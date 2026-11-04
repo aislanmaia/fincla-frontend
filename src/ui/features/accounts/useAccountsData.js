@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getOrgBalances } from "../../../api/balances";
 import {
   listAccounts as apiListAccounts,
@@ -39,18 +39,35 @@ export function formatAccountsApiError(error) {
  * é dirigida pelo balance, que já traz nome/tipo/saldo/include_in_total por conta.
  * Expõe ações de criar/editar/desativar conta e transferir, que recarregam o saldo.
  */
-export function useAccountsData({ organizationId, enabled = true, lente = null }) {
+export function useAccountsData({
+  organizationId,
+  enabled = true,
+  lente = null,
+  /** Sobe a cada transação criada/editada/excluída no app (#264): o saldo por conta
+      muda com ela, e sem isto a tela seguia mostrando o valor anterior até o F5. */
+  refreshKey = 0,
+}) {
   const [state, setState] = useState(EMPTY);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
+  // Chave da última leitura BEM-SUCEDIDA (org + lente). Mesma chave = recarga de
+  // algo já na tela (transação salva, conta editada): o que está lá continua lá —
+  // lista, total E a moeda/recibo dele — até o número novo chegar, e uma falha
+  // na recarga não apaga os saldos que a pessoa estava vendo. Chave diferente
+  // (outra org, outra lente) = leitura nova: o total anterior estaria em outra
+  // moeda, então ele não sobrevive.
+  const loadedKeyRef = useRef(null);
 
   useEffect(() => {
     if (!enabled || !organizationId) {
+      loadedKeyRef.current = null;
       setState(EMPTY);
       return;
     }
     let cancelled = false;
-    setState((s) => ({ ...EMPTY, isLoading: true, accounts: s.accounts, total: s.total }));
+    const key = `${organizationId}|${lente ?? ""}`;
+    const isRefresh = loadedKeyRef.current === key;
+    setState((s) => (isRefresh ? { ...s, isLoading: true, error: "" } : { ...EMPTY, isLoading: true }));
     // `lente` é a moeda de EXIBIÇÃO escolhida na hora (#138). Ela entra na chave do
     // efeito, então trocar a lente refaz a leitura — e não é gravada em lugar
     // nenhum: recarregar a página volta para a moeda base da organização.
@@ -79,15 +96,23 @@ export function useAccountsData({ organizationId, enabled = true, lente = null }
           asOf: balances.as_of || null,
           hasLoaded: true,
         });
+        loadedKeyRef.current = key;
       })
       .catch((error) => {
         if (cancelled) return;
-        setState({ ...EMPTY, error: formatAccountsApiError(error), hasLoaded: true });
+        const message = formatAccountsApiError(error);
+        if (isRefresh) {
+          // Os saldos anteriores continuam visíveis; `refreshFailed` impede a tela
+          // de chamá-los de "atualizados agora".
+          setState((s) => ({ ...s, isLoading: false, error: message, refreshFailed: true }));
+          return;
+        }
+        setState({ ...EMPTY, error: message, hasLoaded: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, version, lente]);
+  }, [enabled, organizationId, version, lente, refreshKey]);
 
   const run = useCallback(
     async (fn) => {

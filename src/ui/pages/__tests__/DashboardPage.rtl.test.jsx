@@ -32,9 +32,10 @@ vi.mock("recharts", () => ({
  * com a projeção, e o caso em que a barra não pode prometer "depois das recorrências".
  */
 let projectionItems = null;
+let projectionCalls = 0;
 vi.mock("../../../api/recurringSeries", () => ({
   getRecurringProjection: () =>
-    projectionItems === null
+    ++projectionCalls && projectionItems === null
       ? Promise.reject(new Error("projeção fora do ar"))
       : Promise.resolve({ items: projectionItems }),
 }));
@@ -276,6 +277,26 @@ describe("DashboardPage — barra de composição é partição das receitas", (
     // Nem a barra nem o KPI podem prometer "depois das recorrências" sem saber quais são.
     expect(screen.queryByText("Sobra depois das recorrências")).toBeNull();
     expect(within(barra).getByText("Sobra do período")).toBeTruthy();
+  });
+
+  it("recarga depois de uma transação (#264) não troca a projeção conhecida por 'indisponível' nem pisca", async () => {
+    projectionItems = [
+      { series_id: "s1", date: "2026-04-20", value: 150, type: "expense", description: "Internet", category: "casa" },
+      { series_id: "s2", date: "2026-04-28", value: 50, type: "expense", description: "Streaming", category: "lazer" },
+    ];
+    const props = { onNav: vi.fn(), stateCtrl: { mounted: true, isMobile: false }, dataMode: "live", organizationId: "org-bar", onNewTx: vi.fn() };
+    const { rerender } = render(<DashboardPage {...props} transactionsRefreshToken={0} />);
+    expect(await screen.findByTestId("dashboard-composicao-comprometido")).toHaveTextContent("R$ 200,00");
+
+    const before = projectionCalls;
+    projectionItems = null; // a RECARGA falha
+    rerender(<DashboardPage {...props} transactionsRefreshToken={1} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(before));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Os números que já sabíamos continuam: nem some a fatia, nem vira "Sobra do período".
+    expect(screen.getByTestId("dashboard-composicao-comprometido")).toHaveTextContent("R$ 200,00");
+    expect(within(screen.getByTestId("dashboard-composicao")).getByText("Sobra depois das recorrências")).toBeTruthy();
   });
 });
 
@@ -691,5 +712,18 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
     renderAt({ total_income: 1000, total_expenses: 2000, balance: -1000 }, 500);
     expect(screen.getByText("Crítico")).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da receita gasta");
+  });
+});
+
+describe("DashboardPage — recarrega a projeção de recorrências depois de uma transação (#264)", () => {
+  it("o token de transação salva relê a projeção", async () => {
+    mockDashboardData = baseData();
+    projectionItems = [];
+    const props = { onNav: vi.fn(), stateCtrl: { mounted: true, isMobile: false }, dataMode: "live", organizationId: "org-refresh", onNewTx: vi.fn() };
+    const { rerender } = render(<DashboardPage {...props} transactionsRefreshToken={0} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(0));
+    const before = projectionCalls;
+    rerender(<DashboardPage {...props} transactionsRefreshToken={1} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(before));
   });
 });

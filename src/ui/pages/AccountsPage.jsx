@@ -28,7 +28,18 @@ const menuItemStyle = {
   color: T.inkMid,
 };
 
-export function AccountsPage({ organizationId, dataMode = "live", isMobile = false }) {
+/**
+ * Quão atual é o que a tela de Contas mostra (#264). `null` = não afirmar nada
+ * (modo demonstração/sem organização: não há leitura para datar).
+ */
+export function accountsFreshnessLabel(data, enabled) {
+  if (!enabled) return null;
+  if (data.isLoading) return data.hasLoaded ? "atualizando…" : null;
+  if (data.refreshFailed) return "não foi possível atualizar";
+  return data.hasLoaded ? "atualizado agora" : null;
+}
+
+export function AccountsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
   const enabled = !!organizationId && dataMode === "live";
   // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
   //
@@ -37,7 +48,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
   // que impede a lente de virar, na prática, uma segunda moeda base que ninguém
   // declarou e que relatório e IA não conhecem.
   const [lente, setLente] = useState(null);
-  const data = useAccountsData({ organizationId, enabled, lente });
+  const data = useAccountsData({ organizationId, enabled, lente, refreshKey: transactionsRefreshToken });
 
   // O seletor só existe onde ele significa alguma coisa: uma organização de moeda
   // única não tem lente para trocar, e oferecer a troca ali seria oferecer uma
@@ -198,7 +209,13 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
             {formatMoney(data.total, data.consolidation?.target_currency) ?? "—"}
           </div>
           <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span>{accounts.length} {accounts.length === 1 ? "conta" : "contas"} · atualizado agora</span>
+            {/* "atualizado agora" só depois de uma leitura real (#264): durante a recarga
+                que segue uma transação, o número na tela ainda é o anterior; se a
+                recarga falhou, ele continua na tela, mas não é chamado de atual. */}
+            <span>
+              {accounts.length} {accounts.length === 1 ? "conta" : "contas"}
+              {accountsFreshnessLabel(data, enabled) ? ` · ${accountsFreshnessLabel(data, enabled)}` : ""}
+            </span>
             {temMaisDeUmaMoeda ? (
               <label style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: T.inkLight }}>
                 <span>ver em</span>
