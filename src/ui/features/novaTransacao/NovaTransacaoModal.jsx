@@ -37,6 +37,13 @@ import {
 } from "./useDrawerCloseAnim.js";
 import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
+import { AccountMoveValue } from "./AccountMoveValue.jsx";
+import { formatAmountInput, parseAmountInput } from "./accountConversion.js";
+import { convertAmountExact } from "../../money/convertAmount.js";
+import { listAccounts } from "../../../api/accounts";
+import { getQuotation } from "../../../api/transfers";
+import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 import {
   parseApiDecimal,
@@ -86,6 +93,7 @@ import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "../creditCards/closingDay.js";
 import { getOrgBalances } from "../../../api/balances";
 import { settlementCopy } from "../transactions/settlementCopy.js";
+import { accountDisplayName, findActiveAccount } from "../transactions/shared/transactionAccountLabel.js";
 import {
   buildCreateCreditCardPayload,
   CARD_BRAND_OPTIONS,
@@ -166,6 +174,16 @@ export function resolveQuickAddDetailTagLabel(id, rows, typedLabel) {
   return resolveDetailTagRowLabel(row) || typedLabel;
 }
 
+/**
+ * Conta que um lançamento NOVO usa quando a pessoa não escolhe outra: a primeira
+ * que entra no total, senão a primeira da lista. Um só lugar porque o carregamento
+ * das contas, a abertura do drawer e o «Nova transação» precisam da mesma resposta.
+ */
+function defaultSettleAccountId(accounts) {
+  const list = Array.isArray(accounts) ? accounts : [];
+  return list.find((a) => a.include_in_total)?.account_id || list[0]?.account_id || "";
+}
+
 /** Aviso sob o campo de data ao editar uma parcela: o campo é a data da COMPRA; o vencimento vai à parte. */
 function InstallmentDueNote({ preConfig }) {
   if (!preConfig?.purchaseDateEdit) return null;
@@ -227,30 +245,35 @@ export const NovaTransacaoModal = ({
   const [cardId,    setCardId]    = useState("");
   const [txDateYmd, setTxDateYmd]  = useState(() => todayLocalYmd());
   // Fase 0 (cash model): conta de liquidação + "já paguei?" (settlement) p/ métodos não-cartão.
-  const [accountOptions, setAccountOptions] = useState([]);
+  /* Contas da organização, SEMPRE com a org a que pertencem: trocar de org com o
+     drawer montado não pode deixar a lista (nem a escolha) da org anterior valer.
+     Rebusca a cada abertura — uma conta criada depois precisa aparecer já. */
+  const [accountsState, setAccountsState] = useState({ orgId: null, status: "idle", accounts: [] });
+  const [accountsReloadNonce, setAccountsReloadNonce] = useState(0);
+  /** Escolha EXPLÍCITA (ou a conta gravada, no Editar). "" = sem escolha → padrão. */
   const [settleAccountId, setSettleAccountId] = useState("");
+  /** A pessoa mexeu no select nesta sessão? Sem isso o Editar não envia `account_id`. */
+  const [accountTouched, setAccountTouched] = useState(false);
   const [settled, setSettled] = useState(true);
-  const accountsLoadedOrgRef = useRef(null);
+  const liveAccounts = dataMode === "live" && !!organizationId;
   useEffect(() => {
-    if (!open || !organizationId || dataMode !== "live") return undefined;
-    // Só busca uma vez por org — evita refetch a cada reabertura do modal.
-    if (accountsLoadedOrgRef.current === organizationId) return undefined;
+    if (!open || !liveAccounts) return undefined;
     let cancelled = false;
+    setAccountsState((cur) => ({ orgId: organizationId, status: "loading", accounts: cur.orgId === organizationId ? cur.accounts : [] }));
     getOrgBalances(organizationId)
       .then((d) => {
-        if (cancelled) return;
-        const accts = d.accounts || [];
-        setAccountOptions(accts);
-        setSettleAccountId(
-          (cur) => cur || accts.find((a) => a.include_in_total)?.account_id || accts[0]?.account_id || "",
-        );
-        accountsLoadedOrgRef.current = organizationId;
+        if (!cancelled) setAccountsState({ orgId: organizationId, status: "ready", accounts: d.accounts || [] });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAccountsState({ orgId: organizationId, status: "error", accounts: [] });
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, dataMode]);
+  }, [open, organizationId, liveAccounts, accountsReloadNonce]);
+  // Só a lista DESTA org conta; a de outra org é como não ter lista.
+  const accountOptions = accountsState.orgId === organizationId ? accountsState.accounts : [];
+  const accountsStatus = !liveAccounts ? "idle" : accountsState.orgId === organizationId ? accountsState.status : "loading";
   const [modalityChoice,setModalityChoice]       = useState("parcelado");
   const [recurrenceFrequency,   setRecurrenceFrequency]   = useState(preConfig?.freqRec || "mensal");
   const [recurrenceEndKind,    setRecurrenceEndKind]    = useState(preConfig?.encRec || "sem-fim");
@@ -276,6 +299,32 @@ export const NovaTransacaoModal = ({
    */
   const [editBaselineDropped, setEditBaselineDropped] = useState(false);
   useEffect(() => { setEditBaselineDropped(false); }, [preConfig]);
+
+  /* A conta EFETIVA do formulário — a que o select mostra, a revisão escreve e o
+     payload leva. Uma escolha só vale se a conta está entre as ativas DESTA org;
+     a exceção é a conta gravada do lançamento em edição (pode ter sido desativada:
+     aparece como «Conta desativada», sem trocar em silêncio). Fora disso — escolha
+     de outra org, conta inativa vinda de um Duplicar, nada escolhido — vale a
+     padrão. */
+  const editingStoredAccountId =
+    !editBaselineDropped &&
+    preConfig?.editingTransactionId != null &&
+    String(preConfig.editingTransactionId).trim() !== "" &&
+    preConfig?.accountId != null
+      ? String(preConfig.accountId)
+      : "";
+  const effectiveAccountId =
+    settleAccountId &&
+    (findActiveAccount(settleAccountId, accountOptions) || String(settleAccountId) === editingStoredAccountId)
+      ? String(settleAccountId)
+      : defaultSettleAccountId(accountOptions);
+  /** Mesmo texto no select e na revisão — nunca discordam. */
+  const accountLabel =
+    accountsStatus === "loading"
+      ? "Carregando contas…"
+      : accountsStatus === "error"
+        ? (editingStoredAccountId ? "Conta atual" : "Conta padrão")
+        : (accountDisplayName(effectiveAccountId, accountOptions) || "Conta padrão");
   /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
   const [review,    setReview]    = useState(false);
@@ -614,6 +663,121 @@ export const NovaTransacaoModal = ({
     onCancelInstallmentCalc: () => setCalcOpenRef.current?.(false),
   });
 
+  /* Mover um lançamento para conta de OUTRA moeda, no Editar (regra do Owner, opção 1).
+     A cotação do dia SUGERE o valor na moeda nova num campo editável; o PUT leva
+     `account_id` + esse `value`. Sem cotação o campo fica vazio — nunca taxa 1.
+     Mesma moeda: nada muda (só `account_id`). */
+  // Moeda GRAVADA do lançamento: a do próprio valor (`value_currency`); senão a da
+  // conta gravada — na lista ativa ou, se ela foi desativada, na lista completa.
+  const storedFromActive = editingStoredAccountId
+    ? (findActiveAccount(editingStoredAccountId, accountOptions)?.currency || null)
+    : null;
+  const [inactiveStoredCurrency, setInactiveStoredCurrency] = useState({ id: null, currency: null });
+  const needsFullAccountList =
+    !!editingStoredAccountId && !preConfig?.currency && !storedFromActive && accountsStatus === "ready";
+  useEffect(() => {
+    if (!needsFullAccountList || !organizationId) return undefined;
+    let cancelled = false;
+    listAccounts(organizationId, true)
+      .then((rows) => {
+        if (cancelled) return;
+        const hit = (rows || []).find((a) => String(a.id) === editingStoredAccountId);
+        setInactiveStoredCurrency({ id: editingStoredAccountId, currency: hit?.currency ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [needsFullAccountList, organizationId, editingStoredAccountId]);
+  const storedAccountCurrency = editingStoredAccountId
+    ? (preConfig?.currency ||
+      storedFromActive ||
+      (inactiveStoredCurrency.id === editingStoredAccountId ? inactiveStoredCurrency.currency : null) ||
+      null)
+    : null;
+  const targetAccountCurrency = findActiveAccount(effectiveAccountId, accountOptions)?.currency || null;
+  const moveFrom = storedAccountCurrency ? String(storedAccountCurrency).toUpperCase() : null;
+  const moveTo = targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null;
+  const movingAccount =
+    !!editingStoredAccountId &&
+    accountTouched &&
+    method !== "credito" &&
+    liveAccounts &&
+    !!effectiveAccountId &&
+    String(effectiveAccountId) !== editingStoredAccountId;
+  /** Sem saber a moeda de origem não dá para saber se é troca entre moedas: bloqueia. */
+  const moveCurrencyUnknown = movingAccount && (!moveFrom || !moveTo);
+  const crossCurrencyMove = movingAccount && !!moveFrom && !!moveTo && moveFrom !== moveTo;
+  /** Moeda em que o valor do formulário está — o que a revisão e o sucesso escrevem. */
+  const formCurrency = (editingStoredAccountId ? moveFrom : null) || (targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null) || "BRL";
+
+  // Cotação e rascunho POR PAR de moedas, enquanto o drawer está aberto: alternar
+  // entre contas não rebusca a cotação nem apaga o valor que a pessoa digitou.
+  const movePairKey = crossCurrencyMove ? `${moveFrom}>${moveTo}` : null;
+  const [moveQuotes, setMoveQuotes] = useState({});
+  const [moveDrafts, setMoveDrafts] = useState({});
+  const [moveValueError, setMoveValueError] = useState("");
+  const moveQuotesInFlightRef = useRef(new Set());
+  const moveQuote = movePairKey ? (moveQuotes[movePairKey] ?? { status: "loading" }) : { status: "idle" };
+  const moveDraft = movePairKey ? (moveDrafts[movePairKey] ?? { text: "", touched: false }) : { text: "", touched: false };
+  const moveValueText = moveDraft.text;
+  /** Valor gravado na moeda nova — o sucesso mostra ele, não o da moeda antiga. */
+  const [savedMove, setSavedMove] = useState(null);
+  const resetMoveState = () => {
+    setMoveQuotes({});
+    setMoveDrafts({});
+    setMoveValueError("");
+    moveQuotesInFlightRef.current = new Set();
+  };
+  useEffect(() => {
+    if (!movePairKey || moveQuotes[movePairKey] || moveQuotesInFlightRef.current.has(movePairKey)) return;
+    const key = movePairKey;
+    const inFlight = moveQuotesInFlightRef.current;
+    inFlight.add(key);
+    getQuotation(organizationId, moveFrom, moveTo)
+      .then((q) => {
+        if (q?.rate == null || String(q.rate).trim() === "") throw new Error("empty rate");
+        return { status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null };
+      })
+      .catch(() => ({ status: "unavailable" }))
+      .then((entry) => {
+        // Drawer resetado no meio (nova sessão): a resposta é de outra intenção.
+        if (moveQuotesInFlightRef.current !== inFlight) return;
+        inFlight.delete(key);
+        setMoveQuotes((cur) => ({ ...cur, [key]: entry }));
+      });
+  }, [movePairKey, moveQuotes, moveFrom, moveTo, organizationId]);
+  // Sugestão = valor ORIGINAL convertido pela taxa em cache. Recalcula quando o valor
+  // original muda — mas SÓ enquanto a pessoa não mexeu no campo: o que ela digitou
+  // nunca é sobrescrito, nem por uma cotação que chega atrasada.
+  const originalAmountFixed = Math.abs(amountNum || 0).toFixed(2);
+  useEffect(() => {
+    if (!movePairKey || moveQuote.status !== "ready" || moveDraft.touched) return;
+    const converted = convertAmountExact(originalAmountFixed, moveQuote.rate);
+    const text = converted != null ? formatAmountInput(converted) : "";
+    if (text === moveDraft.text) return;
+    setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: false } }));
+  }, [movePairKey, moveQuote.status, moveQuote.rate, moveDraft.touched, moveDraft.text, originalAmountFixed]);
+  const setMoveValueByUser = (text) => {
+    if (!movePairKey) return;
+    setMoveValueError("");
+    setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: true } }));
+  };
+  const moveValueNum = crossCurrencyMove ? parseAmountInput(moveValueText) : null;
+  const moveCurrencyUnknownMessage = "Não foi possível identificar a moeda deste lançamento. A conta não pode ser trocada agora — mantenha a conta atual ou tente mais tarde.";
+  /** Revisar/salvar só com a troca de conta resolvida: moeda conhecida e valor na moeda nova. */
+  const moveReadyOrExplain = () => {
+    if (moveCurrencyUnknown) {
+      setTxSubmitError(moveCurrencyUnknownMessage);
+      return false;
+    }
+    if (crossCurrencyMove && !(moveValueNum > 0)) {
+      setMoveValueError(`Informe o valor em ${currencyInfo(moveTo).symbol}`);
+      return false;
+    }
+    return true;
+  };
+
   const {
     calcOpen,
     setCalcOpen,
@@ -806,6 +970,8 @@ export const NovaTransacaoModal = ({
 
     setTxSubmitError("");
     setTxSubmitting(false);
+    setSavedMove(null);
+    resetMoveState();
     setCategoryTagId(null);
     resetMobileStep();
     setReview(false);
@@ -860,6 +1026,8 @@ export const NovaTransacaoModal = ({
       setRecurrenceRepetitions(preConfig?.encRepetitionsRec ?? 12);
       setRecurrenceEndDateYmd(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
       setCat(preConfig?.cat || "");
+      setSettleAccountId("");
+      setAccountTouched(false);
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -961,6 +1129,10 @@ export const NovaTransacaoModal = ({
         setRecurrencePanelExiting(false);
         setCardId("");
       }
+      // Editar mostra a conta GRAVADA (#266); sem ela (lançamento novo, duplicar de
+      // linha sem conta) volta à padrão — nunca herda a da abertura anterior.
+      setSettleAccountId(preConfig.accountId != null ? String(preConfig.accountId) : "");
+      setAccountTouched(false);
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -1009,6 +1181,8 @@ export const NovaTransacaoModal = ({
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
       if (pp != null) setInstallments(pp);
     }
+    setSettleAccountId("");
+    setAccountTouched(false);
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
@@ -1709,15 +1883,52 @@ export const NovaTransacaoModal = ({
       <div>
         <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 8 }}>Conta</div>
         <select
-          value={settleAccountId}
-          onChange={(e) => setSettleAccountId(e.target.value)}
+          aria-label="Conta"
+          value={accountOptions.length > 0 ? effectiveAccountId : ""}
+          disabled={accountOptions.length === 0}
+          onChange={(e) => { setSettleAccountId(e.target.value); setAccountTouched(true); }}
           style={{ ...G, width: "100%", fontSize: 13, color: T.ink, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", outline: "none", boxSizing: "border-box", marginBottom: 10 }}
         >
-          {accountOptions.length === 0 ? <option value="">Conta padrão</option> : null}
+          {/* Sem lista (carregando, erro, modo demonstração): uma opção só, com o
+              MESMO texto que a revisão mostra. */}
+          {accountOptions.length === 0 ? <option value="">{accountLabel}</option> : null}
           {accountOptions.map((a) => (
             <option key={a.account_id} value={a.account_id}>{a.name}</option>
           ))}
+          {/* Lançamento gravado numa conta que já não está na lista (desativada):
+              sem esta opção o <select> exibiria a primeira conta enquanto o estado
+              guarda outra — a mesma mentira do #266 por outra porta. */}
+          {accountOptions.length > 0 && effectiveAccountId && !findActiveAccount(effectiveAccountId, accountOptions)
+            ? <option value={effectiveAccountId}>{accountDisplayName(effectiveAccountId, accountOptions)}</option>
+            : null}
         </select>
+        {accountsStatus === "error" ? (
+          <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "7px 10px", marginBottom: 10 }}>
+            Não foi possível carregar as contas.{" "}
+            <button type="button" onClick={() => setAccountsReloadNonce((n) => n + 1)}
+              style={{ ...G, fontSize: 12, fontWeight: 700, color: T.red, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+              Tentar de novo
+            </button>
+          </div>
+        ) : null}
+        {crossCurrencyMove ? (
+          <AccountMoveValue
+            from={moveFrom}
+            to={moveTo}
+            quote={moveQuote.status === "ready" ? moveQuote : null}
+            loading={moveQuote.status === "loading"}
+            value={moveValueText}
+            onChange={setMoveValueByUser}
+            originalAmount={Math.abs(amountNum || 0)}
+            onUseSameNumber={() => setMoveValueByUser(formatAmountInput(Math.abs(amountNum || 0)))}
+            error={moveValueError}
+          />
+        ) : null}
+        {moveCurrencyUnknown ? (
+          <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "7px 10px", marginBottom: 10 }}>
+            {moveCurrencyUnknownMessage}
+          </div>
+        ) : null}
         <div
           role="switch"
           aria-checked={settled}
@@ -1957,6 +2168,12 @@ export const NovaTransacaoModal = ({
         setTxSubmitError("Escolha uma categoria da lista.");
         return;
       }
+      // Com as contas ainda chegando, o select e a revisão dizem "Carregando contas…":
+      // salvar agora gravaria numa conta que a pessoa não viu.
+      if (method !== "credito" && accountsStatus === "loading") {
+        setTxSubmitError("Aguarde as contas carregarem para salvar.");
+        return;
+      }
       setTxSubmitting(true);
       setTxSubmitError("");
       setTxCreateFailed(false);
@@ -1991,27 +2208,48 @@ export const NovaTransacaoModal = ({
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (isEditingExisting) {
           const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
+          if (moveCurrencyUnknown) {
+            setTxSubmitError(moveCurrencyUnknownMessage);
+            setTxSubmitting(false);
+            return;
+          }
+          if (crossCurrencyMove && !(moveValueNum > 0)) {
+            setTxSubmitError(`Informe o valor em ${currencyInfo(moveTo).symbol} para mover para esta conta.`);
+            setTxSubmitting(false);
+            return;
+          }
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
+          const updatePayload = buildUpdateTransactionPayload({
+            tipo: effectiveTipoEdit,
+            description: desc,
+            value: amountNum,
+            paymentMethodKey: method,
+            categoryTagId,
+            detailTagIds: detailIdsForApi,
+            dateIso,
+            installmentsCount,
+            modality,
+            cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
+            recurring: isRecurring,
+            // Só envia conta se a PESSOA trocou no select; sem isso o valor fica o do
+            // baseline e não entra no diff (lançamento legado sem conta não ganha uma
+            // em silêncio). Cartão não troca de conta: a conta dele é a do cartão.
+            accountId:
+              method !== "credito" && accountTouched
+                ? (effectiveAccountId || null)
+                : (preConfig?.editBaseline?.accountId ?? null),
+            moveValue: crossCurrencyMove ? moveValueNum : null,
+            moveCurrency: crossCurrencyMove ? moveTo : null,
+            // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
+            // o payload sai completo, como antes.
+            baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
+          });
           await updateTransactionForUi(
             editingTransactionIdStr ?? editingTransactionId,
             organizationId,
-            buildUpdateTransactionPayload({
-              tipo: effectiveTipoEdit,
-              description: desc,
-              value: amountNum,
-              paymentMethodKey: method,
-              categoryTagId,
-              detailTagIds: detailIdsForApi,
-              dateIso,
-              installmentsCount,
-              modality,
-              cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
-              recurring: isRecurring,
-              // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
-              // o payload sai completo, como antes.
-              baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
-            }),
+            updatePayload,
           );
+          setSavedMove(crossCurrencyMove ? { amount: moveValueNum, currency: moveTo } : null);
         } else {
           const createPayload = buildCreateTransactionPayload({
             organizationId,
@@ -2026,7 +2264,7 @@ export const NovaTransacaoModal = ({
             modality,
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
-            accountId: settleAccountId || null,
+            accountId: effectiveAccountId || null,
             paidAt: method !== "credito" && settled ? paidAtForAttempt(txDateYmd) : null,
           });
           // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
@@ -2061,6 +2299,16 @@ export const NovaTransacaoModal = ({
           lastCreateErrorBaseMessageRef.current = "";
         }
       } catch (err) {
+        // Troca de conta entre moedas recusada pelo servidor (422: aporte de meta,
+        // estorno, valor/moeda faltando): a mensagem vai NO campo do valor da moeda
+        // nova — é ali que a pessoa decide — e também no rodapé, sem tela de sucesso.
+        if (isEditingExisting && crossCurrencyMove && err?.response?.status === 422) {
+          const message = formatTransactionsApiError(err);
+          setMoveValueError(message);
+          setTxSubmitError(message);
+          setTxSubmitting(false);
+          return;
+        }
         // Erro na ESCRITA principal (create/update em si): a operação que a
         // pessoa pediu não foi confirmada nem depois das tentativas
         // automáticas. Guarda se o erro foi AMBÍGUO (5xx/rede: pode ter
@@ -2147,7 +2395,10 @@ export const NovaTransacaoModal = ({
   };
 
   // Desktop-only helpers
-  const goReview = () => { setReviewDir("forward"); setReview(true); };
+  const goReview = () => {
+    if (!moveReadyOrExplain()) return;
+    setReviewDir("forward"); setReview(true);
+  };
   const goBack   = () => { setReviewDir("back");    setReview(false); };
 
   const handleNewTransaction = () => {
@@ -2195,6 +2446,10 @@ export const NovaTransacaoModal = ({
     } else {
       setModalityChoice("parcelado"); setInstallments(3);
     }
+    setSettleAccountId("");
+    setAccountTouched(false);
+    setSavedMove(null);
+    resetMoveState();
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
@@ -2269,8 +2524,15 @@ export const NovaTransacaoModal = ({
         <div style={{ ...G, fontSize:18, fontWeight:800, color:T.ink, letterSpacing:"-0.01em" }}>{desc || "(sem descrição)"}</div>
         <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
           <span style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, letterSpacing:"-0.02em" }}>
-            {effectiveTypeIsMoneyIn ? "+" : "−"}R$ {amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+            {effectiveTypeIsMoneyIn ? "+" : "−"}{crossCurrencyMove
+              ? formatMoneyPlainSpace(moveValueNum ?? 0, moveTo)
+              : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
           </span>
+          {crossCurrencyMove && moveValueNum > 0 ? (
+            <span data-testid="review-original-amount" style={{ ...G, fontSize:11, color:T.inkLight }}>
+              era {formatMoneyPlainSpace(Math.abs(amountNum || 0), moveFrom)}
+            </span>
+          ) : null}
           {(novaRecorrencia || isRecurring) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
               / {FREQ_LABELS[recurrenceFrequency]?.toLowerCase() || "mês"}
@@ -2296,7 +2558,10 @@ export const NovaTransacaoModal = ({
               { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
               { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de ${fmtAbs(amountNum/installments)}`)) : "—" },
-              { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
+              // Cartão: o cartão escolhido. Fora dele, a conta onde o lançamento cai (#266).
+              method === "credito"
+                ? { label:"CARTÃO", val: cards.find(c=>c.id===cardId)?.nome || "—" }
+                : { label:"CONTA",  val: accountLabel },
             ]),
           ].map((f,i) => (
             <div key={i} style={{ background:T.surface, padding:"10px 14px" }}>
@@ -2398,7 +2663,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
@@ -2920,7 +3185,7 @@ export const NovaTransacaoModal = ({
                     <ChevronLeft size={18} color={T.inkMid} />
                   </button>
                 )}
-                <button onClick={goNext} disabled={mStep === 1 && !amountNum}
+                <button onClick={() => { if (mNextStep === "review" && !moveReadyOrExplain()) return; goNext(); }} disabled={mStep === 1 && !amountNum}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkFaint : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
                   {mNextLabel()}
                 </button>
@@ -3317,7 +3582,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>

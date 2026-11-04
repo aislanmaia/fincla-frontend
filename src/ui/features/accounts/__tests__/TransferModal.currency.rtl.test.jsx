@@ -81,6 +81,15 @@ describe("TransferModal entre moedas", () => {
     expect(screen.getByText(/03\/09/)).toBeInTheDocument();
   });
 
+  it("a sugestão usa a conversão exata (HALF_UP), não ponto flutuante", async () => {
+    renderModal({ onQuote: vi.fn().mockResolvedValue({ base: "EUR", quote: "BRL", rate: "0.25", quoted_on: "2026-09-03" }) });
+    escolher(0, "eur");
+    escolher(1, "brl");
+    fireEvent.change(screen.getByPlaceholderText("€ 0,00"), { target: { value: "10,10" } });
+    // 10,10 × 0,25 = 2,525 → 2,53. Em float, 2.525.toFixed(2) dá "2.52".
+    await waitFor(() => expect(screen.getByDisplayValue("2,53")).toBeInTheDocument());
+  });
+
   it("o valor sugerido é sobrescrevível — é ele que vai gravado", async () => {
     const { onSubmit } = renderModal();
     escolher(0, "eur");

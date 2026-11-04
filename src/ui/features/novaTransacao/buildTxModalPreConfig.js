@@ -42,6 +42,10 @@ export function buildTxModalPreConfig(tx) {
     detailTagIds: tx.detailTagIds ?? [],
     detailTagDisplayById: tx.detailTagDisplayById ?? {},
     refundOfTransactionId: tx.refundOfTransactionId ?? null,
+    // Conta em que o lançamento está gravado — o Editar mostra ESTA, não a padrão (#266).
+    accountId: tx.accountId ?? null,
+    // Moeda gravada: mover para conta de outra moeda pede o valor na moeda nova.
+    currency: tx.currency ?? null,
     // A lista traz a transação inteira, então o baseline nasce aqui: este
     // caminho curto-circuita o fetch de hidratação (`hasEditorPayload`) e sem
     // isso o submit voltaria a mandar o pacote cheio.

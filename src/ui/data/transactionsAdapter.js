@@ -1187,6 +1187,8 @@ export function buildEditBaselineFromUi(ui) {
     modality: isCard ? (isParcelado ? "installment" : "cash") : null,
     installmentsCount: isParcelado ? ui.parcela.total : null,
     recurring: !!ui.rec,
+    // Conta gravada: sem ela no baseline, trocar a conta no Editar nunca entraria no diff.
+    accountId: ui.accountId ?? null,
   };
 }
 
@@ -1598,6 +1600,11 @@ export function buildUpdateTransactionPayload({
   installmentsCount = null,
   modality = null,
   recurring = false,
+  accountId = null,
+  /** Valor na moeda da conta NOVA ao mover para conta de outra moeda: vai sempre. */
+  moveValue = null,
+  /** Moeda da conta NOVA: vai junto de `moveValue` (fincla-api#452 exige o par). */
+  moveCurrency = null,
   baseline = null,
 }) {
   let type;
@@ -1630,7 +1637,23 @@ export function buildUpdateTransactionPayload({
       payload.installments_count = Number(installmentsCount);
     }
   }
-  if (!baseline) return payload;
+  // Conta de liquidação (fincla-api#444). Só existe quando a tela tem uma conta
+  // escolhida; cartão não manda (a conta dele é a do cartão).
+  if (accountId) payload.account_id = String(accountId);
+  // Mover para conta de outra moeda: o backend EXIGE `value` na moeda nova (422
+  // sem ele). Vai sempre — mesmo quando o número coincide com o anterior ("usar
+  // 52,40 como US$"), que o diff abaixo descartaria por "não mudou".
+  // Só quando a conta MUDA de fato em relação ao baseline: sem troca de conta não
+  // há "valor na moeda nova" a forçar, e o diff decide o `value` como sempre.
+  const movingFromBaseline = !baseline || String(accountId ?? "") !== String(baseline.accountId ?? "");
+  const withMoveValue = (body) => {
+    if (body.account_id && movingFromBaseline && moveValue != null && Number.isFinite(Number(moveValue))) {
+      body.value = Number(moveValue);
+      if (moveCurrency) body.value_currency = String(moveCurrency).toUpperCase();
+    }
+    return body;
+  };
+  if (!baseline) return withMoveValue(payload);
 
   // Envia só o que o usuário mexeu. Sem isso o backend recebe o pacote inteiro em toda
   // edição e precisa adivinhar o que mudou — comparando contra valores que chegam
@@ -1648,7 +1671,7 @@ export function buildUpdateTransactionPayload({
   // `date` segue obrigatório no UpdateTxBody da API (fincla-api#91); enquanto for,
   // mandamos sempre. Quando virar opcional, sai daqui junto com os demais.
   changed.date = payload.date;
-  return changed;
+  return withMoveValue(changed);
 }
 
 /** Compara dois valores de campo do payload de update, tratando arrays por conteúdo. */

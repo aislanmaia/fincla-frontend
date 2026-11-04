@@ -265,6 +265,7 @@ export function useTransactionModalController({
               : "avista"
             : undefined,
         parcelas: isParcelado ? tx.parcela.total : undefined,
+        accountId: tx.accountId ?? null,
       }));
       return;
     }
@@ -314,6 +315,8 @@ export function useTransactionModalController({
           detailTagIds: ui.detailTagIds ?? [],
           detailTagDisplayById: ui.detailTagDisplayById ?? {},
           detailTagMetaById: ui.detailTagMetaById ?? {},
+          accountId: ui.accountId ?? null,
+          currency: ui.currency ?? null,
           // Estado tal como veio da API, para o submit enviar só o que o usuário mexeu.
           // Sem isso o backend recebe o pacote inteiro e precisa adivinhar o que mudou —
           // comparando contra valores que chegam derivados (fincla-api#90).
