@@ -7,6 +7,7 @@ import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
 import { dayKey, forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
 import { plural } from "../../plural.js";
+import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../selection/BulkSelection.jsx";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -44,15 +45,10 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
     : <div style={style}>{content}</div>;
 }
 
-const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
 // O cabeçalho do dia gruda logo abaixo do cabeçalho de colunas (desktop), senão ele ficaria coberto e sem clique.
 const COLUMN_HEADER_HEIGHT = 30;
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 92px 92px 86px";
 
-/** A caixa nativa (13 px) é pequena demais para o dedo: o rótulo estende a área de toque para 28 px (WCAG 2.2, 2.5.8) sem mudar o desenho nem ocupar espaço (a margem negativa devolve o excesso). */
-function RowCheckbox(props) {
-  return <label style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: -7, flex: "none", cursor: "pointer" }}><input type="checkbox" style={{ margin: 0 }} {...props} /></label>;
-}
 
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
@@ -84,13 +80,12 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
       <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span data-testid="ledger-count">{plural(total == null ? rows.length : total, "lançamento", "lançamentos")}</span>
-      {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}{hiddenSelected > 0 ? ` · ${hiddenSelected} em dias recolhidos` : ""}</span>}
-      {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
+      <SelectionCount count={selected.length} extra={[selectionSum, hiddenSelected > 0 ? `${hiddenSelected} em dias recolhidos` : null].filter(Boolean).join(" · ") || null} />
+      {selected.length > 0 && <BulkActionsToolbar onClear={() => onSelected([])}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}
         <button type="button" onClick={onExportSelected} style={bulkButton}>Exportar seleção</button>
-        <button type="button" onClick={() => onSelected([])} style={bulkButton}>Limpar seleção</button>
-      </span>}
+      </BulkActionsToolbar>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
       {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}

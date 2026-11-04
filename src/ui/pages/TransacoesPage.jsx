@@ -88,6 +88,8 @@ import { listAccounts } from "../../api/accounts";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
 import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
 import { transactionAccountLabel } from "../features/transactions/shared/transactionAccountLabel.js";
+import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../features/selection/BulkSelection.jsx";
+import { BulkMoveDialog } from "../features/transactions/bulkMove/BulkMoveDialog.jsx";
 import { mergeTransferRows, transfersToRows } from "../features/transactions/transferRows.js";
 import { listTransfers } from "../../api/transfers";
 import { exportTransactionsCsv } from "../../api/transactions";
@@ -1284,8 +1286,13 @@ function TransacoesPageBody({
 
   /* Filtro "Conta" (#268): só existe com 2+ contas ativas. Com uma só ele não
      aparece e não tem efeito — o recorte vira vazio antes de chegar à API. */
+  // Só contas ATIVAS (o `GET /accounts` já as filtra; a guarda local cobre um
+  // backend que devolva desativadas). Filtro "Conta" e seleção em lote dependem
+  // de 2+ delas — desativada não conta.
   const accountsForFilter = useMemo(
-    () => orgAccounts.map((a) => ({ id: String(a.id), label: a.name, currency: a.currency ?? null })),
+    () => orgAccounts
+      .filter((a) => a.is_active !== false)
+      .map((a) => ({ id: String(a.id), label: a.name, currency: a.currency ?? null })),
     [orgAccounts],
   );
   const accountsForFilterById = useMemo(
@@ -1307,6 +1314,23 @@ function TransacoesPageBody({
   }, [accountFilterAvailable, filter.accountSel]);
   /** A conta do recorte quando é UMA só — extrato com transferências e "+ Transação" nela. */
   const singleFilteredAccountId = effectiveAccountSel.length === 1 ? effectiveAccountSel[0] : null;
+
+  /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
+     2+ contas ativas. Ids em string (a lista mistura número e UUID). */
+  const selectionEnabled = shouldUseRealData && accountsForFilter.length >= 2;
+  /** A coluna das caixas: as réguas de largura da linha (wide/xwide/rótulos/tags)
+      descontam ela, e o esqueleto reserva a mesma — nada pula quando o dado chega. */
+  const selectionGutterPx = selectionEnabled ? (isMobile ? 30 : 34) : 0;
+  const larguraDasLinhas = Math.max(0, larguraVisivelDaLista - selectionGutterPx);
+  const [bulkSelected, setBulkSelected] = useState([]);
+  /** As linhas do lote no momento em que o diálogo abriu (a seleção encolhe ao mover). */
+  const [bulkMoveRows, setBulkMoveRows] = useState(null);
+  const toggleBulk = useCallback((id) => {
+    setBulkSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }, []);
+  useEffect(() => {
+    setBulkSelected([]);
+  }, [organizationId]);
   useEffect(() => {
     onAccountScopeChange?.(singleFilteredAccountId);
   }, [onAccountScopeChange, singleFilteredAccountId]);
@@ -2037,11 +2061,11 @@ function TransacoesPageBody({
      rápida, pelo mesmo motivo. */
   const tagsColPx = useMemo(
     () => {
-      const largura = larguraVisivelDaLista;
+      const largura = larguraDasLinhas;
       if (isMobile || largura < 1000) return 0;
       return larguraColunaTags(pageRows);
     },
-    [isMobile, larguraVisivelDaLista, viewportWidth, pageRows],
+    [isMobile, larguraDasLinhas, viewportWidth, pageRows],
   );
   const catColPx = useMemo(
     () => (isMobile ? 0 : larguraColunaCategoria(pageRows)),
@@ -2064,7 +2088,7 @@ function TransacoesPageBody({
      e a descrição pula de lugar em todo mount. 800 px de lista ≈ 1035 px de
      viewport (sidebar 195 + respiros), não 1280. */
   const catNaLinhaDeMeta = !isMobile
-    && larguraVisivelDaLista < 800;
+    && larguraDasLinhas < 800;
 
   /* A parada de Tab que EXISTE na tela. Se a linha lembrada saiu da lista
      (excluída, filtrada, ou a página trocou), a parada volta para a primeira —
@@ -2075,6 +2099,39 @@ function TransacoesPageBody({
      Transferência só faz sentido na ordenação por data. */
   const sortedByDate = !filter.sort?.length || filter.sort[0]?.field === "date";
   const transactionsWindow = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  /* Seleção em lote: "todos" = os lançamentos já carregados (como no cartão);
+     transferências do extrato não entram. */
+  const selectableLoadedIds = useMemo(
+    () => (selectionEnabled ? txList.filter((t) => t.kind !== "transfer").map((t) => String(t.id)) : []),
+    [selectionEnabled, txList],
+  );
+  const allLoadedSelected = selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelected.includes(id));
+  const bulkSelectedRows = useMemo(
+    () => txList.filter((t) => bulkSelected.includes(String(t.id))),
+    [txList, bulkSelected],
+  );
+  /* Seleção velha não sobrevive (mesma regra dos Lançamentos do cartão): outro
+     recorte (filtro, período, busca, conta) ou uma releitura por transação salva
+     limpam tudo; e a cada carga a seleção perde o que saiu da lista (ex.: excluído).
+     Sem isto o contador dizia "5 selecionados" e o diálogo "Mover 0". */
+  const selectionFilterKey = JSON.stringify({ ...transactionsFilters, limit: undefined });
+  const selectionFilterKeyRef = useRef(selectionFilterKey);
+  useEffect(() => {
+    if (selectionFilterKeyRef.current === selectionFilterKey) return;
+    selectionFilterKeyRef.current = selectionFilterKey;
+    setBulkSelected([]);
+  }, [selectionFilterKey]);
+  const selectionTokenRef = useRef(transactionsRefreshToken);
+  useEffect(() => {
+    if (selectionTokenRef.current === transactionsRefreshToken) return;
+    selectionTokenRef.current = transactionsRefreshToken;
+    setBulkSelected([]);
+  }, [transactionsRefreshToken]);
+  useEffect(() => {
+    const loaded = new Set(txList.map((t) => String(t.id)));
+    setBulkSelected((cur) => (cur.every((id) => loaded.has(id)) ? cur : cur.filter((id) => loaded.has(id))));
+  }, [txList]);
+
   const displayedRows = useMemo(() => {
     if (!transferRows.length || !sortedByDate) return transactionsWindow;
     return mergeTransferRows(transactionsWindow, transferRows, {
@@ -3531,6 +3588,12 @@ function TransacoesPageBody({
         </div>
       ) : null}
       <TransactionsListHeader
+        leading={selectionEnabled ? (
+          <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
+            onChange={(e) => setBulkSelected(e.target.checked
+              ? [...new Set([...bulkSelected, ...selectableLoadedIds])]
+              : bulkSelected.filter((id) => !selectableLoadedIds.includes(id)))} />
+        ) : null}
         total={filteredCount}
         /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
            grandeza, que confunde no extrato de uma conta. */
@@ -3575,6 +3638,16 @@ function TransacoesPageBody({
         redoLabel={filterHistory.redoLabel}
         compact={isMobile}
       />
+      {/* Seleção em lote (#281): mesmo contador e mesma barra dos Lançamentos do cartão. */}
+      {selectionEnabled && bulkSelectedRows.length > 0 ? (
+        <div data-testid="bulk-selection-bar" style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px",
+          padding: isMobile ? "8px 12px" : "8px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
+          <SelectionCount count={bulkSelectedRows.length} />
+          <BulkActionsToolbar onClear={() => setBulkSelected([])}>
+            <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+          </BulkActionsToolbar>
+        </div>
+      ) : null}
       {transfersHiddenBySort ? (
         <div data-testid="transfers-sort-note" style={{ ...G, fontSize: 11.5, color: T.inkLight, padding: "6px 14px", borderBottom: `1px solid ${T.border}` }}>
           Transferências aparecem na ordenação por data.
@@ -3620,6 +3693,7 @@ function TransacoesPageBody({
             catColPx={catColPx}
             catNaLinhaDeMeta={catNaLinhaDeMeta}
             tagsColPx={tagsColPx}
+            leadingGutterPx={selectionGutterPx}
           />
         ) : listLoadFailed ? (
           // 1ª carga falhou (nunca tivemos dados válidos pra este filtro) —
@@ -3723,6 +3797,21 @@ function TransacoesPageBody({
                   style={{
                   borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
                     ? "none" : `1px solid ${T.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                  {selectionEnabled ? (
+                    <span data-testid="row-selection-gutter"
+                      /* O pulso de "liquidado" e o tom da linha aberta cobrem também a
+                         coluna da caixa (a saída já anima o item inteiro). */
+                      className={settledFlashId === tx.id ? "fincla-tx-settled" : undefined}
+                      style={{ flex: "none", width: selectionGutterPx, alignSelf: "stretch", display: "grid", placeItems: "center",
+                        background: selected?.id === tx.id ? `${catColor(tx.cat)}08` : "transparent" }}>
+                      {tx.kind === "transfer" ? null : (
+                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelected.includes(String(tx.id))}
+                          onChange={() => toggleBulk(String(tx.id))} />
+                      )}
+                    </span>
+                  ) : null}
+                  <div style={{ flex: 1, minWidth: 0 }}>
                   <TxRow
                     tx={tx}
                     isMobile={isMobile}
@@ -3746,7 +3835,7 @@ function TransacoesPageBody({
                        76 px para o rótulo da situação e um teto de 420 para a
                        descrição: a linha prometia largura que não tinha, e a
                        descrição (a única coluna que encolhe até zero) pagava. */
-                    wide={!isMobile && larguraVisivelDaLista >= 1300}
+                    wide={!isMobile && larguraDasLinhas >= 1300}
                     tagsColPx={tagsColPx}
                     catColPx={catColPx}
                     catNaLinhaDeMeta={catNaLinhaDeMeta}
@@ -3759,10 +3848,12 @@ function TransacoesPageBody({
                        Enquanto a medição não chega (primeiro render), cai no
                        limiar de viewport, que erra só para menos. */
                     showActionLabels={
-                      !isMobile && larguraVisivelDaLista >= 1000
+                      !isMobile && larguraDasLinhas >= 1000
                     }
-                    xwide={!isMobile && larguraVisivelDaLista >= 1800}
+                    xwide={!isMobile && larguraDasLinhas >= 1800}
                   />
+                  </div>
+                  </div>
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
                       numa coluna de 320 px que, em 1366×768, sobrava com 32 px
                       de área rolável — sem os botões Editar e Excluir à vista.
@@ -4384,6 +4475,23 @@ function TransacoesPageBody({
         </div>
       )}
 
+      {bulkMoveRows ? (
+        <BulkMoveDialog
+          isMobile={isMobile}
+          organizationId={organizationId}
+          accounts={accountsForFilter}
+          transactions={bulkMoveRows}
+          /* Moeda dos totais do servidor (a base da organização; num recorte de uma
+             conta, a dela) — o fallback de uma linha sem moeda. Sem ela: inelegível. */
+          baseCurrency={summaryCurrency}
+          onClose={() => setBulkMoveRows(null)}
+          onMoved={() => {
+            // Lista, resumo e saldos (Minhas Contas, Visão Geral) releem com o token —
+            // e o token limpa a seleção inteira, como no razão do cartão.
+            onTransactionsInvalidate?.();
+          }}
+        />
+      ) : null}
       {/* No MOBILE não existe faixa de KPIs. O cabeçalho da lista já carrega a
           contagem, a situação e o resultado; os outros dois totais abrem numa
           sheet a partir dele. A faixa custava ~87 px permanentes numa tela de

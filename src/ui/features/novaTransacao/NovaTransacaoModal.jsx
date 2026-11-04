@@ -39,7 +39,9 @@ import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
 import { AccountMoveValue } from "./AccountMoveValue.jsx";
 import { formatAmountInput, parseAmountInput } from "./accountConversion.js";
-import { divideAmountExact, PLAIN_DECIMAL_RE } from "../../money/convertAmount.js";
+import { PLAIN_DECIMAL_RE } from "../../money/convertAmount.js";
+import { convertByQuote, quoteDirection } from "../../money/quoteDirection.js";
+import { useOrganizationBaseCurrency } from "../../money/useOrganizationBaseCurrency.js";
 import { listAccounts } from "../../../api/accounts";
 import { getQuotation } from "../../../api/transfers";
 import { currencyInfo } from "../../money/currencyRegistry.js";
@@ -721,6 +723,14 @@ export const NovaTransacaoModal = ({
   const [moveValueError, setMoveValueError] = useState("");
   const moveQuotesInFlightRef = useRef(new Set());
   const moveQuote = movePairKey ? (moveQuotes[movePairKey] ?? { status: "loading" }) : { status: "idle" };
+  // A base da organização orienta a cotação: "1 <estrangeira> = <base>" nos dois sentidos.
+  const moveOrgBase = useOrganizationBaseCurrency(organizationId, { enabled: crossCurrencyMove });
+  const moveDirection = useMemo(
+    () => (crossCurrencyMove && moveOrgBase.status === "ready"
+      ? quoteDirection({ from: moveFrom, to: moveTo, base: moveOrgBase.currency })
+      : null),
+    [crossCurrencyMove, moveOrgBase.status, moveOrgBase.currency, moveFrom, moveTo],
+  );
   const moveDraft = movePairKey ? (moveDrafts[movePairKey] ?? { text: "", touched: false }) : { text: "", touched: false };
   const moveValueText = moveDraft.text;
   /** Valor gravado na moeda nova — o sucesso mostra ele, não o da moeda antiga. */
@@ -732,20 +742,20 @@ export const NovaTransacaoModal = ({
     moveQuotesInFlightRef.current = new Set();
   };
   useEffect(() => {
-    if (!movePairKey || moveQuotes[movePairKey] || moveQuotesInFlightRef.current.has(movePairKey)) return;
+    if (!movePairKey || !moveDirection || moveQuotes[movePairKey] || moveQuotesInFlightRef.current.has(movePairKey)) return;
     const key = movePairKey;
+    const direction = moveDirection;
     const inFlight = moveQuotesInFlightRef.current;
     inFlight.add(key);
-    // UMA cotação, na direção em que se lê câmbio no Brasil: 1 <moeda nova> = x
-    // <moeda de origem> (`GET /quotations/{destino}/{origem}`). A MESMA taxa é mostrada
-    // e usada na conta (valor de origem ÷ taxa), então a tela fecha. Taxa fora do
-    // formato decimal simples (ex.: notação científica) = sem cotação — nunca
-    // impressa crua.
-    getQuotation(organizationId, moveTo, moveFrom)
+    // UMA cotação, já na direção mostrada (`quoteDirection`: 1 <estrangeira> = <base>).
+    // A MESMA taxa é mostrada e usada na conta (× ou ÷ conforme o lado), então a tela
+    // fecha. Taxa fora do formato decimal simples (ex.: notação científica) = sem
+    // cotação — nunca impressa crua.
+    getQuotation(organizationId, direction.base, direction.quote)
       .then((q) => {
         const rate = String(q?.rate ?? "").trim();
         if (!PLAIN_DECIMAL_RE.test(rate) || !/[1-9]/.test(rate)) throw new Error("unusable rate");
-        return { status: "ready", rate, quoted_on: q.quoted_on ?? null };
+        return { status: "ready", rate, quoted_on: q.quoted_on ?? null, direction };
       })
       .catch(() => ({ status: "unavailable" }))
       .then((entry) => {
@@ -754,18 +764,18 @@ export const NovaTransacaoModal = ({
         inFlight.delete(key);
         setMoveQuotes((cur) => ({ ...cur, [key]: entry }));
       });
-  }, [movePairKey, moveQuotes, moveFrom, moveTo, organizationId]);
+  }, [movePairKey, moveDirection, moveQuotes, organizationId]);
   // Sugestão = valor ORIGINAL convertido pela taxa em cache. Recalcula quando o valor
   // original muda — mas SÓ enquanto a pessoa não mexeu no campo: o que ela digitou
   // nunca é sobrescrito, nem por uma cotação que chega atrasada.
   const originalAmountFixed = Math.abs(amountNum || 0).toFixed(2);
   useEffect(() => {
     if (!movePairKey || moveQuote.status !== "ready" || moveDraft.touched) return;
-    const converted = divideAmountExact(originalAmountFixed, moveQuote.rate);
+    const converted = convertByQuote(originalAmountFixed, moveQuote.rate, moveQuote.direction.op);
     const text = converted != null ? formatAmountInput(converted) : "";
     if (text === moveDraft.text) return;
     setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: false } }));
-  }, [movePairKey, moveQuote.status, moveQuote.rate, moveDraft.touched, moveDraft.text, originalAmountFixed]);
+  }, [movePairKey, moveQuote.status, moveQuote.rate, moveQuote.direction, moveDraft.touched, moveDraft.text, originalAmountFixed]);
   const setMoveValueByUser = (text) => {
     if (!movePairKey) return;
     setMoveValueError("");

@@ -12,18 +12,22 @@ describe("accountConversion", () => {
   it("escreve o campo em pt-BR", () => {
     expect(formatAmountInput("52.40")).toBe("52,40");
   });
-  it("mostra a taxa como a API deu, sem inverter nem zerar (JPY/KRW)", () => {
+  it("mostra a taxa com no máximo 4 casas (HALF_UP), no mínimo 2", () => {
     expect(formatRatePtBr("0.1825")).toBe("0,1825");
-    expect(formatRatePtBr("0.00068000")).toBe("0,00068");
+    expect(formatRatePtBr("5.49140000")).toBe("5,4914");
+    expect(formatRatePtBr("0.1821029")).toBe("0,1821");
+    expect(formatRatePtBr("5.46535")).toBe("5,4654");
+    expect(formatRatePtBr("9.99996")).toBe("10,00");
     expect(formatRatePtBr("5.5")).toBe("5,50");
-    const h = conversionHeadline({ from: "JPY", to: "BRL", quote: { rate: "0.0365", quoted_on: "2026-11-03" } });
-    expect(h).toContain("0,0365");
-    expect(h).not.toContain("0,00)");
+    const h = conversionHeadline({ to: "BRL", quote: { rate: "0.0365", quoted_on: "2026-11-03" }, direction: { base: "JPY", quote: "BRL" } });
+    expect(h).toContain(" 1 = R$ 0,0365)");
   });
 
-  it("mostra a cotação destino→origem como se lê câmbio: '1 <moeda nova> = <moeda de origem> x'", () => {
-    const h = conversionHeadline({ from: "BRL", to: "USD", quote: { rate: "5.4914", quoted_on: "2026-11-04" } });
-    expect(h).toBe("Esta conta é em US$. Valor convertido pela cotação de 04/11 (US$ 1 = R$ 5,4914):");
+  it("o par mostrado é o da direção em que a cotação foi buscada", () => {
+    const toUsd = conversionHeadline({ to: "USD", quote: { rate: "5.4914", quoted_on: "2026-11-04" }, direction: { base: "USD", quote: "BRL" } });
+    expect(toUsd).toBe("Esta conta é em US$. Valor convertido pela cotação de 04/11 (US$ 1 = R$ 5,4914):");
+    const toBrl = conversionHeadline({ to: "BRL", quote: { rate: "5.4914", quoted_on: "2026-11-04" }, direction: { base: "USD", quote: "BRL" } });
+    expect(toBrl).toBe("Esta conta é em R$. Valor convertido pela cotação de 04/11 (US$ 1 = R$ 5,4914):");
   });
 });
 

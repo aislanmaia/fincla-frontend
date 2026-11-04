@@ -26,6 +26,9 @@ export function TransactionsSkeleton({
      deslizava ~152 px de lado — exatamente o que este componente existe para
      não deixar acontecer. */
   catNaLinhaDeMeta = false,
+  /** Coluna da seleção em lote (#281): reservada também no esqueleto, senão a
+      linha de verdade chega 34 px à direita. */
+  leadingGutterPx = 0,
 }) {
   return (
     <div aria-hidden="true" data-testid="transactions-skeleton">
@@ -58,7 +61,9 @@ export function TransactionsSkeleton({
             alignItems: "center",
             gap: 10,
             height: rowHeight,
-            padding: isMobile ? "0 14px" : "0 14px",
+            /* Com seleção, a linha de verdade tem a coluna do checkbox ANTES
+               da grade de 14 px de respiro; aqui a soma vai no padding. */
+            padding: `0 14px 0 ${14 + leadingGutterPx}px`,
             borderBottom: `1px solid ${T.border}`,
             /* O brilho entra ESCALONADO por linha: um pulso único no bloco
                inteiro lê como "a tela travou", e um por linha lê como

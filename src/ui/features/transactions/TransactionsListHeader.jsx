@@ -51,6 +51,8 @@ export function TransactionsListHeader({
   onSumClick,
   sumOpen = false,
   compact = false,
+  /** Caixa "selecionar todos" da seleção em lote (#281) — antes da contagem, como nos Lançamentos do cartão. */
+  leading = null,
 }) {
   const num = (v) => (loading ? "—" : String(v));
 
@@ -106,6 +108,7 @@ export function TransactionsListHeader({
       }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {leading}
         {/* "17 de 20 transações": o filtro sozinho não diz nada sem o total de
             onde ele saiu. Só "17" deixa a pessoa sem saber se cortou muito ou
             pouco — e é essa relação que responde "meu filtro está certo?". */}

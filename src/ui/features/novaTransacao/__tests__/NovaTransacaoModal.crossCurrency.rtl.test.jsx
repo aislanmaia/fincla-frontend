@@ -75,6 +75,7 @@ beforeEach(() => {
       return Promise.resolve({ data: { as_of: "2026-11-04T09:00:00", total: { amount: "3000", currency: "BRL" }, consolidation: null,
         accounts: [balanceRow(ACC_A, "Conta A Itaú", "BRL"), balanceRow(ACC_B, "Conta B Nubank", "BRL"), balanceRow(ACC_USD, "Wise USD", "USD")] } });
     }
+    if (url === `/organizations/${ORG}`) return Promise.resolve({ data: { id: ORG, base_currency: "BRL" } });
     if (url === "/quotations/USD/BRL") return quotation();
     if (url === "/accounts") return Promise.resolve({ data: allAccounts });
     return Promise.resolve({ data: [] });
@@ -231,8 +232,8 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const row = { ...rowInB, accountId: "acc-velha", currency: null };
     render(<NovaTransacaoModal {...props} preConfig={buildTxModalPreConfig(row)} />);
     await user.selectOptions(await screen.findByDisplayValue("Conta desativada"), ACC_A);
-    // USD → BRL: pede o valor em R$ (cotação USD/BRL não mockada → sem cotação).
-    expect(await screen.findByTestId("account-move-value")).toHaveTextContent("informe o valor em R$");
+    // A moeda (USD) veio da lista completa: USD → BRL pela cotação US$ 1 = R$ 5,4914.
+    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("Esta conta é em R$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"));
   });
 
   it("moeda de origem desconhecida: bloqueia a troca em vez de mandar PUT sem valor", async () => {
@@ -303,6 +304,17 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     await waitFor(() => expect(box).toHaveTextContent("Sem cotação agora — informe o valor em US$"));
     expect(box).not.toHaveTextContent("E+0");
     expect(screen.getByLabelText("Valor em US$")).toHaveValue("");
+  });
+
+  it("US$ → R$ (para a base): mesma cotação 'US$ 1 = R$ 5,4914', valor MULTIPLICADO (52,40 × 5,4914 = 287,75)", async () => {
+    const rowInUsd = { ...rowInB, id: 602, desc: "Hotel em Miami", val: -52.4, accountId: ACC_USD, currency: "USD" };
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...props} preConfig={buildTxModalPreConfig(rowInUsd)} />);
+    await user.selectOptions(await screen.findByDisplayValue("Wise USD"), ACC_B);
+    const box = await screen.findByTestId("account-move-value");
+    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em R$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"));
+    expect(screen.getByLabelText("Valor em R$")).toHaveValue("287,75");
+    expect(quotationCalls().map(([url]) => url)).toEqual(["/quotations/USD/BRL"]);
   });
 });
 

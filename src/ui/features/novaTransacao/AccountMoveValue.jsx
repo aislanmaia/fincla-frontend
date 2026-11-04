@@ -17,7 +17,7 @@ import { conversionHeadline, formatAmountInput } from "./accountConversion.js";
 export function AccountMoveValue({ from, to, quote, loading, value, onChange, originalAmount, onUseSameNumber, error = "" }) {
   if (!from || !to) return null;
   const toSymbol = currencyInfo(to).symbol;
-  const headline = conversionHeadline({ from, to, quote });
+  const headline = conversionHeadline({ to, quote, direction: quote?.direction });
   const sameNumber = formatAmountInput(originalAmount);
   return (
     <div
