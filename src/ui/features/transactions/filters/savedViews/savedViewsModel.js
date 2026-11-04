@@ -43,6 +43,7 @@ export function normalizeViewSnapshot(snapshot) {
       cats: [],
       tags: [],
       cardSel: [],
+      accountSel: [],
       rec: "any",
       valueMin: "",
       valueMax: "",
@@ -64,6 +65,7 @@ export function normalizeViewSnapshot(snapshot) {
     cats: sortedStrings(snapshot.cats),
     tags: sortedStrings(snapshot.tags),
     cardSel: sortedStrings(snapshot.cardSel),
+    accountSel: sortedStrings(snapshot.accountSel),
     rec: snapshot.rec ?? "any",
     valueMin: snapshot.valueMin ?? "",
     valueMax: snapshot.valueMax ?? "",
@@ -144,6 +146,7 @@ export function countActiveFiltersInSnapshot(snapshot) {
   if (Array.isArray(snapshot.cats) && snapshot.cats.length) n += 1;
   if (Array.isArray(snapshot.tags) && snapshot.tags.length) n += 1;
   if (Array.isArray(snapshot.cardSel) && snapshot.cardSel.length) n += 1;
+  if (Array.isArray(snapshot.accountSel) && snapshot.accountSel.length) n += 1;
   if (snapshot.rec && snapshot.rec !== "any") n += 1;
   if (snapshot.valueMin || snapshot.valueMax) n += 1;
   if (snapshot.settlement && snapshot.settlement !== "todas") n += 1;

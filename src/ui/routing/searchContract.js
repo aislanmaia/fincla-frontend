@@ -26,6 +26,7 @@ export const FC = {
   TX_TO: "fc_to", // "YYYY-MM-DD" — fim do período (>= fc_from)
   TX_TYPE: "fc_type", // "expense" | "income"
   TX_STATUS: "fc_status", // "paid" | "to_pay"
+  TX_ACCOUNT: "fc_account", // UUID(s) de conta, separados por vírgula — filtro "Conta" (#268)
   // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=new` do Hub de Cartões.
   VIEW: "view",
   HUB_CARD: "card",
@@ -100,6 +101,7 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   delete next[FC.TX_TO];
   delete next[FC.TX_TYPE];
   delete next[FC.TX_STATUS];
+  delete next[FC.TX_ACCOUNT];
   delete next[FC.SIM_OPEN];
   delete next[FC.SIM_ITEM];
   delete next[FC.MODAL];
@@ -114,6 +116,10 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
 
   if (opts.filterCat != null && String(opts.filterCat).trim() !== "") {
     next[FC.CATEGORY] = String(opts.filterCat).trim();
+  }
+  // Minhas Contas → /transactions já filtrado naquela conta (#268).
+  if (opts.accountId != null && String(opts.accountId).trim() !== "") {
+    next[FC.TX_ACCOUNT] = String(opts.accountId).trim();
   }
   if (opts.autoOpenAdd) {
     next[FC.ADD] = "1";

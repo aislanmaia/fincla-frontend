@@ -138,6 +138,7 @@ export const finclaRootSearchSchema = z.object({
   [FC.TX_TO]: fcRealYmdSchema,
   [FC.TX_TYPE]: fcStrictEnum(["expense", "income"]),
   [FC.TX_STATUS]: fcStrictEnum(["paid", "to_pay"]),
+  [FC.TX_ACCOUNT]: optionalTrimmedString(1024),
   [FC.VIEW]: viewSchema,
   [FC.HUB_CARD]: hubCardSchema,
   [FC.LEDGER_INVOICE]: fcYmSchema,

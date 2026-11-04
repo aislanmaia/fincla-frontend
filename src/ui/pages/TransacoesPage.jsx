@@ -88,6 +88,10 @@ import { listAccounts } from "../../api/accounts";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
 import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
 import { transactionAccountLabel } from "../features/transactions/shared/transactionAccountLabel.js";
+import { mergeTransferRows, transfersToRows } from "../features/transactions/transferRows.js";
+import { listTransfers } from "../../api/transfers";
+import { exportTransactionsCsv } from "../../api/transactions";
+import { buildTransactionsQuery, transactionsDateRangeFor } from "../data/transactionsAdapter.js";
 import {
   filtersToLegacyParams,
   filtersToCsvOptions,
@@ -310,6 +314,38 @@ export function larguraColunaTags(txs, { visiveis = TAGS_VISIVEIS, tetoChip = TA
 }
 
 
+/** Subtotal do dia SEM transferências: elas não são receita nem despesa (#268). */
+const diaSemTransferencias = (txs) => txs.filter((t) => t.kind !== "transfer").reduce((s, t) => s + t.val, 0);
+
+/**
+ * Detalhe de uma TRANSFERÊNCIA no extrato de uma conta (#268). Só leitura: ela não
+ * é uma transação, então não tem editar, excluir, liquidar nem duplicar — e não
+ * entra nos totais de receitas e despesas.
+ */
+const TransferDetail = ({ tx, inline = false, isMobileDetail = false }) => {
+  const fields = [
+    { label: "Data", val: tx.date },
+    { label: "Valor", val: `${tx.val >= 0 ? "+" : "−"}${fmtValorDaLinha(tx.val, tx.currency)}` },
+    ...(tx.note ? [{ label: "Nota", val: tx.note }] : []),
+  ];
+  return (
+    <div data-testid="transfer-detail" style={{ display: "flex", flexDirection: "column",
+      padding: inline ? (isMobileDetail ? "10px 12px" : "4px 14px 10px 107px") : "16px 20px" }}>
+      <div style={{ ...G, display: "grid", gridTemplateColumns: isMobileDetail ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))", gap: "8px 18px" }}>
+        {fields.map(({ label, val }) => (
+          <div key={label} style={{ minWidth: 0 }}>
+            <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: MICRO_PX, letterSpacing: "0.07em", textTransform: "uppercase", color: T.inkGhost }}>{label}</div>
+            <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{val}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ ...G, fontSize: 11.5, color: T.inkLight, marginTop: 8 }}>
+        Transferência entre contas: não entra em receitas nem despesas. Para mudar, use Minhas Contas.
+      </div>
+    </div>
+  );
+};
+
 /* Mesmo motivo do `TxRow` acima (fincla-frontend#66): definido dentro do corpo,
    o drawer inteiro era desmontado e remontado a cada render da página — inclusive
    a cada transição de `settlingId`, disparada pelo próprio botão de liquidar. */
@@ -378,6 +414,7 @@ const DetailPanel = ({
   }, [pedidoAberto]);
 
   if (!tx) return null;
+  if (tx.kind === "transfer") return <TransferDetail tx={tx} inline={inline} isMobileDetail={isMobileDetail} />;
   const isReceita = tx.val > 0;
   const statusPresentation = transactionStatus(tx.status);
   const accountLabel = transactionAccountLabel(tx, accounts);
@@ -701,6 +738,8 @@ function TransacoesPageBody({
   onEditTx,
   onDuplicateTx,
   onNewTx,
+  /** Avisa o App da conta do recorte (UMA conta filtrada) — "+ Transação" nasce nela. */
+  onAccountScopeChange,
   dataMode = "live",
   organizationId = null,
   transactionsRefreshToken = 0,
@@ -1210,10 +1249,14 @@ function TransacoesPageBody({
   const [balanceAnchors, setBalanceAnchors] = useState({});
   /** Contas ativas — a mesma leitura das âncoras; o detalhe usa para a «Conta» (#267). */
   const [orgAccounts, setOrgAccounts] = useState([]);
+  /** A lista de contas chegou (com sucesso) para esta org? Antes disso não dá para
+      afirmar que há uma conta só — o filtro de conta vindo da URL continua valendo. */
+  const [orgAccountsLoaded, setOrgAccountsLoaded] = useState(false);
   useEffect(() => {
     if (!shouldUseRealData || !organizationId) {
       setBalanceAnchors({});
       setOrgAccounts([]);
+      setOrgAccountsLoaded(false);
       return undefined;
     }
     let cancelled = false;
@@ -1223,12 +1266,13 @@ function TransacoesPageBody({
     // depende apenas da lista de contas e não pode sumir junto.
     Promise.all([
       listOrgBalanceAdjustments(organizationId).catch(() => null),
-      listAccounts(organizationId).catch(() => []),
+      listAccounts(organizationId).catch(() => null),
     ])
       .then(([rows, accounts]) => {
         if (cancelled) return;
-        setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, accounts));
+        setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, accounts || []));
         setOrgAccounts(Array.isArray(accounts) ? accounts : []);
+        setOrgAccountsLoaded(Array.isArray(accounts));
       })
       .catch(() => {
         if (!cancelled) setBalanceAnchors({});
@@ -1237,6 +1281,36 @@ function TransacoesPageBody({
       cancelled = true;
     };
   }, [shouldUseRealData, organizationId, transactionsRefreshToken]);
+
+  /* Filtro "Conta" (#268): só existe com 2+ contas ativas. Com uma só ele não
+     aparece e não tem efeito — o recorte vira vazio antes de chegar à API. */
+  const accountsForFilter = useMemo(
+    () => orgAccounts.map((a) => ({ id: String(a.id), label: a.name, currency: a.currency ?? null })),
+    [orgAccounts],
+  );
+  const accountsForFilterById = useMemo(
+    () => (accountsForFilter.length >= 2 ? Object.fromEntries(accountsForFilter.map((a) => [a.id, a])) : null),
+    [accountsForFilter],
+  );
+  const accountFilterAvailable = !orgAccountsLoaded || accountsForFilter.length >= 2;
+  const effectiveAccountSel = useMemo(
+    () => (accountFilterAvailable ? filter.accountSel : []),
+    [accountFilterAvailable, filter.accountSel],
+  );
+  /* Com uma conta só (lista carregada), a seleção de conta sai do PRÓPRIO estado do
+     filtro — não só da requisição. Senão "tem filtro ativo", o contador, os chips,
+     o desfazer e as visões salvas contariam um filtro que não existe na tela. */
+  const setAccountSelRef = useRef(filter.setAccountSel);
+  setAccountSelRef.current = filter.setAccountSel;
+  useEffect(() => {
+    if (!accountFilterAvailable && filter.accountSel.length > 0) setAccountSelRef.current([]);
+  }, [accountFilterAvailable, filter.accountSel]);
+  /** A conta do recorte quando é UMA só — extrato com transferências e "+ Transação" nela. */
+  const singleFilteredAccountId = effectiveAccountSel.length === 1 ? effectiveAccountSel[0] : null;
+  useEffect(() => {
+    onAccountScopeChange?.(singleFilteredAccountId);
+  }, [onAccountScopeChange, singleFilteredAccountId]);
+  useEffect(() => () => onAccountScopeChange?.(null), [onAccountScopeChange]);
 
   const categoryTagsData = useCategoryTagsData({
     organizationId,
@@ -1377,6 +1451,7 @@ function TransacoesPageBody({
           settlement: filter.settlement,
           rec: filter.rec,
           tagMode: filter.tagMode,
+          accountSel: effectiveAccountSel,
         },
         {
           limit: visible,
@@ -1387,6 +1462,7 @@ function TransacoesPageBody({
         },
       ),
     [
+      effectiveAccountSel,
       debouncedSearch,
       filter.type,
       filter.method,
@@ -1450,6 +1526,7 @@ function TransacoesPageBody({
     filter.cats.length > 0 ||
     filter.tags.length > 0 ||
     filter.cardSel.length > 0 ||
+    effectiveAccountSel.length > 0 ||
     filter.rec !== "any" ||
     filter.settlement !== "todas" ||
     Boolean(filter.valueMin || filter.valueMax);
@@ -1491,6 +1568,7 @@ function TransacoesPageBody({
     valor: { valueMin: "", valueMax: "" },
     recorrencia: { rec: "any" },
     situacao: { settlement: "todas" },
+    conta: { accountSel: [] },
   }), []);
 
   /* Qual faceta está com os contadores à vista. São DUAS superfícies: a barra
@@ -1510,6 +1588,7 @@ function TransacoesPageBody({
         period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
         sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
         settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
+        accountSel: effectiveAccountSel,
         ...estado,
       },
       {
@@ -1523,7 +1602,8 @@ function TransacoesPageBody({
   }, [NEUTRO_POR_FACETA, facetaComContadoresAVista, transactionsFilters, filter.type, filter.method,
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds]);
+      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
+      effectiveAccountSel]);
 
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
@@ -1540,6 +1620,65 @@ function TransacoesPageBody({
      dependências e seria recriado a cada página carregada. */
   const txListRef = useRef(txList);
   txListRef.current = txList;
+
+  /* Extrato de UMA conta (#268, decisão do Owner): com exatamente uma conta no
+     filtro, as transferências que entraram e saíram dela viram linhas próprias,
+     fora dos totais (o resumo vem do servidor e não as conta). Só sem outros
+     recortes: transferência não tem categoria, tag, forma ou situação, então
+     com qualquer um desses filtros ela não "casaria". */
+  const transferEligible =
+    shouldUseRealData &&
+    singleFilteredAccountId != null &&
+    !debouncedSearch &&
+    filter.type === "todos" &&
+    filter.method.length === 0 &&
+    filter.cats.length === 0 &&
+    filter.tags.length === 0 &&
+    filter.cardSel.length === 0 &&
+    filter.rec === "any" &&
+    filter.settlement === "todas" &&
+    !filter.valueMin && !filter.valueMax;
+  /* `GET /v1/transfers` não aceita período (só `account_id`): a lista vem inteira e
+     o recorte por data é feito aqui. Para não rebuscar a cada busca digitada ou
+     filtro ligado/desligado, o resultado fica em cache por organização + conta +
+     token de transações salvas (uma transferência nova sobe o token). */
+  const [accountTransfers, setAccountTransfers] = useState({ key: null, rows: [] });
+  const transfersCacheRef = useRef(new Map());
+  const transfersKey = singleFilteredAccountId && organizationId
+    ? `${organizationId}|${singleFilteredAccountId}|${transactionsRefreshToken}`
+    : null;
+  useEffect(() => {
+    if (!transferEligible || !transfersKey) return undefined;
+    const cached = transfersCacheRef.current.get(transfersKey);
+    if (cached) {
+      setAccountTransfers({ key: transfersKey, rows: cached });
+      return undefined;
+    }
+    let cancelled = false;
+    const key = transfersKey;
+    listTransfers(organizationId, singleFilteredAccountId)
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        transfersCacheRef.current.set(key, list);
+        if (!cancelled) setAccountTransfers({ key, rows: list });
+      })
+      .catch(() => {
+        if (!cancelled) setAccountTransfers({ key, rows: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [transferEligible, transfersKey, organizationId, singleFilteredAccountId]);
+  const transferRows = useMemo(() => {
+    if (!transferEligible || accountTransfers.key !== transfersKey) return [];
+    const range = transactionsDateRangeFor(filter.period, filter.customFrom, filter.customTo);
+    const byId = Object.fromEntries(accountsForFilter.map((a) => [a.id, a]));
+    return transfersToRows(accountTransfers.rows, singleFilteredAccountId, byId, {
+      dateStart: range.date_start,
+      dateEnd: range.date_end,
+    });
+  }, [transferEligible, accountTransfers, transfersKey, singleFilteredAccountId, filter.period,
+      filter.customFrom, filter.customTo, accountsForFilter]);
 
 
   // fincla-frontend#106 — mesmo padrão do calendário (`useCalendarData`):
@@ -1862,6 +2001,10 @@ function TransacoesPageBody({
      filtro, dividir um pelo outro dava uma "média" que podia sair 10× alta.
      O código escondia a média por causa disso; com a contagem certa ela volta. */
   const sumario = canUseRemoteSummary ? transactionsData.summary : null;
+  /* Moeda do resumo: a que o servidor declarou nos totais (#268/#446). Recorte numa
+     conta em euro → resumo em €; sem declaração (modo demo, backend antigo) → real. */
+  const summaryCurrency = sumario?.currency ?? null;
+  const fmtResumo = useCallback((v) => fmtValorDaLinha(v, summaryCurrency), [summaryCurrency]);
   const countReceita = sumario?.income_count ?? filtered.filter(t=>t.type==="income").length;
   const countDespesa = sumario?.expense_count ?? filtered.filter(t=>t.type==="expense").length;
   const countEstorno = sumario?.refund_count ?? filtered.filter(t=>t.type==="refund").length;
@@ -1926,16 +2069,34 @@ function TransacoesPageBody({
   /* A parada de Tab que EXISTE na tela. Se a linha lembrada saiu da lista
      (excluída, filtrada, ou a página trocou), a parada volta para a primeira —
      nunca para "nenhuma", que tirava a lista da ordem de Tab. */
+  /* Linhas à vista: a janela (`visible`) corta SÓ as transações; as transferências
+     do extrato de uma conta entram depois, dentro do intervalo já carregado. Cortar
+     depois de intercalar perdia as últimas transações mesmo sem mais páginas.
+     Transferência só faz sentido na ordenação por data. */
+  const sortedByDate = !filter.sort?.length || filter.sort[0]?.field === "date";
+  const transactionsWindow = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  const displayedRows = useMemo(() => {
+    if (!transferRows.length || !sortedByDate) return transactionsWindow;
+    return mergeTransferRows(transactionsWindow, transferRows, {
+      hasMore: (shouldUseRealData && transactionsData.hasMore) || visible < filtered.length,
+      ascending: filter.sort?.[0]?.dir === "asc",
+    });
+  }, [transactionsWindow, transferRows, sortedByDate, shouldUseRealData, transactionsData.hasMore,
+      visible, filtered.length, filter.sort]);
+  const shownTransferCount = displayedRows.length - transactionsWindow.length;
+  /** Transferências existem no recorte mas a ordenação não é por data: avisa. */
+  const transfersHiddenBySort = transferRows.length > 0 && !sortedByDate;
+
   const rovingStopId = useMemo(() => {
-    const visiveis = filtered.slice(0, visible).map((t) => String(t.id));
+    const visiveis = displayedRows.map((t) => String(t.id));
     if (visiveis.length === 0) return null;
     return rovingId && visiveis.includes(rovingId) ? rovingId : visiveis[0];
-  }, [filtered, visible, rovingId]);
+  }, [displayedRows, rovingId]);
 
   // ── Group by date ─────────────────────────────────────────────────────────
   const groups = useMemo(() => {
     const map = {};
-    filtered.slice(0, visible).forEach(t => {
+    displayedRows.forEach(t => {
       const k = t.date || "Sem data";
       if (!map[k]) map[k] = [];
       map[k].push(t);
@@ -1944,7 +2105,7 @@ function TransacoesPageBody({
     return shouldUseRealData
       ? entries
       : entries.sort((a,b) => parseDate(b[0]) - parseDate(a[0]));
-  }, [shouldUseRealData, filtered, visible]);
+  }, [shouldUseRealData, displayedRows]);
 
   // fincla-frontend#109 rodada 4, achado 1 (CRÍTICO): uma falha ao "carregar
   // mais" não seta mais o `error` geral (achado 2 da rodada 3) — sem esta
@@ -2190,8 +2351,8 @@ function TransacoesPageBody({
   );
 
   const allFacets = useMemo(
-    () => filter.buildFacets({ categoriesById, cardsById }),
-    [filter, categoriesById, cardsById],
+    () => filter.buildFacets({ categoriesById, cardsById, accountsById: accountsForFilterById }),
+    [filter, categoriesById, cardsById, accountsForFilterById],
   );
 
 
@@ -2205,6 +2366,7 @@ function TransacoesPageBody({
       period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
       sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
       settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
+      accountSel: effectiveAccountSel,
     };
     const drops = {
       busca: { search: "" },
@@ -2216,6 +2378,7 @@ function TransacoesPageBody({
       valor: { valueMin: "", valueMax: "" },
       recorrencia: { rec: "any" },
       situacao: { settlement: "todas" },
+      conta: { accountSel: [] },
     };
     const active = new Set(allFacets.filter((f) => f.active).map((f) => f.key));
     if (debouncedSearch) active.add("busca");
@@ -2276,7 +2439,7 @@ function TransacoesPageBody({
     filter.tags,
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-    totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
+    totalCategoriesForBackend, categoryApiNameById, resolvedTagIds, effectiveAccountSel,
   ]);
 
   const facetLabels = useMemo(() => {
@@ -2426,8 +2589,12 @@ function TransacoesPageBody({
      três some — o oposto do que um desfazer serve. */
   const describeFilterSnapshot = useCallback(
     (destino, atual, verbo) =>
-      describeFilterChange(atual, destino, verbo, { categorias: categoriesById, cartoes: cardsById }),
-    [categoriesById, cardsById],
+      describeFilterChange(atual, destino, verbo, {
+        categorias: categoriesById,
+        cartoes: cardsById,
+        contas: accountsForFilterById || {},
+      }),
+    [categoriesById, cardsById, accountsForFilterById],
   );
 
   // Desfazer dos filtros, com o rótulo nomeando a mudança.
@@ -2547,6 +2714,18 @@ function TransacoesPageBody({
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
+    /* Recorte por conta (#268): o export do servidor de Transações aceita os MESMOS
+       filtros da lista, inclusive `account_id` repetível (fincla-api#446). O CSV
+       legado de analytics não conhece conta — usá-lo aqui exportaria a organização
+       inteira com um chip de conta na tela. */
+    if (shouldUseRealData && organizationId && effectiveAccountSel.length > 0) {
+      const { page: _page, limit: _limit, sort_by: _sortBy, sort_order: _sortOrder, ...query } =
+        buildTransactionsQuery({ organizationId, ...transactionsFilters });
+      exportTransactionsCsv(query)
+        .then((blob) => saveBlob(blob, "transacoes.csv"))
+        .catch(() => {});
+      return;
+    }
     // A busca e o filtro por categoria não têm equivalente no endpoint de CSV,
     // então esses casos caem no export client-side. Forma(s) de pagamento agora
     // vão para o backend (param repetido), então não limitam mais o caminho remoto.
@@ -2590,6 +2769,7 @@ function TransacoesPageBody({
     filter,
     categories: categoriesForFilter,
     cards: cardsForFilter,
+    accounts: accountsForFilter,
     allTags: allTagsForFilter,
     tagIdByLabel: tagDisplayToId,
     // Achado 5: sem isto o painel mostra "Nenhuma tag cadastrada" enquanto o
@@ -3309,7 +3489,9 @@ function TransacoesPageBody({
 
   const listIsEmptyUnderFilters =
     shouldUseRealData && !tagFilterBlocked && !listLoading && !listLoadFailed &&
-    filteredCount === 0 && listFiltersActive;
+    filteredCount === 0 && listFiltersActive &&
+    // Transferências à vista (extrato de uma conta): a lista NÃO está vazia.
+    shownTransferCount === 0;
   const { narrowest } = useNarrowestFilter({
     organizationId,
     filtersByKey: filtersWithoutEach,
@@ -3328,12 +3510,35 @@ function TransacoesPageBody({
        grudar no topo ao rolar. O arredondamento vem de raios explícitos. */
     <div style={{ display:"flex", flexDirection:"column", gap:0,
       background:T.surface, border:`1px solid ${T.border}`, borderRadius:12 }}>
+      {/* Chip da conta filtrada, à vista em qualquer largura: chegando de Minhas
+          Contas no celular, o filtro só aparecia como "Filtros 1". */}
+      {effectiveAccountSel.length > 0 && accountsForFilterById ? (
+        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 0" }}>
+          {effectiveAccountSel.map((id) => {
+            const label = accountsForFilterById[id]?.label || "Conta";
+            return (
+              <span key={id} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600,
+                color: T.ink, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9999, padding: "3px 4px 3px 10px" }}>
+                {label}
+                <button type="button" aria-label={`Remover filtro de conta ${label}`}
+                  onClick={() => { filter.setAccountSel(effectiveAccountSel.filter((x) => x !== id)); setVisible(PAGE_SIZE); }}
+                  style={{ ...G, border: "none", background: "none", cursor: "pointer", color: T.inkMid, fontSize: 13, lineHeight: 1, padding: "0 4px" }}>
+                  ✕
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
       <TransactionsListHeader
         total={filteredCount}
-        totalUnfiltered={narrowedByMoreThanPeriod ? periodTotal.total : null}
+        /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
+           grandeza, que confunde no extrato de uma conta. */
+        totalUnfiltered={narrowedByMoreThanPeriod && effectiveAccountSel.length === 0 ? periodTotal.total : null}
+        transfers={shownTransferCount}
         pending={filter.settlement === "todas" ? pendingCount : 0}
         sum={canUseRemoteSummary || filtered.length ? saldo : null}
-        fmt={fmtBRL}
+        fmt={fmtResumo}
         loading={tagFilterBlocked || listNeverLoaded}
         statusLabel={
           tagFilterBlocked
@@ -3370,6 +3575,11 @@ function TransacoesPageBody({
         redoLabel={filterHistory.redoLabel}
         compact={isMobile}
       />
+      {transfersHiddenBySort ? (
+        <div data-testid="transfers-sort-note" style={{ ...G, fontSize: 11.5, color: T.inkLight, padding: "6px 14px", borderBottom: `1px solid ${T.border}` }}>
+          Transferências aparecem na ordenação por data.
+        </div>
+      ) : null}
       {groups.length === 0 ? (
         // Prioridade 2 (revisão adversarial da PR #96): com a busca em espera
         // (`tagFilterBlocked`), `groups` também dá 0 — mas "Nenhuma transação
@@ -3491,8 +3701,8 @@ function TransacoesPageBody({
                   }}>{fmtDateLabel(date)}</div>
                   <div style={{ flex:1 }}/>
                   <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
-                    color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
-                    {txs.reduce((s,t)=>s+t.val,0) >= 0 ? "+" : "−"}{fmtBRL(Math.abs(txs.reduce((s,t)=>s+t.val,0)))}
+                    color: diaSemTransferencias(txs) >= 0 ? T.green : T.red, fontWeight:700 }}>
+                    {diaSemTransferencias(txs) >= 0 ? "+" : "−"}{fmtResumo(Math.abs(diaSemTransferencias(txs)))}
                   </div>
                 </div>
               )}
@@ -3522,10 +3732,12 @@ function TransacoesPageBody({
                     rowHeight={listRowHeight}
                     showDate={!isGrouped}
                     dateLabel={rotuloDeData(tx.date)}
-                    quickActions={quickActions}
-                    onFilterByCategory={filterByCategoryFromRow}
-                    onFilterByTag={filterByTagFromRow}
-                    swipe={isMobile ? swipeActions : null}
+                    /* Transferência (extrato de uma conta) não é transação: sem
+                       editar/excluir/liquidar/duplicar — o toque só mostra o detalhe. */
+                    quickActions={tx.kind === "transfer" ? null : quickActions}
+                    onFilterByCategory={tx.kind === "transfer" ? undefined : filterByCategoryFromRow}
+                    onFilterByTag={tx.kind === "transfer" ? undefined : filterByTagFromRow}
+                    swipe={isMobile && tx.kind !== "transfer" ? swipeActions : null}
                     flash={settledFlashId === tx.id}
                     busy={rowBusyId != null && String(rowBusyId) === String(tx.id)}
                     /* A LISTA medida, não a viewport — a mesma régua de
@@ -3786,7 +3998,8 @@ function TransacoesPageBody({
               expanded={statsExpanded}
               onToggleExpanded={() => setStatsExpanded((v) => !v)}
               compactLabels={viewportWidth < 1400}
-              fmt={fmtBRL}
+              fmt={fmtResumo}
+              currency={summaryCurrency}
             />
           </div>
         )}
@@ -4186,7 +4399,7 @@ function TransacoesPageBody({
         countDespesa={countDespesa}
         totalEstorno={totalEstorno}
         countsArePartial={countsArePartial}
-        fmt={fmtBRL}
+        fmt={fmtResumo}
       />
 
             {/* Lista. O painel lateral de 320 px e o bottom sheet de detalhes
@@ -4333,6 +4546,7 @@ function TransacoesPageBody({
               onFacetChange={setPanelFacet}
               categories={categoriesForFilter}
               cards={cardsForFilter}
+              accounts={accountsForFilter}
               allTags={allTagsForFilter}
               tagIdByLabel={tagDisplayToId}
               allTagsLoading={shouldUseRealData && tagCatalog.loading}

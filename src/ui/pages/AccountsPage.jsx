@@ -32,7 +32,14 @@ const menuItemStyle = {
 export { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
 import { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
 
-export function AccountsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
+export function AccountsPage({
+  organizationId,
+  dataMode = "live",
+  isMobile = false,
+  transactionsRefreshToken = 0,
+  /** Toque numa conta → Transações filtradas nela (#268). */
+  onOpenAccountTransactions = null,
+}) {
   const enabled = !!organizationId && dataMode === "live";
   // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
   //
@@ -264,7 +271,24 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
               return (
                 <div key={a.id}>
                   {idx > 0 ? <div style={{ height: 1, background: T.border }} /> : null}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+                  <div
+                    {...(onOpenAccountTransactions
+                      ? {
+                          role: "button",
+                          tabIndex: 0,
+                          "aria-label": `Ver lançamentos de ${a.name}`,
+                          onClick: () => onOpenAccountTransactions(a.id),
+                          onKeyDown: (e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onOpenAccountTransactions(a.id);
+                            }
+                          },
+                        }
+                      : {})}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", cursor: onOpenAccountTransactions ? "pointer" : "default" }}
+                  >
                     <div style={{ width: 38, height: 38, flex: "0 0 38px", borderRadius: 11, display: "grid", placeItems: "center", fontSize: 19, background: meta.tint }}>
                       {a.icon_key || meta.emoji}
                     </div>
@@ -285,6 +309,8 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
                     </div>
                     <button
                       onClick={(e) => {
+                        // O menu da conta não é "abrir os lançamentos" da linha.
+                        e.stopPropagation();
                         const r = e.currentTarget.getBoundingClientRect();
                         setMenu((m) => (m?.id === a.id ? null : { id: a.id, rect: r }));
                       }}

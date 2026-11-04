@@ -30,6 +30,7 @@ const RAIL = [
   { key: "tag", icon: "🏷", label: "Tags" },
   { key: "forma", icon: "▤", label: "Pagamento" },
   { key: "cartao", icon: "▭", label: "Cartão" },
+  { key: "conta", icon: "🏦", label: "Conta" },
   { key: "valor", icon: "∿", label: "Valor" },
   { key: "recorrencia", icon: "↻", label: "Recorrência" },
   { key: "situacao", icon: "✓", label: "Situação" },
@@ -44,6 +45,7 @@ export function facetSelectionCounts(filter, defaultPeriod = "mes") {
     tag: filter.tags.length,
     forma: filter.method.length,
     cartao: filter.cardSel.length,
+    conta: (filter.accountSel || []).length,
     valor: filter.valueMin || filter.valueMax ? 1 : 0,
     recorrencia: filter.rec !== "any" ? 1 : 0,
     situacao: filter.settlement !== "todas" ? 1 : 0,
@@ -56,6 +58,8 @@ export function TransactionsFilterPanel({
   onFacetChange,
   categories = [],
   cards = [],
+  /** Contas ativas `{id,label,currency}`. A faceta "Conta" só aparece com 2+ (#268). */
+  accounts = [],
   allTags = [],
   allTagsLoading = false,
   allTagsError = false,
@@ -154,7 +158,7 @@ export function TransactionsFilterPanel({
               : { height: 1, background: T.border, margin: "5px 4px", flex: "none" }
           }
         />
-        {RAIL.filter((r) => !visibleFacetKeys || visibleFacetKeys.includes(r.key)).map((r) => (
+        {RAIL.filter((r) => (!visibleFacetKeys || visibleFacetKeys.includes(r.key)) && (r.key !== "conta" || accounts.length >= 2)).map((r) => (
           <RailButton
             key={r.key}
             icon={r.icon}
@@ -216,6 +220,9 @@ export function TransactionsFilterPanel({
             cardSel={filter.cardSel}
             setCardSel={filter.setCardSel}
             cards={cards}
+            accountSel={filter.accountSel}
+            setAccountSel={filter.setAccountSel}
+            accounts={accounts}
             valueMin={filter.valueMin}
             valueMax={filter.valueMax}
             valueCurrency={filter.valueCurrency}

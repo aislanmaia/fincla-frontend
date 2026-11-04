@@ -13,6 +13,8 @@ import { FC, isRealYmd } from "../../routing/searchContract.js";
  * @param {Record<string, unknown> | null | undefined} search
  * @returns {{ period?: "custom", customFrom?: string, customTo?: string, type?: string, settlement?: string }}
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function resolveTransactionsDeepLink(search) {
   const out = {};
   if (!search || typeof search !== "object") return out;
@@ -33,6 +35,11 @@ export function resolveTransactionsDeepLink(search) {
   const status = search[FC.TX_STATUS];
   if (status === "paid") out.settlement = "pagas";
   else if (status === "to_pay") out.settlement = "a-pagar";
+
+  // Conta(s): UUIDs separados por vírgula (#268). Qualquer outro formato é ignorado.
+  const rawAccounts = typeof search[FC.TX_ACCOUNT] === "string" ? search[FC.TX_ACCOUNT] : "";
+  const accountSel = [...new Set(rawAccounts.split(",").map((v) => v.trim()).filter((v) => UUID_RE.test(v)))];
+  if (accountSel.length) out.accountSel = accountSel;
 
   return out;
 }

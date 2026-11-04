@@ -865,6 +865,8 @@ export interface LargestTransaction {
 
 export interface TransactionsSummaryResponse {
   total_transactions: number;
+  /** Moeda dos totais (extraída na fronteira); `null` quando não houve total. */
+  currency?: string | null;
   /** Total movimentado no recorte, por moeda original; preservado como Money. */
   by_currency?: Array<{ amount: string; currency: string }>;
   total_value: number;

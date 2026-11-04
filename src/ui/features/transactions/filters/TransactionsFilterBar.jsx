@@ -58,6 +58,8 @@ export function TransactionsFilterBar({
   filter,
   categories = [],
   cards = [],
+  /** Contas ativas `{id,label,currency}`. A faceta "Conta" só aparece com 2+ (#268). */
+  accounts = [],
   allTags = [],
   allTagsLoading = false,
   allTagsError = false,
@@ -177,7 +179,13 @@ export function TransactionsFilterBar({
     return map;
   }, [cards]);
 
-  const facets = filter.buildFacets({ categoriesById, cardsById })
+  const accountsById = useMemo(() => {
+    const map = {};
+    for (const a of accounts) map[a.id] = a;
+    return map;
+  }, [accounts]);
+
+  const facets = filter.buildFacets({ categoriesById, cardsById, accountsById })
     .filter((facet) => !visibleFacetKeys || visibleFacetKeys.includes(facet.key));
 
   const activeFacets = facets
@@ -348,6 +356,10 @@ export function TransactionsFilterBar({
                 cardSel={filter.cardSel}
                 setCardSel={filter.setCardSel}
                 cards={cards}
+                // account
+                accountSel={filter.accountSel}
+                setAccountSel={filter.setAccountSel}
+                accounts={accounts}
                 // value
                 valueMin={filter.valueMin}
                 valueMax={filter.valueMax}

@@ -108,7 +108,11 @@ export const getTransactionsSummary = async (
       projected_by_invoice: raw.breakdown.projected_by_invoice == null ? raw.breakdown.projected_by_invoice : raw.breakdown.projected_by_invoice.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
     },
   } : raw;
-  return unwrapMoney(withBreakdownCurrencies);
+  // A moeda em que os totais vieram (#268/#446): com o recorte numa conta só, é a
+  // moeda DESSA conta; sem conversão o total é `null` e a moeda some junto.
+  const summaryCurrency =
+    toCurrency(raw.total_income) ?? toCurrency(raw.total_expenses) ?? toCurrency(raw.balance) ?? null;
+  return { ...unwrapMoney(withBreakdownCurrencies), currency: summaryCurrency };
 };
 
 /**

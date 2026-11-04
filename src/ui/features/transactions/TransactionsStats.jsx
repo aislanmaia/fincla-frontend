@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { AnimNum } from "../../components/primitives.jsx";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
@@ -55,7 +56,10 @@ export function TransactionsStats({
   aPagarDespesas = null,
   saldoLiquidado = null,
   fmt,
+  /** Moeda dos totais (#268): recorte numa conta em euro → "€". `null` = real. */
+  currency = null,
 }) {
+  const animPrefix = `${currencyInfo(currency || "BRL").symbol}\u00a0`;
   /* A faixa mede o PRÓPRIO box e escolhe o layout a partir dele.
      A viewport não serve de régua aqui: esta faixa divide a linha com o título,
      então em 1024 px de tela ela fica com 440 — e `compactLabels` era decidido
@@ -331,7 +335,7 @@ export function TransactionsStats({
                 {/* Sem `prefix`: o default de `AnimNum` já é "R$\u00a0" com o caractere
                     de verdade. Passar "R$&nbsp;" imprimia a entidade literal, porque
                     React não decodifica HTML em string de JS. */}
-                <AnimNum value={values[i].valor} />
+                <AnimNum value={values[i].valor} prefix={animPrefix} />
               </>
             )}
           </span>
