@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FC, FC_MODAL } from "./searchContract.js";
+import { FC, FC_MODAL, isRealYmd } from "./searchContract.js";
 
 /**
  * Converte string vazia / só espaços em `undefined` para não poluir o estado tipado.
@@ -73,6 +73,20 @@ const fcYmdSchema = z.preprocess((val) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined;
 }, z.string().optional());
 
+/** `YYYY-MM-DD` que existe no calendário, ou `undefined` (deep link de Lançamentos). */
+const fcRealYmdSchema = z.preprocess((val) => {
+  const s = val == null ? "" : String(val).trim();
+  return isRealYmd(s) ? s : undefined;
+}, z.string().optional());
+
+/** Enum estrito: qualquer outro valor (inclusive caixa diferente) vira `undefined`. */
+function fcStrictEnum(values) {
+  return z.preprocess((val) => {
+    const s = val == null ? "" : String(val).trim();
+    return values.includes(s) ? s : undefined;
+  }, z.enum(values).optional());
+}
+
 /** `YYYY-MM` ou `undefined`. */
 const fcYmSchema = z.preprocess((val) => {
   const s = val == null ? "" : String(val).trim();
@@ -120,6 +134,10 @@ export const finclaRootSearchSchema = z.object({
   [FC.CAL_HIDE]: optionalTrimmedString(32),
   [FC.CAL_PAY]: optionalTrimmedString(256),
   [FC.DATE]: fcYmdSchema,
+  [FC.TX_FROM]: fcRealYmdSchema,
+  [FC.TX_TO]: fcRealYmdSchema,
+  [FC.TX_TYPE]: fcStrictEnum(["expense", "income"]),
+  [FC.TX_STATUS]: fcStrictEnum(["paid", "to_pay"]),
   [FC.VIEW]: viewSchema,
   [FC.HUB_CARD]: hubCardSchema,
   [FC.LEDGER_INVOICE]: fcYmSchema,

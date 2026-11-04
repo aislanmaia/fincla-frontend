@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FC, FC_MODAL, editTransactionSearch, mergeNavSearch, simulationTipoFromUrl, simulationTipoToUrl } from "../searchContract.js";
+import { FC, FC_MODAL, editTransactionSearch, isRealYmd, mergeNavSearch, simulationTipoFromUrl, simulationTipoToUrl } from "../searchContract.js";
 
 describe("searchContract", () => {
   it("editTransactionSearch abre o painel de edição e preserva o resto da URL", () => {
@@ -48,5 +48,19 @@ describe("searchContract", () => {
     expect(out[FC.MODAL]).toBeUndefined();
     expect(out[FC.TX]).toBeUndefined();
     expect(out[FC.HUB_CARD]).toBeUndefined();
+  });
+
+  it("mergeNavSearch não vaza os filtros do deep link de Lançamentos para outras telas", () => {
+    const prev = { [FC.TX_FROM]: "2026-10-01", [FC.TX_TO]: "2026-10-31", [FC.TX_TYPE]: "expense", [FC.TX_STATUS]: "paid", invite_token: "t" };
+    const out = mergeNavSearch(prev, "dashboard", {});
+    expect(out).toEqual({ invite_token: "t" });
+  });
+
+  it("isRealYmd valida calendário de verdade", () => {
+    expect(isRealYmd("2026-10-31")).toBe(true);
+    expect(isRealYmd("2028-02-29")).toBe(true);
+    for (const bad of ["2026-02-29", "2026-04-31", "2026-00-10", "2026-10-00", "2026-1-1", "", null, undefined, 20261001]) {
+      expect(isRealYmd(bad)).toBe(false);
+    }
   });
 });

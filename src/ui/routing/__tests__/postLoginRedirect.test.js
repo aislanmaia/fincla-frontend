@@ -84,3 +84,44 @@ describe("capture + consume pós-login", () => {
     expect(sessionStorage.getItem(KEY)).toBeNull();
   });
 });
+
+describe("deep link /transactions com filtros", () => {
+  const DEEP =
+    "/transactions?fc_from=2026-10-01&fc_to=2026-10-31&fc_type=expense&fc_status=paid&fc_category=Alimenta%C3%A7%C3%A3o";
+
+  it("preserva path + query inteira ida e volta", () => {
+    capturePostLoginRedirectFromLocation({
+      pathname: "/transactions",
+      searchStr: DEEP.slice("/transactions".length),
+    });
+    expect(consumePostLoginNavigateArgs()).toEqual({ href: DEEP, replace: true });
+  });
+
+  it("aceita categoria com apóstrofo cru (encodeURIComponent não o escapa); a URL o normaliza para %27", () => {
+    capturePostLoginRedirectFromLocation({ pathname: "/transactions", searchStr: "?fc_category=D'%C3%A1gua" });
+    expect(consumePostLoginNavigateArgs()?.href).toBe("/transactions?fc_category=D%27%C3%A1gua");
+  });
+
+  it.each([
+    ["//evil.com", ""],
+    ["//evil.com/transactions", ""],
+    ["/\\evil.com", ""],
+    ["https://evil.com/transactions", ""],
+    ["/transactions/../../evil", ""],
+    ["/transactions", "?x=<script>"],
+    ["/transactions", 'x="1'],
+    ["/transactions", "//evil.com"],
+  ])("não grava destino inseguro %s %s", (pathname, searchStr) => {
+    capturePostLoginRedirectFromLocation({ pathname, searchStr });
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("valor adulterado no storage é rejeitado na leitura (open redirect)", () => {
+    for (const raw of ["//evil.com", "https://evil.com/transactions", "/\\evil.com", "javascript:alert(1)"]) {
+      sessionStorage.setItem(KEY, raw);
+      expect(consumePostLoginNavigateArgs()).toBeNull();
+      expect(sessionStorage.getItem(KEY)).toBeNull();
+    }
+  });
+});
+
