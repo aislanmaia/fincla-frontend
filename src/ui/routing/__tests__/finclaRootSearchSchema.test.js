@@ -101,4 +101,40 @@ describe("finclaRootSearchSchema", () => {
       [FC.SIM_OPEN]: "1",
     });
   });
+
+  describe("deep link de Lançamentos (fc_from/fc_to/fc_type/fc_status)", () => {
+    it("aceita valores válidos", () => {
+      expect(
+        parseFinclaRootSearch({ fc_from: "2026-10-01", fc_to: "2026-10-31", fc_type: "expense", fc_status: "paid" }),
+      ).toEqual({ fc_from: "2026-10-01", fc_to: "2026-10-31", fc_type: "expense", fc_status: "paid" });
+      expect(parseFinclaRootSearch({ fc_type: "income", fc_status: "to_pay" })).toEqual({ fc_type: "income", fc_status: "to_pay" });
+    });
+
+    it.each(["2026-02-31", "2026-13-01", "2026-10-1", "26-10-01", "2026-10-01T00:00", "abc", "", "9999-99-99"])(
+      "descarta data inválida %j",
+      (bad) => {
+        expect(parseFinclaRootSearch({ fc_from: bad, fc_to: bad }).fc_from).toBeUndefined();
+        expect(parseFinclaRootSearch({ fc_from: bad, fc_to: bad }).fc_to).toBeUndefined();
+      },
+    );
+
+    it("aceita 29/02 só em ano bissexto", () => {
+      expect(parseFinclaRootSearch({ fc_from: "2028-02-29" }).fc_from).toBe("2028-02-29");
+      expect(parseFinclaRootSearch({ fc_from: "2026-02-29" }).fc_from).toBeUndefined();
+    });
+
+    it.each(["transfer", "refund", "EXPENSE", "despesa", "expense,income", "", "1"])("descarta fc_type %j", (bad) => {
+      expect(parseFinclaRootSearch({ fc_type: bad }).fc_type).toBeUndefined();
+    });
+
+    it.each(["settled", "pagas", "PAID", "unpaid", "paid,to_pay", ""])("descarta fc_status %j", (bad) => {
+      expect(parseFinclaRootSearch({ fc_status: bad }).fc_status).toBeUndefined();
+    });
+
+    it("não derruba o parse: inválidos somem e o resto (inclusive fc_category) segue", () => {
+      expect(parseFinclaRootSearch({ fc_from: "x", fc_type: "zzz", fc_status: {}, fc_category: "Alimentação" })).toEqual({
+        fc_category: "Alimentação",
+      });
+    });
+  });
 });

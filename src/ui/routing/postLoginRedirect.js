@@ -43,7 +43,8 @@ function isSafeSearchStr(searchStr) {
   if (typeof searchStr !== "string") return false;
   if (!searchStr.startsWith("?")) return false;
   if (searchStr.length > 1024) return false;
-  if (/[<>"']/.test(searchStr)) return false;
+  // Apóstrofo é legítimo (encodeURIComponent não o escapa: "D'água"); só < > " ficam de fora.
+  if (/[<>"]/.test(searchStr)) return false;
   return true;
 }
 
@@ -94,6 +95,9 @@ export function consumePostLoginNavigateArgs() {
     sessionStorage.removeItem(STORAGE_KEY);
     if (!raw || typeof raw !== "string") return null;
     if (raw.length > MAX_FULL_LEN) return null;
+    // Só caminho relativo à origem: `new URL(raw, base)` ignora a base quando `raw` é absoluta
+    // ("https://evil.com/transactions") e normaliza `\` em `/` — recusar antes de parsear.
+    if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return null;
     let url;
     try {
       url = new URL(raw, "http://fincla.local");

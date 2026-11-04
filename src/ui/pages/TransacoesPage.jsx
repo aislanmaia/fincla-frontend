@@ -24,6 +24,7 @@ import {
   tagOptionsToDisplayMap,
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
+import { resolveTransactionsDeepLink } from "../features/transactions/transactionsDeepLink.js";
 import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
 import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
@@ -757,11 +758,16 @@ function TransacoesPageBody({
    * Estado canônico dos filtros + ordenação multi-nível (Variação C — Faceted Pills).
    * O período inicial vem do localStorage por org (preservado da implementação anterior).
    */
+  /* Deep link (`fc_from/fc_to/fc_type/fc_status`) entra no estado INICIAL, não num
+     efeito: a primeira busca já sai com o filtro certo, sem piscar a lista do mês. */
+  const deepLink = resolveTransactionsDeepLink(urlSearch);
+  const deepLinkPeriod = deepLink.period != null;
   const filter = useTransactionsFilterState({
     initial: {
       period: b0.period,
       customFrom: b0.customFrom,
       customTo: b0.customTo,
+      ...deepLink,
     },
     initialSort: DEFAULT_SORT,
   });
@@ -1146,7 +1152,7 @@ function TransacoesPageBody({
     }
     // Deep-link `?fc_date` tem precedência: não deixar o bootstrap de período
     // (localStorage) sobrescrever o filtro do dia vindo do calendário.
-    if (fcDate) return;
+    if (fcDate || deepLinkPeriod) return;
     const row = getTransactionsPeriodBootstrap(organizationId);
     periodPersistFingerprintRef.current = JSON.stringify({
       org: organizationId,
@@ -1164,7 +1170,7 @@ function TransacoesPageBody({
     if (!organizationId) return;
     // Deep-link do calendário (`?fc_date=`) é um filtro transiente: não persistir
     // como período padrão do usuário (senão `/transactions` fica preso naquele dia).
-    if (fcDate) return;
+    if (fcDate || deepLinkPeriod) return;
     const fp = JSON.stringify({
       org: organizationId,
       period: filter.period,
@@ -1178,7 +1184,7 @@ function TransacoesPageBody({
       customFrom: filter.customFrom,
       customTo: filter.customTo,
     });
-  }, [organizationId, fcDate, filter.period, filter.customFrom, filter.customTo]);
+  }, [organizationId, fcDate, deepLinkPeriod, filter.period, filter.customFrom, filter.customTo]);
 
   useEffect(() => {
     const trimmed = searchInput.trim();
