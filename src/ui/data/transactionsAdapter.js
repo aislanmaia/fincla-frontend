@@ -1641,8 +1641,11 @@ export function buildUpdateTransactionPayload({
   // Mover para conta de outra moeda: o backend EXIGE `value` na moeda nova (422
   // sem ele). Vai sempre — mesmo quando o número coincide com o anterior ("usar
   // 52,40 como US$"), que o diff abaixo descartaria por "não mudou".
+  // Só quando a conta MUDA de fato em relação ao baseline: sem troca de conta não
+  // há "valor na moeda nova" a forçar, e o diff decide o `value` como sempre.
+  const movingFromBaseline = !baseline || String(accountId ?? "") !== String(baseline.accountId ?? "");
   const withMoveValue = (body) => {
-    if (body.account_id && moveValue != null && Number.isFinite(Number(moveValue))) {
+    if (body.account_id && movingFromBaseline && moveValue != null && Number.isFinite(Number(moveValue))) {
       body.value = Number(moveValue);
     }
     return body;

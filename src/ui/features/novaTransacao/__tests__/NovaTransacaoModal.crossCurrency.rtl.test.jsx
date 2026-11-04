@@ -64,8 +64,10 @@ const rowInB = {
 };
 
 let quotation;
+let allAccounts;
 
 beforeEach(() => {
+  allAccounts = [];
   quotation = () => Promise.resolve({ data: { base: "BRL", quote: "USD", rate: "0.1825", quoted_on: "2026-11-03" } });
   apiClient.get.mockImplementation((url) => {
     if (url === "/balances") {
@@ -73,6 +75,7 @@ beforeEach(() => {
         accounts: [balanceRow(ACC_A, "Conta A Itaú", "BRL"), balanceRow(ACC_B, "Conta B Nubank", "BRL"), balanceRow(ACC_USD, "Wise USD", "USD")] } });
     }
     if (url === "/quotations/BRL/USD") return quotation();
+    if (url === "/accounts") return Promise.resolve({ data: allAccounts });
     return Promise.resolve({ data: [] });
   });
   apiClient.put.mockImplementation((url, body) => Promise.resolve({ data: { id: 601, account_id: body.account_id ?? ACC_B } }));
@@ -99,7 +102,7 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
     const box = await screen.findByTestId("account-move-value");
-    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em US$. Valor convertido pela cotação de 03/11/2026 (US$ 1 = R$ 5,48):"));
+    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em US$. Valor convertido pela cotação de 03/11 (R$ 1 = US$ 0,1825):"));
     expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40");
     expect(box).toHaveTextContent("Confira com o extrato do banco.");
   });
@@ -146,11 +149,10 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const field = screen.getByLabelText("Valor em US$");
     expect(field).toHaveValue("");
 
-    await reviewAndConfirm(user);
-    expect(await screen.findByText("Informe o valor em US$ para mover para esta conta.")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(await screen.findByText("Informe o valor em US$")).toBeInTheDocument();
     expect(apiClient.put).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: /^Editar$/i }));
     await user.type(screen.getByLabelText("Valor em US$"), "50");
     await reviewAndConfirm(user);
     await waitFor(() => expect(apiClient.put).toHaveBeenCalledTimes(1));
@@ -168,4 +170,87 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     expect(body).not.toHaveProperty("value");
     expect(quotationCalls()).toHaveLength(0);
   });
+
+  it("cotação que chega DEPOIS de a pessoa digitar não sobrescreve o valor dela", async () => {
+    let release;
+    quotation = () => new Promise((r) => { release = () => r({ data: { base: "BRL", quote: "USD", rate: "0.1825", quoted_on: "2026-11-03" } }); });
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const field = await screen.findByLabelText("Valor em US$");
+    await user.type(field, "60,00");
+    release();
+    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("0,1825"));
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("60,00");
+  });
+
+  it("mudar o valor original refaz a sugestão enquanto o campo não foi tocado; tocado, mantém", async () => {
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40"));
+    const original = screen.getAllByPlaceholderText("0,00").find((el) => el.getAttribute("aria-label") !== "Valor em US$");
+    await user.type(original, "0"); // 287,15 → 2.871,50
+    // 2.871,50 × 0,1825 = 524,04875 → 524,05
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("524,05"));
+
+    await user.clear(screen.getByLabelText("Valor em US$"));
+    await user.type(screen.getByLabelText("Valor em US$"), "500,00");
+    await user.type(original, "{Backspace}"); // volta a 287,15
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("500,00");
+  });
+
+  it("Revisar fica bloqueado com o valor vazio, com o aviso no próprio campo", async () => {
+    quotation = () => Promise.reject(Object.assign(new Error("503"), { isAxiosError: true, response: { status: 503, data: {} } }));
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("Sem cotação agora"));
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(await screen.findByText("Informe o valor em US$")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Confirmar despesa/i })).toBeNull();
+  });
+
+  it("alternar entre contas não rebusca a cotação nem apaga o valor digitado do mesmo par", async () => {
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const field = await screen.findByLabelText("Valor em US$");
+    await waitFor(() => expect(field).toHaveValue("52,40"));
+    await user.clear(field);
+    await user.type(field, "51,00");
+    await user.selectOptions(screen.getByLabelText("Conta"), ACC_A);
+    await user.selectOptions(screen.getByLabelText("Conta"), ACC_USD);
+    expect(await screen.findByLabelText("Valor em US$")).toHaveValue("51,00");
+    expect(quotationCalls()).toHaveLength(1);
+  });
+
+  it("conta gravada desativada: a moeda vem da lista completa de contas", async () => {
+    allAccounts = [{ id: "acc-velha", name: "Conta Velha", currency: "USD", is_active: false }];
+    const user = userEvent.setup();
+    const row = { ...rowInB, accountId: "acc-velha", currency: null };
+    render(<NovaTransacaoModal {...props} preConfig={buildTxModalPreConfig(row)} />);
+    await user.selectOptions(await screen.findByDisplayValue("Conta desativada"), ACC_A);
+    // USD → BRL: pede o valor em R$ (cotação USD/BRL não mockada → sem cotação).
+    expect(await screen.findByTestId("account-move-value")).toHaveTextContent("informe o valor em R$");
+  });
+
+  it("moeda de origem desconhecida: bloqueia a troca em vez de mandar PUT sem valor", async () => {
+    allAccounts = [];
+    const user = userEvent.setup();
+    const row = { ...rowInB, accountId: "acc-sumida", currency: null };
+    render(<NovaTransacaoModal {...props} preConfig={buildTxModalPreConfig(row)} />);
+    await user.selectOptions(await screen.findByDisplayValue("Conta desativada"), ACC_A);
+    expect((await screen.findAllByText(/Não foi possível identificar a moeda deste lançamento/)).length).toBeGreaterThan(0);
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(screen.queryByRole("button", { name: /Confirmar despesa/i })).toBeNull();
+    expect(apiClient.put).not.toHaveBeenCalled();
+  });
+
+  it("lançamento em US$ editado sem trocar de conta: a revisão escreve US$, não R$", async () => {
+    const user = userEvent.setup();
+    const row = { ...rowInB, accountId: ACC_USD, currency: "USD" };
+    render(<NovaTransacaoModal {...props} preConfig={buildTxModalPreConfig(row)} />);
+    await screen.findByDisplayValue("Wise USD");
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(await screen.findByText(/US\$ 287,15/)).toBeInTheDocument();
+    expect(screen.queryByText(/R\$ 287,15/)).toBeNull();
+  });
 });
+
