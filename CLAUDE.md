@@ -30,6 +30,7 @@ Consequências aceitas conscientemente: `overscroll-behavior: none` desliga o pu
 - Auth: Bearer em `localStorage.getItem('auth_token')`
 - **Contrato da API (canônico, só em fincla-api):** [`fincla-api/docs/FRONTEND_API_GUIDE.md`](../fincla-api/docs/FRONTEND_API_GUIDE.md) — caminho local no monorepo; no clone só do backend: `docs/FRONTEND_API_GUIDE.md`; no GitHub: https://github.com/aislanmaia/fincla-api/blob/main/docs/FRONTEND_API_GUIDE.md — o backend registra ali **todas** as mudanças (endpoints, parâmetros, retornos, erros).
 - **`docs/FRONTEND_AUTH_INVITE_LINKS.md`** — repasse **só** ao backend para **compliance** dos **links de e-mail** com o SPA (reset/convite); não substitui o guia da API.
+- **`docs/FRONTEND_TRANSACTIONS_DEEP_LINK.md`** — contrato do deep link `/transactions?fc_from&fc_to&fc_type&fc_status&fc_category` (assistente do WhatsApp) e retorno pós-login.
 - **`docs/DASHBOARD_INSIGHT_CTA_SPEC.md`** — especificação dos botões do card «Insight do dia» (humor/mood → navegação); **implementação pendente**.
 
 ### Integração com a API (status)

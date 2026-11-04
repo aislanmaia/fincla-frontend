@@ -21,6 +21,11 @@ export const FC = {
   CAL_HIDE: "fc_cal_hide", // tipos ocultos: "income" | "expense" | "income,expense"
   CAL_PAY: "fc_cal_pay", // formas de pagamento ocultas (csv)
   DATE: "fc_date", // "YYYY-MM-DD" — filtro de dia no /transactions
+  // Deep link de filtros dos Lançamentos (/transactions) — ver docs/FRONTEND_TRANSACTIONS_DEEP_LINK.md.
+  TX_FROM: "fc_from", // "YYYY-MM-DD" — início do período (exige fc_to)
+  TX_TO: "fc_to", // "YYYY-MM-DD" — fim do período (>= fc_from)
+  TX_TYPE: "fc_type", // "expense" | "income"
+  TX_STATUS: "fc_status", // "paid" | "to_pay"
   // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=new` do Hub de Cartões.
   VIEW: "view",
   HUB_CARD: "card",
@@ -31,6 +36,14 @@ export const FC = {
   LEDGER_SEARCH: "fc_q", // texto da busca
   LEDGER_KIND: "fc_kind", // "one_off" | "installment" | "recurring" | "refund"
 };
+
+/** `true` só para `YYYY-MM-DD` que existe no calendário (rejeita 2026-02-31, 2026-13-01). */
+export function isRealYmd(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
 
 /** Valores de `fc_modal` (inglês, partilháveis). */
 export const FC_MODAL = {
@@ -82,6 +95,11 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   const next = { ...previous };
   delete next[FC.ADD];
   delete next[FC.CATEGORY];
+  // Filtros de deep link dos Lançamentos não vazam para outras telas (nem voltam sozinhos ao reabrir /transactions).
+  delete next[FC.TX_FROM];
+  delete next[FC.TX_TO];
+  delete next[FC.TX_TYPE];
+  delete next[FC.TX_STATUS];
   delete next[FC.SIM_OPEN];
   delete next[FC.SIM_ITEM];
   delete next[FC.MODAL];
