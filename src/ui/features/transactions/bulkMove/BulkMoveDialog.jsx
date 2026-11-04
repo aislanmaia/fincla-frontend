@@ -69,8 +69,12 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {group.rows.map((tx) => {
           const text = values[tx.id] ?? "";
-          // Um valor que arredonda para 0,00 é apontado NA linha, não só no botão travado.
-          const zeroed = text.trim() !== "" && !((parseAmountInput(text) ?? 0) > 0);
+          // Problema do valor apontado NA linha, não só no botão travado: texto que não é
+          // número ("abc") é inválido; número que arredonda para 0,00 pede um maior.
+          // parseBRL devolve 0 para texto sem número, então "sem dígito" é o sinal de inválido.
+          const parsed = /\d/.test(text) ? parseAmountInput(text) : null;
+          const invalid = text.trim() !== "" && parsed === null;
+          const zeroed = parsed !== null && parsed <= 0;
           return (
           <li key={tx.id} style={{ ...G, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12 }}>
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: T.ink }}>{tx.desc}</span>
@@ -82,9 +86,9 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
                 onChange={(e) => onValue(tx.id, e.target.value)}
                 style={{ ...G, ...NUM, width: 76, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 700, color: T.ink }} />
             </label>
-            {zeroed ? (
+            {invalid || zeroed ? (
               <span role="alert" style={{ flexBasis: "100%", fontSize: 11.5, color: T.red }}>
-                Fica {toSymbol} 0,00 nessa moeda — informe um valor maior.
+                {invalid ? "Valor inválido" : `Fica ${toSymbol} 0,00 nessa moeda — informe um valor maior.`}
               </span>
             ) : null}
           </li>

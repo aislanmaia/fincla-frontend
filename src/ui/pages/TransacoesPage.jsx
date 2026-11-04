@@ -4485,10 +4485,9 @@ function TransacoesPageBody({
              conta, a dela) — o fallback de uma linha sem moeda. Sem ela: inelegível. */
           baseCurrency={summaryCurrency}
           onClose={() => setBulkMoveRows(null)}
-          onMoved={(ids) => {
-            const moved = ids.map(String);
-            setBulkSelected((cur) => cur.filter((id) => !moved.includes(id)));
-            // Lista, resumo e saldos (Minhas Contas, Visão Geral) releem com o token.
+          onMoved={() => {
+            // Lista, resumo e saldos (Minhas Contas, Visão Geral) releem com o token —
+            // e o token limpa a seleção inteira, como no razão do cartão.
             onTransactionsInvalidate?.();
           }}
         />

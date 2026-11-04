@@ -311,7 +311,7 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     await waitFor(() => expect(screen.queryByTestId("bulk-selection-bar")).toBeNull());
   });
 
-  it("com o lote em voo, Esc / ✕ / fundo não fecham; os resultados aparecem", async () => {
+  it("com o lote em voo, ✕ / fundo não fecham; os resultados aparecem", async () => {
     let release;
     putImpl = (url, body) => new Promise((r) => { release = () => r({ data: { id: 1, ...body } }); });
     const user = userEvent.setup();
@@ -320,7 +320,6 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     await openMoveTo(user, "Conta B Nubank");
     await user.click(await screen.findByRole("button", { name: "Mover 1 lançamento" }));
     const dialog = screen.getByRole("dialog");
-    fireEvent.keyDown(document, { key: "Escape" });
     await user.click(within(dialog).getByRole("button", { name: "Fechar" }));
     fireEvent.click(dialog.parentElement);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -416,4 +415,63 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     render(<TransactionsSkeleton rows={1} leadingGutterPx={34} />);
     expect(screen.getByTestId("transactions-skeleton").firstChild).toHaveStyle({ paddingLeft: "48px" });
   });
+
+  it("valor que não é número diz 'Valor inválido', não '0,00'", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+    await user.clear(field);
+    await user.type(field, "abc");
+    const group = screen.getByTestId("bulk-move-group-BRL");
+    expect(within(group).getByRole("alert")).toHaveTextContent("Valor inválido");
+    expect(within(group).getByRole("alert")).not.toHaveTextContent("0,00");
+    expect(screen.getByRole("button", { name: "Mover 1 lançamento" })).toBeDisabled();
+  });
+
+  describe("celular (sheet)", () => {
+    const SLIDE_WAIT = 600;
+    const drag = (handle) => {
+      fireEvent.touchStart(handle, { touches: [{ clientY: 100 }] });
+      fireEvent.touchMove(document, { touches: [{ clientY: 300 }] });
+      fireEvent.touchEnd(document);
+    };
+
+    it("com o lote em voo, Esc / ✕ / fundo / arraste não fecham; os resultados ficam", async () => {
+      let release;
+      putImpl = (url, body) => new Promise((r) => { release = () => r({ data: { id: 1, ...body } }); });
+      const user = userEvent.setup();
+      renderPage({ isMobile: true });
+      await selectRows(user, "Mercado");
+      await openMoveTo(user, "Conta B Nubank");
+      await user.click(await screen.findByRole("button", { name: "Mover 1 lançamento" }));
+      fireEvent.keyDown(document, { key: "Escape" });
+      await user.click(screen.getByRole("button", { name: "Fechar mover para conta" }));
+      fireEvent.click(screen.getByTestId("bulk-move-backdrop"));
+      drag(screen.getByTestId("bulk-move-handle"));
+      await new Promise((r) => setTimeout(r, SLIDE_WAIT));
+      expect(screen.getByRole("dialog", { name: /Mover/ })).toBeInTheDocument();
+      release();
+      expect(await screen.findByTestId("bulk-move-results")).toHaveTextContent("1 movido");
+      await new Promise((r) => setTimeout(r, SLIDE_WAIT));
+      expect(screen.getByTestId("bulk-move-results")).toBeInTheDocument();
+    });
+
+    it("valor editado: o fundo não fecha; o ✕ fecha", async () => {
+      const user = userEvent.setup();
+      renderPage({ isMobile: true });
+      await selectRows(user, "Jantar em Nova York");
+      await openMoveTo(user, "Wise");
+      const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+      await user.clear(field);
+      await user.type(field, "50,00");
+      fireEvent.click(screen.getByTestId("bulk-move-backdrop"));
+      await new Promise((r) => setTimeout(r, SLIDE_WAIT));
+      expect(screen.getByRole("dialog", { name: /Mover/ })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Fechar mover para conta" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+  });
 });
+
