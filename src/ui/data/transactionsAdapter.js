@@ -1187,6 +1187,8 @@ export function buildEditBaselineFromUi(ui) {
     modality: isCard ? (isParcelado ? "installment" : "cash") : null,
     installmentsCount: isParcelado ? ui.parcela.total : null,
     recurring: !!ui.rec,
+    // Conta gravada: sem ela no baseline, trocar a conta no Editar nunca entraria no diff.
+    accountId: ui.accountId ?? null,
   };
 }
 
@@ -1598,6 +1600,7 @@ export function buildUpdateTransactionPayload({
   installmentsCount = null,
   modality = null,
   recurring = false,
+  accountId = null,
   baseline = null,
 }) {
   let type;
@@ -1630,6 +1633,9 @@ export function buildUpdateTransactionPayload({
       payload.installments_count = Number(installmentsCount);
     }
   }
+  // Conta de liquidação (fincla-api#444). Só existe quando a tela tem uma conta
+  // escolhida; cartão não manda (a conta dele é a do cartão).
+  if (accountId) payload.account_id = String(accountId);
   if (!baseline) return payload;
 
   // Envia só o que o usuário mexeu. Sem isso o backend recebe o pacote inteiro em toda
