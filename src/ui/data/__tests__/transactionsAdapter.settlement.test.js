@@ -4,6 +4,7 @@ import {
   buildTransactionsQuery,
   buildTransactionsSummaryQuery,
   mapApiTransactionToUi,
+  paidAtIsoForSettlement,
 } from "../transactionsAdapter.js";
 
 const base = {
@@ -119,5 +120,19 @@ describe("buildTransactionsQuery / buildTransactionsSummaryQuery — param settl
     expect(buildTransactionsSummaryQuery({ ...q, settlement: "a-pagar" }).settled).toBe(false);
     expect(buildTransactionsSummaryQuery({ ...q, settlement: "pagas" }).settled).toBe(true);
     expect(buildTransactionsSummaryQuery({ ...q, settlement: "todas" })).not.toHaveProperty("settled");
+  });
+});
+
+describe("paidAtIsoForSettlement (#265)", () => {
+  it("hoje de manhã: a hora de parede local, sem fuso", () => {
+    expect(paidAtIsoForSettlement("2026-11-04", new Date(2026, 10, 4, 8, 15, 42))).toBe("2026-11-04T08:15:42");
+  });
+
+  it("hoje à noite: continua no mesmo dia (sem fuso que vire o dia em UTC)", () => {
+    expect(paidAtIsoForSettlement("2026-11-04", new Date(2026, 10, 4, 22, 30, 0))).toBe("2026-11-04T22:30:00");
+  });
+
+  it("outra data: meio-dia daquele dia, como antes", () => {
+    expect(paidAtIsoForSettlement("2026-11-01", new Date(2026, 10, 4, 8, 15, 42))).toBe("2026-11-01T12:00:00");
   });
 });

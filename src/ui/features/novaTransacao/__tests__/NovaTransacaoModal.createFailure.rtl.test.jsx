@@ -91,6 +91,11 @@ vi.mock("../../../data/transactionsAdapter.js", async (importOriginal) => {
     // servidor. Aqui a resposta é controlada por cenário: é justamente essa
     // costura (UI reagindo ao veredito do adapter) que se quer testar.
     createResendIsProtected: vi.fn(() => false),
+    // `createTransactionForUi` está mockado, então o mapa de chaves retidas do
+    // adapter real nunca é preenchido. Na vida real a tentativa que falhou deixa a
+    // chave retida — e é isso que mantém congelado o `paid_at` do "Já paguei"
+    // (#265) para o reenvio sair com o MESMO payload.
+    hasRetainedCreateIdempotencyKey: vi.fn(() => true),
     // Embrulha a implementação real: o efeito continua acontecendo e ainda dá
     // para afirmar QUANDO o modal solta a chave retida.
     releaseCreateIdempotencyKey: vi.fn(actual.releaseCreateIdempotencyKey),

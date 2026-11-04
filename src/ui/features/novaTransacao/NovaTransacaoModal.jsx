@@ -52,11 +52,13 @@ import {
   createTransactionPayloadFingerprint,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
+  hasRetainedCreateIdempotencyKey,
   isCreateTransactionErrorMaybePersisted,
   clampNovaTxPrefsParcelas,
   initialNovaTransacaoDateYmd,
   isUuidString,
   normalizeStoredNovaTxPaymentMethod,
+  paidAtIsoForSettlement,
   readStoredNovaTransacaoPrefs,
   releaseCreateIdempotencyKey,
   resolveStoredNovaTxCategorySelection,
@@ -426,6 +428,37 @@ export const NovaTransacaoModal = ({
   // contradiz a faixa logo abaixo ("este envio é um lançamento novo") e,
   // naquele ponto, já é falsa.
   const lastCreateErrorBaseMessageRef = useRef("");
+  // `paid_at` de "Já paguei" com data de hoje é o INSTANTE do lançamento (#265) —
+  // e a `Idempotency-Key` da criação é a impressão digital do payload. Recalcular
+  // o instante a cada clique mudaria o payload entre a tentativa que falhou de forma
+  // ambígua e o reenvio: chave nova, lançamento DUPLICADO no servidor. O instante é
+  // capturado na primeira tentativa e reaproveitado por todo reenvio deste
+  // lançamento; ele morre junto com as chaves retidas (`releaseFailedCreateKeys`:
+  // sucesso, reabrir, «Nova transação»).
+  //
+  // MAPA por data, não um slot: hoje → ontem → hoje depois de uma falha ambígua
+  // precisa voltar ao instante ORIGINAL de hoje (é ele que está na chave retida).
+  // E o instante só vale enquanto a chave da tentativa que o usou continua retida:
+  // erro definitivo (4xx), chave liberada pelo adapter ou TTL vencido → o próximo
+  // envio é intenção nova e leva a hora de agora.
+  const frozenPaidAtRef = useRef(new Map());
+  const paidAtForAttempt = (ymd) => {
+    const entry = frozenPaidAtRef.current.get(ymd);
+    if (entry && retainedKeySafe(entry.payload)) return entry.iso;
+    frozenPaidAtRef.current.delete(ymd);
+    return paidAtIsoForSettlement(ymd);
+  };
+  /** Congela o instante só quando uma tentativa de fato SAI — é a chave dela que o mantém vivo. */
+  const notePaidAtAttempt = (ymd, payload) => {
+    if (payload?.paid_at) frozenPaidAtRef.current.set(ymd, { iso: payload.paid_at, payload });
+  };
+  const retainedKeySafe = (payload) => {
+    try {
+      return hasRetainedCreateIdempotencyKey(payload);
+    } catch {
+      return false;
+    }
+  };
 
   /**
    * Solta no adapter todas as chaves das tentativas que este drawer abandonou.
@@ -462,6 +495,7 @@ export const NovaTransacaoModal = ({
       releaseCreateIdempotencyKey(fingerprint);
     }
     failedCreateFingerprintsRef.current.clear();
+    frozenPaidAtRef.current.clear();
   };
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
@@ -1698,7 +1732,9 @@ export const NovaTransacaoModal = ({
                 "Ainda não recebi" when off, which read as the switch being ON for "not received". */}
             <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{copy.settledToggle}</div>
             <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1 }}>
-              {settled ? "Entra no saldo da conta agora." : copy.pendingHint}
+              {settled
+                ? (txDateYmd > todayLocalYmd() ? "Entra no saldo na data escolhida." : "Entra no saldo da conta agora.")
+                : copy.pendingHint}
             </div>
           </div>
           <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkFaint, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
@@ -1929,6 +1965,7 @@ export const NovaTransacaoModal = ({
       // Preenchido logo antes do POST; o catch usa para lembrar QUAL payload
       // falhou. Fica fora do `try` porque um erro pode acontecer antes dele.
       let attemptedCreatePayload = null;
+      let attemptedPaidAtYmd = null;
       try {
         if (method === "credito") {
           const idNum = Number(cardId);
@@ -1990,7 +2027,7 @@ export const NovaTransacaoModal = ({
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
             accountId: settleAccountId || null,
-            paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
+            paidAt: method !== "credito" && settled ? paidAtForAttempt(txDateYmd) : null,
           });
           // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
           // é garantidamente um replay. O modal já teve a própria conta (comparar fingerprints num `ref`),
@@ -2013,6 +2050,8 @@ export const NovaTransacaoModal = ({
             return;
           }
           attemptedCreatePayload = createPayload;
+          attemptedPaidAtYmd = txDateYmd;
+          notePaidAtAttempt(txDateYmd, createPayload);
           await createTransactionForUi(createPayload);
           // Sucesso: esta tentativa acabou e qualquer outra que tenha falhado
           // nesta sessão foi abandonada junto — soltar as chaves delas evita
@@ -2028,6 +2067,11 @@ export const NovaTransacaoModal = ({
         // gravado) — não para travar o reenvio, que a chave já protege, mas
         // para o portão acima avisar caso os dados mudem antes dele.
         const ambiguous = !isEditingExisting && isCreateTransactionErrorMaybePersisted(err);
+        // Erro que prova que nada foi gravado (4xx), ou chave solta pelo adapter:
+        // o instante congelado não protege mais nada — o próximo envio usa a hora atual.
+        if (attemptedPaidAtYmd != null && (!ambiguous || createErrorReleasedIdempotencyKey(err))) {
+          frozenPaidAtRef.current.delete(attemptedPaidAtYmd);
+        }
         // A chave sobrevive ao erro? Se o adapter a liberou (mismatch, ou
         // in-flight órfão), o próximo envio é lançamento NOVO e a promessa de
         // "não duplica" deixaria de ser verdade — a mensagem específica desses
