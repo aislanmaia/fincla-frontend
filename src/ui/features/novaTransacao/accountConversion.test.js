@@ -21,8 +21,8 @@ describe("accountConversion", () => {
     expect(h).not.toContain("0,00)");
   });
 
-  it("com a taxa inversa da API, mostra '1 <moeda nova> = <moeda de origem> x'", () => {
-    const h = conversionHeadline({ from: "BRL", to: "USD", quote: { rate: "0.1821029", displayRate: "5.4914", quoted_on: "2026-11-04" } });
+  it("mostra a cotação destino→origem como se lê câmbio: '1 <moeda nova> = <moeda de origem> x'", () => {
+    const h = conversionHeadline({ from: "BRL", to: "USD", quote: { rate: "5.4914", quoted_on: "2026-11-04" } });
     expect(h).toBe("Esta conta é em US$. Valor convertido pela cotação de 04/11 (US$ 1 = R$ 5,4914):");
   });
 });

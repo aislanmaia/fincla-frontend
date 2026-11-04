@@ -43,18 +43,13 @@ export function formatRatePtBr(rate) {
 /**
  * "Esta conta é em US$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"
  *
- * A taxa aparece como se lê câmbio no Brasil — 1 unidade da moeda NOVA em moeda de
- * origem — usando `quote.displayRate`, que vem pronta da API (cotação destino→origem).
- * Sem ela, cai na direção direta ("R$ 1 = US$ 0,1821") em vez de inverter na mão.
- * `null` sem cotação.
+ * `quote` é a cotação destino→origem (1 unidade da moeda NOVA em moeda de origem),
+ * a mesma usada na conta do valor sugerido; a data é a DELA. `null` sem cotação.
  */
 export function conversionHeadline({ from, to, quote }) {
   if (!quote?.rate || !from || !to) return null;
   const fromSymbol = currencyInfo(from).symbol;
   const toSymbol = currencyInfo(to).symbol;
   const quotedOn = formatDay(quote.quoted_on);
-  const rateText = quote.displayRate
-    ? `${toSymbol} 1 = ${fromSymbol} ${formatRatePtBr(quote.displayRate)}`
-    : `${fromSymbol} 1 = ${toSymbol} ${formatRatePtBr(quote.rate)}`;
-  return `Esta conta é em ${toSymbol}. Valor convertido pela cotação${quotedOn ? ` de ${quotedOn}` : ""} (${rateText}):`;
+  return `Esta conta é em ${toSymbol}. Valor convertido pela cotação${quotedOn ? ` de ${quotedOn}` : ""} (${toSymbol} 1 = ${fromSymbol} ${formatRatePtBr(quote.rate)}):`;
 }

@@ -49,3 +49,29 @@ export function convertAmountExact(amount, rate) {
   const abs = (negative ? -scaled : scaled).toString().padStart(MONEY_PLACES + 1, "0");
   return `${negative ? "-" : ""}${abs.slice(0, -MONEY_PLACES)}.${abs.slice(-MONEY_PLACES)}`;
 }
+
+/** Decimal simples ("5.4914", "100", "0.0365") — sem sinal, sem notação científica. */
+export const PLAIN_DECIMAL_RE = /^\d+(\.\d+)?$/;
+
+/**
+ * `amount ÷ rate` em 2 casas, HALF_UP, em inteiros. Usado quando a cotação vem na
+ * direção "1 <moeda nova> = x <moeda de origem>" (como se lê câmbio no Brasil): o
+ * valor na moeda nova é o de origem DIVIDIDO pela taxa mostrada — assim a conta da
+ * tela fecha (taxa × valor sugerido ≈ valor de origem). `null` para entrada inválida
+ * ou taxa zero.
+ */
+export function divideAmountExact(amount, rate) {
+  // A taxa precisa ser um decimal simples: notação científica ou lixo não vira número.
+  if (!PLAIN_DECIMAL_RE.test(String(rate ?? "").trim())) return null;
+  const a = parseDecimal(amount);
+  const r = parseDecimal(rate);
+  if (!a || !r || r.digits === 0n) return null;
+  // (a.digits / 10^a.scale) / (r.digits / 10^r.scale) em centavos:
+  // a.digits * 10^(r.scale + 2) / (r.digits * 10^a.scale)
+  const numerator = a.digits * 10n ** BigInt(r.scale + MONEY_PLACES);
+  const denominator = r.digits * 10n ** BigInt(a.scale);
+  const scaled = divHalfUp(numerator, denominator);
+  const negative = scaled < 0n;
+  const abs = (negative ? -scaled : scaled).toString().padStart(MONEY_PLACES + 1, "0");
+  return `${negative ? "-" : ""}${abs.slice(0, -MONEY_PLACES)}.${abs.slice(-MONEY_PLACES)}`;
+}
