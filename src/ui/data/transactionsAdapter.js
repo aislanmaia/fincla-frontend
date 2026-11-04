@@ -1187,6 +1187,8 @@ export function buildEditBaselineFromUi(ui) {
     modality: isCard ? (isParcelado ? "installment" : "cash") : null,
     installmentsCount: isParcelado ? ui.parcela.total : null,
     recurring: !!ui.rec,
+    // Conta gravada: sem ela no baseline, trocar a conta no Editar nunca entraria no diff.
+    accountId: ui.accountId ?? null,
   };
 }
 
@@ -1573,6 +1575,7 @@ export function buildUpdateTransactionPayload({
   installmentsCount = null,
   modality = null,
   recurring = false,
+  accountId = null,
   baseline = null,
 }) {
   let type;
@@ -1605,6 +1608,9 @@ export function buildUpdateTransactionPayload({
       payload.installments_count = Number(installmentsCount);
     }
   }
+  // Conta de liquidação (fincla-api#444). Só existe quando a tela tem uma conta
+  // escolhida; cartão não manda (a conta dele é a do cartão).
+  if (accountId) payload.account_id = String(accountId);
   if (!baseline) return payload;
 
   // Envia só o que o usuário mexeu. Sem isso o backend recebe o pacote inteiro em toda
@@ -2133,6 +2139,20 @@ export async function createTransactionForUi(payload) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
+}
+
+/**
+ * O servidor ignorou a troca de conta pedida no `PUT`? Um backend anterior ao
+ * fincla-api#444 descarta `account_id` em silêncio e responde 200 — a tela diria
+ * "Despesa registrada!" com o gasto ainda na conta antiga. Compara o que foi pedido
+ * com o que voltou; sem `account_id` no pedido (ou na resposta) não há o que afirmar.
+ */
+export function accountChangeWasIgnored(payload, response) {
+  const asked = payload?.account_id;
+  if (!asked) return false;
+  const got = response?.account_id;
+  if (got == null) return false;
+  return String(got) !== String(asked);
 }
 
 export async function updateTransactionForUi(transactionId, organizationId, payload) {

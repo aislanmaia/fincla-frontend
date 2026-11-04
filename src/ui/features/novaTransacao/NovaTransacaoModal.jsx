@@ -44,6 +44,7 @@ import {
   formatProjectionCardExplain,
 } from "../../data/novaTransacaoImpactUtils.js";
 import {
+  accountChangeWasIgnored,
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createErrorReleasedIdempotencyKey,
@@ -164,6 +165,16 @@ export function resolveQuickAddDetailTagLabel(id, rows, typedLabel) {
   return resolveDetailTagRowLabel(row) || typedLabel;
 }
 
+/**
+ * Conta que um lançamento NOVO usa quando a pessoa não escolhe outra: a primeira
+ * que entra no total, senão a primeira da lista. Um só lugar porque o carregamento
+ * das contas, a abertura do drawer e o «Nova transação» precisam da mesma resposta.
+ */
+function defaultSettleAccountId(accounts) {
+  const list = Array.isArray(accounts) ? accounts : [];
+  return list.find((a) => a.include_in_total)?.account_id || list[0]?.account_id || "";
+}
+
 /** Aviso sob o campo de data ao editar uma parcela: o campo é a data da COMPRA; o vencimento vai à parte. */
 function InstallmentDueNote({ preConfig }) {
   if (!preConfig?.purchaseDateEdit) return null;
@@ -239,9 +250,7 @@ export const NovaTransacaoModal = ({
         if (cancelled) return;
         const accts = d.accounts || [];
         setAccountOptions(accts);
-        setSettleAccountId(
-          (cur) => cur || accts.find((a) => a.include_in_total)?.account_id || accts[0]?.account_id || "",
-        );
+        setSettleAccountId((cur) => cur || defaultSettleAccountId(accts));
         accountsLoadedOrgRef.current = organizationId;
       })
       .catch(() => {});
@@ -826,6 +835,7 @@ export const NovaTransacaoModal = ({
       setRecurrenceRepetitions(preConfig?.encRepetitionsRec ?? 12);
       setRecurrenceEndDateYmd(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
       setCat(preConfig?.cat || "");
+      setSettleAccountId(defaultSettleAccountId(accountOptions));
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -927,6 +937,13 @@ export const NovaTransacaoModal = ({
         setRecurrencePanelExiting(false);
         setCardId("");
       }
+      // Editar mostra a conta GRAVADA (#266); sem ela (lançamento novo, duplicar de
+      // linha sem conta) volta à padrão — nunca herda a da abertura anterior.
+      setSettleAccountId(
+        preConfig.accountId != null && String(preConfig.accountId) !== ""
+          ? String(preConfig.accountId)
+          : defaultSettleAccountId(accountOptions),
+      );
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -975,6 +992,7 @@ export const NovaTransacaoModal = ({
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
       if (pp != null) setInstallments(pp);
     }
+    setSettleAccountId(defaultSettleAccountId(accountOptions));
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
@@ -1683,6 +1701,12 @@ export const NovaTransacaoModal = ({
           {accountOptions.map((a) => (
             <option key={a.account_id} value={a.account_id}>{a.name}</option>
           ))}
+          {/* Lançamento gravado numa conta que já não está na lista (desativada):
+              sem esta opção o <select> exibiria a primeira conta enquanto o estado
+              guarda outra — a mesma mentira do #266 por outra porta. */}
+          {accountOptions.length > 0 && settleAccountId && !accountOptions.some((a) => String(a.account_id) === String(settleAccountId))
+            ? <option value={settleAccountId}>Conta desativada</option>
+            : null}
         </select>
         <div
           role="switch"
@@ -1955,26 +1979,42 @@ export const NovaTransacaoModal = ({
         if (isEditingExisting) {
           const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
-          await updateTransactionForUi(
+          const updatePayload = buildUpdateTransactionPayload({
+            tipo: effectiveTipoEdit,
+            description: desc,
+            value: amountNum,
+            paymentMethodKey: method,
+            categoryTagId,
+            detailTagIds: detailIdsForApi,
+            dateIso,
+            installmentsCount,
+            modality,
+            cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
+            recurring: isRecurring,
+            // Cartão não troca de conta: a conta dele é a do cartão.
+            accountId: method !== "credito" ? (settleAccountId || null) : null,
+            // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
+            // o payload sai completo, como antes.
+            baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
+          });
+          const updated = await updateTransactionForUi(
             editingTransactionIdStr ?? editingTransactionId,
             organizationId,
-            buildUpdateTransactionPayload({
-              tipo: effectiveTipoEdit,
-              description: desc,
-              value: amountNum,
-              paymentMethodKey: method,
-              categoryTagId,
-              detailTagIds: detailIdsForApi,
-              dateIso,
-              installmentsCount,
-              modality,
-              cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
-              recurring: isRecurring,
-              // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
-              // o payload sai completo, como antes.
-              baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
-            }),
+            updatePayload,
           );
+          if (accountChangeWasIgnored(updatePayload, updated)) {
+            // O resto da edição foi gravado; só a conta não. Recarrega quem depende
+            // do lançamento e conta a verdade em vez de "Despesa registrada!".
+            try {
+              clearNovaTransacaoSummaryCache();
+              await onTransactionSaved?.();
+            } catch { /* efeito local; o aviso abaixo é o que importa */ }
+            setTxSubmitError(
+              "As outras alterações foram salvas, mas a conta não foi trocada: o servidor ainda não aceita mudar a conta de um lançamento. O lançamento continua na conta anterior.",
+            );
+            setTxSubmitting(false);
+            return;
+          }
         } else {
           const createPayload = buildCreateTransactionPayload({
             organizationId,
@@ -2151,6 +2191,7 @@ export const NovaTransacaoModal = ({
     } else {
       setModalityChoice("parcelado"); setInstallments(3);
     }
+    setSettleAccountId(defaultSettleAccountId(accountOptions));
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
@@ -2252,7 +2293,10 @@ export const NovaTransacaoModal = ({
               { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
               { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de ${fmtAbs(amountNum/installments)}`)) : "—" },
-              { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
+              // Cartão: o cartão escolhido. Fora dele, a conta onde o lançamento cai (#266).
+              method === "credito"
+                ? { label:"CARTÃO", val: cards.find(c=>c.id===cardId)?.nome || "—" }
+                : { label:"CONTA",  val: accountOptions.find((a) => String(a.account_id) === String(settleAccountId))?.name || (settleAccountId ? "Conta desativada" : "Conta padrão") },
             ]),
           ].map((f,i) => (
             <div key={i} style={{ background:T.surface, padding:"10px 14px" }}>

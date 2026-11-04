@@ -2068,3 +2068,61 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
     expect(chip.style.maxWidth).not.toBe("");
   });
 });
+
+describe("<TransacoesPage> — detalhe mostra a conta (#267)", () => {
+  // Testes anteriores deixam o feed de ajustes rejeitando (mockRejectedValue sobrevive
+  // ao clearAllMocks); aqui ele volta ao normal para isolar o que está sob teste.
+  beforeEach(() => { listOrgBalanceAdjustmentsMock.mockResolvedValue([]); });
+
+  it("o feed de ajustes fora do ar não apaga a conta do detalhe", async () => {
+    listOrgBalanceAdjustmentsMock.mockRejectedValue(new Error("backend fora"));
+    listAccountsMock.mockResolvedValue([
+      { id: "acc-a", name: "Conta A Itaú", currency: "BRL" },
+      { id: "acc-b", name: "Conta B Nubank", currency: "BRL" },
+    ]);
+    seedFeiraNaContaB();
+    renderPage();
+    await openFilters();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await userEvent.click((await screen.findAllByText("Feira"))[0]);
+    expect(await screen.findByText("Conta B Nubank")).toBeInTheDocument();
+  });
+
+  function seedFeiraNaContaB() {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 100, total_refunds: 0, balance: -100 },
+      transactions: [
+        { id: "tx-feira", date: "03/11", desc: "Feira", cat: "Alimentação", val: -100, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-11-03T12:00:00", accountId: "acc-b" },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+  }
+
+  it("com 2 contas ativas, o detalhe exibe a conta onde o gasto caiu", async () => {
+    listAccountsMock.mockResolvedValue([
+      { id: "acc-a", name: "Conta A Itaú", currency: "BRL" },
+      { id: "acc-b", name: "Conta B Nubank", currency: "BRL" },
+    ]);
+    seedFeiraNaContaB();
+    renderPage();
+    await openFilters();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await userEvent.click((await screen.findAllByText("Feira"))[0]);
+    expect(await screen.findByText("Conta B Nubank")).toBeInTheDocument();
+    expect(screen.queryByText("Conta A Itaú")).toBeNull();
+  });
+
+  it("com uma conta só, o campo Conta não aparece", async () => {
+    listAccountsMock.mockResolvedValue([{ id: "acc-b", name: "Conta B Nubank", currency: "BRL" }]);
+    seedFeiraNaContaB();
+    renderPage();
+    await openFilters();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await userEvent.click((await screen.findAllByText("Feira"))[0]);
+    await screen.findByText("Recorrente");
+    expect(screen.queryByText("Conta B Nubank")).toBeNull();
+  });
+});

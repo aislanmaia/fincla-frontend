@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accountChangeWasIgnored,
   buildEditBaselineFromUi,
   buildUpdateTransactionPayload,
   pickAmountAbsForTransactionEdit,
@@ -165,6 +166,7 @@ describe("buildEditBaselineFromUi", () => {
       modality: "installment",
       installmentsCount: 3,
       recurring: false,
+      accountId: null,
     });
   });
 
@@ -205,5 +207,50 @@ describe("buildEditBaselineFromUi", () => {
     expect(payload).not.toHaveProperty("installments_count");
     expect(payload).not.toHaveProperty("card_id");
     expect(payload.tag_ids).toContain("tag-lazer");
+  });
+});
+
+describe("buildUpdateTransactionPayload — conta (#266)", () => {
+  const pixNaContaB = {
+    tipo: "despesa",
+    description: "Feira",
+    value: 100,
+    paymentMethodKey: "pix",
+    categoryTagId: "tag-alim",
+    detailTagIds: [],
+    dateIso: "2026-11-03T12:00:00",
+    recurring: false,
+    accountId: "acc-b",
+  };
+
+  it("trocar a conta envia account_id", () => {
+    const payload = buildUpdateTransactionPayload({ ...pixNaContaB, accountId: "acc-a", baseline: pixNaContaB });
+    expect(payload.account_id).toBe("acc-a");
+    expect(payload).not.toHaveProperty("value");
+  });
+
+  it("a mesma conta não entra no diff", () => {
+    const payload = buildUpdateTransactionPayload({ ...pixNaContaB, description: "Feira livre", baseline: pixNaContaB });
+    expect(payload).not.toHaveProperty("account_id");
+  });
+
+  it("o baseline construído da linha da lista carrega a conta gravada", () => {
+    const baseline = buildEditBaselineFromUi({
+      id: 1, desc: "Feira", val: -100, paymentMethodKey: "pix", categoryTagId: "tag-alim",
+      detailTagIds: [], dateIsoForEdit: "2026-11-03", rec: false, accountId: "acc-b",
+    });
+    expect(baseline.accountId).toBe("acc-b");
+    const payload = buildUpdateTransactionPayload({ ...pixNaContaB, accountId: "acc-b", baseline });
+    expect(payload).not.toHaveProperty("account_id");
+  });
+});
+
+describe("accountChangeWasIgnored", () => {
+  it("acusa quando o servidor devolve outra conta que a pedida", () => {
+    expect(accountChangeWasIgnored({ account_id: "acc-a" }, { account_id: "acc-b" })).toBe(true);
+  });
+  it("não acusa quando a conta pedida voltou, nem quando nada foi pedido", () => {
+    expect(accountChangeWasIgnored({ account_id: "acc-a" }, { account_id: "acc-a" })).toBe(false);
+    expect(accountChangeWasIgnored({ description: "x" }, { account_id: "acc-b" })).toBe(false);
   });
 });

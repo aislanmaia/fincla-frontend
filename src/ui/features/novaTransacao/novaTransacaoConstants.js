@@ -140,5 +140,6 @@ export function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig)
     novaTxDetailDisplayStamp(preConfig.detailTagDisplayById),
     JSON.stringify(preConfig.detailTagMetaById ?? {}),
     preConfig.novaRecorrencia ? "1" : "0",
+    String(preConfig.accountId ?? ""),
   ].join("|");
 }

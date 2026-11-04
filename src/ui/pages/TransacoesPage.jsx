@@ -86,6 +86,7 @@ import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/tra
 import { listAccounts } from "../../api/accounts";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
 import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
+import { transactionAccountLabel } from "../features/transactions/shared/transactionAccountLabel.js";
 import {
   filtersToLegacyParams,
   filtersToCsvOptions,
@@ -338,6 +339,8 @@ const DetailPanel = ({
   setSettlingId,
   settleError,
   setSettleError,
+  /* Contas ATIVAS da organização — o detalhe mostra a «Conta» com 2 ou mais (#267). */
+  accounts = [],
   /* Pedido de confirmação in-place (toque): `{ kind, tx }` ou `null`. No
      desktop a pergunta vai num modal; aqui ela ocupa o lugar dos botões dentro
      da própria sanfona, que já está aberta e já é o foco da tela. */
@@ -376,6 +379,7 @@ const DetailPanel = ({
   if (!tx) return null;
   const isReceita = tx.val > 0;
   const statusPresentation = transactionStatus(tx.status);
+  const accountLabel = transactionAccountLabel(tx, accounts);
   return (
     <div style={ inline
       ? { display:"flex", flexDirection:"column" }
@@ -450,6 +454,7 @@ const DetailPanel = ({
             )},
           { label:"Data",      val: tx.date },
           { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
+          ...(accountLabel ? [{ label:"Conta", val: accountLabel }] : []),
           { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
               background: statusPresentation.background,
               color: statusPresentation.color }}>
@@ -1197,20 +1202,27 @@ function TransacoesPageBody({
       acerto e por isso não mexem no saldo. Falha silenciosa de propósito: sem elas a
       lista só deixa de mostrar a marca, o que é melhor do que não carregar a tela. */
   const [balanceAnchors, setBalanceAnchors] = useState({});
+  /** Contas ativas — a mesma leitura das âncoras; o detalhe usa para a «Conta» (#267). */
+  const [orgAccounts, setOrgAccounts] = useState([]);
   useEffect(() => {
     if (!shouldUseRealData || !organizationId) {
       setBalanceAnchors({});
+      setOrgAccounts([]);
       return undefined;
     }
     let cancelled = false;
     // As duas fontes: o feed de ajustes e as contas (para a âncora implícita do saldo
     // de abertura, que não tem linha em `balance_adjustments`).
+    // A falha do feed de ajustes derruba só as âncoras: a «Conta» do detalhe
+    // depende apenas da lista de contas e não pode sumir junto.
     Promise.all([
-      listOrgBalanceAdjustments(organizationId),
+      listOrgBalanceAdjustments(organizationId).catch(() => null),
       listAccounts(organizationId).catch(() => []),
     ])
       .then(([rows, accounts]) => {
-        if (!cancelled) setBalanceAnchors(latestAnchorByAccount(rows, accounts));
+        if (cancelled) return;
+        setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, accounts));
+        setOrgAccounts(Array.isArray(accounts) ? accounts : []);
       })
       .catch(() => {
         if (!cancelled) setBalanceAnchors({});
@@ -3577,6 +3589,7 @@ function TransacoesPageBody({
                         setSettlingId={setSettlingId}
                         settleError={settleError}
                         setSettleError={setSettleError}
+                        accounts={orgAccounts}
                       />
                     </div>
                   )}
