@@ -3,7 +3,6 @@ import {
   buildCreateTransactionPayload,
   buildTransactionsQuery,
   buildTransactionsSummaryQuery,
-  localIsoWithOffset,
   mapApiTransactionToUi,
   paidAtIsoForSettlement,
 } from "../transactionsAdapter.js";
@@ -125,23 +124,15 @@ describe("buildTransactionsQuery / buildTransactionsSummaryQuery — param settl
 });
 
 describe("paidAtIsoForSettlement (#265)", () => {
-  const morning = new Date(2026, 10, 4, 8, 15, 42);
+  it("hoje de manhã: a hora de parede local, sem fuso", () => {
+    expect(paidAtIsoForSettlement("2026-11-04", new Date(2026, 10, 4, 8, 15, 42))).toBe("2026-11-04T08:15:42");
+  });
 
-  it("hoje: o instante real com fuso, que o Date reconhece como o mesmo momento", () => {
-    const iso = paidAtIsoForSettlement("2026-11-04", morning);
-    expect(iso).toMatch(/^2026-11-04T08:15:42[+-]\d{2}:\d{2}$/);
-    expect(Date.parse(iso)).toBe(morning.getTime());
+  it("hoje à noite: continua no mesmo dia (sem fuso que vire o dia em UTC)", () => {
+    expect(paidAtIsoForSettlement("2026-11-04", new Date(2026, 10, 4, 22, 30, 0))).toBe("2026-11-04T22:30:00");
   });
 
   it("outra data: meio-dia daquele dia, como antes", () => {
-    expect(paidAtIsoForSettlement("2026-11-01", morning)).toBe("2026-11-01T12:00:00");
-  });
-
-  it("localIsoWithOffset escreve o deslocamento do fuso local", () => {
-    const off = -morning.getTimezoneOffset();
-    const sign = off >= 0 ? "+" : "-";
-    const hh = String(Math.trunc(Math.abs(off) / 60)).padStart(2, "0");
-    const mm = String(Math.abs(off) % 60).padStart(2, "0");
-    expect(localIsoWithOffset(morning).endsWith(`${sign}${hh}:${mm}`)).toBe(true);
+    expect(paidAtIsoForSettlement("2026-11-01", new Date(2026, 10, 4, 8, 15, 42))).toBe("2026-11-01T12:00:00");
   });
 });

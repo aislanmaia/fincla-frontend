@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -79,13 +79,31 @@ async function confirm(user) {
 }
 
 describe("NovaTransacaoModal — 'Já paguei' com data de hoje (#265)", () => {
-  it("de manhã, paid_at é o instante do lançamento (com fuso), não o meio-dia", async () => {
+  it("de manhã, paid_at é a hora de parede do lançamento, sem fuso — não o meio-dia", async () => {
     const user = userEvent.setup();
     render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
     expect(await screen.findByRole("switch", { name: "Já paguei" })).toHaveAttribute("aria-checked", "true");
     const body = await confirm(user);
-    expect(body.paid_at).toMatch(/^2026-11-04T08:15:42[+-]\d{2}:\d{2}$/);
-    expect(Date.parse(body.paid_at)).toBe(MORNING.getTime());
+    expect(body.paid_at).toBe("2026-11-04T08:15:42");
+  });
+
+  it("à noite (22:30), paid_at continua no MESMO dia — sem fuso que o empurre para amanhã em UTC", async () => {
+    vi.setSystemTime(new Date(2026, 10, 4, 22, 30, 0));
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    const body = await confirm(user);
+    expect(body.paid_at).toBe("2026-11-04T22:30:00");
+  });
+
+  it("data futura: a dica não promete 'agora'", async () => {
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig({ dateIso: "2026-11-10" })} />);
+    expect(await screen.findByText("Entra no saldo na data escolhida.")).toBeInTheDocument();
+    expect(screen.queryByText("Entra no saldo da conta agora.")).toBeNull();
+  });
+
+  it("data de hoje: a dica continua 'agora'", async () => {
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    expect(await screen.findByText("Entra no saldo da conta agora.")).toBeInTheDocument();
   });
 
   it("data passada mantém a convenção do meio-dia", async () => {
@@ -103,7 +121,7 @@ describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvi
     let failing = true;
     apiClient.post.mockImplementation((url, body) => {
       if (url !== "/transactions") return Promise.resolve({ data: {}, headers: {} });
-      if (failing) return Promise.reject(Object.assign(new Error("Network Error"), { isAxiosError: true, code: "ERR_NETWORK" }));
+      if (failing) return Promise.reject(Object.assign(new Error("Network Error"), { isAxiosError: true, code: "ERR_NETWORK", request: {} }));
       return Promise.resolve({ data: { id: 7, ...body }, headers: { "Idempotent-Replay": "false" } });
     });
     const user = userEvent.setup();
@@ -141,7 +159,109 @@ describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvi
     apiClient.post.mockClear();
     rerender(<NovaTransacaoModal open {...props} preConfig={preConfig({ desc: "Padaria (tarde)" })} />);
     const second = await confirm(user);
-    expect(Date.parse(second.paid_at)).toBe(later.getTime());
+    expect(second.paid_at).toBe("2026-11-04T08:16:42");
     expect(second.paid_at).not.toBe(first.paid_at);
   });
+
+  it("hoje → ontem → hoje depois de falha ambígua: o reenvio de hoje reaproveita o instante e a chave originais", async () => {
+    noteIdempotencySupport();
+    let failing = true;
+    apiClient.post.mockImplementation((url, body) => {
+      if (url !== "/transactions") return Promise.resolve({ data: {}, headers: {} });
+      if (failing) return Promise.reject(Object.assign(new Error("Network Error"), { isAxiosError: true, code: "ERR_NETWORK", request: {} }));
+      return Promise.resolve({ data: { id: 8, ...body }, headers: { "Idempotent-Replay": "false" } });
+    });
+    const txPosts = () => apiClient.post.mock.calls.filter(([url]) => url === "/transactions");
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" }, { timeout: 8000 });
+    const first = txPosts()[0];
+    const sentBefore = txPosts().length;
+
+    // Troca o dia pelo calendário do próprio campo (novembro/2026 já é o mês aberto).
+    const setDate = async (day) => {
+      await user.click(screen.getByRole("button", { name: /^Editar$/i }));
+      await user.click(document.getElementById("nova-tx-date-desktop"));
+      const calendar = await screen.findByRole("dialog", { name: "Calendário" });
+      await user.click(within(calendar).getByRole("button", { name: String(day) }));
+      await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    };
+
+    // Ontem: outro lançamento — não protegido, pede confirmação; a pessoa confirma
+    // e ESTE envio também falha de forma ambígua (a data de ontem tem a própria chave).
+    vi.setSystemTime(new Date(MORNING.getTime() + 3000));
+    await setDate(3);
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    await user.click(await screen.findByRole("button", { name: "Registrar assim mesmo" }));
+    await waitFor(() => expect(txPosts().length).toBeGreaterThan(sentBefore));
+    await screen.findByRole("button", { name: "Tentar novamente" }, { timeout: 8000 });
+    expect(txPosts()[txPosts().length - 1][1].paid_at).toBe("2026-11-03T12:00:00");
+    const sentAfterYesterday = txPosts().length;
+
+    // De volta a hoje, segundos depois: é o MESMO lançamento — vai direto, mesma chave.
+    vi.setSystemTime(new Date(MORNING.getTime() + 9000));
+    await setDate(4);
+    failing = false;
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    await waitFor(() => expect(txPosts().length).toBe(sentAfterYesterday + 1));
+    expect(screen.queryByText(/Confira seu extrato antes de continuar/i)).toBeNull();
+    const resend = txPosts()[sentAfterYesterday];
+    expect(resend[1].paid_at).toBe(first[1].paid_at);
+    expect(resend[2].headers["Idempotency-Key"]).toBe(first[2].headers["Idempotency-Key"]);
+  }, 30000);
+
+  it("erro definitivo (422) e novo envio depois: usa a hora atual, não a congelada", async () => {
+    let calls = 0;
+    apiClient.post.mockImplementation((url, body) => {
+      if (url !== "/transactions") return Promise.resolve({ data: {}, headers: {} });
+      calls += 1;
+      if (calls === 1) {
+        return Promise.reject(Object.assign(new Error("422"), { isAxiosError: true, response: { status: 422, data: { detail: "Valor inválido." } } }));
+      }
+      return Promise.resolve({ data: { id: 9, ...body }, headers: {} });
+    });
+    const txPosts = () => apiClient.post.mock.calls.filter(([url]) => url === "/transactions");
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
+    expect(txPosts()[0][1].paid_at).toBe("2026-11-04T08:15:42");
+
+    // Um minuto depois — ainda dentro do TTL da chave retida: é o 4xx (nada gravado)
+    // que solta o instante, não o vencimento da chave.
+    vi.setSystemTime(new Date(2026, 10, 4, 8, 16, 42));
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    await waitFor(() => expect(txPosts().length).toBe(2));
+    expect(txPosts()[1][1].paid_at).toBe("2026-11-04T08:16:42");
+  });
+
+  it("falha ambígua e a chave retida expira (11 min): o novo envio leva a hora atual", async () => {
+    noteIdempotencySupport();
+    let failing = true;
+    apiClient.post.mockImplementation((url, body) => {
+      if (url !== "/transactions") return Promise.resolve({ data: {}, headers: {} });
+      if (failing) return Promise.reject(Object.assign(new Error("Network Error"), { isAxiosError: true, code: "ERR_NETWORK", request: {} }));
+      return Promise.resolve({ data: { id: 10, ...body }, headers: { "Idempotent-Replay": "false" } });
+    });
+    const txPosts = () => apiClient.post.mock.calls.filter(([url]) => url === "/transactions");
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" }, { timeout: 8000 });
+    const sentBefore = txPosts().length;
+
+    vi.setSystemTime(new Date(2026, 10, 4, 8, 27, 0));
+    failing = false;
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    // Chave vencida: o reenvio deixou de ser protegido, então a tela pede confirmação.
+    const confirmar = await screen.findByRole("button", { name: "Registrar assim mesmo" });
+    await user.click(confirmar);
+    await waitFor(() => expect(txPosts().length).toBe(sentBefore + 1));
+    expect(txPosts()[sentBefore][1].paid_at).toBe("2026-11-04T08:27:00");
+  }, 20000);
 });
+
