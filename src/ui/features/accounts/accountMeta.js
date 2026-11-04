@@ -82,3 +82,17 @@ export function parseBRL(input) {
   const n = Number.parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
+
+/**
+ * Recibo da consolidação entre moedas — "Convertido com 1 USD = R$ 5,48 (03/11)".
+ * Um texto só para Minhas Contas e para a Visão Geral: a data é o que torna uma
+ * taxa velha visivelmente velha. `null` quando não houve conversão.
+ */
+export function consolidationReceipt(consolidation) {
+  const rates = consolidation?.rates;
+  if (!Array.isArray(rates) || rates.length === 0) return null;
+  return `Convertido com ${rates
+    .map((r) => `1 ${r.base} = ${formatarDinheiro(r.rate, r.quote)} (${formatDay(r.quoted_on)})`)
+    .join(" · ")}`;
+}
+

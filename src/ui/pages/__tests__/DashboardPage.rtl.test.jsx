@@ -727,3 +727,17 @@ describe("DashboardPage — recarrega a projeção de recorrências depois de um
     await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(before));
   });
 });
+
+describe("DashboardPage — 'em N contas' é o controle do saldo por conta", () => {
+  it("o texto do card de saldo vira um botão que expande no desktop", () => {
+    mockDashboardData = {
+      ...baseData(),
+      balanceSummary: { as_of: "2026-04-15T12:00:00", total_available: 1500, total_all: 1500, account_count: 2, by_type: [] },
+    };
+    render(<DashboardPage onNav={vi.fn()} stateCtrl={{ mounted: true, isMobile: false }} dataMode="live" organizationId="org-contas" onNewTx={vi.fn()} />);
+    const headline = screen.getAllByTestId("dashboard-headline-saldo-conta")[0];
+    const toggle = within(headline).getByRole("button", { name: "em 2 contas" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(headline).toHaveTextContent("dinheiro disponível hoje · em 2 contas");
+  });
+});

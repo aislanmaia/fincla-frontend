@@ -42,6 +42,7 @@ import { linearProjection, periodYardstick } from "../features/dashboard/periodY
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
 import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
+import { AccountBalancesNote } from "../features/dashboard/AccountBalancesBreakdown.jsx";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
   formatDashboardKpiPeriodPhrase,
@@ -603,7 +604,7 @@ export function DashboardPage({
     const summaryBalance = dashboardData.balanceSummary;
     const total = summaryBalance?.total_available;
     if (typeof total !== "number") {
-      return { available: false, value: "—", note: "Dados indisponíveis" };
+      return { available: false, value: "—", note: "Dados indisponíveis", notePrefix: "Dados indisponíveis", noteLabel: null };
     }
     const n = summaryBalance.account_count ?? 0;
     const contas = n === 1 ? "1 conta" : `${n} contas`;
@@ -614,6 +615,9 @@ export function DashboardPage({
       note: total < 0
         ? `conta negativa · ${contas}`
         : `dinheiro disponível hoje · em ${contas}`,
+      // "em N contas" vira o controle que abre o saldo por conta.
+      notePrefix: total < 0 ? "conta negativa · " : "dinheiro disponível hoje · ",
+      noteLabel: total < 0 ? contas : `em ${contas}`,
     };
   }, [dashboardData.balanceSummary]);
 
@@ -1262,7 +1266,7 @@ export function DashboardPage({
                       <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                         {accountHeadline.value}
                       </div>
-                      <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</div>
+                      <AccountBalancesNote prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
                     </div>
                   ) : null}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1317,7 +1321,7 @@ export function DashboardPage({
                     <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                       {accountHeadline.value}
                     </div>
-                    <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</div>
+                    <AccountBalancesNote prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
                   </div>
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{kpiPeriodPhrase}</div>
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, marginBottom: 18, lineHeight: 1.55 }}>
@@ -1468,7 +1472,7 @@ export function DashboardPage({
                   >
                     {accountHeadline.value}
                   </div>
-                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</span>
+                  <AccountBalancesNote as="span" prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
                 </div>
 
                 {isMobile ? null : (

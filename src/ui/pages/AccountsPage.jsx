@@ -4,7 +4,7 @@ import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, Badge, PageEnter } from "../components/primitives";
 import { useAccountsData } from "../features/accounts/useAccountsData.js";
-import { accountMeta, formatDay, formatMoney } from "../features/accounts/accountMeta.js";
+import { accountMeta, consolidationReceipt, formatMoney } from "../features/accounts/accountMeta.js";
 import { AccountFormModal } from "../features/accounts/AccountFormModal.jsx";
 import { TransferModal } from "../features/accounts/TransferModal.jsx";
 import { AdjustBalanceModal } from "../features/accounts/AdjustBalanceModal.jsx";
@@ -247,10 +247,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
             <div style={{ ...G, fontSize: 11.5, color: T.inkGhost, marginTop: 8, lineHeight: 1.45 }}>
               {/* A data é o que torna uma taxa velha visivelmente velha em vez de
                   silenciosamente errada. Nunca mostre o total convertido sem ela. */}
-              Convertido com{" "}
-              {data.consolidation.rates
-                .map((r) => `1 ${r.base} = ${formatMoney(r.rate, r.quote)} (${formatDay(r.quoted_on)})`)
-                .join(" · ")}
+              {consolidationReceipt(data.consolidation)}
             </div>
           ) : null}
         </Card>

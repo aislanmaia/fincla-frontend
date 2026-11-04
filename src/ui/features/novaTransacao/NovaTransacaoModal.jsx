@@ -2506,12 +2506,12 @@ export const NovaTransacaoModal = ({
                     {periodSaldo.live ? (
                       <span style={{ ...G, fontSize:11, color:T.inkLight }}>
                         {periodSaldo.loading ? (
-                          <>Saldo no mês: …</>
+                          <>Resultado do mês: …</>
                         ) : periodSaldo.error ? (
-                          <>Saldo no mês indisponível</>
+                          <>Resultado do mês indisponível</>
                         ) : (
                           <>
-                            Saldo no mês:{" "}
+                            Resultado do mês:{" "}
                             <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
                             {amountNum > 0 && saldoAposLancamento != null ? (
                               <>
@@ -3491,12 +3491,12 @@ export const NovaTransacaoModal = ({
                   {periodSaldo.live ? (
                     <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:4 }}>
                       {periodSaldo.loading ? (
-                        <>Saldo no mês: …</>
+                        <>Resultado do mês: …</>
                       ) : periodSaldo.error ? (
-                        <>Saldo no mês indisponível</>
+                        <>Resultado do mês indisponível</>
                       ) : (
                         <>
-                          Saldo no mês:{" "}
+                          Resultado do mês:{" "}
                           <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
                           {amountNum > 0 && saldoAposLancamento != null ? (
                             <>
