@@ -28,7 +28,7 @@ const menuItemStyle = {
   color: T.inkMid,
 };
 
-export function AccountsPage({ organizationId, dataMode = "live", isMobile = false }) {
+export function AccountsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
   const enabled = !!organizationId && dataMode === "live";
   // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
   //
@@ -37,7 +37,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
   // que impede a lente de virar, na prática, uma segunda moeda base que ninguém
   // declarou e que relatório e IA não conhecem.
   const [lente, setLente] = useState(null);
-  const data = useAccountsData({ organizationId, enabled, lente });
+  const data = useAccountsData({ organizationId, enabled, lente, refreshKey: transactionsRefreshToken });
 
   // O seletor só existe onde ele significa alguma coisa: uma organização de moeda
   // única não tem lente para trocar, e oferecer a troca ali seria oferecer uma
@@ -198,7 +198,9 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
             {formatMoney(data.total, data.consolidation?.target_currency) ?? "—"}
           </div>
           <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span>{accounts.length} {accounts.length === 1 ? "conta" : "contas"} · atualizado agora</span>
+            {/* "atualizado agora" só depois de uma leitura real (#264): durante a recarga
+                que segue uma transação, o número na tela ainda é o anterior. */}
+            <span>{accounts.length} {accounts.length === 1 ? "conta" : "contas"} · {data.hasLoaded && !data.isLoading ? "atualizado agora" : "atualizando…"}</span>
             {temMaisDeUmaMoeda ? (
               <label style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: T.inkLight }}>
                 <span>ver em</span>

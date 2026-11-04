@@ -262,7 +262,8 @@ export function DashboardPage({
       .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
       .catch(() => { if (!cancelled) setRecurringProjection(null); });
     return () => { cancelled = true; };
-  }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end]);
+  // `transactionsRefreshToken`: uma recorrência criada/editada muda o que ainda vai cair (#264).
+  }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end, transactionsRefreshToken]);
 
   /** Mapa dia-do-período (1..dim) → soma de projeções de despesa naquele dia. */
   const projectedExpenseByDay = useMemo(() => {

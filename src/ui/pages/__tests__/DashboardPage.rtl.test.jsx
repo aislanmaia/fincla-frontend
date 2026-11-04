@@ -32,9 +32,10 @@ vi.mock("recharts", () => ({
  * com a projeção, e o caso em que a barra não pode prometer "depois das recorrências".
  */
 let projectionItems = null;
+let projectionCalls = 0;
 vi.mock("../../../api/recurringSeries", () => ({
   getRecurringProjection: () =>
-    projectionItems === null
+    ++projectionCalls && projectionItems === null
       ? Promise.reject(new Error("projeção fora do ar"))
       : Promise.resolve({ items: projectionItems }),
 }));
@@ -691,5 +692,18 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
     renderAt({ total_income: 1000, total_expenses: 2000, balance: -1000 }, 500);
     expect(screen.getByText("Crítico")).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da receita gasta");
+  });
+});
+
+describe("DashboardPage — recarrega a projeção de recorrências depois de uma transação (#264)", () => {
+  it("o token de transação salva relê a projeção", async () => {
+    mockDashboardData = baseData();
+    projectionItems = [];
+    const props = { onNav: vi.fn(), stateCtrl: { mounted: true, isMobile: false }, dataMode: "live", organizationId: "org-refresh", onNewTx: vi.fn() };
+    const { rerender } = render(<DashboardPage {...props} transactionsRefreshToken={0} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(0));
+    const before = projectionCalls;
+    rerender(<DashboardPage {...props} transactionsRefreshToken={1} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(before));
   });
 });

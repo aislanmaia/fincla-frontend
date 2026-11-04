@@ -39,7 +39,14 @@ export function formatAccountsApiError(error) {
  * é dirigida pelo balance, que já traz nome/tipo/saldo/include_in_total por conta.
  * Expõe ações de criar/editar/desativar conta e transferir, que recarregam o saldo.
  */
-export function useAccountsData({ organizationId, enabled = true, lente = null }) {
+export function useAccountsData({
+  organizationId,
+  enabled = true,
+  lente = null,
+  /** Sobe a cada transação criada/editada/excluída no app (#264): o saldo por conta
+      muda com ela, e sem isto a tela seguia mostrando o valor anterior até o F5. */
+  refreshKey = 0,
+}) {
   const [state, setState] = useState(EMPTY);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
@@ -87,7 +94,7 @@ export function useAccountsData({ organizationId, enabled = true, lente = null }
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, version, lente]);
+  }, [enabled, organizationId, version, lente, refreshKey]);
 
   const run = useCallback(
     async (fn) => {
