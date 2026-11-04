@@ -3510,9 +3510,31 @@ function TransacoesPageBody({
        grudar no topo ao rolar. O arredondamento vem de raios explícitos. */
     <div style={{ display:"flex", flexDirection:"column", gap:0,
       background:T.surface, border:`1px solid ${T.border}`, borderRadius:12 }}>
+      {/* Chip da conta filtrada, à vista em qualquer largura: chegando de Minhas
+          Contas no celular, o filtro só aparecia como "Filtros 1". */}
+      {effectiveAccountSel.length > 0 && accountsForFilterById ? (
+        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 0" }}>
+          {effectiveAccountSel.map((id) => {
+            const label = accountsForFilterById[id]?.label || "Conta";
+            return (
+              <span key={id} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600,
+                color: T.ink, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9999, padding: "3px 4px 3px 10px" }}>
+                {label}
+                <button type="button" aria-label={`Remover filtro de conta ${label}`}
+                  onClick={() => { filter.setAccountSel(effectiveAccountSel.filter((x) => x !== id)); setVisible(PAGE_SIZE); }}
+                  style={{ ...G, border: "none", background: "none", cursor: "pointer", color: T.inkMid, fontSize: 13, lineHeight: 1, padding: "0 4px" }}>
+                  ✕
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
       <TransactionsListHeader
         total={filteredCount}
-        totalUnfiltered={narrowedByMoreThanPeriod ? periodTotal.total : null}
+        /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
+           grandeza, que confunde no extrato de uma conta. */
+        totalUnfiltered={narrowedByMoreThanPeriod && effectiveAccountSel.length === 0 ? periodTotal.total : null}
         transfers={shownTransferCount}
         pending={filter.settlement === "todas" ? pendingCount : 0}
         sum={canUseRemoteSummary || filtered.length ? saldo : null}

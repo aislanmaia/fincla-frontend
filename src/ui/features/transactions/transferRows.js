@@ -1,3 +1,5 @@
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
+
 /**
  * Transferências como linhas do extrato de UMA conta (#268, decisão do Owner).
  *
@@ -42,6 +44,13 @@ export function transfersToRows(transfers, accountId, accountsById = {}, { dateS
     if (!isOrigin && !isDestination) continue;
     const amount = isOrigin ? t.amount : t.to_amount;
     if (typeof amount !== "number") continue;
+    // Entre moedas, o OUTRO lado em letra pequena: "saiu R$ 549,14" numa entrada,
+    // "entrou US$ 100,00" numa saída.
+    const crossCurrency = t.from_currency && t.to_currency && t.from_currency !== t.to_currency;
+    const otherAmount = isOrigin ? t.to_amount : t.amount;
+    const counterpartLabel = crossCurrency && typeof otherAmount === "number"
+      ? `${isOrigin ? "entrou" : "saiu"} ${formatMoneyPlainSpace(Math.abs(otherAmount), isOrigin ? t.to_currency : t.from_currency)}`
+      : null;
     const [y, m, d] = ymd.split("-");
     rows.push({
       id: `transfer:${t.id}`,
@@ -54,7 +63,10 @@ export function transfersToRows(transfers, accountId, accountsById = {}, { dateS
       currency: isOrigin ? t.from_currency : t.to_currency,
       date: `${d}/${m}/${y}`,
       listDateYmd: ymd,
-      method: "Transferência",
+      // A categoria já diz "Transferência"; a linha de baixo traz só a nota (se
+      // houver) e o outro lado da conversão — nada de "Transferência · Transferência".
+      method: [t.note, counterpartLabel].filter(Boolean).join(" · "),
+      counterpartLabel,
       icon: "⇄",
       tags: [],
       detailTagIds: [],

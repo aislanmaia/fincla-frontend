@@ -11,6 +11,8 @@ import userEvent from "@testing-library/user-event";
  */
 
 let routerSearch = {};
+/** Total do período sem os outros filtros (o "de N" do cabeçalho). */
+let facetTotalMock = null;
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
   useSearch: () => routerSearch,
@@ -45,7 +47,7 @@ vi.mock("../../features/transactions/filters/useTransactionsTagCatalog.js", () =
   useTransactionsTagCatalog: () => ({ rows: [], loading: false, error: "" }),
 }));
 vi.mock("../../features/transactions/useTransactionsFacetCounts.js", () => ({
-  useTransactionsFacetCounts: () => ({ counts: null, isLoading: false, total: null, buckets: null, optionCount: () => null, optionCountByLabel: () => null, binaryCount: () => null }),
+  useTransactionsFacetCounts: () => ({ counts: null, isLoading: false, total: facetTotalMock, buckets: null, optionCount: () => null, optionCountByLabel: () => null, binaryCount: () => null }),
 }));
 vi.mock("../../../api/balanceAdjustments", () => ({ listOrgBalanceAdjustments: vi.fn().mockResolvedValue([]) }));
 const listAccountsMock = vi.fn();
@@ -75,6 +77,7 @@ const TWO_ACCOUNTS = [
 ];
 
 beforeEach(() => {
+  facetTotalMock = null;
   // `mockImplementation` de um teste sobrevive ao `clearAllMocks`: volta ao padrão.
   transactionsDataMock.mockImplementation(defaultTransactionsData);
   transactionsList = baseTransactions;
@@ -328,6 +331,29 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     const group = await screen.findByRole("group", { name: "Contas" });
     await userEvent.click(within(group).getByRole("button", { name: /Conta A Itaú/ }));
     await waitFor(() => expect(document.body.innerHTML).toMatch(/Desfazer[^"]*Conta A Itaú/));
+  });
+
+  it("com conta filtrada, o cabeçalho não mostra o 'de N' da organização: '1 transação · 1 transferência'", async () => {
+    facetTotalMock = 8;
+    transactionsList = [baseTransactions[0]];
+    transactionsDataMock.mockImplementation(() => ({ ...defaultTransactionsData(), total: 1 }));
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue([TRANSFERS[1]]);
+    renderPage();
+    const header = (await screen.findByTestId("list-header-transfers")).parentElement;
+    expect(header).toHaveTextContent("transação · 1 transferência");
+    expect(header).not.toHaveTextContent(/de\s*8/);
+  });
+
+  it("chip da conta filtrada à vista; o ✕ tira o filtro de conta", async () => {
+    routerSearch = { fc_account: ACC_B };
+    renderPage();
+    const chips = await screen.findByTestId("account-filter-chips");
+    expect(chips).toHaveTextContent("Conta B Nubank");
+    await waitFor(() => expect(lastFilters().accountIds).toEqual([ACC_B]));
+    await userEvent.click(within(chips).getByRole("button", { name: "Remover filtro de conta Conta B Nubank" }));
+    await waitFor(() => expect(lastFilters().accountIds).toBeUndefined());
+    expect(screen.queryByTestId("account-filter-chips")).toBeNull();
   });
 });
 

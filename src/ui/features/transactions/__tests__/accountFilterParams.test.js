@@ -52,6 +52,14 @@ describe("transferências no extrato de uma conta", () => {
     expect(out).toMatchObject({ desc: "Transferência para Itaú", val: -100, currency: "USD", kind: "transfer" });
     expect(inn).toMatchObject({ desc: "Transferência de Itaú", val: 100, currency: "USD" });
   });
+  it("linha de baixo sem 'Transferência' repetida: nota e, entre moedas, o outro lado", () => {
+    const rows = transfersToRows([{ ...transfers[1], note: "reserva" }, { ...transfers[0], from_currency: "USD", to_currency: "USD", to_amount: 100 }], B, byId);
+    const inn = rows.find((r) => r.transfer.id === "in");
+    const out = rows.find((r) => r.transfer.id === "out");
+    expect(inn.method).toMatch(/^reserva · saiu R\$\s?548,00$/);
+    expect(inn.method).not.toMatch(/Transferência/);
+    expect(out.method).toBe("");
+  });
   it("respeita o período", () => {
     expect(transfersToRows(transfers, B, byId, { dateStart: "2026-11-06", dateEnd: "2026-11-30" }).map((r) => r.transfer.id)).toEqual(["in"]);
   });

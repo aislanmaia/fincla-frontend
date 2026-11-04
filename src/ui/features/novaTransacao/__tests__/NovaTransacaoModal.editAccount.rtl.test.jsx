@@ -263,5 +263,25 @@ describe("NovaTransacaoModal — conta: org, cache, Duplicar, carregamento, lega
     await waitFor(() => expect(postedTransactions().length).toBe(1));
     expect(postedTransactions()[0].account_id).toBe(ACC_B);
   });
+
+  it("o símbolo do valor segue a moeda da conta escolhida (Wise USD → US$) e muda com a conta", async () => {
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...baseProps} preConfig={{ accountId: ACC_USD }} />);
+    await screen.findByDisplayValue("Wise USD");
+    expect(screen.getByTestId("amount-currency-symbol")).toHaveTextContent("US$");
+    await user.selectOptions(screen.getByLabelText("Conta"), ACC_A);
+    expect(screen.getByTestId("amount-currency-symbol")).toHaveTextContent("R$");
+    await user.selectOptions(screen.getByLabelText("Conta"), ACC_USD);
+    await user.type(document.querySelector("textarea"), "Hotel");
+    await user.type(screen.getAllByPlaceholderText("0,00")[0], "500");
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    // A revisão também na moeda da conta.
+    expect(await screen.findByText(/US\$\s?5,00/)).toBeInTheDocument();
+  });
+
+  it("celular: passo 1 já mostra US$ com a Wise pré-selecionada", async () => {
+    render(<NovaTransacaoModal {...baseProps} isMobile preConfig={{ accountId: ACC_USD }} />);
+    await waitFor(() => expect(screen.getByTestId("amount-currency-symbol")).toHaveTextContent("US$"));
+  });
 });
 

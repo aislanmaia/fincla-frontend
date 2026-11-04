@@ -709,6 +709,8 @@ export const NovaTransacaoModal = ({
   const moveCurrencyUnknown = movingAccount && (!moveFrom || !moveTo);
   const crossCurrencyMove = movingAccount && !!moveFrom && !!moveTo && moveFrom !== moveTo;
   /** Moeda em que o valor do formulário está — o que a revisão e o sucesso escrevem. */
+  // A moeda do VALOR digitado — o símbolo do campo, a revisão e o sucesso: o
+  // lançamento é gravado na moeda da conta escolhida (ou, ao editar, na dele).
   const formCurrency = (editingStoredAccountId ? moveFrom : null) || (targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null) || "BRL";
 
   // Cotação e rascunho POR PAR de moedas, enquanto o drawer está aberto: alternar
@@ -2741,7 +2743,7 @@ export const NovaTransacaoModal = ({
                 <div style={{ textAlign:"center" }}>
                   <div style={{ ...G, fontSize:13, fontWeight:600, color:T.inkLight, marginBottom:4 }}>Valor</div>
                   <div style={{ display:"flex", alignItems:"baseline", justifyContent:"center", gap:6 }}>
-                    <span style={{ ...G, fontSize:22, fontWeight:700, color:T.inkLight }}>R$</span>
+                    <span data-testid="amount-currency-symbol" style={{ ...G, fontSize:22, fontWeight:700, color:T.inkLight }}>{currencyInfo(formCurrency).symbol}</span>
                     <input
                       ref={amountInputRef}
                       value={amount}
@@ -3635,7 +3637,7 @@ export const NovaTransacaoModal = ({
                   </div>
                   {/* Main valor input — banking style */}
                   <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:6 }}>
-                    <span style={{ ...G, fontSize:18, fontWeight:700, color:T.inkLight, flexShrink:0 }}>R$</span>
+                    <span data-testid="amount-currency-symbol" style={{ ...G, fontSize:18, fontWeight:700, color:T.inkLight, flexShrink:0 }}>{currencyInfo(formCurrency).symbol}</span>
                     <input
                       ref={amountInputRef}
                       value={amount}

@@ -122,7 +122,8 @@ export function TransactionsListHeader({
                 </b>{" "}
               </>
             ) : null}
-            transaç{total === 1 ? "ão" : "ões"}
+            {/* "1 de 8 transações": depois de "de N" o substantivo concorda com N. */}
+            transaç{(totalUnfiltered != null && totalUnfiltered > total ? totalUnfiltered : total) === 1 ? "ão" : "ões"}
             {transfers > 0 ? (
               <span data-testid="list-header-transfers">
                 {" · "}
