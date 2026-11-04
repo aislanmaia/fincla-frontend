@@ -278,6 +278,26 @@ describe("DashboardPage — barra de composição é partição das receitas", (
     expect(screen.queryByText("Sobra depois das recorrências")).toBeNull();
     expect(within(barra).getByText("Sobra do período")).toBeTruthy();
   });
+
+  it("recarga depois de uma transação (#264) não troca a projeção conhecida por 'indisponível' nem pisca", async () => {
+    projectionItems = [
+      { series_id: "s1", date: "2026-04-20", value: 150, type: "expense", description: "Internet", category: "casa" },
+      { series_id: "s2", date: "2026-04-28", value: 50, type: "expense", description: "Streaming", category: "lazer" },
+    ];
+    const props = { onNav: vi.fn(), stateCtrl: { mounted: true, isMobile: false }, dataMode: "live", organizationId: "org-bar", onNewTx: vi.fn() };
+    const { rerender } = render(<DashboardPage {...props} transactionsRefreshToken={0} />);
+    expect(await screen.findByTestId("dashboard-composicao-comprometido")).toHaveTextContent("R$ 200,00");
+
+    const before = projectionCalls;
+    projectionItems = null; // a RECARGA falha
+    rerender(<DashboardPage {...props} transactionsRefreshToken={1} />);
+    await vi.waitFor(() => expect(projectionCalls).toBeGreaterThan(before));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Os números que já sabíamos continuam: nem some a fatia, nem vira "Sobra do período".
+    expect(screen.getByTestId("dashboard-composicao-comprometido")).toHaveTextContent("R$ 200,00");
+    expect(within(screen.getByTestId("dashboard-composicao")).getByText("Sobra depois das recorrências")).toBeTruthy();
+  });
 });
 
 /**
