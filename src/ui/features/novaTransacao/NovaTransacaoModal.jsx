@@ -39,7 +39,7 @@ import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
 import { AccountMoveValue } from "./AccountMoveValue.jsx";
 import { formatAmountInput, parseAmountInput } from "./accountConversion.js";
-import { convertAmountExact } from "../../money/convertAmount.js";
+import { divideAmountExact, PLAIN_DECIMAL_RE } from "../../money/convertAmount.js";
 import { listAccounts } from "../../../api/accounts";
 import { getQuotation } from "../../../api/transfers";
 import { currencyInfo } from "../../money/currencyRegistry.js";
@@ -734,10 +734,16 @@ export const NovaTransacaoModal = ({
     const key = movePairKey;
     const inFlight = moveQuotesInFlightRef.current;
     inFlight.add(key);
-    getQuotation(organizationId, moveFrom, moveTo)
+    // UMA cotação, na direção em que se lê câmbio no Brasil: 1 <moeda nova> = x
+    // <moeda de origem> (`GET /quotations/{destino}/{origem}`). A MESMA taxa é mostrada
+    // e usada na conta (valor de origem ÷ taxa), então a tela fecha. Taxa fora do
+    // formato decimal simples (ex.: notação científica) = sem cotação — nunca
+    // impressa crua.
+    getQuotation(organizationId, moveTo, moveFrom)
       .then((q) => {
-        if (q?.rate == null || String(q.rate).trim() === "") throw new Error("empty rate");
-        return { status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null };
+        const rate = String(q?.rate ?? "").trim();
+        if (!PLAIN_DECIMAL_RE.test(rate) || !/[1-9]/.test(rate)) throw new Error("unusable rate");
+        return { status: "ready", rate, quoted_on: q.quoted_on ?? null };
       })
       .catch(() => ({ status: "unavailable" }))
       .then((entry) => {
@@ -753,7 +759,7 @@ export const NovaTransacaoModal = ({
   const originalAmountFixed = Math.abs(amountNum || 0).toFixed(2);
   useEffect(() => {
     if (!movePairKey || moveQuote.status !== "ready" || moveDraft.touched) return;
-    const converted = convertAmountExact(originalAmountFixed, moveQuote.rate);
+    const converted = divideAmountExact(originalAmountFixed, moveQuote.rate);
     const text = converted != null ? formatAmountInput(converted) : "";
     if (text === moveDraft.text) return;
     setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: false } }));

@@ -68,13 +68,14 @@ let allAccounts;
 
 beforeEach(() => {
   allAccounts = [];
-  quotation = () => Promise.resolve({ data: { base: "BRL", quote: "USD", rate: "0.1825", quoted_on: "2026-11-03" } });
+  // A cotação na direção em que se lê câmbio: 1 US$ = R$ 5,4914 (USD→BRL).
+  quotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.49140000", quoted_on: "2026-11-03" } });
   apiClient.get.mockImplementation((url) => {
     if (url === "/balances") {
       return Promise.resolve({ data: { as_of: "2026-11-04T09:00:00", total: { amount: "3000", currency: "BRL" }, consolidation: null,
         accounts: [balanceRow(ACC_A, "Conta A Itaú", "BRL"), balanceRow(ACC_B, "Conta B Nubank", "BRL"), balanceRow(ACC_USD, "Wise USD", "USD")] } });
     }
-    if (url === "/quotations/BRL/USD") return quotation();
+    if (url === "/quotations/USD/BRL") return quotation();
     if (url === "/accounts") return Promise.resolve({ data: allAccounts });
     return Promise.resolve({ data: [] });
   });
@@ -102,15 +103,15 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
     const box = await screen.findByTestId("account-move-value");
-    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em US$. Valor convertido pela cotação de 03/11 (R$ 1 = US$ 0,1825):"));
-    expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40");
+    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em US$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"));
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,29");
     expect(box).toHaveTextContent("Confira com o extrato do banco.");
   });
 
   it("atalho «usar 287,15 como US$»: mesmo número, moeda nova — e vai no PUT mesmo igual ao valor antigo", async () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
-    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40"));
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,29"));
     await user.click(screen.getByRole("button", { name: "usar 287,15 como US$" }));
     expect(screen.getByLabelText("Valor em US$")).toHaveValue("287,15");
     await reviewAndConfirm(user);
@@ -125,7 +126,7 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
     const field = screen.getByLabelText("Valor em US$");
-    await waitFor(() => expect(field).toHaveValue("52,40"));
+    await waitFor(() => expect(field).toHaveValue("52,29"));
     await user.clear(field);
     await user.type(field, "53,10");
     await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
@@ -174,24 +175,24 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
 
   it("cotação que chega DEPOIS de a pessoa digitar não sobrescreve o valor dela", async () => {
     let release;
-    quotation = () => new Promise((r) => { release = () => r({ data: { base: "BRL", quote: "USD", rate: "0.1825", quoted_on: "2026-11-03" } }); });
+    quotation = () => new Promise((r) => { release = () => r({ data: { base: "USD", quote: "BRL", rate: "5.4914", quoted_on: "2026-11-03" } }); });
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
     const field = await screen.findByLabelText("Valor em US$");
     await user.type(field, "60,00");
     release();
-    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("0,1825"));
+    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("5,4914"));
     expect(screen.getByLabelText("Valor em US$")).toHaveValue("60,00");
   });
 
   it("mudar o valor original refaz a sugestão enquanto o campo não foi tocado; tocado, mantém", async () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
-    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40"));
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,29"));
     const original = screen.getAllByPlaceholderText("0,00").find((el) => el.getAttribute("aria-label") !== "Valor em US$");
     await user.type(original, "0"); // 287,15 → 2.871,50
-    // 2.871,50 × 0,1825 = 524,04875 → 524,05
-    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("524,05"));
+    // 2.871,50 ÷ 5,4914 = 522,9085… → 522,91
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("522,91"));
 
     await user.clear(screen.getByLabelText("Valor em US$"));
     await user.type(screen.getByLabelText("Valor em US$"), "500,00");
@@ -213,13 +214,15 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
     const field = await screen.findByLabelText("Valor em US$");
-    await waitFor(() => expect(field).toHaveValue("52,40"));
+    await waitFor(() => expect(field).toHaveValue("52,29"));
     await user.clear(field);
     await user.type(field, "51,00");
     await user.selectOptions(screen.getByLabelText("Conta"), ACC_A);
     await user.selectOptions(screen.getByLabelText("Conta"), ACC_USD);
     expect(await screen.findByLabelText("Valor em US$")).toHaveValue("51,00");
+    // UMA requisição por par, numa direção só (a que é mostrada e usada na conta).
     expect(quotationCalls()).toHaveLength(1);
+    expect(quotationCalls()[0][0]).toBe("/quotations/USD/BRL");
   });
 
   it("conta gravada desativada: a moeda vem da lista completa de contas", async () => {
@@ -264,13 +267,42 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     })));
     const user = userEvent.setup();
     await openAndMoveTo(user, ACC_USD);
-    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40"));
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,29"));
     await reviewAndConfirm(user);
     await waitFor(() => expect(apiClient.put).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.queryByText("Despesa registrada!")).toBeNull();
     await user.click(screen.getByRole("button", { name: /^Editar$/i }));
     expect(within(await screen.findByTestId("account-move-value")).getByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("a conta da tela fecha: taxa mostrada × valor sugerido ≈ valor de origem (287,15 ÷ 5,4914 = 52,29)", async () => {
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const box = await screen.findByTestId("account-move-value");
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,29"));
+    const rate = Number(/US\$ 1 = R\$ ([\d,]+)/.exec(box.textContent)[1].replace(",", "."));
+    const suggested = Number(screen.getByLabelText("Valor em US$").value.replace(",", "."));
+    expect(Math.abs(rate * suggested - 287.15)).toBeLessThanOrEqual(0.01 * rate);
+    // Uma requisição só, na direção mostrada.
+    expect(quotationCalls().map(([url]) => url)).toEqual(["/quotations/USD/BRL"]);
+  });
+
+  it("a data do aviso é a da cotação MOSTRADA", async () => {
+    quotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.4914", quoted_on: "2026-10-31" } });
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    await waitFor(() => expect(screen.getByTestId("account-move-value")).toHaveTextContent("cotação de 31/10 (US$ 1 = R$ 5,4914)"));
+  });
+
+  it("taxa em formato inesperado (notação científica) = sem cotação, nunca impressa crua", async () => {
+    quotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.4914E+0", quoted_on: "2026-11-03" } });
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const box = await screen.findByTestId("account-move-value");
+    await waitFor(() => expect(box).toHaveTextContent("Sem cotação agora — informe o valor em US$"));
+    expect(box).not.toHaveTextContent("E+0");
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("");
   });
 });
 

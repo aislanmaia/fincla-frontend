@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { convertAmountExact } from "../convertAmount.js";
+import { convertAmountExact, divideAmountExact } from "../convertAmount.js";
 
 describe("convertAmountExact — HALF_UP em 2 casas, igual ao Quotation.convert", () => {
   it("arredonda a metade para cima (float e banker's errariam)", () => {
@@ -16,5 +16,20 @@ describe("convertAmountExact — HALF_UP em 2 casas, igual ao Quotation.convert"
   });
   it("entrada inválida → null", () => {
     expect(convertAmountExact("abc", "1")).toBeNull();
+  });
+});
+
+describe("divideAmountExact — valor de origem ÷ taxa, HALF_UP em 2 casas", () => {
+  it("287,15 ÷ 5,4914 = 52,29", () => {
+    expect(divideAmountExact("287.15", "5.4914")).toBe("52.29");
+    expect(divideAmountExact("287.15", "5.49140000")).toBe("52.29");
+  });
+  it("metade arredonda para cima", () => {
+    // 2,525 → 2,53
+    expect(divideAmountExact("10.10", "4")).toBe("2.53");
+  });
+  it("taxa zero ou inválida → null", () => {
+    expect(divideAmountExact("10", "0")).toBeNull();
+    expect(divideAmountExact("10", "5E+0")).toBeNull();
   });
 });
