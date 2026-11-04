@@ -54,12 +54,11 @@ const renderNote = (props = {}) =>
 const balancesCalls = () => apiClient.get.mock.calls.filter(([url]) => url === "/balances");
 
 describe("AccountBalancesNote", () => {
-  it("desktop: 'em N contas' expande no próprio card (aria-expanded), buscando só ao abrir", async () => {
+  it("desktop: 'em N contas' expande no próprio card (aria-expanded)", async () => {
     const user = userEvent.setup();
     renderNote();
-    const toggle = screen.getByRole("button", { name: /2 contas/ });
+    const toggle = await screen.findByRole("button", { name: "em 2 contas" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(apiClient.get).not.toHaveBeenCalled();
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     const inline = await screen.findByTestId("account-balances-inline");
@@ -78,7 +77,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const list = await screen.findByTestId("account-balances-list");
     const rows = within(list).getAllByTestId("account-balance-row");
     expect(rows[0]).toHaveTextContent(/R\$\s?1\.000,00/);
@@ -96,7 +95,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const list = await screen.findByTestId("account-balances-list");
     expect(within(list).queryByTestId("account-balances-total")).toBeNull();
     const byCurrency = within(list).getByTestId("account-balances-by-currency");
@@ -112,7 +111,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const excluded = await screen.findByTestId("account-balances-excluded");
     expect(excluded).toHaveTextContent("Fora do saldo disponível");
     expect(within(excluded).getByText("XP Investimentos")).toBeInTheDocument();
@@ -124,7 +123,7 @@ describe("AccountBalancesNote", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderNote({ isMobile: true });
-    const toggle = screen.getByRole("button", { name: /2 contas/ });
+    const toggle = await screen.findByRole("button", { name: /2 contas/ });
     expect(toggle).toHaveAttribute("aria-haspopup", "dialog");
 
     await user.click(toggle);
@@ -152,7 +151,7 @@ describe("AccountBalancesNote", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderNote({ isMobile: true });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     await screen.findByRole("dialog");
     const handle = screen.getByTestId("account-balances-handle");
     fireEvent.touchStart(handle, { touches: [{ clientY: 100 }] });
@@ -165,7 +164,7 @@ describe("AccountBalancesNote", () => {
   it("uma transação gravada relê os saldos sem apagar a lista da tela", async () => {
     const user = userEvent.setup();
     const { rerender } = renderNote({ refreshKey: 0 });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     await screen.findByText("Itaú");
     let release;
     apiClient.get.mockImplementation((url) => {
@@ -181,26 +180,37 @@ describe("AccountBalancesNote", () => {
   it("celular: o sheet é portalizado no body (fora do card que tem transform)", async () => {
     const user = userEvent.setup();
     const { container } = renderNote({ isMobile: true });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const dialog = await screen.findByRole("dialog", { name: "Saldo por conta" });
     expect(container.contains(dialog)).toBe(false);
     expect(document.body.contains(dialog)).toBe(true);
   });
 
-  it("o rótulo conta só as contas do total depois da leitura ('2 contas no saldo · 1 fora')", async () => {
+  it("o rótulo já nasce certo (pré-busca) e conta só as contas do total ('2 contas no saldo · 1 fora')", async () => {
     balancesBody = { ...balancesBody, accounts: [...balancesBody.accounts, row("x", "XP", "investment", "9000.00", "BRL", false)] };
     const user = userEvent.setup();
+    let release;
+    apiClient.get.mockImplementation((url) => {
+      if (url === "/accounts") return Promise.resolve({ data: accountsMeta });
+      return new Promise((r) => { release = () => r({ data: balancesBody }); });
+    });
     render(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={3} organizationId="org-1" />);
-    // Antes da leitura o resumo só sabe "3 contas" no total — não afirma "em 3".
-    expect(screen.getByRole("button", { name: "3 contas" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "3 contas" }));
+    // Enquanto a lista não chega, não afirma número nenhum (o resumo diria "3",
+    // contando a conta de investimento que está fora do total).
+    expect(screen.getByRole("button", { name: "ver contas" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /3 contas/ })).toBeNull();
+    release();
+    // Pré-buscado: já certo ANTES de abrir.
     expect(await screen.findByRole("button", { name: "2 contas no saldo · 1 fora" })).toBeInTheDocument();
+    expect(screen.queryByTestId("account-balances-inline")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "2 contas no saldo · 1 fora" }));
+    expect(await screen.findByTestId("account-balances-inline")).toBeInTheDocument();
   });
 
   it("ícone da conta vem dos metadados de /accounts (merge do useAccountsData)", async () => {
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const rows = await screen.findAllByTestId("account-balance-row");
     expect(rows[0]).toHaveTextContent("🟧");
   });
@@ -212,11 +222,11 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     const { rerender } = renderNote();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     await screen.findByText("Itaú");
     rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-2" />);
     expect(screen.queryByTestId("account-balances-inline")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     expect(await screen.findByText("Banco da Org 2")).toBeInTheDocument();
     expect(screen.queryByText("Itaú")).toBeNull();
   });
@@ -224,7 +234,7 @@ describe("AccountBalancesNote", () => {
   it("fechado, uma transação gravada não rebusca; a releitura vem na próxima abertura", async () => {
     const user = userEvent.setup();
     const { rerender } = renderNote({ refreshKey: 0 });
-    const toggle = screen.getByRole("button", { name: /2 contas/ });
+    const toggle = await screen.findByRole("button", { name: /2 contas/ });
     await user.click(toggle);
     await screen.findByText("Itaú");
     await user.click(toggle); // fecha
@@ -232,14 +242,14 @@ describe("AccountBalancesNote", () => {
     rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" refreshKey={1} />);
     await new Promise((r) => setTimeout(r, 30));
     expect(balancesCalls().length).toBe(before);
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     await waitFor(() => expect(balancesCalls().length).toBe(before + 1));
   });
 
   it("releitura que falha não apresenta os valores antigos como atuais", async () => {
     const user = userEvent.setup();
     const { rerender } = renderNote({ refreshKey: 0 });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     await screen.findByText("Itaú");
     apiClient.get.mockImplementation(() => Promise.reject(Object.assign(new Error("500"), { isAxiosError: true, response: { status: 500, data: {} } })));
     rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" refreshKey={1} />);
@@ -250,7 +260,7 @@ describe("AccountBalancesNote", () => {
   it("celular: touchcancel devolve o sheet ao lugar e não fecha", async () => {
     const user = userEvent.setup();
     renderNote({ isMobile: true });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const dialog = await screen.findByRole("dialog");
     const handle = screen.getByTestId("account-balances-handle");
     fireEvent.touchStart(handle, { touches: [{ clientY: 100 }] });
@@ -267,7 +277,7 @@ describe("AccountBalancesNote", () => {
   it("celular: fechar por arrasto continua do ponto solto (sem a animação CSS que recomeça em 0)", async () => {
     const user = userEvent.setup();
     renderNote({ isMobile: true });
-    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.touchStart(screen.getByTestId("account-balances-handle"), { touches: [{ clientY: 100 }] });
     fireEvent.touchMove(document, { touches: [{ clientY: 260 }] });
@@ -276,5 +286,10 @@ describe("AccountBalancesNote", () => {
     expect(dialog.style.animation).toMatch(/none/);
     expect(dialog.style.transform).toBe("translateY(105%)");
   });
-});
 
+  it("pluraliza pela lista por conta", async () => {
+    balancesBody = { ...balancesBody, accounts: [row("a", "Itaú", "checking", "1000.00", "BRL")] };
+    render(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={1} organizationId="org-1" />);
+    expect(await screen.findByRole("button", { name: "em 1 conta" })).toBeInTheDocument();
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_TYPES, accountMeta, formatBRL, parseBRL } from "../accountMeta.js";
+import { ACCOUNT_TYPES, accountMeta, consolidationReceipt, formatBRL, formatRateExact, parseBRL } from "../accountMeta.js";
 
 describe("accountMeta", () => {
   it("mapeia tipos conhecidos para rótulo PT", () => {
@@ -40,5 +40,17 @@ describe("parseBRL", () => {
   it("vazio/invalido => 0", () => {
     expect(parseBRL("")).toBe(0);
     expect(parseBRL("abc")).toBe(0);
+  });
+});
+
+describe("consolidationReceipt — taxa exata, nunca arredondada para 2 casas", () => {
+  it("mostra a taxa como a API deu, com vírgula", () => {
+    const receipt = consolidationReceipt({ rates: [{ base: "USD", quote: "BRL", rate: "5.4653", quoted_on: "2026-11-04" }] });
+    expect(receipt).toBe("Convertido com 1 USD = R$ 5,4653 (04/11)");
+  });
+  it("corta zeros à direita, com mínimo de 2 casas", () => {
+    expect(formatRateExact("5.46530000")).toBe("5,4653");
+    expect(formatRateExact("6.00")).toBe("6,00");
+    expect(formatRateExact("0.0365")).toBe("0,0365");
   });
 });

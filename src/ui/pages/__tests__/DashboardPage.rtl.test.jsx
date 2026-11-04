@@ -183,17 +183,18 @@ describe("DashboardPage — saldo em conta no headline (opção D)", () => {
     expect(headline).not.toHaveTextContent(/ritmo/i);
   });
 
-  it("pluraliza a contagem de contas", () => {
-    renderDash();
-    expect(screen.getByTestId("dashboard-headline-saldo-conta")).toHaveTextContent("1 conta");
-
-    cleanup();
+  it("a contagem do card não vem do resumo (que inclui as contas fora do total)", () => {
+    // A contagem certa vem da lista por conta (pré-buscada; ver
+    // AccountBalancesBreakdown.rtl.test.jsx, que também cobre a pluralização).
+    // Enquanto ela não chega, o card não afirma número nenhum.
     mockDashboardData = {
       ...mockDashboardData,
       balanceSummary: { ...mockDashboardData.balanceSummary, account_count: 3 },
     };
     renderDash();
-    expect(screen.getByTestId("dashboard-headline-saldo-conta")).toHaveTextContent("3 contas");
+    const headline = screen.getByTestId("dashboard-headline-saldo-conta");
+    expect(headline).toHaveTextContent("ver contas");
+    expect(headline).not.toHaveTextContent("3 contas");
   });
 
   it("saldo negativo mostra o sinal — não pode parecer positivo", () => {
@@ -736,9 +737,9 @@ describe("DashboardPage — 'em N contas' é o controle do saldo por conta", () 
     };
     render(<DashboardPage onNav={vi.fn()} stateCtrl={{ mounted: true, isMobile: false }} dataMode="live" organizationId="org-contas" onNewTx={vi.fn()} />);
     const headline = screen.getAllByTestId("dashboard-headline-saldo-conta")[0];
-    const toggle = within(headline).getByRole("button", { name: "2 contas" });
+    const toggle = within(headline).getByRole("button", { name: "ver contas" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(headline).toHaveTextContent("dinheiro disponível hoje · 2 contas");
+    expect(headline).toHaveTextContent("dinheiro disponível hoje · ver contas");
   });
 
   it("sem total (moedas sem cotação) o controle das contas continua lá", () => {
@@ -748,7 +749,7 @@ describe("DashboardPage — 'em N contas' é o controle do saldo por conta", () 
     };
     render(<DashboardPage onNav={vi.fn()} stateCtrl={{ mounted: true, isMobile: false }} dataMode="live" organizationId="org-sem-cotacao" onNewTx={vi.fn()} />);
     const headline = screen.getAllByTestId("dashboard-headline-saldo-conta")[0];
-    expect(within(headline).getByRole("button", { name: "2 contas" })).toBeInTheDocument();
+    expect(within(headline).getByRole("button", { name: "ver contas" })).toBeInTheDocument();
   });
 
   it("no desktop a lista expande ABAIXO da linha saldo/resultado, não dentro da coluna do saldo", () => {
@@ -758,7 +759,7 @@ describe("DashboardPage — 'em N contas' é o controle do saldo por conta", () 
     };
     render(<DashboardPage onNav={vi.fn()} stateCtrl={{ mounted: true, isMobile: false }} dataMode="live" organizationId="org-slot" onNewTx={vi.fn()} />);
     const headline = screen.getAllByTestId("dashboard-headline-saldo-conta")[0];
-    fireEvent.click(within(headline).getByRole("button", { name: "2 contas" }));
+    fireEvent.click(within(headline).getByRole("button", { name: "ver contas" }));
     const panel = screen.getByTestId("account-balances-inline");
     expect(headline.contains(panel)).toBe(false);
     expect(screen.getByTestId("dashboard-balances-slot").contains(panel)).toBe(true);

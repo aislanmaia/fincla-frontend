@@ -14,8 +14,9 @@ import { accountsFreshnessLabel } from "../accounts/accountsFreshness.js";
  * O texto das contas vira o controle: no desktop abre a lista no card; no celular,
  * num sheet de baixo. Os dados são os de Minhas Contas (`useAccountsData`: chave por
  * organização, mantém os valores na releitura, `refreshFailed`, metadados das contas).
- * Busca só depois da primeira abertura NESTA organização, e uma transação gravada só
- * relê na próxima abertura (ou já, se estiver aberto).
+ * Buscados em segundo plano ao carregar a Visão Geral (um GET), para o rótulo já
+ * nascer com a contagem certa; uma transação gravada só relê com o painel aberto
+ * (ou na próxima abertura).
  *
  * Todos os componentes ficam no nível do módulo: definidos dentro de outro, seriam
  * remontados a cada render (perde foco, reinicia animação).
@@ -38,11 +39,12 @@ function totalsByCurrency(accounts) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * Rótulo do controle. Com a lista carregada, conta só o que entra no total ("em 2
- * contas", ou "2 contas no saldo · 1 fora"). Antes dela, o resumo só sabe o total de
- * contas da organização — então não afirma "em N" sobre ele.
+ * Rótulo do controle, sempre a partir da lista POR CONTA: conta só o que entra no
+ * total ("em 2 contas", ou "2 contas no saldo · 1 fora"). O resumo só sabe o total
+ * de contas da organização (inclui as fora do total), então antes da lista chegar o
+ * rótulo não afirma número nenhum: "ver contas".
  */
-export function accountsControlLabel(accounts, fallbackCount) {
+export function accountsControlLabel(accounts) {
   if (Array.isArray(accounts) && accounts.length > 0) {
     const included = accounts.filter((a) => a.include_in_total).length;
     const excluded = accounts.length - included;
@@ -50,7 +52,7 @@ export function accountsControlLabel(accounts, fallbackCount) {
       ? `${plural(included, "conta", "contas")} no saldo · ${excluded} fora`
       : `em ${plural(included, "conta", "contas")}`;
   }
-  return plural(fallbackCount ?? 0, "conta", "contas");
+  return "ver contas";
 }
 
 function AccountRow({ account, muted }) {
@@ -249,8 +251,6 @@ export function AccountBalancesSheet({ onClose, children }) {
  */
 export function AccountBalancesNote({ prefix, accountCount, isMobile = false, organizationId, refreshKey = 0, as = "div", inlineContainer = null }) {
   const [open, setOpen] = useState(false);
-  // Organização em que o painel já foi aberto: trocar de org volta ao "não buscado".
-  const [openedOrg, setOpenedOrg] = useState(null);
   // O token de transação só chega ao hook enquanto o painel está aberto; fechado, a
   // releitura espera a próxima abertura.
   const [refreshKeySeen, setRefreshKeySeen] = useState(refreshKey);
@@ -260,15 +260,14 @@ export function AccountBalancesNote({ prefix, accountCount, isMobile = false, or
   useEffect(() => {
     setOpen(false);
   }, [organizationId]);
-  const enabled = !!organizationId && openedOrg === organizationId;
+  // Pré-busca: o rótulo precisa da contagem POR CONTA desde o primeiro render.
+  // `useAccountsData` chaveia por organização, então trocar de org recomeça do zero.
+  const enabled = !!organizationId;
   const data = useAccountsData({ organizationId, enabled, refreshKey: refreshKeySeen });
   const hasAccounts = (accountCount ?? 0) > 0 || (data.accounts || []).length > 0;
-  const toggle = () => {
-    setOpenedOrg(organizationId);
-    setOpen((v) => !v);
-  };
+  const toggle = () => setOpen((v) => !v);
   const Wrapper = as;
-  const label = accountsControlLabel(enabled ? data.accounts : null, accountCount);
+  const label = accountsControlLabel(data.hasLoaded ? data.accounts : null);
   if (!hasAccounts) return <Wrapper style={{ ...G, fontSize: 12, color: T.inkMid }}>{prefix}</Wrapper>;
   const panel = (
     <div data-testid="account-balances-inline" style={{ marginTop: 8, padding: "6px 12px 10px", border: `1px solid ${T.border}`, borderRadius: 12, background: T.surface, maxWidth: 420 }}>
