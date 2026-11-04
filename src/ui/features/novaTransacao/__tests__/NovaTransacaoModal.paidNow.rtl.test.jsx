@@ -41,6 +41,7 @@ vi.mock("../useNovaTransacaoPeriodSaldo.js", () => ({
 }));
 
 import apiClient from "../../../../api/client";
+import { noteIdempotencySupport, resetIdempotencySupportObservation } from "../../../../api/idempotency";
 import { NovaTransacaoModal } from "../NovaTransacaoModal.jsx";
 
 const MORNING = new Date(2026, 10, 4, 8, 15, 42); // 04/11/2026 08:15:42, hora local
@@ -60,6 +61,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  resetIdempotencySupportObservation();
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -91,5 +93,55 @@ describe("NovaTransacaoModal — 'Já paguei' com data de hoje (#265)", () => {
     render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig({ dateIso: "2026-11-01" })} />);
     const body = await confirm(user);
     expect(body.paid_at).toBe("2026-11-01T12:00:00");
+  });
+});
+
+describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvio protegido", () => {
+  it("erro de rede ambíguo, 6 s depois reenvia: mesmo paid_at, mesma Idempotency-Key, sem faixa de confirmação", async () => {
+    // Servidor que já provou suporte a Idempotency-Key: é o caso em que o reenvio vai direto.
+    noteIdempotencySupport();
+    let failing = true;
+    apiClient.post.mockImplementation((url, body) => {
+      if (url !== "/transactions") return Promise.resolve({ data: {}, headers: {} });
+      if (failing) return Promise.reject(Object.assign(new Error("Network Error"), { isAxiosError: true, code: "ERR_NETWORK" }));
+      return Promise.resolve({ data: { id: 7, ...body }, headers: { "Idempotent-Replay": "false" } });
+    });
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal open onClose={vi.fn()} onTransactionSaved={vi.fn()} isMobile={false} organizationId="org-1" dataMode="live" preConfig={preConfig()} />);
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
+    const retry = await screen.findByRole("button", { name: "Tentar novamente" }, { timeout: 8000 });
+
+    const txPosts = () => apiClient.post.mock.calls.filter(([url]) => url === "/transactions");
+    const failedCount = txPosts().length;
+    const first = txPosts()[0];
+
+    vi.setSystemTime(new Date(MORNING.getTime() + 6000));
+    failing = false;
+    await user.click(retry);
+
+    await waitFor(() => expect(txPosts().length).toBe(failedCount + 1));
+    expect(screen.queryByText(/Confira seu extrato antes de continuar/i)).toBeNull();
+    const resend = txPosts()[failedCount];
+    expect(resend[1].paid_at).toBe(first[1].paid_at);
+    expect(resend[2].headers["Idempotency-Key"]).toBe(first[2].headers["Idempotency-Key"]);
+    expect(await screen.findByText("Despesa registrada!")).toBeInTheDocument();
+  }, 20000);
+
+  it("o instante congelado morre com a sessão do drawer: reabrir e lançar de novo usa o instante novo", async () => {
+    const user = userEvent.setup();
+    const props = { onClose: vi.fn(), onTransactionSaved: vi.fn(), isMobile: false, organizationId: "org-1", dataMode: "live", preConfig: preConfig() };
+    const { rerender } = render(<NovaTransacaoModal open {...props} />);
+    const first = await confirm(user);
+    expect(await screen.findByText("Despesa registrada!")).toBeInTheDocument();
+
+    rerender(<NovaTransacaoModal open={false} {...props} />);
+    const later = new Date(MORNING.getTime() + 60_000);
+    vi.setSystemTime(later);
+    apiClient.post.mockClear();
+    rerender(<NovaTransacaoModal open {...props} preConfig={preConfig({ desc: "Padaria (tarde)" })} />);
+    const second = await confirm(user);
+    expect(Date.parse(second.paid_at)).toBe(later.getTime());
+    expect(second.paid_at).not.toBe(first.paid_at);
   });
 });

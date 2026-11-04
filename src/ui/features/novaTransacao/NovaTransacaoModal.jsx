@@ -427,6 +427,22 @@ export const NovaTransacaoModal = ({
   // contradiz a faixa logo abaixo ("este envio é um lançamento novo") e,
   // naquele ponto, já é falsa.
   const lastCreateErrorBaseMessageRef = useRef("");
+  // `paid_at` de "Já paguei" com data de hoje é o INSTANTE do lançamento (#265) —
+  // e a `Idempotency-Key` da criação é a impressão digital do payload. Recalcular
+  // o instante a cada clique mudaria o payload entre a tentativa que falhou de forma
+  // ambígua e o reenvio: chave nova, lançamento DUPLICADO no servidor. O instante é
+  // capturado na primeira tentativa e reaproveitado por todo reenvio deste
+  // lançamento; ele morre junto com as chaves retidas (`releaseFailedCreateKeys`:
+  // sucesso, reabrir, «Nova transação»). Indexado pela data: trocar o dia é
+  // intenção nova e o payload já mudaria de qualquer forma.
+  const frozenPaidAtRef = useRef(null);
+  const paidAtForAttempt = (ymd) => {
+    const frozen = frozenPaidAtRef.current;
+    if (frozen && frozen.ymd === ymd) return frozen.iso;
+    const iso = paidAtIsoForSettlement(ymd);
+    frozenPaidAtRef.current = { ymd, iso };
+    return iso;
+  };
 
   /**
    * Solta no adapter todas as chaves das tentativas que este drawer abandonou.
@@ -463,6 +479,7 @@ export const NovaTransacaoModal = ({
       releaseCreateIdempotencyKey(fingerprint);
     }
     failedCreateFingerprintsRef.current.clear();
+    frozenPaidAtRef.current = null;
   };
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
@@ -1991,7 +2008,7 @@ export const NovaTransacaoModal = ({
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
             accountId: settleAccountId || null,
-            paidAt: method !== "credito" && settled ? paidAtIsoForSettlement(txDateYmd) : null,
+            paidAt: method !== "credito" && settled ? paidAtForAttempt(txDateYmd) : null,
           });
           // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
           // é garantidamente um replay. O modal já teve a própria conta (comparar fingerprints num `ref`),
