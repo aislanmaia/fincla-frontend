@@ -243,3 +243,21 @@ describe("buildUpdateTransactionPayload — conta (#266)", () => {
     expect(payload).not.toHaveProperty("account_id");
   });
 });
+
+describe("buildUpdateTransactionPayload — valor na moeda nova ao mover de conta", () => {
+  const naContaB = {
+    tipo: "despesa", description: "Hotel", value: 287.15, paymentMethodKey: "pix",
+    categoryTagId: "tag-x", detailTagIds: [], dateIso: "2026-11-03T12:00:00", recurring: false, accountId: "acc-b",
+  };
+
+  it("mudando de conta, `value` vai mesmo igual ao antigo (o backend exige)", () => {
+    const payload = buildUpdateTransactionPayload({ ...naContaB, accountId: "acc-usd", moveValue: 287.15, moveCurrency: "usd", baseline: naContaB });
+    expect(payload).toMatchObject({ account_id: "acc-usd", value: 287.15, value_currency: "USD" });
+  });
+
+  it("mesma conta do baseline: `moveValue` não força nada", () => {
+    const payload = buildUpdateTransactionPayload({ ...naContaB, accountId: "acc-b", moveValue: 52.4, baseline: naContaB });
+    expect(payload).not.toHaveProperty("value");
+    expect(payload).not.toHaveProperty("account_id");
+  });
+});

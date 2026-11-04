@@ -5,6 +5,7 @@ import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
 import { accountMeta, formatDay, formatMoney, parseBRL } from "./accountMeta.js";
 import { currencyInfo } from "../../money/currencyRegistry.js";
+import { convertAmountExact } from "../../money/convertAmount.js";
 
 const inputStyle = {
   ...G,
@@ -80,9 +81,10 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
   // Pré-preenche enquanto o usuário não digitou nada no campo de destino.
   useEffect(() => {
     if (!crossCurrency || !quotation || toAmount !== "") return;
-    const sugerido = amountNum * Number(quotation.rate);
-    if (Number.isFinite(sugerido) && sugerido > 0) {
-      setToAmount(sugerido.toFixed(2).replace(".", ","));
+    // Conversão exata (HALF_UP em inteiros), a mesma do Editar e do backend.
+    const sugerido = convertAmountExact(Number(amountNum).toFixed(2), quotation.rate);
+    if (sugerido != null && Number(sugerido) > 0) {
+      setToAmount(sugerido.replace(".", ","));
     }
   }, [crossCurrency, quotation, amountNum, toAmount]);
 

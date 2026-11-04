@@ -37,6 +37,13 @@ import {
 } from "./useDrawerCloseAnim.js";
 import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
+import { AccountMoveValue } from "./AccountMoveValue.jsx";
+import { formatAmountInput, parseAmountInput } from "./accountConversion.js";
+import { convertAmountExact } from "../../money/convertAmount.js";
+import { listAccounts } from "../../../api/accounts";
+import { getQuotation } from "../../../api/transfers";
+import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 import {
   parseApiDecimal,
@@ -656,6 +663,121 @@ export const NovaTransacaoModal = ({
     onCancelInstallmentCalc: () => setCalcOpenRef.current?.(false),
   });
 
+  /* Mover um lançamento para conta de OUTRA moeda, no Editar (regra do Owner, opção 1).
+     A cotação do dia SUGERE o valor na moeda nova num campo editável; o PUT leva
+     `account_id` + esse `value`. Sem cotação o campo fica vazio — nunca taxa 1.
+     Mesma moeda: nada muda (só `account_id`). */
+  // Moeda GRAVADA do lançamento: a do próprio valor (`value_currency`); senão a da
+  // conta gravada — na lista ativa ou, se ela foi desativada, na lista completa.
+  const storedFromActive = editingStoredAccountId
+    ? (findActiveAccount(editingStoredAccountId, accountOptions)?.currency || null)
+    : null;
+  const [inactiveStoredCurrency, setInactiveStoredCurrency] = useState({ id: null, currency: null });
+  const needsFullAccountList =
+    !!editingStoredAccountId && !preConfig?.currency && !storedFromActive && accountsStatus === "ready";
+  useEffect(() => {
+    if (!needsFullAccountList || !organizationId) return undefined;
+    let cancelled = false;
+    listAccounts(organizationId, true)
+      .then((rows) => {
+        if (cancelled) return;
+        const hit = (rows || []).find((a) => String(a.id) === editingStoredAccountId);
+        setInactiveStoredCurrency({ id: editingStoredAccountId, currency: hit?.currency ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [needsFullAccountList, organizationId, editingStoredAccountId]);
+  const storedAccountCurrency = editingStoredAccountId
+    ? (preConfig?.currency ||
+      storedFromActive ||
+      (inactiveStoredCurrency.id === editingStoredAccountId ? inactiveStoredCurrency.currency : null) ||
+      null)
+    : null;
+  const targetAccountCurrency = findActiveAccount(effectiveAccountId, accountOptions)?.currency || null;
+  const moveFrom = storedAccountCurrency ? String(storedAccountCurrency).toUpperCase() : null;
+  const moveTo = targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null;
+  const movingAccount =
+    !!editingStoredAccountId &&
+    accountTouched &&
+    method !== "credito" &&
+    liveAccounts &&
+    !!effectiveAccountId &&
+    String(effectiveAccountId) !== editingStoredAccountId;
+  /** Sem saber a moeda de origem não dá para saber se é troca entre moedas: bloqueia. */
+  const moveCurrencyUnknown = movingAccount && (!moveFrom || !moveTo);
+  const crossCurrencyMove = movingAccount && !!moveFrom && !!moveTo && moveFrom !== moveTo;
+  /** Moeda em que o valor do formulário está — o que a revisão e o sucesso escrevem. */
+  const formCurrency = (editingStoredAccountId ? moveFrom : null) || (targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null) || "BRL";
+
+  // Cotação e rascunho POR PAR de moedas, enquanto o drawer está aberto: alternar
+  // entre contas não rebusca a cotação nem apaga o valor que a pessoa digitou.
+  const movePairKey = crossCurrencyMove ? `${moveFrom}>${moveTo}` : null;
+  const [moveQuotes, setMoveQuotes] = useState({});
+  const [moveDrafts, setMoveDrafts] = useState({});
+  const [moveValueError, setMoveValueError] = useState("");
+  const moveQuotesInFlightRef = useRef(new Set());
+  const moveQuote = movePairKey ? (moveQuotes[movePairKey] ?? { status: "loading" }) : { status: "idle" };
+  const moveDraft = movePairKey ? (moveDrafts[movePairKey] ?? { text: "", touched: false }) : { text: "", touched: false };
+  const moveValueText = moveDraft.text;
+  /** Valor gravado na moeda nova — o sucesso mostra ele, não o da moeda antiga. */
+  const [savedMove, setSavedMove] = useState(null);
+  const resetMoveState = () => {
+    setMoveQuotes({});
+    setMoveDrafts({});
+    setMoveValueError("");
+    moveQuotesInFlightRef.current = new Set();
+  };
+  useEffect(() => {
+    if (!movePairKey || moveQuotes[movePairKey] || moveQuotesInFlightRef.current.has(movePairKey)) return;
+    const key = movePairKey;
+    const inFlight = moveQuotesInFlightRef.current;
+    inFlight.add(key);
+    getQuotation(organizationId, moveFrom, moveTo)
+      .then((q) => {
+        if (q?.rate == null || String(q.rate).trim() === "") throw new Error("empty rate");
+        return { status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null };
+      })
+      .catch(() => ({ status: "unavailable" }))
+      .then((entry) => {
+        // Drawer resetado no meio (nova sessão): a resposta é de outra intenção.
+        if (moveQuotesInFlightRef.current !== inFlight) return;
+        inFlight.delete(key);
+        setMoveQuotes((cur) => ({ ...cur, [key]: entry }));
+      });
+  }, [movePairKey, moveQuotes, moveFrom, moveTo, organizationId]);
+  // Sugestão = valor ORIGINAL convertido pela taxa em cache. Recalcula quando o valor
+  // original muda — mas SÓ enquanto a pessoa não mexeu no campo: o que ela digitou
+  // nunca é sobrescrito, nem por uma cotação que chega atrasada.
+  const originalAmountFixed = Math.abs(amountNum || 0).toFixed(2);
+  useEffect(() => {
+    if (!movePairKey || moveQuote.status !== "ready" || moveDraft.touched) return;
+    const converted = convertAmountExact(originalAmountFixed, moveQuote.rate);
+    const text = converted != null ? formatAmountInput(converted) : "";
+    if (text === moveDraft.text) return;
+    setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: false } }));
+  }, [movePairKey, moveQuote.status, moveQuote.rate, moveDraft.touched, moveDraft.text, originalAmountFixed]);
+  const setMoveValueByUser = (text) => {
+    if (!movePairKey) return;
+    setMoveValueError("");
+    setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: true } }));
+  };
+  const moveValueNum = crossCurrencyMove ? parseAmountInput(moveValueText) : null;
+  const moveCurrencyUnknownMessage = "Não foi possível identificar a moeda deste lançamento. A conta não pode ser trocada agora — mantenha a conta atual ou tente mais tarde.";
+  /** Revisar/salvar só com a troca de conta resolvida: moeda conhecida e valor na moeda nova. */
+  const moveReadyOrExplain = () => {
+    if (moveCurrencyUnknown) {
+      setTxSubmitError(moveCurrencyUnknownMessage);
+      return false;
+    }
+    if (crossCurrencyMove && !(moveValueNum > 0)) {
+      setMoveValueError(`Informe o valor em ${currencyInfo(moveTo).symbol}`);
+      return false;
+    }
+    return true;
+  };
+
   const {
     calcOpen,
     setCalcOpen,
@@ -848,6 +970,8 @@ export const NovaTransacaoModal = ({
 
     setTxSubmitError("");
     setTxSubmitting(false);
+    setSavedMove(null);
+    resetMoveState();
     setCategoryTagId(null);
     resetMobileStep();
     setReview(false);
@@ -1787,6 +1911,24 @@ export const NovaTransacaoModal = ({
             </button>
           </div>
         ) : null}
+        {crossCurrencyMove ? (
+          <AccountMoveValue
+            from={moveFrom}
+            to={moveTo}
+            quote={moveQuote.status === "ready" ? moveQuote : null}
+            loading={moveQuote.status === "loading"}
+            value={moveValueText}
+            onChange={setMoveValueByUser}
+            originalAmount={Math.abs(amountNum || 0)}
+            onUseSameNumber={() => setMoveValueByUser(formatAmountInput(Math.abs(amountNum || 0)))}
+            error={moveValueError}
+          />
+        ) : null}
+        {moveCurrencyUnknown ? (
+          <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "7px 10px", marginBottom: 10 }}>
+            {moveCurrencyUnknownMessage}
+          </div>
+        ) : null}
         <div
           role="switch"
           aria-checked={settled}
@@ -2066,6 +2208,16 @@ export const NovaTransacaoModal = ({
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (isEditingExisting) {
           const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
+          if (moveCurrencyUnknown) {
+            setTxSubmitError(moveCurrencyUnknownMessage);
+            setTxSubmitting(false);
+            return;
+          }
+          if (crossCurrencyMove && !(moveValueNum > 0)) {
+            setTxSubmitError(`Informe o valor em ${currencyInfo(moveTo).symbol} para mover para esta conta.`);
+            setTxSubmitting(false);
+            return;
+          }
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
           const updatePayload = buildUpdateTransactionPayload({
             tipo: effectiveTipoEdit,
@@ -2086,6 +2238,8 @@ export const NovaTransacaoModal = ({
               method !== "credito" && accountTouched
                 ? (effectiveAccountId || null)
                 : (preConfig?.editBaseline?.accountId ?? null),
+            moveValue: crossCurrencyMove ? moveValueNum : null,
+            moveCurrency: crossCurrencyMove ? moveTo : null,
             // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
             // o payload sai completo, como antes.
             baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
@@ -2095,6 +2249,7 @@ export const NovaTransacaoModal = ({
             organizationId,
             updatePayload,
           );
+          setSavedMove(crossCurrencyMove ? { amount: moveValueNum, currency: moveTo } : null);
         } else {
           const createPayload = buildCreateTransactionPayload({
             organizationId,
@@ -2144,6 +2299,16 @@ export const NovaTransacaoModal = ({
           lastCreateErrorBaseMessageRef.current = "";
         }
       } catch (err) {
+        // Troca de conta entre moedas recusada pelo servidor (422: aporte de meta,
+        // estorno, valor/moeda faltando): a mensagem vai NO campo do valor da moeda
+        // nova — é ali que a pessoa decide — e também no rodapé, sem tela de sucesso.
+        if (isEditingExisting && crossCurrencyMove && err?.response?.status === 422) {
+          const message = formatTransactionsApiError(err);
+          setMoveValueError(message);
+          setTxSubmitError(message);
+          setTxSubmitting(false);
+          return;
+        }
         // Erro na ESCRITA principal (create/update em si): a operação que a
         // pessoa pediu não foi confirmada nem depois das tentativas
         // automáticas. Guarda se o erro foi AMBÍGUO (5xx/rede: pode ter
@@ -2230,7 +2395,10 @@ export const NovaTransacaoModal = ({
   };
 
   // Desktop-only helpers
-  const goReview = () => { setReviewDir("forward"); setReview(true); };
+  const goReview = () => {
+    if (!moveReadyOrExplain()) return;
+    setReviewDir("forward"); setReview(true);
+  };
   const goBack   = () => { setReviewDir("back");    setReview(false); };
 
   const handleNewTransaction = () => {
@@ -2280,6 +2448,8 @@ export const NovaTransacaoModal = ({
     }
     setSettleAccountId("");
     setAccountTouched(false);
+    setSavedMove(null);
+    resetMoveState();
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
@@ -2354,8 +2524,15 @@ export const NovaTransacaoModal = ({
         <div style={{ ...G, fontSize:18, fontWeight:800, color:T.ink, letterSpacing:"-0.01em" }}>{desc || "(sem descrição)"}</div>
         <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
           <span style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, letterSpacing:"-0.02em" }}>
-            {effectiveTypeIsMoneyIn ? "+" : "−"}R$ {amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+            {effectiveTypeIsMoneyIn ? "+" : "−"}{crossCurrencyMove
+              ? formatMoneyPlainSpace(moveValueNum ?? 0, moveTo)
+              : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
           </span>
+          {crossCurrencyMove && moveValueNum > 0 ? (
+            <span data-testid="review-original-amount" style={{ ...G, fontSize:11, color:T.inkLight }}>
+              era {formatMoneyPlainSpace(Math.abs(amountNum || 0), moveFrom)}
+            </span>
+          ) : null}
           {(novaRecorrencia || isRecurring) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
               / {FREQ_LABELS[recurrenceFrequency]?.toLowerCase() || "mês"}
@@ -2486,7 +2663,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
@@ -3008,7 +3185,7 @@ export const NovaTransacaoModal = ({
                     <ChevronLeft size={18} color={T.inkMid} />
                   </button>
                 )}
-                <button onClick={goNext} disabled={mStep === 1 && !amountNum}
+                <button onClick={() => { if (mNextStep === "review" && !moveReadyOrExplain()) return; goNext(); }} disabled={mStep === 1 && !amountNum}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkFaint : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
                   {mNextLabel()}
                 </button>
@@ -3405,7 +3582,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : formatMoneyPlainSpace(amountNum || 0, formCurrency)}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
