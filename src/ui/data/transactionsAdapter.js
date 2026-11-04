@@ -1213,8 +1213,8 @@ export function buildRefundLinkedTxFromUi(ui) {
 }
 
 /** Data local do dia (YYYY-MM-DD). */
-export function todayLocalYmd() {
-  const d = new Date();
+export function todayLocalYmd(now = new Date()) {
+  const d = now;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -1498,6 +1498,31 @@ export function defaultTransactionDateIso() {
 export function transactionDateIsoFromYmd(ymd) {
   const y = ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : todayLocalYmd();
   return `${y}T12:00:00`;
+}
+
+/**
+ * `paid_at` do "Já paguei" (#265). O formulário promete "Entra no saldo da conta
+ * agora", e o saldo conta só o que tem `paid_at ≤ agora`: com o meio-dia fixo de
+ * `transactionDateIsoFromYmd`, um pagamento lançado de manhã só entrava no saldo
+ * à tarde.
+ *
+ * Data de HOJE → a hora de PAREDE local, SEM fuso (`2026-11-04T22:30:00`). É a
+ * convenção do backend (`BalanceService._cutoff`: "naive on purpose", `date` e
+ * `paid_at` gravados com `datetime.now()` sem fuso): o valor fica como hora do
+ * relógio, o DIA nunca muda — calendário, âncoras de saldo e o corte por data
+ * (`combine(date, time.max)`) leem o dia certo — e, a oeste de UTC (todo o
+ * Brasil), ele já é ≤ o "agora" do servidor, então entra no saldo na hora.
+ * Mandar com fuso (`-03:00`) gravava `01:30Z` do dia SEGUINTE para um pagamento
+ * das 22:30 e jogava o lançamento no dia errado.
+ *
+ * Outra data → meio-dia daquele dia, como sempre.
+ */
+export function paidAtIsoForSettlement(ymd, now = new Date()) {
+  const y = ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : null;
+  const today = todayLocalYmd(now);
+  if (y && y !== today) return transactionDateIsoFromYmd(y);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${today}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
 /**
@@ -1910,8 +1935,11 @@ function stableStringify(value) {
  *
  * Com TTL curto porque a retenção também engole: às 09:00 um "Café R$ 7,00"
  * falha com 503 depois de gravar; às 15:00 a pessoa compra outro café e digita
- * exatamente os mesmos dados (a data vai sempre como `T12:00:00`, então o
- * payload é idêntico byte a byte). Sem expirar, a chave da manhã seria reusada
+ * exatamente os mesmos dados. A `date` vai como `T12:00:00`, mas o `paid_at` do
+ * "Já paguei" com data de hoje leva a hora do lançamento (#265) — e o modal a
+ * CONGELA por tentativa, justamente para o reenvio sair com o mesmo payload. Um
+ * lançamento pendente (sem `paid_at`) continua idêntico byte a byte ao da manhã.
+ * Sem expirar, a chave da manhã seria reusada
  * e o backend replayaria o registro antigo: a tela diz "Registrado!" e o
  * lançamento da tarde NUNCA existe. A janela do backend é de 24h; a nossa é de
  * minutos, o tempo de uma pessoa insistir no botão.

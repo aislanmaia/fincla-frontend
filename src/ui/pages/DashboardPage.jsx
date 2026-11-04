@@ -249,20 +249,32 @@ export function DashboardPage({
    * lê uma falha que não aconteceu, a cada troca de período.
    */
   const [recurringProjection, setRecurringProjection] = useState(undefined);
+  const projectionKeyRef = useRef(null);
   useEffect(() => {
     if (!apiDataEnabled || !organizationId || !appliedRange.start || !appliedRange.end) {
+      projectionKeyRef.current = null;
       setRecurringProjection(null);
       return undefined;
     }
     let cancelled = false;
-    // Sem isto, trocar de período deixa os itens do período ANTERIOR na tela até a
-    // nova resposta chegar — dois KPIs exibiriam números de outro intervalo.
-    setRecurringProjection(undefined);
+    const key = `${organizationId}|${appliedRange.start}|${appliedRange.end}`;
+    // Mesma org e mesmo período = recarga depois de uma transação salva (#264): os
+    // itens atuais continuam na tela até os novos chegarem, e uma falha nessa
+    // recarga não troca números conhecidos por "indisponível".
+    const isRefresh = projectionKeyRef.current === key;
+    // Período (ou org) novo: sem isto, os itens do período ANTERIOR ficariam na
+    // tela até a nova resposta chegar — dois KPIs exibiriam números de outro intervalo.
+    if (!isRefresh) setRecurringProjection(undefined);
     getRecurringProjection(organizationId, appliedRange.start, appliedRange.end)
-      .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
-      .catch(() => { if (!cancelled) setRecurringProjection(null); });
+      .then((res) => {
+        if (cancelled) return;
+        projectionKeyRef.current = key;
+        setRecurringProjection(res.items || []);
+      })
+      .catch(() => { if (!cancelled && !isRefresh) setRecurringProjection(null); });
     return () => { cancelled = true; };
-  }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end]);
+  // `transactionsRefreshToken`: uma recorrência criada/editada muda o que ainda vai cair (#264).
+  }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end, transactionsRefreshToken]);
 
   /** Mapa dia-do-período (1..dim) → soma de projeções de despesa naquele dia. */
   const projectedExpenseByDay = useMemo(() => {
