@@ -600,24 +600,28 @@ export function DashboardPage({
    * vira zero — zero é um saldo legítimo e a diferença importa aqui mais que em
    * qualquer outro lugar da tela.
    */
+  /** Onde a lista por conta expande no desktop (abaixo da linha saldo/resultado). */
+  const [balancesSlot, setBalancesSlot] = useState(null);
   const accountHeadline = useMemo(() => {
     const summaryBalance = dashboardData.balanceSummary;
     const total = summaryBalance?.total_available;
+    // O controle das contas vem do componente (`AccountBalancesNote`); aqui só o
+    // prefixo e a contagem do resumo — que inclui as contas fora do total, por isso
+    // o rótulo "em N contas" só é afirmado depois da leitura por conta.
+    const accountCount = summaryBalance?.account_count ?? 0;
     if (typeof total !== "number") {
-      return { available: false, value: "—", note: "Dados indisponíveis", notePrefix: "Dados indisponíveis", noteLabel: null };
+      // Sem total (ex.: moedas sem cotação) o saldo POR CONTA continua alcançável:
+      // é justamente onde o "por moeda" aparece.
+      return summaryBalance && accountCount > 0
+        ? { available: false, value: "—", notePrefix: "total indisponível agora · ", accountCount }
+        : { available: false, value: "—", notePrefix: "Dados indisponíveis", accountCount: 0 };
     }
-    const n = summaryBalance.account_count ?? 0;
-    const contas = n === 1 ? "1 conta" : `${n} contas`;
     return {
       available: true,
       negative: total < 0,
       value: total < 0 ? fmtSgn(total) : fmtAbs(total),
-      note: total < 0
-        ? `conta negativa · ${contas}`
-        : `dinheiro disponível hoje · em ${contas}`,
-      // "em N contas" vira o controle que abre o saldo por conta.
       notePrefix: total < 0 ? "conta negativa · " : "dinheiro disponível hoje · ",
-      noteLabel: total < 0 ? contas : `em ${contas}`,
+      accountCount,
     };
   }, [dashboardData.balanceSummary]);
 
@@ -1266,7 +1270,7 @@ export function DashboardPage({
                       <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                         {accountHeadline.value}
                       </div>
-                      <AccountBalancesNote prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                      <AccountBalancesNote prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
                     </div>
                   ) : null}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1321,7 +1325,7 @@ export function DashboardPage({
                     <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                       {accountHeadline.value}
                     </div>
-                    <AccountBalancesNote prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                    <AccountBalancesNote prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
                   </div>
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{kpiPeriodPhrase}</div>
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, marginBottom: 18, lineHeight: 1.55 }}>
@@ -1472,7 +1476,7 @@ export function DashboardPage({
                   >
                     {accountHeadline.value}
                   </div>
-                  <AccountBalancesNote as="span" prefix={accountHeadline.notePrefix} label={accountHeadline.noteLabel} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                  <AccountBalancesNote as="span" prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} inlineContainer={balancesSlot} />
                 </div>
 
                 {isMobile ? null : (
@@ -1512,6 +1516,10 @@ export function DashboardPage({
                   </div>
                 </div>
               </div>
+              {/* Saldo por conta (desktop) expande AQUI, abaixo da linha inteira: dentro
+                  da coluna do saldo ele empurraria o "Resultado do período" e o
+                  divisor para baixo (a linha alinha pelo fim). */}
+              <div ref={setBalancesSlot} data-testid="dashboard-balances-slot" />
 
               <div data-testid="dashboard-composicao">
                 <div style={{ ...G, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>

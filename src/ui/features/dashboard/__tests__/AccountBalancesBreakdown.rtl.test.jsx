@@ -23,14 +23,25 @@ const row = (account_id, name, type, amount, currency, include_in_total = true) 
 });
 
 let balancesBody;
+let balancesByOrg;
+let accountsMeta;
 beforeEach(() => {
+  balancesByOrg = null;
+  accountsMeta = [{ id: "a", icon_key: "🟧" }];
   balancesBody = {
     as_of: "2026-11-04T09:00:00",
     total: money("1500.00", "BRL"),
     consolidation: { target_currency: "BRL", rates: [], unavailable: null },
     accounts: [row("a", "Itaú", "checking", "1000.00", "BRL"), row("b", "Nubank", "checking", "500.00", "BRL")],
   };
-  apiClient.get.mockImplementation((url) => (url === "/balances" ? Promise.resolve({ data: balancesBody }) : Promise.resolve({ data: [] })));
+  apiClient.get.mockImplementation((url, config) => {
+    if (url === "/balances") {
+      const org = config?.params?.organization_id;
+      return Promise.resolve({ data: balancesByOrg?.[org] ?? balancesBody });
+    }
+    if (url === "/accounts") return Promise.resolve({ data: accountsMeta });
+    return Promise.resolve({ data: [] });
+  });
 });
 afterEach(() => {
   cleanup();
@@ -39,13 +50,14 @@ afterEach(() => {
 });
 
 const renderNote = (props = {}) =>
-  render(<AccountBalancesNote prefix="dinheiro disponível hoje · " label="em 2 contas" organizationId="org-1" {...props} />);
+  render(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" {...props} />);
+const balancesCalls = () => apiClient.get.mock.calls.filter(([url]) => url === "/balances");
 
 describe("AccountBalancesNote", () => {
   it("desktop: 'em N contas' expande no próprio card (aria-expanded), buscando só ao abrir", async () => {
     const user = userEvent.setup();
     renderNote();
-    const toggle = screen.getByRole("button", { name: "em 2 contas" });
+    const toggle = screen.getByRole("button", { name: /2 contas/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(apiClient.get).not.toHaveBeenCalled();
     await user.click(toggle);
@@ -66,7 +78,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
     const list = await screen.findByTestId("account-balances-list");
     const rows = within(list).getAllByTestId("account-balance-row");
     expect(rows[0]).toHaveTextContent(/R\$\s?1\.000,00/);
@@ -84,7 +96,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
     const list = await screen.findByTestId("account-balances-list");
     expect(within(list).queryByTestId("account-balances-total")).toBeNull();
     const byCurrency = within(list).getByTestId("account-balances-by-currency");
@@ -100,7 +112,7 @@ describe("AccountBalancesNote", () => {
     };
     const user = userEvent.setup();
     renderNote();
-    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
     const excluded = await screen.findByTestId("account-balances-excluded");
     expect(excluded).toHaveTextContent("Fora do saldo disponível");
     expect(within(excluded).getByText("XP Investimentos")).toBeInTheDocument();
@@ -112,7 +124,7 @@ describe("AccountBalancesNote", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderNote({ isMobile: true });
-    const toggle = screen.getByRole("button", { name: "em 2 contas" });
+    const toggle = screen.getByRole("button", { name: /2 contas/ });
     expect(toggle).toHaveAttribute("aria-haspopup", "dialog");
 
     await user.click(toggle);
@@ -140,7 +152,7 @@ describe("AccountBalancesNote", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderNote({ isMobile: true });
-    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
     await screen.findByRole("dialog");
     const handle = screen.getByTestId("account-balances-handle");
     fireEvent.touchStart(handle, { touches: [{ clientY: 100 }] });
@@ -153,13 +165,116 @@ describe("AccountBalancesNote", () => {
   it("uma transação gravada relê os saldos sem apagar a lista da tela", async () => {
     const user = userEvent.setup();
     const { rerender } = renderNote({ refreshKey: 0 });
-    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
     await screen.findByText("Itaú");
     let release;
-    apiClient.get.mockImplementation(() => new Promise((r) => { release = () => r({ data: { ...balancesBody, accounts: [row("a", "Itaú", "checking", "876.55", "BRL"), row("b", "Nubank", "checking", "500.00", "BRL")] } }); }));
-    rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " label="em 2 contas" organizationId="org-1" refreshKey={1} />);
+    apiClient.get.mockImplementation((url) => {
+      if (url === "/accounts") return Promise.resolve({ data: accountsMeta });
+      return new Promise((r) => { release = () => r({ data: { ...balancesBody, accounts: [row("a", "Itaú", "checking", "876.55", "BRL"), row("b", "Nubank", "checking", "500.00", "BRL")] } }); });
+    });
+    rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" refreshKey={1} />);
     expect(screen.getByText("Itaú")).toBeInTheDocument();
     release();
     await waitFor(() => expect(screen.getByTestId("account-balances-list")).toHaveTextContent(/876,55/));
   });
+
+  it("celular: o sheet é portalizado no body (fora do card que tem transform)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderNote({ isMobile: true });
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Saldo por conta" });
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+  });
+
+  it("o rótulo conta só as contas do total depois da leitura ('2 contas no saldo · 1 fora')", async () => {
+    balancesBody = { ...balancesBody, accounts: [...balancesBody.accounts, row("x", "XP", "investment", "9000.00", "BRL", false)] };
+    const user = userEvent.setup();
+    render(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={3} organizationId="org-1" />);
+    // Antes da leitura o resumo só sabe "3 contas" no total — não afirma "em 3".
+    expect(screen.getByRole("button", { name: "3 contas" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "3 contas" }));
+    expect(await screen.findByRole("button", { name: "2 contas no saldo · 1 fora" })).toBeInTheDocument();
+  });
+
+  it("ícone da conta vem dos metadados de /accounts (merge do useAccountsData)", async () => {
+    const user = userEvent.setup();
+    renderNote();
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    const rows = await screen.findAllByTestId("account-balance-row");
+    expect(rows[0]).toHaveTextContent("🟧");
+  });
+
+  it("trocar de organização fecha e nunca mostra as contas da anterior", async () => {
+    balancesByOrg = {
+      "org-1": balancesBody,
+      "org-2": { ...balancesBody, accounts: [row("z", "Banco da Org 2", "checking", "10.00", "BRL"), row("y", "Outra", "checking", "5.00", "BRL")] },
+    };
+    const user = userEvent.setup();
+    const { rerender } = renderNote();
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await screen.findByText("Itaú");
+    rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-2" />);
+    expect(screen.queryByTestId("account-balances-inline")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    expect(await screen.findByText("Banco da Org 2")).toBeInTheDocument();
+    expect(screen.queryByText("Itaú")).toBeNull();
+  });
+
+  it("fechado, uma transação gravada não rebusca; a releitura vem na próxima abertura", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderNote({ refreshKey: 0 });
+    const toggle = screen.getByRole("button", { name: /2 contas/ });
+    await user.click(toggle);
+    await screen.findByText("Itaú");
+    await user.click(toggle); // fecha
+    const before = balancesCalls().length;
+    rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" refreshKey={1} />);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(balancesCalls().length).toBe(before);
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await waitFor(() => expect(balancesCalls().length).toBe(before + 1));
+  });
+
+  it("releitura que falha não apresenta os valores antigos como atuais", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderNote({ refreshKey: 0 });
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    await screen.findByText("Itaú");
+    apiClient.get.mockImplementation(() => Promise.reject(Object.assign(new Error("500"), { isAxiosError: true, response: { status: 500, data: {} } })));
+    rerender(<AccountBalancesNote prefix="dinheiro disponível hoje · " accountCount={2} organizationId="org-1" refreshKey={1} />);
+    expect(await screen.findByTestId("account-balances-freshness")).toHaveTextContent("não foi possível atualizar");
+    expect(screen.getByText("Itaú")).toBeInTheDocument();
+  });
+
+  it("celular: touchcancel devolve o sheet ao lugar e não fecha", async () => {
+    const user = userEvent.setup();
+    renderNote({ isMobile: true });
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    const dialog = await screen.findByRole("dialog");
+    const handle = screen.getByTestId("account-balances-handle");
+    fireEvent.touchStart(handle, { touches: [{ clientY: 100 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 160 }] });
+    expect(dialog.style.transform).toBe("translateY(60px)");
+    fireEvent.touchCancel(document);
+    expect(dialog.style.transform).toBe("translateY(0)");
+    // Depois do cancel, mover o dedo não arrasta mais (ouvintes removidos).
+    fireEvent.touchMove(document, { touches: [{ clientY: 400 }] });
+    expect(dialog.style.transform).toBe("translateY(0)");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("celular: fechar por arrasto continua do ponto solto (sem a animação CSS que recomeça em 0)", async () => {
+    const user = userEvent.setup();
+    renderNote({ isMobile: true });
+    await user.click(screen.getByRole("button", { name: /2 contas/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.touchStart(screen.getByTestId("account-balances-handle"), { touches: [{ clientY: 100 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 260 }] });
+    fireEvent.touchEnd(document);
+    expect(dialog.getAttribute("data-closing")).toBe("dragged");
+    expect(dialog.style.animation).toMatch(/none/);
+    expect(dialog.style.transform).toBe("translateY(105%)");
+  });
 });
+

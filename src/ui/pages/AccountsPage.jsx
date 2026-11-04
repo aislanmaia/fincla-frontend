@@ -28,16 +28,9 @@ const menuItemStyle = {
   color: T.inkMid,
 };
 
-/**
- * Quão atual é o que a tela de Contas mostra (#264). `null` = não afirmar nada
- * (modo demonstração/sem organização: não há leitura para datar).
- */
-export function accountsFreshnessLabel(data, enabled) {
-  if (!enabled) return null;
-  if (data.isLoading) return data.hasLoaded ? "atualizando…" : null;
-  if (data.refreshFailed) return "não foi possível atualizar";
-  return data.hasLoaded ? "atualizado agora" : null;
-}
+// Mora em features/accounts para a Visão Geral usar a mesma regra; reexportado aqui.
+export { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
+import { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
 
 export function AccountsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
   const enabled = !!organizationId && dataMode === "live";

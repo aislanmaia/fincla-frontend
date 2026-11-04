@@ -1,46 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { getOrgBalances } from "../../../api/balances";
+import { useAccountsData } from "../accounts/useAccountsData.js";
 import { accountMeta, consolidationReceipt, formatMoney } from "../accounts/accountMeta.js";
+import { accountsFreshnessLabel } from "../accounts/accountsFreshness.js";
 
 /**
  * "Saldo em conta" da Visão Geral → saldo POR CONTA.
  *
- * O texto "em N contas" vira o controle: no desktop abre a lista dentro do próprio
- * card; no celular, num sheet de baixo. Os dados são `GET /v1/balances` (o mesmo de
- * Minhas Contas), buscados só na primeira abertura e relidos a cada transação
- * gravada (`refreshKey`) — sem apagar a lista da tela durante a releitura.
+ * O texto das contas vira o controle: no desktop abre a lista no card; no celular,
+ * num sheet de baixo. Os dados são os de Minhas Contas (`useAccountsData`: chave por
+ * organização, mantém os valores na releitura, `refreshFailed`, metadados das contas).
+ * Busca só depois da primeira abertura NESTA organização, e uma transação gravada só
+ * relê na próxima abertura (ou já, se estiver aberto).
  *
  * Todos os componentes ficam no nível do módulo: definidos dentro de outro, seriam
  * remontados a cada render (perde foco, reinicia animação).
  */
 
 const SHEET_SLIDE_MS = 380;
-
-/** Saldos por conta, sob demanda. `enabled` liga na primeira abertura e não desliga mais. */
-export function useAccountBalancesBreakdown({ organizationId, enabled, refreshKey = 0 }) {
-  const [state, setState] = useState({ status: "idle", data: null });
-  useEffect(() => {
-    if (!enabled || !organizationId) return undefined;
-    let cancelled = false;
-    // Mantém o que já está na tela enquanto relê (#270): só o status muda.
-    setState((cur) => ({ status: cur.data ? "refreshing" : "loading", data: cur.data }));
-    getOrgBalances(organizationId)
-      .then((data) => {
-        if (!cancelled) setState({ status: "ready", data });
-      })
-      .catch(() => {
-        if (!cancelled) setState((cur) => ({ status: "error", data: cur.data }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, organizationId, refreshKey]);
-  return state;
-}
+const SHEET_EASE = "cubic-bezier(0.32,0.72,0,1)";
 
 /** Soma em centavos inteiros por moeda — o "por moeda" quando não há consolidação. */
 function totalsByCurrency(accounts) {
@@ -51,6 +33,24 @@ function totalsByCurrency(accounts) {
     cents.set(code, (cents.get(code) ?? 0) + Math.round(a.balance * 100));
   }
   return [...cents.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([currency, c]) => ({ currency, amount: c / 100 }));
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Rótulo do controle. Com a lista carregada, conta só o que entra no total ("em 2
+ * contas", ou "2 contas no saldo · 1 fora"). Antes dela, o resumo só sabe o total de
+ * contas da organização — então não afirma "em N" sobre ele.
+ */
+export function accountsControlLabel(accounts, fallbackCount) {
+  if (Array.isArray(accounts) && accounts.length > 0) {
+    const included = accounts.filter((a) => a.include_in_total).length;
+    const excluded = accounts.length - included;
+    return excluded > 0
+      ? `${plural(included, "conta", "contas")} no saldo · ${excluded} fora`
+      : `em ${plural(included, "conta", "contas")}`;
+  }
+  return plural(fallbackCount ?? 0, "conta", "contas");
 }
 
 function AccountRow({ account, muted }) {
@@ -71,15 +71,13 @@ function AccountRow({ account, muted }) {
   );
 }
 
-/** Lista por conta + total (ou total por moeda) + recibo da conversão. */
-export function AccountBalancesList({ state }) {
-  const { status, data } = state;
-  if (!data) {
-    return (
-      <div style={{ ...G, fontSize: 12.5, color: status === "error" ? T.red : T.inkLight, padding: "6px 0" }}>
-        {status === "error" ? "Não foi possível carregar os saldos por conta." : "Carregando contas…"}
-      </div>
-    );
+/** Lista por conta + total (ou total por moeda) + recibo da conversão. `data` = `useAccountsData`. */
+export function AccountBalancesList({ data }) {
+  if (!data.hasLoaded) {
+    return <div style={{ ...G, fontSize: 12.5, color: T.inkLight, padding: "6px 0" }}>Carregando contas…</div>;
+  }
+  if (data.error && !data.refreshFailed && (data.accounts || []).length === 0) {
+    return <div style={{ ...G, fontSize: 12.5, color: T.red, padding: "6px 0" }}>Não foi possível carregar os saldos por conta.</div>;
   }
   const accounts = data.accounts || [];
   const included = accounts.filter((a) => a.include_in_total);
@@ -87,13 +85,13 @@ export function AccountBalancesList({ state }) {
   const base = data.consolidation?.target_currency;
   const currencies = new Set(included.map((a) => a.currency).filter(Boolean));
   const consolidated = typeof data.total === "number" && !data.consolidation?.unavailable;
-  const receipt = currencies.size > 1 || (base && [...currencies].some((c) => c !== base))
-    ? consolidationReceipt(data.consolidation)
-    : null;
+  const multiCurrency = currencies.size > 1 || (base && [...currencies].some((c) => c !== base));
+  const receipt = multiCurrency ? consolidationReceipt(data.consolidation) : null;
+  const freshness = accountsFreshnessLabel(data, true);
   return (
     <div data-testid="account-balances-list" style={{ ...G }}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {included.map((a) => <AccountRow key={a.account_id} account={a} />)}
+        {included.map((a) => <AccountRow key={a.account_id ?? a.id} account={a} />)}
       </ul>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, borderTop: `1px solid ${T.border}`, paddingTop: 9, marginTop: 2 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total</span>
@@ -122,32 +120,47 @@ export function AccountBalancesList({ state }) {
             Fora do saldo disponível
           </div>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {excluded.map((a) => <AccountRow key={a.account_id} account={a} muted />)}
+            {excluded.map((a) => <AccountRow key={a.account_id ?? a.id} account={a} muted />)}
           </ul>
         </div>
       ) : null}
-      {status === "refreshing" ? <div style={{ fontSize: 11, color: T.inkGhost, marginTop: 6 }}>atualizando…</div> : null}
+      {freshness && freshness !== "atualizado agora" ? (
+        <div data-testid="account-balances-freshness" style={{ fontSize: 11, color: data.refreshFailed ? T.amber : T.inkGhost, marginTop: 8 }}>
+          {freshness}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /**
- * Sheet de baixo do celular. Fecha por arrasto para baixo, toque no fundo, Esc ou ✕.
- * A saída anima e o desmontar vem por TIMER — nunca por `onAnimationEnd`, que não é
- * garantido (jsdom, movimento reduzido, quadro descartado) e deixaria o sheet preso.
+ * Sheet de baixo do celular, PORTALIZADO no `body`: dentro do card ele herdaria o
+ * `transform` da animação de entrada da grade (que vira o bloco de contenção de
+ * `position: fixed`) e ficaria preso ao card, por baixo dos KPIs.
+ *
+ * Fecha por arrasto, fundo, Esc ou ✕. A saída anima e o desmontar vem por TIMER —
+ * nunca por `onAnimationEnd`, que não é garantido e deixaria a camada presa.
  */
 export function AccountBalancesSheet({ onClose, children }) {
-  const [closing, setClosing] = useState(false);
+  const [closing, setClosing] = useState(null); // null | "animated" | "dragged"
   const closingRef = useRef(false);
   const timerRef = useRef(null);
   const sheetRef = useRef(null);
+  const listenersCleanupRef = useRef(null);
+  const finishAfter = useCallback((ms) => {
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(onClose, ms);
+  }, [onClose]);
   const requestClose = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
-    setClosing(true);
-    timerRef.current = window.setTimeout(onClose, SHEET_SLIDE_MS);
-  }, [onClose]);
-  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+    setClosing("animated");
+    finishAfter(SHEET_SLIDE_MS);
+  }, [finishAfter]);
+  useEffect(() => () => {
+    window.clearTimeout(timerRef.current);
+    listenersCleanupRef.current?.();
+  }, []);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") requestClose();
@@ -159,29 +172,54 @@ export function AccountBalancesSheet({ onClose, children }) {
   const onHandleTouchStart = (event) => {
     const el = sheetRef.current;
     if (!el || closingRef.current) return;
+    listenersCleanupRef.current?.();
     const startY = event.touches[0].clientY;
     let delta = 0;
-    const onMove = (move) => {
-      delta = Math.max(0, move.touches[0].clientY - startY);
-      el.style.transform = `translateY(${delta}px)`;
-    };
-    const onEnd = () => {
+    el.style.transition = "none";
+    const cleanup = () => {
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("touchend", onEnd);
-      if (delta > 80) requestClose();
-      else el.style.transform = "";
+      document.removeEventListener("touchcancel", onCancel);
+      listenersCleanupRef.current = null;
     };
+    const snapBack = () => {
+      el.style.transition = `transform 0.3s ${SHEET_EASE}`;
+      el.style.transform = "translateY(0)";
+    };
+    function onMove(move) {
+      delta = Math.max(0, move.touches[0].clientY - startY);
+      el.style.transform = `translateY(${delta}px)`;
+    }
+    function onEnd() {
+      cleanup();
+      if (delta > 80) {
+        // Fecha A PARTIR de onde o dedo soltou: transição no próprio elemento, sem a
+        // animação CSS `sheetDown` (que recomeçaria em 0 e daria um salto para cima).
+        closingRef.current = true;
+        setClosing("dragged");
+        el.style.transition = `transform ${SHEET_SLIDE_MS}ms ${SHEET_EASE}`;
+        el.style.transform = "translateY(105%)";
+        finishAfter(SHEET_SLIDE_MS);
+      } else snapBack();
+    }
+    // O sistema tomou o gesto (chamada, rolagem nativa): volta ao lugar, não fecha.
+    function onCancel() {
+      cleanup();
+      snapBack();
+    }
+    listenersCleanupRef.current = cleanup;
     document.addEventListener("touchmove", onMove, { passive: true });
     document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onCancel);
   };
 
-  return (
+  return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       <div data-testid="account-balances-backdrop" aria-hidden="true" onClick={requestClose}
         style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", animation: closing ? `backdropOut ${SHEET_SLIDE_MS}ms ease-in both` : "backdropIn 0.22s ease-out both" }} />
-      <div ref={sheetRef} role="dialog" aria-modal="true" aria-label="Saldo por conta"
+      <div ref={sheetRef} role="dialog" aria-modal="true" aria-label="Saldo por conta" data-closing={closing ?? ""}
         style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "85dvh", display: "flex", flexDirection: "column",
-          animation: closing ? `sheetDown ${SHEET_SLIDE_MS}ms cubic-bezier(0.32,0.72,0,1) both` : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) backwards",
+          animation: closing === "animated" ? `sheetDown ${SHEET_SLIDE_MS}ms ${SHEET_EASE} both` : closing ? "none" : `sheetUp 0.5s ${SHEET_EASE} backwards`,
           boxShadow: "0 -8px 32px rgba(0,0,0,0.14)" }}>
         <div data-testid="account-balances-handle" onTouchStart={onHandleTouchStart} aria-hidden="true"
           style={{ padding: "12px 0 6px", display: "flex", justifyContent: "center", touchAction: "none", cursor: "grab" }}>
@@ -198,24 +236,45 @@ export function AccountBalancesSheet({ onClose, children }) {
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 /**
- * A linha "dinheiro disponível hoje · em N contas" do card, com "N contas" como
- * controle. `prefix` e `label` vêm do cálculo do card (o número não muda aqui).
+ * A linha "dinheiro disponível hoje · em N contas" do card, com as contas como
+ * controle. `accountCount` é o total do resumo (rótulo antes da primeira leitura).
+ * `inlineContainer`: no desktop, onde a lista expande (abaixo da linha do card, para
+ * não empurrar o "Resultado do período"); sem ele, logo abaixo do texto.
  */
-export function AccountBalancesNote({ prefix, label, isMobile = false, organizationId, refreshKey = 0, as = "div" }) {
+export function AccountBalancesNote({ prefix, accountCount, isMobile = false, organizationId, refreshKey = 0, as = "div", inlineContainer = null }) {
   const [open, setOpen] = useState(false);
-  const [everOpened, setEverOpened] = useState(false);
-  const state = useAccountBalancesBreakdown({ organizationId, enabled: everOpened, refreshKey });
+  // Organização em que o painel já foi aberto: trocar de org volta ao "não buscado".
+  const [openedOrg, setOpenedOrg] = useState(null);
+  // O token de transação só chega ao hook enquanto o painel está aberto; fechado, a
+  // releitura espera a próxima abertura.
+  const [refreshKeySeen, setRefreshKeySeen] = useState(refreshKey);
+  useEffect(() => {
+    if (open) setRefreshKeySeen(refreshKey);
+  }, [open, refreshKey]);
+  useEffect(() => {
+    setOpen(false);
+  }, [organizationId]);
+  const enabled = !!organizationId && openedOrg === organizationId;
+  const data = useAccountsData({ organizationId, enabled, refreshKey: refreshKeySeen });
+  const hasAccounts = (accountCount ?? 0) > 0 || (data.accounts || []).length > 0;
   const toggle = () => {
-    setEverOpened(true);
+    setOpenedOrg(organizationId);
     setOpen((v) => !v);
   };
   const Wrapper = as;
-  if (!label) return <Wrapper style={{ ...G, fontSize: 12, color: T.inkMid }}>{prefix}</Wrapper>;
+  const label = accountsControlLabel(enabled ? data.accounts : null, accountCount);
+  if (!hasAccounts) return <Wrapper style={{ ...G, fontSize: 12, color: T.inkMid }}>{prefix}</Wrapper>;
+  const panel = (
+    <div data-testid="account-balances-inline" style={{ marginTop: 8, padding: "6px 12px 10px", border: `1px solid ${T.border}`, borderRadius: 12, background: T.surface, maxWidth: 420 }}>
+      <AccountBalancesList data={data} />
+    </div>
+  );
   return (
     <>
       <Wrapper style={{ ...G, fontSize: 12, color: T.inkMid }}>
@@ -230,16 +289,12 @@ export function AccountBalancesNote({ prefix, label, isMobile = false, organizat
           {label}
         </button>
       </Wrapper>
-      {!isMobile && open ? (
-        <div data-testid="account-balances-inline" style={{ marginTop: 8, padding: "6px 12px 10px", border: `1px solid ${T.border}`, borderRadius: 12, background: T.surface, minWidth: 260 }}>
-          <AccountBalancesList state={state} />
-        </div>
-      ) : null}
+      {!isMobile && open ? (inlineContainer ? createPortal(panel, inlineContainer) : panel) : null}
       {/* Camada guardada pelo estado ABERTO; a saída anima dentro do sheet e o
           desmontar vem por timer. */}
       {isMobile && open ? (
         <AccountBalancesSheet onClose={() => setOpen(false)}>
-          <AccountBalancesList state={state} />
+          <AccountBalancesList data={data} />
         </AccountBalancesSheet>
       ) : null}
     </>
