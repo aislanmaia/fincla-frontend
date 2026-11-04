@@ -251,8 +251,8 @@ describe("buildUpdateTransactionPayload — valor na moeda nova ao mover de cont
   };
 
   it("mudando de conta, `value` vai mesmo igual ao antigo (o backend exige)", () => {
-    const payload = buildUpdateTransactionPayload({ ...naContaB, accountId: "acc-usd", moveValue: 287.15, baseline: naContaB });
-    expect(payload).toMatchObject({ account_id: "acc-usd", value: 287.15 });
+    const payload = buildUpdateTransactionPayload({ ...naContaB, accountId: "acc-usd", moveValue: 287.15, moveCurrency: "usd", baseline: naContaB });
+    expect(payload).toMatchObject({ account_id: "acc-usd", value: 287.15, value_currency: "USD" });
   });
 
   it("mesma conta do baseline: `moveValue` não força nada", () => {

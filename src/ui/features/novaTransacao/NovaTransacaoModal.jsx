@@ -2239,6 +2239,7 @@ export const NovaTransacaoModal = ({
                 ? (effectiveAccountId || null)
                 : (preConfig?.editBaseline?.accountId ?? null),
             moveValue: crossCurrencyMove ? moveValueNum : null,
+            moveCurrency: crossCurrencyMove ? moveTo : null,
             // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
             // o payload sai completo, como antes.
             baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
@@ -2298,6 +2299,16 @@ export const NovaTransacaoModal = ({
           lastCreateErrorBaseMessageRef.current = "";
         }
       } catch (err) {
+        // Troca de conta entre moedas recusada pelo servidor (422: aporte de meta,
+        // estorno, valor/moeda faltando): a mensagem vai NO campo do valor da moeda
+        // nova — é ali que a pessoa decide — e também no rodapé, sem tela de sucesso.
+        if (isEditingExisting && crossCurrencyMove && err?.response?.status === 422) {
+          const message = formatTransactionsApiError(err);
+          setMoveValueError(message);
+          setTxSubmitError(message);
+          setTxSubmitting(false);
+          return;
+        }
         // Erro na ESCRITA principal (create/update em si): a operação que a
         // pessoa pediu não foi confirmada nem depois das tentativas
         // automáticas. Guarda se o erro foi AMBÍGUO (5xx/rede: pode ter

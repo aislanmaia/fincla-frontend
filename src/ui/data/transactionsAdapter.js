@@ -1603,6 +1603,8 @@ export function buildUpdateTransactionPayload({
   accountId = null,
   /** Valor na moeda da conta NOVA ao mover para conta de outra moeda: vai sempre. */
   moveValue = null,
+  /** Moeda da conta NOVA: vai junto de `moveValue` (fincla-api#452 exige o par). */
+  moveCurrency = null,
   baseline = null,
 }) {
   let type;
@@ -1647,6 +1649,7 @@ export function buildUpdateTransactionPayload({
   const withMoveValue = (body) => {
     if (body.account_id && movingFromBaseline && moveValue != null && Number.isFinite(Number(moveValue))) {
       body.value = Number(moveValue);
+      if (moveCurrency) body.value_currency = String(moveCurrency).toUpperCase();
     }
     return body;
   };

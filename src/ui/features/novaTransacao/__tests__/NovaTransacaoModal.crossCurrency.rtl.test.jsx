@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -118,6 +118,7 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     const body = apiClient.put.mock.calls[0][1];
     expect(body.account_id).toBe(ACC_USD);
     expect(body.value).toBe(287.15);
+    expect(body.value_currency).toBe("USD");
   });
 
   it("valor editado vai no PUT; revisão mostra a moeda nova e o original; sucesso mostra o valor gravado", async () => {
@@ -134,7 +135,7 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
     await waitFor(() => expect(apiClient.put).toHaveBeenCalledTimes(1));
     const body = apiClient.put.mock.calls[0][1];
-    expect(body).toMatchObject({ account_id: ACC_USD, value: 53.1 });
+    expect(body).toMatchObject({ account_id: ACC_USD, value: 53.1, value_currency: "USD" });
     expect(body).not.toHaveProperty("conversion_rate");
     expect(await screen.findByText("Despesa registrada!")).toBeInTheDocument();
     expect(screen.getByText(/US\$ 53,10/)).toBeInTheDocument();
@@ -251,6 +252,25 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
     expect(await screen.findByText(/US\$ 287,15/)).toBeInTheDocument();
     expect(screen.queryByText(/R\$ 287,15/)).toBeNull();
+  });
+
+  it.each([
+    ["aporte de meta", "Esta transação é um aporte de meta; mova o aporte pela meta."],
+    ["estorno", "Esta transação tem estorno vinculado; não dá para movê-la para uma conta em outra moeda."],
+  ])("422 do servidor (%s): a mensagem aparece no campo do valor, sem tela de sucesso", async (_caso, message) => {
+    apiClient.put.mockImplementation(() => Promise.reject(Object.assign(new Error("422"), {
+      isAxiosError: true,
+      response: { status: 422, data: { detail: message } },
+    })));
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    await waitFor(() => expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40"));
+    await reviewAndConfirm(user);
+    await waitFor(() => expect(apiClient.put).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByText("Despesa registrada!")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^Editar$/i }));
+    expect(within(await screen.findByTestId("account-move-value")).getByRole("alert")).toHaveTextContent(message);
   });
 });
 
