@@ -1498,6 +1498,32 @@ export function transactionDateIsoFromYmd(ymd) {
   return `${y}T12:00:00`;
 }
 
+/** Instante local com o deslocamento do fuso: `2026-11-04T08:15:42-03:00`. */
+export function localIsoWithOffset(date = new Date()) {
+  const pad = (n) => String(Math.trunc(Math.abs(n))).padStart(2, "0");
+  const offsetMin = -date.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? "+" : "-";
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+    `${sign}${pad(offsetMin / 60)}:${pad(offsetMin % 60)}`
+  );
+}
+
+/**
+ * `paid_at` do "Já paguei" (#265). O formulário promete "Entra no saldo da conta
+ * agora", e o saldo conta só o que tem `paid_at ≤ agora`: com o meio-dia fixo de
+ * `transactionDateIsoFromYmd`, um pagamento lançado de manhã só entrava no saldo
+ * à tarde. Data de HOJE → o instante real, com fuso; outra data mantém a convenção
+ * do meio-dia (o dia certo, sem hora inventada).
+ */
+export function paidAtIsoForSettlement(ymd, now = new Date()) {
+  const y = ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : null;
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (!y || y === today) return localIsoWithOffset(now);
+  return transactionDateIsoFromYmd(y);
+}
+
 /**
  * Payload mínimo para POST /transactions (tag_ids obrigatório).
  * Parcelas/cartão: opcionais conforme o backend aceitar.

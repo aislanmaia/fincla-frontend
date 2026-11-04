@@ -57,6 +57,7 @@ import {
   initialNovaTransacaoDateYmd,
   isUuidString,
   normalizeStoredNovaTxPaymentMethod,
+  paidAtIsoForSettlement,
   readStoredNovaTransacaoPrefs,
   releaseCreateIdempotencyKey,
   resolveStoredNovaTxCategorySelection,
@@ -1990,7 +1991,7 @@ export const NovaTransacaoModal = ({
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
             accountId: settleAccountId || null,
-            paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
+            paidAt: method !== "credito" && settled ? paidAtIsoForSettlement(txDateYmd) : null,
           });
           // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
           // é garantidamente um replay. O modal já teve a própria conta (comparar fingerprints num `ref`),
