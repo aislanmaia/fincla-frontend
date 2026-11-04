@@ -26,15 +26,25 @@ export function parseAmountInput(text) {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
+const RATE_MAX_PLACES = 4;
+
 /**
- * A taxa como a API a deu, na direção em que foi buscada, em pt-BR: "0.1825" →
- * "0,1825". Sem inverter nem arredondar para 2 casas — numa moeda de valor
- * unitário baixo (JPY, KRW) a inversa em 2 casas vira "0,00".
+ * A taxa em pt-BR, no máximo 4 casas (HALF_UP, em inteiros), no mínimo 2:
+ * "5.49140000" → "5,4914", "0.1821029" → "0,1821", "5.5" → "5,50". Só EXIBIÇÃO:
+ * a conta usa a taxa inteira, como a API deu.
  */
 export function formatRatePtBr(rate) {
   const s = String(rate ?? "").trim();
   if (!/^\d+(\.\d+)?$/.test(s)) return s;
-  const [int, frac = ""] = s.split(".");
+  let [int, frac = ""] = s.split(".");
+  if (frac.length > RATE_MAX_PLACES) {
+    const n = BigInt(`${int}${frac}`);
+    const d = 10n ** BigInt(frac.length - RATE_MAX_PLACES);
+    const q = n / d + ((n % d) * 2n >= d ? 1n : 0n);
+    const digits = q.toString().padStart(RATE_MAX_PLACES + 1, "0");
+    int = digits.slice(0, -RATE_MAX_PLACES);
+    frac = digits.slice(-RATE_MAX_PLACES);
+  }
   const trimmed = frac.replace(/0+$/, "");
   const shown = trimmed.length >= 2 ? trimmed : trimmed.padEnd(2, "0");
   return `${int},${shown}`;
@@ -43,13 +53,14 @@ export function formatRatePtBr(rate) {
 /**
  * "Esta conta é em US$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"
  *
- * `quote` é a cotação destino→origem (1 unidade da moeda NOVA em moeda de origem),
- * a mesma usada na conta do valor sugerido; a data é a DELA. `null` sem cotação.
+ * `quote` traz a taxa como buscada e a data DELA; `direction` (de `quoteDirection`)
+ * diz o par mostrado — "1 <direction.base> = <direction.quote> taxa" —, o MESMO par
+ * em que a cotação foi buscada e usada na conta. `null` sem cotação.
  */
-export function conversionHeadline({ from, to, quote }) {
-  if (!quote?.rate || !from || !to) return null;
-  const fromSymbol = currencyInfo(from).symbol;
+export function conversionHeadline({ to, quote, direction }) {
+  if (!quote?.rate || !to || !direction?.base || !direction?.quote) return null;
   const toSymbol = currencyInfo(to).symbol;
   const quotedOn = formatDay(quote.quoted_on);
-  return `Esta conta é em ${toSymbol}. Valor convertido pela cotação${quotedOn ? ` de ${quotedOn}` : ""} (${toSymbol} 1 = ${fromSymbol} ${formatRatePtBr(quote.rate)}):`;
+  const pair = `${currencyInfo(direction.base).symbol} 1 = ${currencyInfo(direction.quote).symbol} ${formatRatePtBr(quote.rate)}`;
+  return `Esta conta é em ${toSymbol}. Valor convertido pela cotação${quotedOn ? ` de ${quotedOn}` : ""} (${pair}):`;
 }

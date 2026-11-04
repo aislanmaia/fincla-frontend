@@ -1,5 +1,5 @@
 import { buildEditBaselineFromUi, buildUpdateTransactionPayload } from "../../../data/transactionsAdapter.js";
-import { divideAmountExact } from "../../../money/convertAmount.js";
+import { convertByQuote } from "../../../money/quoteDirection.js";
 import { formatAmountInput } from "../../novaTransacao/accountConversion.js";
 
 /**
@@ -71,10 +71,11 @@ export function planBulkMove(transactions, target, fallbackCurrency = null) {
  * nova; "convert" = origem ÷ taxa (decimal exato, HALF_UP). Sem cotação, "convert"
  * fica VAZIO — nunca taxa 1.
  */
-export function suggestedMoveValue(tx, mode, rate) {
+export function suggestedMoveValue(tx, mode, rate, op = "divide") {
   const abs = Math.abs(Number(tx?.val) || 0).toFixed(2);
   if (mode === "keep") return formatAmountInput(abs);
-  const converted = rate ? divideAmountExact(abs, rate) : null;
+  // `op` vem de `quoteDirection`: a taxa é a buscada E mostrada, nunca uma inversa.
+  const converted = rate ? convertByQuote(abs, rate, op) : null;
   return converted != null ? formatAmountInput(converted) : "";
 }
 

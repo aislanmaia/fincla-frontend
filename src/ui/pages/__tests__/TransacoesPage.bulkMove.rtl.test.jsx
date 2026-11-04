@@ -25,6 +25,7 @@ vi.mock("../../../api/client", async () => {
 
 let rows;
 let summaryCurrency;
+let orgBase;
 const transactionsDataMock = vi.fn(() => ({
   isLoading: false, error: "", hasLoaded: true,
   summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0, currency: summaryCurrency },
@@ -70,13 +71,15 @@ let putImpl;
 beforeEach(() => {
   localStorage.clear();
   summaryCurrency = "BRL";
+  orgBase = "BRL";
   rows = [row(101, "Jantar em Nova York", -287.15), row(102, "Mercado", -40)];
   listAccountsMock.mockResolvedValue(ACCOUNTS);
   quotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.4914", quoted_on: "2026-11-04" } });
   putImpl = (url, body) => Promise.resolve({ data: { id: Number(url.split("/").pop()), ...body } });
   apiClient.get.mockImplementation((url) => {
+    if (url === "/organizations/org-test") return Promise.resolve({ data: { id: "org-test", base_currency: orgBase } });
     if (url === "/quotations/USD/BRL") return quotation();
-    if (url === "/quotations/USD/EUR") return Promise.resolve({ data: { base: "USD", quote: "EUR", rate: "0.9300", quoted_on: "2026-11-04" } });
+    if (url === "/quotations/EUR/USD") return Promise.resolve({ data: { base: "EUR", quote: "USD", rate: "1.0753", quoted_on: "2026-11-04" } });
     if (url === "/quotations/BRL/USD") return Promise.resolve({ data: { base: "BRL", quote: "USD", rate: "0.1821", quoted_on: "2026-11-04" } });
     return Promise.resolve({ data: [] });
   });
@@ -344,6 +347,7 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
 
   it("organização em US$: linha sem moeda usa a base (US$); sem base conhecida, a linha é inelegível", async () => {
     summaryCurrency = "USD";
+    orgBase = "USD";
     rows = [row(201, "Taxi", -20, { currency: null })];
     const user = userEvent.setup();
     const first = renderPage();
@@ -403,7 +407,9 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     const eur = screen.getByTestId("bulk-move-group-EUR");
     await waitFor(() => expect(within(eur).getByLabelText("Valor de Croissant em US$")).toHaveValue("5,00"));
     const quotes = apiClient.get.mock.calls.map(([u]) => u).filter((u) => u.startsWith("/quotations"));
-    expect(quotes.sort()).toEqual(["/quotations/USD/BRL", "/quotations/USD/EUR"]);
+    // Nenhum lado é a base (R$): "1 € = US$ 1,0753", buscada nessa direção.
+    expect(eur).toHaveTextContent(" 1 = US$ 1,0753");
+    expect(quotes.sort()).toEqual(["/quotations/EUR/USD", "/quotations/USD/BRL"]);
     await user.click(screen.getByRole("button", { name: "Mover 2 lançamentos" }));
     await screen.findByTestId("bulk-move-results");
     const byId = Object.fromEntries(puts().map((p) => [p.id, p.body]));
@@ -472,6 +478,20 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
       await user.click(screen.getByRole("button", { name: "Fechar mover para conta" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
+  });
+
+  it("US$ → R$ (para a base): mostra 'US$ 1 = R$ 5,4914' e MULTIPLICA pela mesma taxa", async () => {
+    rows = [row(501, "Hotel em Miami", -52.4, { accountId: ACC_W, currency: "USD" })];
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Hotel em Miami");
+    await openMoveTo(user, "Conta B Nubank");
+    const group = await screen.findByTestId("bulk-move-group-USD");
+    await waitFor(() => expect(group).toHaveTextContent("cotação de 04/11 (US$ 1 = R$ 5,4914)"));
+    // 52,40 × 5,4914 = 287,749… → 287,75
+    expect(within(group).getByLabelText("Valor de Hotel em Miami em R$")).toHaveValue("287,75");
+    const quotes = apiClient.get.mock.calls.map(([u]) => u).filter((u) => u.startsWith("/quotations"));
+    expect(quotes).toEqual(["/quotations/USD/BRL"]);
   });
 });
 

@@ -47,6 +47,8 @@ describe("suggestedMoveValue", () => {
     expect(suggestedMoveValue(tx(), "keep", "5.4914")).toBe("287,15");
     expect(suggestedMoveValue(tx(), "keep", null)).toBe("287,15");
     expect(suggestedMoveValue(tx(), "convert", null)).toBe("");
+    // Para a base (US$ → R$): a mesma taxa, multiplicada — 52,40 × 5,4914 = 287,75.
+    expect(suggestedMoveValue(tx({ val: -52.4, currency: "USD" }), "convert", "5.4914", "multiply")).toBe("287,75");
   });
 });
 

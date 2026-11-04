@@ -6,6 +6,8 @@ import { G, NUM } from "../../../typography";
 import { BottomSheet } from "../../../components/BottomSheet.jsx";
 import { ModalShell } from "../../accounts/ModalShell.jsx";
 import { getQuotation } from "../../../../api/transfers";
+import { quoteDirection } from "../../../money/quoteDirection.js";
+import { useOrganizationBaseCurrency } from "../../../money/useOrganizationBaseCurrency.js";
 import { PLAIN_DECIMAL_RE } from "../../../money/convertAmount.js";
 import { formatMoneyPlainSpace } from "../../../money/formatMoney.js";
 import { currencyInfo } from "../../../money/currencyRegistry.js";
@@ -47,9 +49,12 @@ function AccountPicker({ accounts, onPick }) {
   );
 }
 
+/** Antes de a busca começar (a moeda base ainda chegando), a cotação já está "buscando". */
+const QUOTE_PENDING = { status: "loading" };
+
 function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValue }) {
   const toSymbol = currencyInfo(target.currency).symbol;
-  const headline = quote?.status === "ready" ? conversionHeadline({ from: group.from, to: target.currency, quote }) : null;
+  const headline = quote?.status === "ready" ? conversionHeadline({ to: target.currency, quote, direction: quote.direction }) : null;
   return (
     <section data-testid={`bulk-move-group-${group.from}`} style={{ border: `1px solid ${T.amber}33`, background: T.amberLight, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ ...G, fontSize: 12, color: T.ink, lineHeight: 1.45 }}>
@@ -129,7 +134,7 @@ function BulkMoveBody({ state, accounts, onPick, quotes, modes, setMode, values,
         </div>
       ) : null}
       {plan.crossGroups.map((group) => (
-        <CrossCurrencyGroup key={group.from} group={group} target={plan.target} quote={quotes[group.from]} mode={modes[group.from] || "convert"}
+        <CrossCurrencyGroup key={group.from} group={group} target={plan.target} quote={quotes[group.from] ?? QUOTE_PENDING} mode={modes[group.from] || "convert"}
           onMode={(m) => setMode(group.from, m)} values={values} onValue={setValue} />
       ))}
       {plan.ineligible.length ? (
@@ -167,18 +172,22 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
     return { ...planned, target: { ...target, currency: planned.targetCurrency } };
   }, [transactions, target, baseCurrency]);
 
-  // Uma cotação por par destino/origem.
+  // A moeda base da organização orienta a cotação ("1 <estrangeira> = <base>").
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: !!plan && plan.crossGroups.length > 0 });
+
+  // Uma cotação por par, buscada JÁ na direção em que é mostrada e usada.
   useEffect(() => {
-    if (!plan) return undefined;
+    if (!plan || orgBase.status !== "ready") return undefined;
     let cancelled = false;
     for (const group of plan.crossGroups) {
       if (quotes[group.from]) continue;
+      const direction = quoteDirection({ from: group.from, to: plan.target.currency, base: orgBase.currency });
       setQuotes((cur) => ({ ...cur, [group.from]: { status: "loading" } }));
-      getQuotation(organizationId, plan.target.currency, group.from)
+      getQuotation(organizationId, direction.base, direction.quote)
         .then((q) => {
           const rate = String(q?.rate ?? "").trim();
           if (!PLAIN_DECIMAL_RE.test(rate) || !/[1-9]/.test(rate)) throw new Error("unusable rate");
-          return { status: "ready", rate, quoted_on: q.quoted_on ?? null };
+          return { status: "ready", rate, quoted_on: q.quoted_on ?? null, direction };
         })
         .catch(() => ({ status: "unavailable" }))
         .then((entry) => {
@@ -189,7 +198,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
       cancelled = true;
     };
     // `quotes` fora de propósito: a busca é por par, uma vez.
-  }, [plan, organizationId]);
+  }, [plan, organizationId, orgBase.status, orgBase.currency]);
 
   // Valores sugeridos: seguem o modo e a cotação enquanto a pessoa não editou a linha.
   useEffect(() => {
@@ -198,8 +207,8 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
       const next = { ...cur };
       for (const group of plan.crossGroups) {
         const mode = modes[group.from] || "convert";
-        const rate = quotes[group.from]?.status === "ready" ? quotes[group.from].rate : null;
-        for (const tx of group.rows) if (!touched[tx.id]) next[tx.id] = suggestedMoveValue(tx, mode, rate);
+        const q = quotes[group.from]?.status === "ready" ? quotes[group.from] : null;
+        for (const tx of group.rows) if (!touched[tx.id]) next[tx.id] = suggestedMoveValue(tx, mode, q?.rate ?? null, q?.direction.op);
       }
       return next;
     });
@@ -222,7 +231,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
   const crossItems = plan ? plan.crossGroups.flatMap((g) => g.rows) : [];
   // Só a cotação de um grupo que vai CONVERTER segura o botão; "Manter os números" não precisa dela.
   const anyQuoteLoading = plan
-    ? plan.crossGroups.some((g) => (modes[g.from] || "convert") === "convert" && quotes[g.from]?.status === "loading")
+    ? plan.crossGroups.some((g) => (modes[g.from] || "convert") === "convert" && (quotes[g.from] ?? QUOTE_PENDING).status === "loading")
     : false;
   const crossValid = crossItems.every((tx) => (parseAmountInput(values[tx.id]) ?? 0) > 0);
   const total = plan ? plan.eligible.length : 0;
