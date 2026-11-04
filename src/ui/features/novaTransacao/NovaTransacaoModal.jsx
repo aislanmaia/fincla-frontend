@@ -37,6 +37,11 @@ import {
 } from "./useDrawerCloseAnim.js";
 import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
+import { AccountMoveValue } from "./AccountMoveValue.jsx";
+import { convertAmountExact, formatAmountInput, parseAmountInput } from "./accountConversion.js";
+import { getQuotation } from "../../../api/transfers";
+import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 import {
   parseApiDecimal,
@@ -656,6 +661,55 @@ export const NovaTransacaoModal = ({
     onCancelInstallmentCalc: () => setCalcOpenRef.current?.(false),
   });
 
+  /* Mover um lançamento para conta de OUTRA moeda, no Editar (regra do Owner, opção 1).
+     A cotação do dia SUGERE o valor na moeda nova num campo editável; o PUT leva
+     `account_id` + esse `value`. Sem cotação o campo fica vazio — nunca taxa 1.
+     Mesma moeda: nada muda (só `account_id`). */
+  const storedAccountCurrency = editingStoredAccountId
+    ? (preConfig?.currency || findActiveAccount(editingStoredAccountId, accountOptions)?.currency || null)
+    : null;
+  const targetAccountCurrency = findActiveAccount(effectiveAccountId, accountOptions)?.currency || null;
+  const moveFrom = storedAccountCurrency ? String(storedAccountCurrency).toUpperCase() : null;
+  const moveTo = targetAccountCurrency ? String(targetAccountCurrency).toUpperCase() : null;
+  const crossCurrencyMove =
+    !!editingStoredAccountId &&
+    accountTouched &&
+    method !== "credito" &&
+    liveAccounts &&
+    !!moveFrom && !!moveTo &&
+    moveFrom !== moveTo &&
+    String(effectiveAccountId) !== editingStoredAccountId;
+  const [moveQuote, setMoveQuote] = useState({ status: "idle", rate: null, quoted_on: null });
+  const [moveValueText, setMoveValueText] = useState("");
+  /** Valor gravado na moeda nova — o sucesso mostra ele, não o da moeda antiga. */
+  const [savedMove, setSavedMove] = useState(null);
+  useEffect(() => {
+    if (!crossCurrencyMove) {
+      setMoveQuote({ status: "idle", rate: null, quoted_on: null });
+      setMoveValueText("");
+      return undefined;
+    }
+    let cancelled = false;
+    setMoveQuote({ status: "loading", rate: null, quoted_on: null });
+    setMoveValueText("");
+    const original = Math.abs(amountNum || 0).toFixed(2);
+    getQuotation(organizationId, moveFrom, moveTo)
+      .then((q) => {
+        if (cancelled) return;
+        if (q?.rate == null || String(q.rate).trim() === "") throw new Error("empty rate");
+        setMoveQuote({ status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null });
+        const converted = convertAmountExact(original, q.rate);
+        setMoveValueText(converted != null ? formatAmountInput(converted) : "");
+      })
+      .catch(() => {
+        if (!cancelled) setMoveQuote({ status: "unavailable", rate: null, quoted_on: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [crossCurrencyMove, moveFrom, moveTo, organizationId]);
+  const moveValueNum = crossCurrencyMove ? parseAmountInput(moveValueText) : null;
+
   const {
     calcOpen,
     setCalcOpen,
@@ -848,6 +902,7 @@ export const NovaTransacaoModal = ({
 
     setTxSubmitError("");
     setTxSubmitting(false);
+    setSavedMove(null);
     setCategoryTagId(null);
     resetMobileStep();
     setReview(false);
@@ -1787,6 +1842,18 @@ export const NovaTransacaoModal = ({
             </button>
           </div>
         ) : null}
+        {crossCurrencyMove ? (
+          <AccountMoveValue
+            from={moveFrom}
+            to={moveTo}
+            quote={moveQuote.status === "ready" ? moveQuote : null}
+            loading={moveQuote.status === "loading"}
+            value={moveValueText}
+            onChange={setMoveValueText}
+            originalAmount={Math.abs(amountNum || 0)}
+            onUseSameNumber={() => setMoveValueText(formatAmountInput(Math.abs(amountNum || 0)))}
+          />
+        ) : null}
         <div
           role="switch"
           aria-checked={settled}
@@ -2066,6 +2133,11 @@ export const NovaTransacaoModal = ({
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (isEditingExisting) {
           const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
+          if (crossCurrencyMove && !(moveValueNum > 0)) {
+            setTxSubmitError(`Informe o valor em ${currencyInfo(moveTo).symbol} para mover para esta conta.`);
+            setTxSubmitting(false);
+            return;
+          }
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
           const updatePayload = buildUpdateTransactionPayload({
             tipo: effectiveTipoEdit,
@@ -2086,6 +2158,7 @@ export const NovaTransacaoModal = ({
               method !== "credito" && accountTouched
                 ? (effectiveAccountId || null)
                 : (preConfig?.editBaseline?.accountId ?? null),
+            moveValue: crossCurrencyMove ? moveValueNum : null,
             // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
             // o payload sai completo, como antes.
             baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
@@ -2095,6 +2168,7 @@ export const NovaTransacaoModal = ({
             organizationId,
             updatePayload,
           );
+          setSavedMove(crossCurrencyMove ? { amount: moveValueNum, currency: moveTo } : null);
         } else {
           const createPayload = buildCreateTransactionPayload({
             organizationId,
@@ -2280,6 +2354,7 @@ export const NovaTransacaoModal = ({
     }
     setSettleAccountId("");
     setAccountTouched(false);
+    setSavedMove(null);
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
@@ -2354,8 +2429,15 @@ export const NovaTransacaoModal = ({
         <div style={{ ...G, fontSize:18, fontWeight:800, color:T.ink, letterSpacing:"-0.01em" }}>{desc || "(sem descrição)"}</div>
         <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
           <span style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, letterSpacing:"-0.02em" }}>
-            {effectiveTypeIsMoneyIn ? "+" : "−"}R$ {amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+            {effectiveTypeIsMoneyIn ? "+" : "−"}{crossCurrencyMove && moveValueNum > 0
+              ? formatMoneyPlainSpace(moveValueNum, moveTo)
+              : <>R$ {amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}</>}
           </span>
+          {crossCurrencyMove && moveValueNum > 0 ? (
+            <span data-testid="review-original-amount" style={{ ...G, fontSize:11, color:T.inkLight }}>
+              era {formatMoneyPlainSpace(Math.abs(amountNum || 0), moveFrom)}
+            </span>
+          ) : null}
           {(novaRecorrencia || isRecurring) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
               / {FREQ_LABELS[recurrenceFrequency]?.toLowerCase() || "mês"}
@@ -2486,7 +2568,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : <>R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}</>}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
@@ -3405,7 +3487,7 @@ export const NovaTransacaoModal = ({
                   {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
-                  {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                  {tipo==="despesa" ? "−" : "+"}{savedMove ? formatMoneyPlainSpace(savedMove.amount, savedMove.currency) : <>R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}</>}
                 </div>
                 {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
