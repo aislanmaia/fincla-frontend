@@ -104,7 +104,7 @@ describe("AccountBalancesNote", () => {
     expect(list.textContent).not.toMatch(/R\$\s?0,00/);
   });
 
-  it("contas fora do total ficam num grupo à parte, 'Fora do saldo disponível'", async () => {
+  it("contas fora do total ficam num grupo à parte, 'Não entram no saldo disponível', com a explicação", async () => {
     balancesBody = {
       ...balancesBody,
       accounts: [...balancesBody.accounts, row("x", "XP Investimentos", "investment", "9000.00", "BRL", false)],
@@ -113,7 +113,8 @@ describe("AccountBalancesNote", () => {
     renderNote();
     await user.click(await screen.findByRole("button", { name: /2 contas/ }));
     const excluded = await screen.findByTestId("account-balances-excluded");
-    expect(excluded).toHaveTextContent("Fora do saldo disponível");
+    expect(excluded).toHaveTextContent("Não entram no saldo disponível");
+    expect(excluded).toHaveTextContent("Investimentos e contas que você marcou para não somar. Mude em Minhas Contas.");
     expect(within(excluded).getByText("XP Investimentos")).toBeInTheDocument();
     const included = screen.getByTestId("account-balances-list").querySelector("ul");
     expect(within(included).queryByText("XP Investimentos")).toBeNull();
@@ -186,7 +187,7 @@ describe("AccountBalancesNote", () => {
     expect(document.body.contains(dialog)).toBe(true);
   });
 
-  it("o rótulo já nasce certo (pré-busca) e conta só as contas do total ('2 contas no saldo · 1 fora')", async () => {
+  it("o rótulo já nasce certo (pré-busca): 'em N contas', contando só as do total, sem '· 1 fora' no card", async () => {
     balancesBody = { ...balancesBody, accounts: [...balancesBody.accounts, row("x", "XP", "investment", "9000.00", "BRL", false)] };
     const user = userEvent.setup();
     let release;
@@ -201,9 +202,10 @@ describe("AccountBalancesNote", () => {
     expect(screen.queryByRole("button", { name: /3 contas/ })).toBeNull();
     release();
     // Pré-buscado: já certo ANTES de abrir.
-    expect(await screen.findByRole("button", { name: "2 contas no saldo · 1 fora" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "em 2 contas" })).toBeInTheDocument();
+    expect(screen.queryByText(/fora/)).toBeNull();
     expect(screen.queryByTestId("account-balances-inline")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "2 contas no saldo · 1 fora" }));
+    await user.click(screen.getByRole("button", { name: "em 2 contas" }));
     expect(await screen.findByTestId("account-balances-inline")).toBeInTheDocument();
   });
 

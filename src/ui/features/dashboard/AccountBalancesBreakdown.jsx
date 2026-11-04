@@ -39,18 +39,15 @@ function totalsByCurrency(accounts) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * Rótulo do controle, sempre a partir da lista POR CONTA: conta só o que entra no
- * total ("em 2 contas", ou "2 contas no saldo · 1 fora"). O resumo só sabe o total
- * de contas da organização (inclui as fora do total), então antes da lista chegar o
- * rótulo não afirma número nenhum: "ver contas".
+ * Rótulo do controle, sempre a partir da lista POR CONTA: "em N contas", com N =
+ * contas que entram no total (decisão do Owner: as de fora são explicadas dentro do
+ * painel, não no card). O resumo só sabe o total de contas da organização (inclui as
+ * fora do total), então antes da lista chegar o rótulo não afirma número: "ver contas".
  */
 export function accountsControlLabel(accounts) {
   if (Array.isArray(accounts) && accounts.length > 0) {
     const included = accounts.filter((a) => a.include_in_total).length;
-    const excluded = accounts.length - included;
-    return excluded > 0
-      ? `${plural(included, "conta", "contas")} no saldo · ${excluded} fora`
-      : `em ${plural(included, "conta", "contas")}`;
+    return `em ${plural(included, "conta", "contas")}`;
   }
   return "ver contas";
 }
@@ -119,7 +116,10 @@ export function AccountBalancesList({ data }) {
       {excluded.length > 0 ? (
         <div data-testid="account-balances-excluded" style={{ marginTop: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            Fora do saldo disponível
+            Não entram no saldo disponível
+          </div>
+          <div style={{ fontSize: 11.5, color: T.inkLight, marginTop: 3, lineHeight: 1.45 }}>
+            Investimentos e contas que você marcou para não somar. Mude em Minhas Contas.
           </div>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {excluded.map((a) => <AccountRow key={a.account_id ?? a.id} account={a} muted />)}
