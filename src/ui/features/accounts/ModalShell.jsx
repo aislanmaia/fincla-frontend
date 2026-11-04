@@ -3,10 +3,10 @@ import { T } from "../../tokens";
 import { G, S } from "../../typography";
 
 /** Overlay + card centrado (modal no desktop, quase full-width no mobile). */
-export function ModalShell({ titleSans, titleSerif, onClose, children, footer }) {
+export function ModalShell({ titleSans, titleSerif, onClose, children, footer, onBackdropClick = onClose }) {
   return (
     <div
-      onClick={onClose}
+      onClick={onBackdropClick}
       style={{
         position: "fixed",
         inset: 0,

@@ -16,7 +16,15 @@ const SHEET_EASE = "cubic-bezier(0.32,0.72,0,1)";
  * Fecha por arrasto, fundo, Esc ou ✕. A saída anima e o desmontar vem por TIMER —
  * nunca por `onAnimationEnd`, que não é garantido e deixaria a camada presa.
  */
-export function BottomSheet({ title, ariaLabel = title, closeLabel = "Fechar", testIdPrefix = "bottom-sheet", footer = null, onClose, children }) {
+export function BottomSheet({
+  title, ariaLabel = title, closeLabel = "Fechar", testIdPrefix = "bottom-sheet", footer = null, onClose, children,
+  /** `false` = nada fecha (Esc, ✕, fundo, arrasto) — ex.: enquanto um lote está em voo. */
+  dismissible = true,
+  /** `false` = o toque no FUNDO não fecha (ex.: há valores editados); ✕/Esc seguem fechando. */
+  backdropDismissible = true,
+}) {
+  const dismissibleRef = useRef(dismissible);
+  dismissibleRef.current = dismissible;
   const [closing, setClosing] = useState(null); // null | "animated" | "dragged"
   const closingRef = useRef(false);
   const timerRef = useRef(null);
@@ -27,7 +35,7 @@ export function BottomSheet({ title, ariaLabel = title, closeLabel = "Fechar", t
     timerRef.current = window.setTimeout(onClose, ms);
   }, [onClose]);
   const requestClose = useCallback(() => {
-    if (closingRef.current) return;
+    if (closingRef.current || !dismissibleRef.current) return;
     closingRef.current = true;
     setClosing("animated");
     finishAfter(SHEET_SLIDE_MS);
@@ -67,7 +75,7 @@ export function BottomSheet({ title, ariaLabel = title, closeLabel = "Fechar", t
     }
     function onEnd() {
       cleanup();
-      if (delta > 80) {
+      if (delta > 80 && dismissibleRef.current) {
         // Fecha A PARTIR de onde o dedo soltou: transição no próprio elemento, sem a
         // animação CSS `sheetDown` (que recomeçaria em 0 e daria um salto para cima).
         closingRef.current = true;
@@ -90,7 +98,7 @@ export function BottomSheet({ title, ariaLabel = title, closeLabel = "Fechar", t
 
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-      <div data-testid={`${testIdPrefix}-backdrop`} aria-hidden="true" onClick={requestClose}
+      <div data-testid={`${testIdPrefix}-backdrop`} aria-hidden="true" onClick={() => { if (backdropDismissible) requestClose(); }}
         style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", animation: closing ? `backdropOut ${SHEET_SLIDE_MS}ms ease-in both` : "backdropIn 0.22s ease-out both" }} />
       <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={ariaLabel} data-closing={closing ?? ""}
         style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "85dvh", display: "flex", flexDirection: "column",

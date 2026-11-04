@@ -39,7 +39,8 @@ function AccountPicker({ accounts, onPick }) {
         <button key={a.id} type="button" onClick={() => onPick(a)}
           style={{ ...G, display: "flex", justifyContent: "space-between", gap: 8, padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 13, fontWeight: 600, color: T.ink, textAlign: "left" }}>
           <span>{a.label}</span>
-          <span style={{ color: T.inkLight, fontWeight: 500 }}>{currencyInfo(a.currency || "BRL").symbol}</span>
+          {/* Moeda desconhecida = sem símbolo (nunca um "R$" chutado). */}
+          <span style={{ color: T.inkLight, fontWeight: 500 }}>{a.currency ? currencyInfo(a.currency).symbol : ""}</span>
         </button>
       ))}
     </div>
@@ -66,8 +67,12 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
         ))}
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-        {group.rows.map((tx) => (
-          <li key={tx.id} style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+        {group.rows.map((tx) => {
+          const text = values[tx.id] ?? "";
+          // Um valor que arredonda para 0,00 é apontado NA linha, não só no botão travado.
+          const zeroed = text.trim() !== "" && !((parseAmountInput(text) ?? 0) > 0);
+          return (
+          <li key={tx.id} style={{ ...G, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12 }}>
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: T.ink }}>{tx.desc}</span>
             <span style={{ ...NUM, color: T.inkMid }}>{formatMoneyPlainSpace(Math.abs(tx.val), group.from)}</span>
             <span aria-hidden>→</span>
@@ -77,8 +82,14 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
                 onChange={(e) => onValue(tx.id, e.target.value)}
                 style={{ ...G, ...NUM, width: 76, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 700, color: T.ink }} />
             </label>
+            {zeroed ? (
+              <span role="alert" style={{ flexBasis: "100%", fontSize: 11.5, color: T.red }}>
+                Fica {toSymbol} 0,00 nessa moeda — informe um valor maior.
+              </span>
+            ) : null}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </section>
   );
@@ -130,7 +141,7 @@ function BulkMoveBody({ state, accounts, onPick, quotes, modes, setMode, values,
   );
 }
 
-export function BulkMoveDialog({ isMobile = false, organizationId, accounts, transactions, baseCurrency = "BRL", onClose, onMoved }) {
+export function BulkMoveDialog({ isMobile = false, organizationId, accounts, transactions, baseCurrency = null, onClose, onMoved }) {
   const [state, setState] = useState("pick"); // pick | confirm | running | results
   const [target, setTarget] = useState(null);
   const [quotes, setQuotes] = useState({});
@@ -148,7 +159,8 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
 
   const plan = useMemo(() => {
     if (!target) return null;
-    return { ...planBulkMove(transactions, target, baseCurrency), target: { ...target, currency: String(target.currency || baseCurrency).toUpperCase() } };
+    const planned = planBulkMove(transactions, target, baseCurrency);
+    return { ...planned, target: { ...target, currency: planned.targetCurrency } };
   }, [transactions, target, baseCurrency]);
 
   // Uma cotação por par destino/origem.
@@ -204,7 +216,10 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
   };
 
   const crossItems = plan ? plan.crossGroups.flatMap((g) => g.rows) : [];
-  const anyQuoteLoading = plan ? plan.crossGroups.some((g) => quotes[g.from]?.status === "loading") : false;
+  // Só a cotação de um grupo que vai CONVERTER segura o botão; "Manter os números" não precisa dela.
+  const anyQuoteLoading = plan
+    ? plan.crossGroups.some((g) => (modes[g.from] || "convert") === "convert" && quotes[g.from]?.status === "loading")
+    : false;
   const crossValid = crossItems.every((tx) => (parseAmountInput(values[tx.id]) ?? 0) > 0);
   const total = plan ? plan.eligible.length : 0;
   const canConfirm = state === "confirm" && total > 0 && crossValid && !anyQuoteLoading;
@@ -230,7 +245,16 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
   const failed = results.filter((r) => !r.ok);
   const title = state === "pick"
     ? "Mover para a conta…"
-    : `Mover ${total} lançamento${total === 1 ? "" : "s"} para ${target?.label ?? ""} (${currencyInfo(plan?.target.currency || "BRL").symbol})`;
+    : `Mover ${total} lançamento${total === 1 ? "" : "s"} para ${target?.label ?? ""}${plan?.target.currency ? ` (${currencyInfo(plan.target.currency).symbol})` : ""}`;
+  // Com o lote em voo nada fecha (Esc, ✕, fundo, arrasto): os resultados por item e o
+  // "tentar de novo" se perderiam, e reabrir dispararia um segundo lote nos mesmos ids.
+  // Com valores editados, o fundo não descarta o que a pessoa digitou (✕/Cancelar fecham).
+  const running = state === "running";
+  const anyTouched = Object.keys(touched).length > 0;
+  const close = () => {
+    if (running) return;
+    onClose();
+  };
 
   const footer = state === "pick" ? null : state === "results" ? (
     <div style={{ display: "flex", gap: 8 }}>
@@ -243,7 +267,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
     </div>
   ) : (
     <div style={{ display: "flex", gap: 8 }}>
-      <button type="button" style={btn(false, false)} onClick={onClose} disabled={state === "running"}>Cancelar</button>
+      <button type="button" style={btn(false, false)} onClick={close} disabled={running}>Cancelar</button>
       <button type="button" style={btn(true, !canConfirm)} disabled={!canConfirm} onClick={() => execute(plan.eligible)}>
         Mover {total} lançamento{total === 1 ? "" : "s"}
       </button>
@@ -257,13 +281,15 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
 
   if (isMobile) {
     return (
-      <BottomSheet title={title} closeLabel="Fechar mover para conta" testIdPrefix="bulk-move" onClose={onClose} footer={footer}>
+      <BottomSheet title={title} closeLabel="Fechar mover para conta" testIdPrefix="bulk-move" onClose={onClose} footer={footer}
+        dismissible={!running} backdropDismissible={!running && !anyTouched}>
         {body}
       </BottomSheet>
     );
   }
   return createPortal(
-    <ModalShell titleSans={title} onClose={onClose} footer={footer}>{body}</ModalShell>,
+    <ModalShell titleSans={title} onClose={close} footer={footer}
+      onBackdropClick={() => { if (!running && !anyTouched) onClose(); }}>{body}</ModalShell>,
     document.body,
   );
 }

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -24,9 +24,10 @@ vi.mock("../../../api/client", async () => {
 });
 
 let rows;
+let summaryCurrency;
 const transactionsDataMock = vi.fn(() => ({
   isLoading: false, error: "", hasLoaded: true,
-  summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0, currency: "BRL" },
+  summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0, currency: summaryCurrency },
   transactions: rows, total: rows.length, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
 }));
 vi.mock("../../features/transactions/useTransactionsData.js", () => ({
@@ -47,6 +48,7 @@ vi.mock("../../../api/accounts", () => ({ listAccounts: (...args) => listAccount
 
 import apiClient from "../../../api/client";
 import { TransacoesPage } from "../TransacoesPage.jsx";
+import { TransactionsSkeleton } from "../../features/transactions/TransactionsSkeleton.jsx";
 
 const ACC_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACC_B = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -67,12 +69,15 @@ let quotation;
 let putImpl;
 beforeEach(() => {
   localStorage.clear();
+  summaryCurrency = "BRL";
   rows = [row(101, "Jantar em Nova York", -287.15), row(102, "Mercado", -40)];
   listAccountsMock.mockResolvedValue(ACCOUNTS);
   quotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.4914", quoted_on: "2026-11-04" } });
   putImpl = (url, body) => Promise.resolve({ data: { id: Number(url.split("/").pop()), ...body } });
   apiClient.get.mockImplementation((url) => {
     if (url === "/quotations/USD/BRL") return quotation();
+    if (url === "/quotations/USD/EUR") return Promise.resolve({ data: { base: "USD", quote: "EUR", rate: "0.9300", quoted_on: "2026-11-04" } });
+    if (url === "/quotations/BRL/USD") return Promise.resolve({ data: { base: "BRL", quote: "USD", rate: "0.1821", quoted_on: "2026-11-04" } });
     return Promise.resolve({ data: [] });
   });
   apiClient.put.mockImplementation((url, body) => putImpl(url, body));
@@ -276,5 +281,139 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     const sheet = await screen.findByRole("dialog", { name: "Mover para a conta…" });
     expect(container.contains(sheet)).toBe(false);
     expect(screen.getByTestId("bulk-move-handle")).toBeInTheDocument();
+  });
+
+  it("seleção velha não sobrevive: trocar o recorte (busca) limpa", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Mercado");
+    expect(screen.getByTestId("bulk-selection-bar")).toHaveTextContent("1 selecionado");
+    await user.type(screen.getAllByLabelText("Buscar transações")[0], "mer");
+    await waitFor(() => expect(screen.queryByTestId("bulk-selection-bar")).toBeNull(), { timeout: 3000 });
+  });
+
+  it("um lançamento selecionado que sai da lista (excluído) sai da contagem; releitura por token limpa tudo", async () => {
+    const user = userEvent.setup();
+    const props = { onNav: vi.fn(), onNewTx: vi.fn(), onEditTx: vi.fn(), isMobile: false, dataMode: "live", organizationId: "org-test", onTransactionsInvalidate: vi.fn() };
+    const { rerender } = render(<TransacoesPage {...props} transactionsRefreshToken={0} />);
+    await selectRows(user, "Jantar em Nova York", "Mercado");
+    expect(screen.getByTestId("bulk-selection-bar")).toHaveTextContent("2 selecionados");
+    const all = rows;
+    rows = rows.filter((r) => r.desc !== "Mercado");
+    rerender(<TransacoesPage {...props} transactionsRefreshToken={0} />);
+    await waitFor(() => expect(screen.getByTestId("bulk-selection-bar")).toHaveTextContent("1 selecionado"));
+    // Se a linha voltar, ela NÃO volta selecionada às escondidas.
+    rows = all;
+    rerender(<TransacoesPage {...props} transactionsRefreshToken={0} />);
+    await screen.findByText("Mercado");
+    expect(screen.getByTestId("bulk-selection-bar")).toHaveTextContent("1 selecionado");
+    rerender(<TransacoesPage {...props} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(screen.queryByTestId("bulk-selection-bar")).toBeNull());
+  });
+
+  it("com o lote em voo, Esc / ✕ / fundo não fecham; os resultados aparecem", async () => {
+    let release;
+    putImpl = (url, body) => new Promise((r) => { release = () => r({ data: { id: 1, ...body } }); });
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Mercado");
+    await openMoveTo(user, "Conta B Nubank");
+    await user.click(await screen.findByRole("button", { name: "Mover 1 lançamento" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await user.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    fireEvent.click(dialog.parentElement);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    release();
+    expect(await screen.findByTestId("bulk-move-results")).toHaveTextContent("1 movido");
+  });
+
+  it("valores editados: o toque no fundo não descarta; o ✕ fecha", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+    await user.clear(field);
+    await user.type(field, "50,00");
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(dialog.parentElement);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("organização em US$: linha sem moeda usa a base (US$); sem base conhecida, a linha é inelegível", async () => {
+    summaryCurrency = "USD";
+    rows = [row(201, "Taxi", -20, { currency: null })];
+    const user = userEvent.setup();
+    const first = renderPage();
+    await selectRows(user, "Taxi");
+    await openMoveTo(user, "Conta B Nubank");
+    // USD → BRL: um grupo de conversão a partir de USD, não "BRL" chutado.
+    expect(await screen.findByTestId("bulk-move-group-USD")).toBeInTheDocument();
+    first.unmount();
+
+    summaryCurrency = null;
+    renderPage();
+    await selectRows(user, "Taxi");
+    await openMoveTo(user, "Conta B Nubank");
+    expect(await screen.findByTestId("bulk-move-ineligible")).toHaveTextContent("Taxi — Moeda desconhecida");
+  });
+
+  it("conta de destino sem moeda: o seletor não mostra 'R$' chutado", async () => {
+    listAccountsMock.mockResolvedValue([...ACCOUNTS, { id: "dddddddd-0000-4000-8000-000000000004", name: "Conta Sem Moeda", currency: null }]);
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Mercado");
+    await user.click(within(screen.getByTestId("bulk-selection-bar")).getByRole("button", { name: "Mover para conta…" }));
+    const picker = await screen.findByRole("group", { name: "Contas de destino" });
+    expect(within(picker).getByRole("button", { name: /Conta Sem Moeda/ })).not.toHaveTextContent("R$");
+  });
+
+  it("'Manter os números' não espera a cotação", async () => {
+    quotation = () => new Promise(() => {});
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const group = await screen.findByTestId("bulk-move-group-BRL");
+    expect(screen.getByRole("button", { name: "Mover 1 lançamento" })).toBeDisabled();
+    await user.click(within(group).getByRole("radio", { name: /Manter os números/ }));
+    expect(screen.getByRole("button", { name: "Mover 1 lançamento" })).toBeEnabled();
+  });
+
+  it("valor que arredonda para 0,00 é apontado na própria linha", async () => {
+    rows = [row(301, "Bala", -0.01)];
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Bala");
+    await openMoveTo(user, "Wise");
+    const group = await screen.findByTestId("bulk-move-group-BRL");
+    await waitFor(() => expect(within(group).getByRole("alert")).toHaveTextContent("Fica US$ 0,00 nessa moeda"));
+    expect(screen.getByRole("button", { name: "Mover 1 lançamento" })).toBeDisabled();
+  });
+
+  it("duas moedas de origem: dois grupos, uma cotação por par", async () => {
+    rows = [row(101, "Jantar em Nova York", -287.15), row(401, "Croissant", -4.65, { currency: "EUR" })];
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York", "Croissant");
+    await openMoveTo(user, "Wise");
+    expect(await screen.findByTestId("bulk-move-group-BRL")).toBeInTheDocument();
+    const eur = screen.getByTestId("bulk-move-group-EUR");
+    await waitFor(() => expect(within(eur).getByLabelText("Valor de Croissant em US$")).toHaveValue("5,00"));
+    const quotes = apiClient.get.mock.calls.map(([u]) => u).filter((u) => u.startsWith("/quotations"));
+    expect(quotes.sort()).toEqual(["/quotations/USD/BRL", "/quotations/USD/EUR"]);
+    await user.click(screen.getByRole("button", { name: "Mover 2 lançamentos" }));
+    await screen.findByTestId("bulk-move-results");
+    const byId = Object.fromEntries(puts().map((p) => [p.id, p.body]));
+    expect(byId["101"]).toMatchObject({ value: 52.29, value_currency: "USD" });
+    expect(byId["401"]).toMatchObject({ value: 5, value_currency: "USD" });
+  });
+
+  it("o esqueleto reserva a coluna da seleção (sem salto quando o dado chega)", () => {
+    render(<TransactionsSkeleton rows={1} leadingGutterPx={34} />);
+    expect(screen.getByTestId("transactions-skeleton").firstChild).toHaveStyle({ paddingLeft: "48px" });
   });
 });

@@ -7,21 +7,30 @@ import { formatAmountInput } from "../../novaTransacao/accountConversion.js";
  * lançamento, com o mesmo corpo da edição individual (#269/#273/#452).
  */
 
-/** Moeda do VALOR de uma linha da lista (a da conta em que ela caiu). */
-export function rowCurrency(tx, fallback = "BRL") {
-  return String(tx?.currency || fallback).toUpperCase();
+/**
+ * Moeda do VALOR de uma linha da lista (a da conta em que ela caiu). Sem moeda na
+ * linha, a moeda base da organização; sem nenhuma das duas, `null` — nunca um "BRL"
+ * chutado (moeda errada move dinheiro errado).
+ */
+export function rowCurrency(tx, fallback = null) {
+  const code = tx?.currency || fallback;
+  return code ? String(code).toUpperCase() : null;
 }
 
 /**
  * Por que esta linha NÃO pode ir para `target` — ou `null` se pode. Só o que a lista
  * já sabe; o resto (ex.: aporte de meta) volta como 422 do servidor, por item.
  */
-export function moveIneligibility(tx, target, fallbackCurrency = "BRL") {
+export function moveIneligibility(tx, target, fallbackCurrency = null) {
   if (tx?.kind === "transfer") return "Transferência entre contas: altere em Minhas Contas";
   if (tx?.settleable === false) return "Compra no cartão: a conta é a do cartão";
   if (tx?.seriesId != null) return "Ocorrência de recorrência: mova a série";
   if (target && String(tx?.accountId ?? "") === String(target.id)) return "Já está nessa conta";
-  const cross = target && rowCurrency(tx, fallbackCurrency) !== String(target.currency || fallbackCurrency).toUpperCase();
+  const from = rowCurrency(tx, fallbackCurrency);
+  if (!from) return "Moeda desconhecida";
+  const to = target ? rowCurrency(target, fallbackCurrency) : null;
+  if (target && !to) return "Moeda da conta de destino desconhecida";
+  const cross = target && from !== to;
   if (cross && tx?.type === "refund") return "Estorno ligado a uma compra: não muda de moeda";
   if (cross && (tx?.refundsSummary?.count ?? 0) > 0) return "Tem estorno ligado: não muda de moeda";
   return null;
@@ -31,7 +40,7 @@ export function moveIneligibility(tx, target, fallbackCurrency = "BRL") {
  * Plano do lote: o que vai, o que fica (com motivo) e os grupos por moeda de
  * ORIGEM — uma cotação por par (origem → conta de destino).
  */
-export function planBulkMove(transactions, target, fallbackCurrency = "BRL") {
+export function planBulkMove(transactions, target, fallbackCurrency = null) {
   const eligible = [];
   const ineligible = [];
   for (const tx of transactions || []) {
@@ -39,7 +48,7 @@ export function planBulkMove(transactions, target, fallbackCurrency = "BRL") {
     if (reason) ineligible.push({ tx, reason });
     else eligible.push(tx);
   }
-  const targetCurrency = String(target?.currency || fallbackCurrency).toUpperCase();
+  const targetCurrency = target ? rowCurrency(target, fallbackCurrency) : null;
   const sameCurrency = eligible.filter((tx) => rowCurrency(tx, fallbackCurrency) === targetCurrency);
   const crossGroups = new Map();
   for (const tx of eligible) {
