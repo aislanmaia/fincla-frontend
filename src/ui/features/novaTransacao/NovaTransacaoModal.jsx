@@ -44,7 +44,6 @@ import {
   formatProjectionCardExplain,
 } from "../../data/novaTransacaoImpactUtils.js";
 import {
-  accountChangeWasIgnored,
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createErrorReleasedIdempotencyKey,
@@ -85,6 +84,7 @@ import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "../creditCards/closingDay.js";
 import { getOrgBalances } from "../../../api/balances";
 import { settlementCopy } from "../transactions/settlementCopy.js";
+import { accountDisplayName, findActiveAccount } from "../transactions/shared/transactionAccountLabel.js";
 import {
   buildCreateCreditCardPayload,
   CARD_BRAND_OPTIONS,
@@ -236,28 +236,35 @@ export const NovaTransacaoModal = ({
   const [cardId,    setCardId]    = useState("");
   const [txDateYmd, setTxDateYmd]  = useState(() => todayLocalYmd());
   // Fase 0 (cash model): conta de liquidação + "já paguei?" (settlement) p/ métodos não-cartão.
-  const [accountOptions, setAccountOptions] = useState([]);
+  /* Contas da organização, SEMPRE com a org a que pertencem: trocar de org com o
+     drawer montado não pode deixar a lista (nem a escolha) da org anterior valer.
+     Rebusca a cada abertura — uma conta criada depois precisa aparecer já. */
+  const [accountsState, setAccountsState] = useState({ orgId: null, status: "idle", accounts: [] });
+  const [accountsReloadNonce, setAccountsReloadNonce] = useState(0);
+  /** Escolha EXPLÍCITA (ou a conta gravada, no Editar). "" = sem escolha → padrão. */
   const [settleAccountId, setSettleAccountId] = useState("");
+  /** A pessoa mexeu no select nesta sessão? Sem isso o Editar não envia `account_id`. */
+  const [accountTouched, setAccountTouched] = useState(false);
   const [settled, setSettled] = useState(true);
-  const accountsLoadedOrgRef = useRef(null);
+  const liveAccounts = dataMode === "live" && !!organizationId;
   useEffect(() => {
-    if (!open || !organizationId || dataMode !== "live") return undefined;
-    // Só busca uma vez por org — evita refetch a cada reabertura do modal.
-    if (accountsLoadedOrgRef.current === organizationId) return undefined;
+    if (!open || !liveAccounts) return undefined;
     let cancelled = false;
+    setAccountsState((cur) => ({ orgId: organizationId, status: "loading", accounts: cur.orgId === organizationId ? cur.accounts : [] }));
     getOrgBalances(organizationId)
       .then((d) => {
-        if (cancelled) return;
-        const accts = d.accounts || [];
-        setAccountOptions(accts);
-        setSettleAccountId((cur) => cur || defaultSettleAccountId(accts));
-        accountsLoadedOrgRef.current = organizationId;
+        if (!cancelled) setAccountsState({ orgId: organizationId, status: "ready", accounts: d.accounts || [] });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAccountsState({ orgId: organizationId, status: "error", accounts: [] });
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, dataMode]);
+  }, [open, organizationId, liveAccounts, accountsReloadNonce]);
+  // Só a lista DESTA org conta; a de outra org é como não ter lista.
+  const accountOptions = accountsState.orgId === organizationId ? accountsState.accounts : [];
+  const accountsStatus = !liveAccounts ? "idle" : accountsState.orgId === organizationId ? accountsState.status : "loading";
   const [modalityChoice,setModalityChoice]       = useState("parcelado");
   const [recurrenceFrequency,   setRecurrenceFrequency]   = useState(preConfig?.freqRec || "mensal");
   const [recurrenceEndKind,    setRecurrenceEndKind]    = useState(preConfig?.encRec || "sem-fim");
@@ -283,6 +290,32 @@ export const NovaTransacaoModal = ({
    */
   const [editBaselineDropped, setEditBaselineDropped] = useState(false);
   useEffect(() => { setEditBaselineDropped(false); }, [preConfig]);
+
+  /* A conta EFETIVA do formulário — a que o select mostra, a revisão escreve e o
+     payload leva. Uma escolha só vale se a conta está entre as ativas DESTA org;
+     a exceção é a conta gravada do lançamento em edição (pode ter sido desativada:
+     aparece como «Conta desativada», sem trocar em silêncio). Fora disso — escolha
+     de outra org, conta inativa vinda de um Duplicar, nada escolhido — vale a
+     padrão. */
+  const editingStoredAccountId =
+    !editBaselineDropped &&
+    preConfig?.editingTransactionId != null &&
+    String(preConfig.editingTransactionId).trim() !== "" &&
+    preConfig?.accountId != null
+      ? String(preConfig.accountId)
+      : "";
+  const effectiveAccountId =
+    settleAccountId &&
+    (findActiveAccount(settleAccountId, accountOptions) || String(settleAccountId) === editingStoredAccountId)
+      ? String(settleAccountId)
+      : defaultSettleAccountId(accountOptions);
+  /** Mesmo texto no select e na revisão — nunca discordam. */
+  const accountLabel =
+    accountsStatus === "loading"
+      ? "Carregando contas…"
+      : accountsStatus === "error"
+        ? (editingStoredAccountId ? "Conta atual" : "Conta padrão")
+        : (accountDisplayName(effectiveAccountId, accountOptions) || "Conta padrão");
   /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
   const [review,    setReview]    = useState(false);
@@ -835,7 +868,8 @@ export const NovaTransacaoModal = ({
       setRecurrenceRepetitions(preConfig?.encRepetitionsRec ?? 12);
       setRecurrenceEndDateYmd(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
       setCat(preConfig?.cat || "");
-      setSettleAccountId(defaultSettleAccountId(accountOptions));
+      setSettleAccountId("");
+      setAccountTouched(false);
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -939,11 +973,8 @@ export const NovaTransacaoModal = ({
       }
       // Editar mostra a conta GRAVADA (#266); sem ela (lançamento novo, duplicar de
       // linha sem conta) volta à padrão — nunca herda a da abertura anterior.
-      setSettleAccountId(
-        preConfig.accountId != null && String(preConfig.accountId) !== ""
-          ? String(preConfig.accountId)
-          : defaultSettleAccountId(accountOptions),
-      );
+      setSettleAccountId(preConfig.accountId != null ? String(preConfig.accountId) : "");
+      setAccountTouched(false);
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
@@ -992,7 +1023,8 @@ export const NovaTransacaoModal = ({
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
       if (pp != null) setInstallments(pp);
     }
-    setSettleAccountId(defaultSettleAccountId(accountOptions));
+    setSettleAccountId("");
+    setAccountTouched(false);
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
@@ -1693,21 +1725,34 @@ export const NovaTransacaoModal = ({
       <div>
         <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 8 }}>Conta</div>
         <select
-          value={settleAccountId}
-          onChange={(e) => setSettleAccountId(e.target.value)}
+          aria-label="Conta"
+          value={accountOptions.length > 0 ? effectiveAccountId : ""}
+          disabled={accountOptions.length === 0}
+          onChange={(e) => { setSettleAccountId(e.target.value); setAccountTouched(true); }}
           style={{ ...G, width: "100%", fontSize: 13, color: T.ink, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", outline: "none", boxSizing: "border-box", marginBottom: 10 }}
         >
-          {accountOptions.length === 0 ? <option value="">Conta padrão</option> : null}
+          {/* Sem lista (carregando, erro, modo demonstração): uma opção só, com o
+              MESMO texto que a revisão mostra. */}
+          {accountOptions.length === 0 ? <option value="">{accountLabel}</option> : null}
           {accountOptions.map((a) => (
             <option key={a.account_id} value={a.account_id}>{a.name}</option>
           ))}
           {/* Lançamento gravado numa conta que já não está na lista (desativada):
               sem esta opção o <select> exibiria a primeira conta enquanto o estado
               guarda outra — a mesma mentira do #266 por outra porta. */}
-          {accountOptions.length > 0 && settleAccountId && !accountOptions.some((a) => String(a.account_id) === String(settleAccountId))
-            ? <option value={settleAccountId}>Conta desativada</option>
+          {accountOptions.length > 0 && effectiveAccountId && !findActiveAccount(effectiveAccountId, accountOptions)
+            ? <option value={effectiveAccountId}>{accountDisplayName(effectiveAccountId, accountOptions)}</option>
             : null}
         </select>
+        {accountsStatus === "error" ? (
+          <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "7px 10px", marginBottom: 10 }}>
+            Não foi possível carregar as contas.{" "}
+            <button type="button" onClick={() => setAccountsReloadNonce((n) => n + 1)}
+              style={{ ...G, fontSize: 12, fontWeight: 700, color: T.red, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+              Tentar de novo
+            </button>
+          </div>
+        ) : null}
         <div
           role="switch"
           aria-checked={settled}
@@ -1945,6 +1990,12 @@ export const NovaTransacaoModal = ({
         setTxSubmitError("Escolha uma categoria da lista.");
         return;
       }
+      // Com as contas ainda chegando, o select e a revisão dizem "Carregando contas…":
+      // salvar agora gravaria numa conta que a pessoa não viu.
+      if (method !== "credito" && accountsStatus === "loading") {
+        setTxSubmitError("Aguarde as contas carregarem para salvar.");
+        return;
+      }
       setTxSubmitting(true);
       setTxSubmitError("");
       setTxCreateFailed(false);
@@ -1991,30 +2042,22 @@ export const NovaTransacaoModal = ({
             modality,
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             recurring: isRecurring,
-            // Cartão não troca de conta: a conta dele é a do cartão.
-            accountId: method !== "credito" ? (settleAccountId || null) : null,
+            // Só envia conta se a PESSOA trocou no select; sem isso o valor fica o do
+            // baseline e não entra no diff (lançamento legado sem conta não ganha uma
+            // em silêncio). Cartão não troca de conta: a conta dele é a do cartão.
+            accountId:
+              method !== "credito" && accountTouched
+                ? (effectiveAccountId || null)
+                : (preConfig?.editBaseline?.accountId ?? null),
             // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
             // o payload sai completo, como antes.
             baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
           });
-          const updated = await updateTransactionForUi(
+          await updateTransactionForUi(
             editingTransactionIdStr ?? editingTransactionId,
             organizationId,
             updatePayload,
           );
-          if (accountChangeWasIgnored(updatePayload, updated)) {
-            // O resto da edição foi gravado; só a conta não. Recarrega quem depende
-            // do lançamento e conta a verdade em vez de "Despesa registrada!".
-            try {
-              clearNovaTransacaoSummaryCache();
-              await onTransactionSaved?.();
-            } catch { /* efeito local; o aviso abaixo é o que importa */ }
-            setTxSubmitError(
-              "As outras alterações foram salvas, mas a conta não foi trocada: o servidor ainda não aceita mudar a conta de um lançamento. O lançamento continua na conta anterior.",
-            );
-            setTxSubmitting(false);
-            return;
-          }
         } else {
           const createPayload = buildCreateTransactionPayload({
             organizationId,
@@ -2029,7 +2072,7 @@ export const NovaTransacaoModal = ({
             modality,
             cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
             refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
-            accountId: settleAccountId || null,
+            accountId: effectiveAccountId || null,
             paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
           });
           // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
@@ -2191,7 +2234,8 @@ export const NovaTransacaoModal = ({
     } else {
       setModalityChoice("parcelado"); setInstallments(3);
     }
-    setSettleAccountId(defaultSettleAccountId(accountOptions));
+    setSettleAccountId("");
+    setAccountTouched(false);
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
@@ -2296,7 +2340,7 @@ export const NovaTransacaoModal = ({
               // Cartão: o cartão escolhido. Fora dele, a conta onde o lançamento cai (#266).
               method === "credito"
                 ? { label:"CARTÃO", val: cards.find(c=>c.id===cardId)?.nome || "—" }
-                : { label:"CONTA",  val: accountOptions.find((a) => String(a.account_id) === String(settleAccountId))?.name || (settleAccountId ? "Conta desativada" : "Conta padrão") },
+                : { label:"CONTA",  val: accountLabel },
             ]),
           ].map((f,i) => (
             <div key={i} style={{ background:T.surface, padding:"10px 14px" }}>

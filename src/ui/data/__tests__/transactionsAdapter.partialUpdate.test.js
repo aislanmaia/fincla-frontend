@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  accountChangeWasIgnored,
   buildEditBaselineFromUi,
   buildUpdateTransactionPayload,
   pickAmountAbsForTransactionEdit,
@@ -242,15 +241,5 @@ describe("buildUpdateTransactionPayload — conta (#266)", () => {
     expect(baseline.accountId).toBe("acc-b");
     const payload = buildUpdateTransactionPayload({ ...pixNaContaB, accountId: "acc-b", baseline });
     expect(payload).not.toHaveProperty("account_id");
-  });
-});
-
-describe("accountChangeWasIgnored", () => {
-  it("acusa quando o servidor devolve outra conta que a pedida", () => {
-    expect(accountChangeWasIgnored({ account_id: "acc-a" }, { account_id: "acc-b" })).toBe(true);
-  });
-  it("não acusa quando a conta pedida voltou, nem quando nada foi pedido", () => {
-    expect(accountChangeWasIgnored({ account_id: "acc-a" }, { account_id: "acc-a" })).toBe(false);
-    expect(accountChangeWasIgnored({ description: "x" }, { account_id: "acc-b" })).toBe(false);
   });
 });

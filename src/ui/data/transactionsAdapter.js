@@ -2141,20 +2141,6 @@ export async function createTransactionForUi(payload) {
   }
 }
 
-/**
- * O servidor ignorou a troca de conta pedida no `PUT`? Um backend anterior ao
- * fincla-api#444 descarta `account_id` em silêncio e responde 200 — a tela diria
- * "Despesa registrada!" com o gasto ainda na conta antiga. Compara o que foi pedido
- * com o que voltou; sem `account_id` no pedido (ou na resposta) não há o que afirmar.
- */
-export function accountChangeWasIgnored(payload, response) {
-  const asked = payload?.account_id;
-  if (!asked) return false;
-  const got = response?.account_id;
-  if (got == null) return false;
-  return String(got) !== String(asked);
-}
-
 export async function updateTransactionForUi(transactionId, organizationId, payload) {
   return updateTransaction(transactionId, organizationId, payload);
 }

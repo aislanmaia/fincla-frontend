@@ -2115,6 +2115,16 @@ describe("<TransacoesPage> — detalhe mostra a conta (#267)", () => {
     expect(screen.queryByText("Conta A Itaú")).toBeNull();
   });
 
+  it("com uma conta ativa e o lançamento numa conta desativada, o detalhe mostra «Conta desativada»", async () => {
+    listAccountsMock.mockResolvedValue([{ id: "acc-a", name: "Conta A Itaú", currency: "BRL" }]);
+    seedFeiraNaContaB();
+    renderPage();
+    await openFilters();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await userEvent.click((await screen.findAllByText("Feira"))[0]);
+    expect(await screen.findByText("Conta desativada")).toBeInTheDocument();
+  });
+
   it("com uma conta só, o campo Conta não aparece", async () => {
     listAccountsMock.mockResolvedValue([{ id: "acc-b", name: "Conta B Nubank", currency: "BRL" }]);
     seedFeiraNaContaB();

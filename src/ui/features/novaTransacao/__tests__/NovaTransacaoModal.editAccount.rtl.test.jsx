@@ -64,22 +64,48 @@ const rowInB = {
 };
 
 let putImpl;
+/** Contas ativas por organização, como `GET /balances` devolve. */
+let accountsByOrg;
+/** Promise que segura a resposta de `/balances` (simula rede lenta); `null` = responde já. */
+let balancesGate;
+let balancesFail;
+
+const OTHER_ORG = "org-other";
+const ACC_X = "dddddddd-0000-4000-8000-000000000004";
+const ACC_NEW = "eeeeeeee-0000-4000-8000-000000000005";
 
 beforeEach(() => {
+  accountsByOrg = {
+    [ORG]: [balanceRow(ACC_A, "Conta A Itaú", "BRL", true), balanceRow(ACC_B, "Conta B Nubank", "BRL", true), balanceRow(ACC_USD, "Wise USD", "USD", false)],
+    [OTHER_ORG]: [balanceRow(ACC_X, "Conta X Inter", "BRL", true)],
+  };
+  balancesGate = null;
+  balancesFail = false;
   putImpl = (url, body) => Promise.resolve({ data: { id: 501, account_id: body.account_id ?? ACC_B } });
-  apiClient.get.mockImplementation((url) => {
+  apiClient.get.mockImplementation((url, config) => {
     if (url === "/balances") {
-      return Promise.resolve({
+      if (balancesFail) return Promise.reject(Object.assign(new Error("500"), { isAxiosError: true, response: { status: 500, data: {} } }));
+      const org = config?.params?.organization_id;
+      const body = {
         data: {
           as_of: "2026-11-04T09:00:00", total: { amount: "3000", currency: "BRL" }, consolidation: { target_currency: "BRL", rates: [], unavailable: null },
-          accounts: [balanceRow(ACC_A, "Conta A Itaú", "BRL", true), balanceRow(ACC_B, "Conta B Nubank", "BRL", true), balanceRow(ACC_USD, "Wise USD", "USD", false)],
+          accounts: accountsByOrg[org] ?? [],
         },
-      });
+      };
+      return balancesGate ? balancesGate.then(() => body) : Promise.resolve(body);
     }
     return Promise.resolve({ data: [] });
   });
   apiClient.put.mockImplementation((url, body) => putImpl(url, body));
+  apiClient.post.mockImplementation((url, body) => Promise.resolve({ data: { id: 900, ...body }, headers: {} }));
 });
+
+/** Pré-config de um lançamento NOVO (sem identidade de edição). */
+const newTxPreConfig = (extra = {}) => ({
+  tipo: "despesa", desc: "Mercado", cat: "Alimentação", categoryTagId: "cat-1", method: "pix", valorInicial: 10,
+  tags: [], detailTagIds: [], detailTagDisplayById: {}, ...extra,
+});
+const postedTransactions = () => apiClient.post.mock.calls.filter(([url]) => url === "/transactions").map(([, body]) => body);
 
 afterEach(() => {
   cleanup();
@@ -135,16 +161,6 @@ describe("NovaTransacaoModal — conta no Editar (#266)", () => {
     expect(apiClient.put.mock.calls[0][1]).not.toHaveProperty("account_id");
   });
 
-  it("servidor que ignora a troca (responde com a conta antiga): nada de 'Despesa registrada!'", async () => {
-    putImpl = () => Promise.resolve({ data: { id: 501, account_id: ACC_B } });
-    const user = userEvent.setup();
-    render(<NovaTransacaoModal {...baseProps} preConfig={buildTxModalPreConfig(rowInB)} />);
-    await user.selectOptions(await screen.findByDisplayValue("Conta B Nubank"), ACC_A);
-    await saveEdit(user);
-    expect(await screen.findByText(/a conta não foi trocada/i)).toBeInTheDocument();
-    expect(screen.queryByText("Despesa registrada!")).toBeNull();
-  });
-
   it("422 do servidor ao trocar a conta: a mensagem aparece e não há sucesso", async () => {
     putImpl = () => Promise.reject(Object.assign(new Error("422"), {
       isAxiosError: true,
@@ -158,3 +174,81 @@ describe("NovaTransacaoModal — conta no Editar (#266)", () => {
     expect(screen.queryByText("Despesa registrada!")).toBeNull();
   });
 });
+
+describe("NovaTransacaoModal — conta: org, cache, Duplicar, carregamento, legado (review #269)", () => {
+  it("trocar de organização: nunca aparece nem é enviada a conta da org anterior", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig()} />);
+    await screen.findByDisplayValue("Conta A Itaú");
+
+    rerender(<NovaTransacaoModal {...baseProps} open={false} preConfig={null} />);
+    let release;
+    balancesGate = new Promise((r) => { release = r; });
+    rerender(<NovaTransacaoModal {...baseProps} organizationId={OTHER_ORG} preConfig={newTxPreConfig()} />);
+    // Enquanto a lista da org nova não chega, nada da org anterior aparece.
+    expect(await screen.findByDisplayValue("Carregando contas…")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Conta A Itaú")).toBeNull();
+    release();
+    expect(await screen.findByDisplayValue("Conta X Inter")).toBeInTheDocument();
+
+    await saveEdit(user);
+    await waitFor(() => expect(postedTransactions().length).toBe(1));
+    expect(postedTransactions()[0].account_id).toBe(ACC_X);
+  });
+
+  it("cada abertura relê as contas: uma conta criada depois aparece sem recarregar a página", async () => {
+    const { rerender } = render(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig()} />);
+    await screen.findByDisplayValue("Conta A Itaú");
+    rerender(<NovaTransacaoModal {...baseProps} open={false} preConfig={null} />);
+    accountsByOrg[ORG] = [...accountsByOrg[ORG], balanceRow(ACC_NEW, "Conta Nova C6", "BRL", true)];
+    rerender(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig()} />);
+    expect(await screen.findByRole("option", { name: "Conta Nova C6" })).toBeInTheDocument();
+  });
+
+  it("Duplicar um lançamento de conta desativada: a cópia vai para a conta padrão", async () => {
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig({ accountId: "acc-desativada" })} />);
+    const select = await screen.findByDisplayValue("Conta A Itaú");
+    expect(select.value).toBe(ACC_A);
+    expect(screen.queryByRole("option", { name: "Conta desativada" })).toBeNull();
+    await saveEdit(user);
+    await waitFor(() => expect(postedTransactions().length).toBe(1));
+    expect(postedTransactions()[0].account_id).toBe(ACC_A);
+  });
+
+  it("contas ainda carregando: select e revisão dizem o mesmo, e salvar espera", async () => {
+    const user = userEvent.setup();
+    balancesGate = new Promise(() => {});
+    render(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig()} />);
+    expect(await screen.findByDisplayValue("Carregando contas…")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(screen.getByText("CONTA").nextSibling).toHaveTextContent("Carregando contas…");
+    await user.click(await screen.findByRole("button", { name: /Confirmar despesa/i }));
+    expect(await screen.findByText(/Aguarde as contas carregarem/)).toBeInTheDocument();
+    expect(postedTransactions()).toHaveLength(0);
+  });
+
+  it("falha ao carregar contas: aviso claro com «Tentar de novo», e select e revisão não discordam", async () => {
+    const user = userEvent.setup();
+    balancesFail = true;
+    render(<NovaTransacaoModal {...baseProps} preConfig={newTxPreConfig()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível carregar as contas");
+    expect(screen.getByLabelText("Conta")).toHaveDisplayValue("Conta padrão");
+    expect(screen.getByLabelText("Conta")).toBeDisabled();
+
+    balancesFail = false;
+    await user.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByDisplayValue("Conta A Itaú")).toBeInTheDocument();
+  });
+
+  it("lançamento legado sem conta (account_id null): editar outro campo não inventa account_id", async () => {
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...baseProps} preConfig={buildTxModalPreConfig({ ...rowInB, accountId: null })} />);
+    await screen.findByDisplayValue("Conta A Itaú");
+    await user.type(document.querySelector("textarea"), " editada");
+    await saveEdit(user);
+    await waitFor(() => expect(apiClient.put).toHaveBeenCalledTimes(1));
+    expect(apiClient.put.mock.calls[0][1]).not.toHaveProperty("account_id");
+  });
+});
+
