@@ -65,21 +65,14 @@ export function useTransactionsData({
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
   const prevFetchSig = useRef(null);
 
-  const query = useMemo(() => {
-    if (!organizationId) return null;
-    return buildTransactionsQuery({
-      organizationId,
-      ...filters,
-    });
-  }, [organizationId, filters]);
-
-  const summaryQuery = useMemo(() => {
-    if (!organizationId) return null;
-    return buildTransactionsSummaryQuery({
-      organizationId,
-      ...filters,
-    });
-  }, [organizationId, filters]);
+  /* As consultas são identificadas pelo CONTEÚDO, não pela referência de `filters`:
+     a página recalcula o objeto quando qualquer dependência muda (a moeda base
+     chegando, a lista de cartões chegando) mesmo que a pergunta seja a mesma — e
+     cada referência nova era uma lista + um resumo pedidos de novo (#293). */
+  const queryKey = JSON.stringify(organizationId ? buildTransactionsQuery({ organizationId, ...filters }) : null);
+  const summaryQueryKey = JSON.stringify(organizationId ? buildTransactionsSummaryQuery({ organizationId, ...filters }) : null);
+  const query = useMemo(() => JSON.parse(queryKey), [queryKey]);
+  const summaryQuery = useMemo(() => JSON.parse(summaryQueryKey), [summaryQueryKey]);
 
   useEffect(() => {
     if (!enabled || !organizationId || !query || !summaryQuery) {
