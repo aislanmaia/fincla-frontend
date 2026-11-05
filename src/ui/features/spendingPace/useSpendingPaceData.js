@@ -88,6 +88,9 @@ export function useSpendingPaceData({
     // apaga o que se sabia — só marca `refreshFailed`.
     const key = `${organizationId}|${ctx.start}|${ctx.end}`;
     const isRefresh = loadedKeyRef.current === key;
+    // Leitura NOVA (outro mês/org): esquece a anterior já. Se esta falhar e a pessoa
+    // voltar, a volta é leitura nova — sem o erro do mês que falhou por cima.
+    if (!isRefresh) loadedKeyRef.current = null;
     setState((s) => (isRefresh
       ? { ...s, isRefreshing: true, refreshFailed: false, refetch }
       : { ...s, isLoading: true, error: "", refreshFailed: false, refetch }));

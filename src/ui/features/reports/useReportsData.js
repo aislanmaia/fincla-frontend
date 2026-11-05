@@ -44,6 +44,9 @@ export function useReportsData({
     let cancelled = false;
     const key = `${organizationId}|${periodo}`;
     const isRefresh = loadedKeyRef.current === key;
+    // Leitura NOVA: esquece a anterior já. Se esta falhar e a pessoa voltar à chave
+    // antiga, a volta é leitura nova — não "recarga" do estado da que falhou.
+    if (!isRefresh) loadedKeyRef.current = null;
     setState((current) => (isRefresh
       ? { ...current, isRefreshing: true, error: "" }
       : { ...EMPTY_STATE, isLoading: true, error: "" }));
