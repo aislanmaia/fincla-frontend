@@ -124,10 +124,27 @@ import {
 } from "../features/transactions/shared/TransactionRow.jsx";
 
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import {
+  EMPTY_IDS,
+  useFilterNotFoundRecovery,
+  useGuardedFilterSelection,
+} from "../features/transactions/filters/useGuardedFilterSelection.js";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
-/** Vazio CONGELADO (mesma referência sempre): um `[]` novo por render viraria consulta nova. */
-const EMPTY_CARD_IDS = Object.freeze([]);
+/** Cartão: id numérico da API. */
+const isApiCardId = (id) => /^[1-9]\d*$/.test(id);
+/** Conta: UUID. */
+const isApiAccountId = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+const CARD_FILTER_MESSAGES = Object.freeze({
+  removedOne: "Um cartão selecionado não existe mais e foi removido do filtro.",
+  removedMany: "Cartões selecionados não existem mais e foram removidos do filtro.",
+  unavailable: "Não foi possível aplicar o filtro de cartão agora — a lista mostra todos os cartões.",
+});
+const ACCOUNT_FILTER_MESSAGES = Object.freeze({
+  removedOne: "Uma conta selecionada não existe mais e foi removida do filtro.",
+  removedMany: "Contas selecionadas não existem mais e foram removidas do filtro.",
+  unavailable: "Não foi possível aplicar o filtro de conta agora — a lista mostra todas as contas.",
+});
 
 /** Snapshot restaurado ao desaplicar uma view criada sem ativação prévia. */
 const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
@@ -1255,19 +1272,22 @@ function TransacoesPageBody({
       acerto e por isso não mexem no saldo. Falha silenciosa de propósito: sem elas a
       lista só deixa de mostrar a marca, o que é melhor do que não carregar a tela. */
   const [balanceAnchors, setBalanceAnchors] = useState({});
-  /** Contas ativas — a mesma leitura das âncoras; o detalhe usa para a «Conta» (#267). */
-  const [orgAccounts, setOrgAccounts] = useState([]);
-  /** A lista de contas chegou (com sucesso) para esta org? Antes disso não dá para
-      afirmar que há uma conta só — o filtro de conta vindo da URL continua valendo. */
-  const [orgAccountsLoaded, setOrgAccountsLoaded] = useState(false);
+  /** Contas ativas — a mesma leitura das âncoras; o detalhe usa para a «Conta» (#267).
+      Guardadas COM a organização dona (#296): trocar de org não pode deixar as contas
+      (nem os ids) da anterior valendo. `loaded`: a lista chegou com sucesso? Antes
+      disso não dá para afirmar que há uma conta só — o filtro vindo da URL vale. */
+  const [accountsState, setAccountsState] = useState({ orgId: null, accounts: EMPTY_IDS, loaded: false });
+  /** Relê as contas quando a API recusa uma conta do filtro (404 ACCOUNT_NOT_FOUND). */
+  const [accountsReloadToken, setAccountsReloadToken] = useState(0);
   useEffect(() => {
     if (!shouldUseRealData || !organizationId) {
       setBalanceAnchors({});
-      setOrgAccounts([]);
-      setOrgAccountsLoaded(false);
+      setAccountsState({ orgId: null, accounts: EMPTY_IDS, loaded: false });
       return undefined;
     }
     let cancelled = false;
+    // Outra organização: zera já, antes da resposta (que pode falhar).
+    setAccountsState((cur) => (cur.orgId === organizationId ? cur : { orgId: organizationId, accounts: EMPTY_IDS, loaded: false }));
     // As duas fontes: o feed de ajustes e as contas (para a âncora implícita do saldo
     // de abertura, que não tem linha em `balance_adjustments`).
     // A falha do feed de ajustes derruba só as âncoras: a «Conta» do detalhe
@@ -1279,8 +1299,11 @@ function TransacoesPageBody({
       .then(([rows, accounts]) => {
         if (cancelled) return;
         setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, accounts || []));
-        setOrgAccounts(Array.isArray(accounts) ? accounts : []);
-        setOrgAccountsLoaded(Array.isArray(accounts));
+        // Releitura que falha não apaga as contas que já se sabia (mesma regra do
+        // Cartão): só deixa de afirmar que a lista está completa.
+        setAccountsState((cur) => (Array.isArray(accounts)
+          ? { orgId: organizationId, accounts, loaded: true }
+          : { orgId: organizationId, accounts: cur.orgId === organizationId ? cur.accounts : EMPTY_IDS, loaded: false }));
       })
       .catch(() => {
         if (!cancelled) setBalanceAnchors({});
@@ -1288,7 +1311,9 @@ function TransacoesPageBody({
     return () => {
       cancelled = true;
     };
-  }, [shouldUseRealData, organizationId, transactionsRefreshToken]);
+  }, [shouldUseRealData, organizationId, transactionsRefreshToken, accountsReloadToken]);
+  const orgAccounts = accountsState.orgId === organizationId ? accountsState.accounts : EMPTY_IDS;
+  const orgAccountsLoaded = accountsState.orgId === organizationId && accountsState.loaded;
 
   /* Filtro "Conta" (#268): só existe com 2+ contas ativas. Com uma só ele não
      aparece e não tem efeito — o recorte vira vazio antes de chegar à API. */
@@ -1306,10 +1331,23 @@ function TransacoesPageBody({
     [accountsForFilter],
   );
   const accountFilterAvailable = !orgAccountsLoaded || accountsForFilter.length >= 2;
-  const effectiveAccountSel = useMemo(
-    () => (accountFilterAvailable ? filter.accountSel : []),
-    [accountFilterAvailable, filter.accountSel],
-  );
+  /* Só ids de contas ATIVAS que a organização tem viajam — a mesma regra do filtro
+     Cartão (#296): troca de org zera a seleção, conta sumida sai com aviso, e o 404
+     ACCOUNT_NOT_FOUND relê as contas uma vez (`useFilterNotFoundRecovery`). */
+  const activeAccountIds = useMemo(() => new Set(accountsForFilter.map((a) => a.id)), [accountsForFilter]);
+  const requestAccountsReload = useCallback(() => setAccountsReloadToken((n) => n + 1), []);
+  const accountGuard = useGuardedFilterSelection({
+    enabled: shouldUseRealData,
+    organizationId,
+    selection: filter.accountSel,
+    setSelection: filter.setAccountSel,
+    isWellFormedId: isApiAccountId,
+    list: accountsState,
+    knownIds: activeAccountIds,
+    requestListReload: requestAccountsReload,
+    messages: ACCOUNT_FILTER_MESSAGES,
+  });
+  const effectiveAccountSel = accountFilterAvailable ? accountGuard.effectiveSel : EMPTY_IDS;
   /* Com uma conta só (lista carregada), a seleção de conta sai do PRÓPRIO estado do
      filtro — não só da requisição. Senão "tem filtro ativo", o contador, os chips,
      o desfazer e as visões salvas contariam um filtro que não existe na tela. */
@@ -1332,22 +1370,20 @@ function TransacoesPageBody({
      que aparecem nas linhas carregadas. A seleção vai à API como `credit_card_id`
      repetível. A lista é guardada COM a organização dona dela: trocar de org não
      pode deixar os cartões (nem os ids) da anterior valendo. */
-  const [cardsState, setCardsState] = useState({ orgId: null, cards: EMPTY_CARD_IDS, loaded: false });
+  const [cardsState, setCardsState] = useState({ orgId: null, cards: EMPTY_IDS, loaded: false });
   const [cardsReloadToken, setCardsReloadToken] = useState(0);
   useEffect(() => {
     if (!shouldUseRealData || !organizationId) {
-      setCardsState({ orgId: null, cards: EMPTY_CARD_IDS, loaded: false });
+      setCardsState({ orgId: null, cards: EMPTY_IDS, loaded: false });
       return undefined;
     }
     let cancelled = false;
     // Outra organização: zera já, antes da resposta (que pode falhar).
-    setCardsState((cur) => (cur.orgId === organizationId ? cur : { orgId: organizationId, cards: EMPTY_CARD_IDS, loaded: false }));
+    setCardsState((cur) => (cur.orgId === organizationId ? cur : { orgId: organizationId, cards: EMPTY_IDS, loaded: false }));
     listCreditCards(organizationId)
       .then((cards) => {
         if (cancelled) return;
-        setCardsState({ orgId: organizationId, cards: Array.isArray(cards) ? cards : EMPTY_CARD_IDS, loaded: Array.isArray(cards) });
-        // Lista nova e confiável: recusas de CONJUNTO (sem prova) deixam de valer.
-        setRejectedCards((cur) => (cur.orgId === organizationId && cur.sets.length ? { ...cur, sets: EMPTY_CARD_IDS } : cur));
+        setCardsState({ orgId: organizationId, cards: Array.isArray(cards) ? cards : EMPTY_IDS, loaded: Array.isArray(cards) });
       })
       .catch(() => {
         if (!cancelled) setCardsState((cur) => ({ ...cur, orgId: organizationId, loaded: false }));
@@ -1356,76 +1392,25 @@ function TransacoesPageBody({
       cancelled = true;
     };
   }, [shouldUseRealData, organizationId, cardsReloadToken]);
-  const cardsOfThisOrg = cardsState.orgId === organizationId;
-  const orgCards = cardsOfThisOrg ? cardsState.cards : EMPTY_CARD_IDS;
-  const orgCardsLoaded = cardsOfThisOrg && cardsState.loaded;
+  const orgCards = cardsState.orgId === organizationId ? cardsState.cards : EMPTY_IDS;
   const orgCardIds = useMemo(() => new Set(orgCards.map((c) => String(c.id))), [orgCards]);
-  /* Recusas da API (404) NESTA organização, em dois níveis:
-     - `ids`: cartões PROVADOS inexistentes (a lista de cartões carregou sem eles);
-       saem da seleção e não viajam mais.
-     - `sets`: um CONJUNTO exato recusado sem prova de qual id falhou (a releitura
-       dos cartões falhou, ou a lista ainda os traz). Só aquela combinação deixa de
-       viajar — nenhum cartão válido fica "envenenado" — e uma lista de cartões
-       carregada com sucesso as limpa. */
-  const [rejectedCards, setRejectedCards] = useState({ orgId: null, ids: EMPTY_CARD_IDS, sets: EMPTY_CARD_IDS });
-  const rejectedIds = rejectedCards.orgId === organizationId ? rejectedCards.ids : EMPTY_CARD_IDS;
-  const rejectedSets = rejectedCards.orgId === organizationId ? rejectedCards.sets : EMPTY_CARD_IDS;
-  const cardOrgRef = useRef(organizationId);
   /* Só ids de cartões que a organização TEM viajam: um id velho (visão salva, link,
-     cartão apagado) sairia como 404 e derrubaria a lista inteira. Antes de a lista
-     de cartões chegar, só os ids numéricos (a API decide). A CHAVE é o conteúdo: um
-     array novo com os mesmos ids (ou vazio) não pode virar uma consulta nova. */
-  const effectiveCardKey = (() => {
-    // Organização acabou de mudar: a seleção ainda é da anterior (o efeito abaixo a
-    // zera) — neste render ela não viaja.
-    if (!shouldUseRealData || cardOrgRef.current !== organizationId) return "";
-    const numeric = filter.cardSel.map(String).filter((id) => /^[1-9]\d*$/.test(id) && !rejectedIds.includes(id));
-    const key = (orgCardsLoaded ? numeric.filter((id) => orgCardIds.has(id)) : numeric).join(",");
-    return rejectedSets.includes(key) ? "" : key;
-  })();
-  const effectiveCardSel = useMemo(
-    () => (effectiveCardKey ? effectiveCardKey.split(",") : EMPTY_CARD_IDS),
-    [effectiveCardKey],
-  );
-  // E o próprio estado do filtro larga o id que não existe (chip, contador, visões),
-  // avisando — um chip que some calado parece defeito.
-  const [cardFilterNotice, setCardFilterNotice] = useState("");
-  const setCardSelRef = useRef(filter.setCardSel);
-  setCardSelRef.current = filter.setCardSel;
-  useEffect(() => {
-    if (!shouldUseRealData) return;
-    const kept = filter.cardSel.filter((id) => !rejectedIds.includes(String(id)) && (!orgCardsLoaded || orgCardIds.has(String(id))));
-    if (kept.length === filter.cardSel.length) return;
-    setCardSelRef.current(kept);
-    // Ids não numéricos (visões salvas antigas) também saem; o aviso fala do que a pessoa vê.
-    setCardFilterNotice(filter.cardSel.length - kept.length === 1
-      ? "Um cartão selecionado não existe mais e foi removido do filtro."
-      : "Cartões selecionados não existem mais e foram removidos do filtro.");
-  }, [shouldUseRealData, orgCardsLoaded, orgCardIds, rejectedIds, filter.cardSel]);
-  /* Escolha DELIBERADA de um cartão (painel, visão salva) vale mais que uma recusa
-     antiga: o id sai das recusas e a combinação nova é perguntada à API de novo. */
-  const prevCardSelRef = useRef(filter.cardSel);
-  useEffect(() => {
-    const before = new Set(prevCardSelRef.current.map(String));
-    prevCardSelRef.current = filter.cardSel;
-    const added = filter.cardSel.map(String).filter((id) => !before.has(id));
-    if (added.length === 0) return;
-    setCardFilterNotice("");
-    setRejectedCards((cur) => {
-      if (cur.orgId !== organizationId) return cur;
-      const ids = cur.ids.filter((id) => !added.includes(id));
-      const sets = cur.sets.filter((set) => !set.split(",").some((id) => added.includes(id)));
-      return ids.length === cur.ids.length && sets.length === cur.sets.length ? cur : { ...cur, ids, sets };
-    });
-  }, [filter.cardSel, organizationId]);
-  // Trocar de organização: os cartões escolhidos eram da outra.
-  useEffect(() => {
-    if (cardOrgRef.current === organizationId) return;
-    cardOrgRef.current = organizationId;
-    setCardFilterNotice("");
-    if (filter.cardSel.length > 0) setCardSelRef.current([]);
-    // A seleção zera no estado; o render seguinte já vem sem ela.
-  }, [organizationId, filter.cardSel.length]);
+     cartão apagado) sairia como 404 e derrubaria a lista inteira. A regra inteira
+     (troca de org, recusas por id e por conjunto, aviso) mora no hook compartilhado
+     com o filtro Conta (#296). */
+  const requestCardsReload = useCallback(() => setCardsReloadToken((n) => n + 1), []);
+  const cardGuard = useGuardedFilterSelection({
+    enabled: shouldUseRealData,
+    organizationId,
+    selection: filter.cardSel,
+    setSelection: filter.setCardSel,
+    isWellFormedId: isApiCardId,
+    list: cardsState,
+    knownIds: orgCardIds,
+    requestListReload: requestCardsReload,
+    messages: CARD_FILTER_MESSAGES,
+  });
+  const effectiveCardSel = cardGuard.effectiveSel;
 
   /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
      2+ contas ativas. Ids em string (a lista mistura número e UUID). */
@@ -1641,61 +1626,11 @@ function TransacoesPageBody({
     refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
   transactionsDataRef.current = transactionsData;
-  /* Cartão do filtro apagado em outra aba (#280): a API responde 404
-     CREDIT_CARD_NOT_FOUND (sem dizer qual). Primeira vez para um conjunto de ids:
-     relê os cartões UMA vez — o apagado sai da seleção e a lista volta sozinha.
-     Segunda vez para o MESMO conjunto (a releitura falhou, ou a API recusa um cartão
-     que a lista ainda traz): esses ids são recusados para sempre nesta organização,
-     sem nova releitura — nunca um laço, nunca a página presa no erro. */
-  const cardRefetchedForRef = useRef({ orgId: null, keys: new Set() });
-  const cardRefetchPendingRef = useRef(null);
-  const effectiveCardSelRef = useRef(effectiveCardSel);
-  effectiveCardSelRef.current = effectiveCardSel;
-  const cardsLoadedRef = useRef({ loaded: false, ids: orgCardIds });
-  cardsLoadedRef.current = { loaded: orgCardsLoaded, ids: orgCardIds };
-  /* Recusa um conjunto enviado: com a lista de cartões carregada, só os ids que ela
-     PROVA inexistentes; sem prova (lista fora do ar, ou a API recusa um cartão que a
-     lista ainda traz), só a combinação exata — nunca um id válido. */
-  const rejectCards = useCallback((sent) => {
-    const { loaded, ids: known } = cardsLoadedRef.current;
-    const missing = loaded ? sent.filter((id) => !known.has(id)) : [];
-    setRejectedCards((cur) => {
-      const base = cur.orgId === organizationId ? cur : { ids: EMPTY_CARD_IDS, sets: EMPTY_CARD_IDS };
-      if (missing.length) return { orgId: organizationId, ids: [...new Set([...base.ids, ...missing])], sets: base.sets };
-      const key = sent.join(",");
-      return { orgId: organizationId, ids: base.ids, sets: base.sets.includes(key) ? base.sets : [...base.sets, key] };
-    });
-    if (!missing.length) setCardFilterNotice("Não foi possível aplicar o filtro de cartão agora — a lista mostra todos os cartões.");
-  }, [organizationId]);
-  useEffect(() => {
-    if (transactionsData.errorCode !== "CREDIT_CARD_NOT_FOUND") return;
-    const sent = effectiveCardSelRef.current;
-    if (sent.length === 0) return;
-    const key = sent.join(",");
-    if (cardRefetchedForRef.current.orgId !== organizationId) {
-      cardRefetchedForRef.current = { orgId: organizationId, keys: new Set() };
-    }
-    if (cardRefetchedForRef.current.keys.has(key)) {
-      rejectCards(sent);
-      return;
-    }
-    cardRefetchedForRef.current.keys.add(key);
-    cardRefetchPendingRef.current = key;
-    setCardsReloadToken((n) => n + 1);
-  }, [transactionsData.errorCode, organizationId, rejectCards]);
-  /* A releitura terminou (bem ou mal) e a seleção que vai à API NÃO mudou: nenhuma
-     consulta nova vai acontecer, e o erro ficaria na tela para sempre. Recusa o
-     conjunto — sem segunda releitura. Se a seleção mudou, a consulta nova decide. */
-  useEffect(() => {
-    const pending = cardRefetchPendingRef.current;
-    if (!pending || !cardsOfThisOrg) return;
-    cardRefetchPendingRef.current = null;
-    if (effectiveCardSelRef.current.join(",") === pending
-      && transactionsDataRef.current?.errorCode === "CREDIT_CARD_NOT_FOUND") {
-      rejectCards(pending.split(","));
-    }
-    // `cardsState` muda a cada resposta da lista de cartões — é o sinal de "terminou".
-  }, [cardsState, cardsOfThisOrg, rejectCards]);
+  /* Cartão/conta do filtro apagado em outra aba (#280, #296): a API responde 404
+     (sem dizer qual id). O hook relê a lista UMA vez e, se o mesmo conjunto voltar
+     a falhar, recusa-o — nunca um laço, nunca a página presa no erro. */
+  useFilterNotFoundRecovery(cardGuard, { errorCode: transactionsData.errorCode, notFoundCode: "CREDIT_CARD_NOT_FOUND" });
+  useFilterNotFoundRecovery(accountGuard, { errorCode: transactionsData.errorCode, notFoundCode: "ACCOUNT_NOT_FOUND" });
   /* Total do período SEM os demais filtros — o "de 20" de "17 de 20
      transações". Sozinho, "17" não diz se o filtro cortou muito ou pouco, e é
      essa relação que responde "meu filtro está certo?".
@@ -4248,19 +4183,23 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* Filtro Cartão ajustado sozinho (#280): cartão apagado em outra aba saiu da
-          seleção, ou a combinação não pôde ser aplicada. Nunca em silêncio. */}
-      {cardFilterNotice && (
+      {/* Filtro Cartão/Conta ajustado sozinho (#280, #296): item apagado em outra aba
+          saiu da seleção, ou a combinação não pôde ser aplicada. Nunca em silêncio. */}
+      {[
+        { guard: cardGuard, testId: "card-filter-notice", label: "Fechar aviso do filtro de cartão" },
+        { guard: accountGuard, testId: "account-filter-notice", label: "Fechar aviso do filtro de conta" },
+      ].map(({ guard, testId, label }) => guard.notice && (
         <div
+          key={testId}
           role="status"
-          data-testid="card-filter-notice"
+          data-testid={testId}
           style={{ ...G, fontSize:13, color:T.amber, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}
         >
-          <span style={{ flex:1 }}>{cardFilterNotice}</span>
-          <button type="button" onClick={() => setCardFilterNotice("")} aria-label="Fechar aviso do filtro de cartão"
+          <span style={{ flex:1 }}>{guard.notice}</span>
+          <button type="button" onClick={guard.dismissNotice} aria-label={label}
             style={{ ...G, background:"none", border:"none", cursor:"pointer", color:T.amber, fontWeight:700 }}>×</button>
         </div>
-      )}
+      ))}
 
       {/* ── Row 1: Título + estatísticas + CSV ───────────────────
           A faixa de KPIs de 87 px e o aviso de "a pagar" de 16 px saíram: os
