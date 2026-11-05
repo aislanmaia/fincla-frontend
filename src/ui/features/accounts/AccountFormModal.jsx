@@ -4,7 +4,7 @@ import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
 import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS } from "./accountMeta.js";
-import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
+import { moneyInputPlaceholder, moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
 
 const inputStyle = {
@@ -178,7 +178,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             value={initial}
             onChange={(e) => setInitial(e.target.value)}
             onBlur={() => setInitial((cur) => reformatMoneyInputOnBlur(cur, currency))}
-            placeholder={`${moedas.find((c) => c.code === currency)?.symbol || "R$"} 0,00`}
+            placeholder={moneyInputPlaceholder(currency)}
             inputMode="decimal"
             aria-label="Saldo inicial"
             aria-invalid={initialInvalid || undefined}

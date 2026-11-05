@@ -58,6 +58,11 @@ describe("AccountFormModal: moeda", () => {
 
     fireEvent.click(screen.getByText(/Euro/i));
     expect(screen.getByPlaceholderText("€ 0,00")).toBeInTheDocument();
+
+    // O caso do smoke em prod (#289): US$ escolhido, placeholder em US$.
+    fireEvent.click(screen.getByText(/Dólar/i));
+    expect(screen.getByPlaceholderText("US$ 0,00")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("R$ 0,00")).toBeNull();
   });
 
   it("na edição sem `currency_locked`, parte da moeda da conta e explica a regra", () => {

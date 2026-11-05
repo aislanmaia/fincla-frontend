@@ -1584,6 +1584,9 @@ function TransacoesPageBody({
           sort: filter.sort,
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
+          // A moeda ESCOLHIDA no painel viaja junto com a faixa (#289) — sem ela
+          // "de 100 a 200 em US$" trazia também os 150 reais.
+          valueCurrency: filter.valueCurrency,
           settlement: filter.settlement,
           rec: filter.rec,
           tagMode: filter.tagMode,
@@ -1613,6 +1616,7 @@ function TransacoesPageBody({
       filter.sort,
       filter.valueMin,
       filter.valueMax,
+      filter.valueCurrency,
       filter.settlement,
       filter.rec,
       filter.tagMode,
@@ -1785,6 +1789,7 @@ function TransacoesPageBody({
         sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
         settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
         accountSel: effectiveAccountSel,
+        valueCurrency: filter.valueCurrency,
         valueReadCurrency,
         cardSel: effectiveCardSel,
         ...estado,
@@ -1801,7 +1806,7 @@ function TransacoesPageBody({
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
       visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
-      effectiveAccountSel, valueReadCurrency, effectiveCardSel]);
+      effectiveAccountSel, filter.valueCurrency, valueReadCurrency, effectiveCardSel]);
 
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
@@ -2606,7 +2611,7 @@ function TransacoesPageBody({
       period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
       sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
       settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
-      accountSel: effectiveAccountSel, valueReadCurrency, cardSel: effectiveCardSel,
+      accountSel: effectiveAccountSel, valueCurrency: filter.valueCurrency, valueReadCurrency, cardSel: effectiveCardSel,
     };
     const drops = {
       busca: { search: "" },
@@ -2681,7 +2686,7 @@ function TransacoesPageBody({
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
     totalCategoriesForBackend, categoryApiNameById, resolvedTagIds, effectiveAccountSel,
-    valueReadCurrency,
+    filter.valueCurrency, valueReadCurrency,
     effectiveCardSel,
   ]);
 
