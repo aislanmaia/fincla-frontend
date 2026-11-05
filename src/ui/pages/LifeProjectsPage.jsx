@@ -28,7 +28,7 @@ import { formatMoney } from "../money/formatMoney.js";
 import { formatAmountInput } from "../features/novaTransacao/accountConversion.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
-import { moneyInputStatus } from "../money/moneyInput.js";
+import { moneyInputStatus, parseMoneyInputFor } from "../money/moneyInput.js";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -167,7 +167,7 @@ function laneSubtotal(items) {
 const EMPTY_FORM = { nome: "", desc: "", type: "emergency_fund", meta: "", deadline: "", prioridade: "media", monthly_target: "", annual_return_rate: "", term: "", status: "active" };
 
 /** M1 — Projetos de Vida. Vive dentro do hub Planejamento (área "goals"). */
-export function LifeProjectsPage({ organizationId = null, dataMode = "live", isMobile = false, onContribuir, initialMetas }) {
+export function LifeProjectsPage({ organizationId = null, dataMode = "live", isMobile = false, initialMetas }) {
   const navigate = useNavigate();
   const urlSearch = useSearch({ strict: false });
   const live = shouldUseRealData(organizationId, dataMode);
@@ -186,6 +186,24 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   const [projGoal, setProjGoal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const [contribGoal, setContribGoal] = useState(null);
+
+  /**
+   * O aporte é da META: grava uma contribuição nela (e a barra anda). Antes o
+   * botão abria a transação genérica como receita e a meta ficava parada.
+   */
+  async function submitContribution(goal, payload) {
+    if (live) {
+      await goalsData.contribute(goal.id, payload);
+    } else {
+      setLocalGoals((cur) => cur.map((g) => {
+        if (g.id !== goal.id) return g;
+        const atual = Number(g.atual || 0) + payload.amount;
+        return { ...g, atual, progress: g.meta ? Math.min(100, (atual / Number(g.meta)) * 100) : 0 };
+      }));
+    }
+    setContribGoal(null);
+  }
 
   function openCreate(term = "") {
     setEditing(null);
@@ -333,7 +351,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.short}</span>
                   {items.length ? <span style={{ ...ghost, marginLeft: "auto" }}>{laneSubtotal(items)}</span> : null}
                 </div>
-                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -349,7 +367,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.label}</span>
                   <span style={{ ...ghost, marginLeft: "auto" }}>{items.length ? laneSubtotal(items) : "0"}</span>
                 </div>
-                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -360,12 +378,16 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       {byTerm.none.length ? (
         <Card style={{ marginTop: 14, padding: "12px 14px" }}>
           <div style={{ ...G, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🗓️ Sem prazo definido · {byTerm.none.length}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />)}</div>
         </Card>
       ) : null}
 
       {modalOpen ? (
         <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} currency={formCurrency} currencyPending={formCurrencyPending} />
+      ) : null}
+
+      {contribGoal ? (
+        <ContributionModal goal={contribGoal} onClose={() => setContribGoal(null)} onSubmit={submitContribution} isSaving={live && goalsData.isSaving} error={live ? goalsData.error : ""} />
       ) : null}
 
       {projGoal ? (
@@ -449,6 +471,58 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, cu
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 6 }}>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
           <Btn variant="dark" onClick={onSubmit} disabled={invalid.meta || invalid.monthly_target || currencyPending}>{isSaving ? "Salvando…" : editing ? "Salvar" : "Criar projeto"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Hoje no fuso de quem usa (YYYY-MM-DD) — `toISOString` daria o dia de Greenwich. */
+function todayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function ContributionModal({ goal, onClose, onSubmit, isSaving = false, error = "" }) {
+  const currency = goal.moeda || "BRL";
+  const symbol = currencyInfo(currency).symbol;
+  const [valor, setValor] = useState("");
+  const [date, setDate] = useState(todayLocal);
+  const [note, setNote] = useState("");
+  const status = moneyInputStatus(valor, currency);
+  const amount = status === "ok" ? parseMoneyInputFor(valor, currency) : null;
+  const canSave = amount != null && amount > 0 && !!date && !isSaving;
+
+  async function save() {
+    if (!canSave) return;
+    try {
+      await onSubmit(goal, { amount, contributed_at: date, note: note.trim() || null });
+    } catch { /* o erro aparece no modal; o que foi digitado fica */ }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: "100%", background: T.surface, borderRadius: 14, boxShadow: T.lg, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <PageTitle sans="Novo" serif="aporte" />
+          <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight }}><X size={18} /></button>
+        </div>
+        <div style={{ ...G, fontSize: 12, color: T.inkLight, marginBottom: 14 }}>
+          Para <b data-contribution-goal style={{ color: T.ink }}>{goal.nome}</b> · {fmt(goal.atual, currency)} de {fmt(goal.meta, currency)}
+        </div>
+
+        <Field label={`Valor do aporte (${symbol})`}>
+          <input style={inputStyle} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="500,00" inputMode="decimal" autoFocus aria-invalid={status === "invalid" || undefined} />
+          <InvalidHint show={status === "invalid"} />
+        </Field>
+        <Field label="Data do aporte"><input type="date" style={inputStyle} value={date} max={todayLocal()} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="Observação (opcional)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex: sobra do mês" /></Field>
+
+        {error ? <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "8px 11px", marginBottom: 10 }}>{error}</div> : null}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 6 }}>
+          <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
+          <Btn variant="dark" onClick={save} disabled={!canSave}>{isSaving ? "Salvando…" : "Registrar aporte"}</Btn>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  contributeToGoalForUi,
   createGoalForUi,
   formatGoalsApiError,
   listGoalsForUi,
@@ -113,10 +114,44 @@ export function useGoalsData({
     }
   }, [organizationId]);
 
+  /**
+   * Registra um aporte e traz a meta de volta do servidor: o progresso (e a
+   * projeção "No ritmo") deriva das contribuições, então só a releitura é a
+   * verdade — somar no cliente mostraria um número que ninguém gravou.
+   */
+  const contribute = useCallback(async (goalId, payload) => {
+    if (!organizationId) return null;
+
+    setState((current) => ({
+      ...current,
+      isSaving: true,
+      error: "",
+    }));
+
+    try {
+      const contribution = await contributeToGoalForUi(goalId, organizationId, payload);
+      const goals = await listGoalsForUi(organizationId);
+      setState((current) => ({
+        ...current,
+        isSaving: false,
+        goals: goals.map((goal, index) => mapGoalToUi(goal, index)),
+      }));
+      return contribution;
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isSaving: false,
+        error: formatGoalsApiError(error),
+      }));
+      throw error;
+    }
+  }, [organizationId]);
+
   return useMemo(() => ({
     ...state,
     createGoal,
     updateGoal,
+    contribute,
     hasRealData: state.hasLoaded,
-  }), [createGoal, state, updateGoal]);
+  }), [contribute, createGoal, state, updateGoal]);
 }
