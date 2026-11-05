@@ -16,8 +16,9 @@ vi.mock("../../features/goals/useGoalsData.js", () => ({
   }),
 }));
 let base = "USD";
+let orgResponse = null;
 vi.mock("../../../api/organizations", () => ({
-  getOrganization: vi.fn(() => Promise.resolve({ id: "org-1", base_currency: base })),
+  getOrganization: vi.fn(() => orgResponse ?? Promise.resolve({ id: "org-1", base_currency: base })),
 }));
 
 import { LifeProjectsPage } from "../LifeProjectsPage.jsx";
@@ -25,6 +26,7 @@ import { clearCurrencyRegistry, setCurrencyRegistry } from "../../money/currency
 
 beforeEach(() => {
   base = "USD";
+  orgResponse = null;
   setCurrencyRegistry([
     { code: "BRL", name: "Real brasileiro", symbol: "R$", decimal_places: 2, is_active: true },
     { code: "USD", name: "Dólar americano", symbol: "US$", decimal_places: 2, is_active: true },
@@ -74,3 +76,22 @@ describe("nova meta numa organização em R$", () => {
     await waitFor(() => expect(createGoal).toHaveBeenCalledWith(expect.objectContaining({ target_amount: 1500 })));
   });
 });
+
+describe("moeda base ainda chegando", () => {
+  it("'Criar projeto' fica travado até saber a moeda — '1,500' não é lido em R$ por engano", async () => {
+    let resolve;
+    orgResponse = new Promise((r) => { resolve = r; });
+    const user = userEvent.setup();
+    await openNew(user);
+    await user.type(screen.getByLabelText(/Valor da meta/), "1,500");
+    const criar = screen.getByRole("button", { name: "Criar projeto" });
+    expect(criar).toBeDisabled();
+    await user.click(criar);
+    expect(createGoal).not.toHaveBeenCalled();
+    resolve({ id: "org-1", base_currency: "USD" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Criar projeto" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Criar projeto" }));
+    await waitFor(() => expect(createGoal).toHaveBeenCalledWith(expect.objectContaining({ target_amount: 1500 })));
+  });
+});
+

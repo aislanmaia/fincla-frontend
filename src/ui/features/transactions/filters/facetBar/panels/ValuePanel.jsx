@@ -29,7 +29,11 @@ export function ValuePanel({
   const moedas = Array.isArray(todos)
     ? [...new Set(todos.map((b) => b.currency || "BRL"))].sort()
     : [];
-  const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency) ? valueCurrency : moedas[0]) || "BRL";
+  /* Aba ativa: a escolhida; sem escolha, a moeda em que a página lê os campos (se o
+     histograma a tem) — aba, barras e campos falam da mesma moeda; senão a primeira. */
+  const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency)
+    ? valueCurrency
+    : readCurrency && moedas.includes(readCurrency) ? readCurrency : moedas[0]) || "BRL";
   const varias = moedas.length > 1;
   // Os campos são lidos na MESMA moeda que a página usa na consulta (#284): em US$,
   // "1,500" é 1500. Duas fontes liam o mesmo texto em moedas diferentes.

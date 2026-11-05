@@ -130,4 +130,21 @@ describe("valores na moeda escolhida (#284)", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(continuar()).toBeEnabled();
   });
+
+  it("cartão sem nome com limite inválido: o passo avança (sem nome, nada é criado)", () => {
+    ateOPassoDaOrganizacao();
+    fireEvent.change(screen.getByPlaceholderText(/Família Alves/), { target: { value: "Casa" } });
+    fireEvent.click(screen.getByText(/usar outra moeda/i));
+    fireEvent.click(screen.getByText(/Dólar americano/i));
+    fireEvent.click(continuar()); // → categorias
+    fireEvent.click(continuar()); // → cartões
+    fireEvent.click(screen.getByText("Sim, usamos"));
+    fireEvent.change(screen.getByPlaceholderText("Limite"), { target: { value: "0,500" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(continuar()).toBeEnabled();
+    // Com nome, o mesmo limite trava.
+    fireEvent.change(screen.getByPlaceholderText(/Nome do cartão/), { target: { value: "Chase" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Valor inválido");
+  });
 });
+

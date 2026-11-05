@@ -111,3 +111,24 @@ describe("<ValuePanel> com uma moeda só", () => {
     expect(screen.getByTestId("estado")).toHaveTextContent("100,00|250,00|");
   });
 });
+
+describe("<ValuePanel> sem aba escolhida usa a moeda de leitura da página (#284)", () => {
+  it("aba ativa = readCurrency quando o histograma a tem (não a primeira em ordem alfabética)", () => {
+    render(
+      <ValuePanel valueMin="" valueMax="" setValueMin={() => {}} setValueMax={() => {}}
+        valueCurrency="" readCurrency="USD" setValueCurrency={() => {}}
+        counts={{ buckets: [...BARRAS("BRL"), ...BARRAS("USD")] }} onClose={() => {}} />,
+    );
+    expect(screen.getByRole("tab", { name: /USD/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /BRL/ })).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("readCurrency fora do histograma: cai na primeira", () => {
+    render(
+      <ValuePanel valueMin="" valueMax="" setValueMin={() => {}} setValueMax={() => {}}
+        valueCurrency="" readCurrency="JPY" setValueCurrency={() => {}}
+        counts={{ buckets: [...BARRAS("BRL"), ...BARRAS("USD")] }} onClose={() => {}} />,
+    );
+    expect(screen.getByRole("tab", { name: /BRL/ })).toHaveAttribute("aria-selected", "true");
+  });
+});

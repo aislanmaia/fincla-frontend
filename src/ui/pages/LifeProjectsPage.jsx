@@ -215,9 +215,11 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   // Moeda dos valores do formulário (#284): a da meta ao editar; a base ao criar.
   const formCurrency = editing?.moeda ?? orgBase.currency ?? null;
   const formMoneyInvalid = goalFormMoneyInvalid(form, formCurrency);
+  // Moeda ainda chegando (base da org): salvar agora leria "1,500" em R$ por engano.
+  const formCurrencyPending = !editing?.moeda && live && orgBase.status === "loading";
 
   async function submit() {
-    if (!form.nome.trim() || formMoneyInvalid.meta || formMoneyInvalid.monthly_target) return;
+    if (!form.nome.trim() || formMoneyInvalid.meta || formMoneyInvalid.monthly_target || formCurrencyPending) return;
     if (live) {
       try {
         // Lido na moeda da meta (#284): a dela ao editar; a base ao criar.
@@ -363,7 +365,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       ) : null}
 
       {modalOpen ? (
-        <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} currency={formCurrency} />
+        <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} currency={formCurrency} currencyPending={formCurrencyPending} />
       ) : null}
 
       {projGoal ? (
@@ -395,7 +397,7 @@ function InvalidHint({ show }) {
   return show ? <span role="alert" style={{ ...G, display: "block", fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</span> : null;
 }
 
-function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, currency = null }) {
+function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, currency = null, currencyPending = false }) {
   const invalid = goalFormMoneyInvalid(form, currency);
   const symbol = currencyInfo(currency || "BRL").symbol;
   return (
@@ -446,7 +448,7 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, cu
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 6 }}>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={onSubmit} disabled={invalid.meta || invalid.monthly_target}>{isSaving ? "Salvando…" : editing ? "Salvar" : "Criar projeto"}</Btn>
+          <Btn variant="dark" onClick={onSubmit} disabled={invalid.meta || invalid.monthly_target || currencyPending}>{isSaving ? "Salvando…" : editing ? "Salvar" : "Criar projeto"}</Btn>
         </div>
       </div>
     </div>

@@ -111,8 +111,10 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
     });
     setEditing(true);
   }
+  // Enquanto a base não chega, "1,500" seria lido em R$ (1,5) numa organização em US$.
+  const baseLoading = live && orgBase.status === "loading";
   async function submit() {
-    if (planInvalid) return;
+    if (planInvalid || baseLoading) return;
     const items = (data?.items || [])
       .map((i) => ({ tag_id: i.tag_id, kind: i.kind, planned_amount: readPlanned(form.items[itemKey(i)]) }))
       .filter((i) => i.planned_amount > 0);
@@ -144,7 +146,7 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
             <>
               <Btn variant="outGray" onClick={() => setEditing(false)} small={isMobile}>Cancelar</Btn>
               {planInvalid ? <span role="alert" style={{ ...G, fontSize: 12, color: T.red }}>Valor inválido</span> : null}
-              <Btn variant="dark" onClick={submit} small={isMobile} disabled={planInvalid}>{saving ? "Salvando…" : "Salvar"}</Btn>
+              <Btn variant="dark" onClick={submit} small={isMobile} disabled={planInvalid || baseLoading}>{saving ? "Salvando…" : "Salvar"}</Btn>
             </>
           ) : (
             <Btn variant="dark" onClick={startEdit} small={isMobile}>Editar plano</Btn>

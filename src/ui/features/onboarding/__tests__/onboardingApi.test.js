@@ -262,6 +262,15 @@ describe("submitOnboarding", () => {
       expect(mocks.createCreditCard).not.toHaveBeenCalled();
     });
 
+    it("cartão sem nome ('Preencher depois') com limite inválido: não trava — nenhum cartão é criado", async () => {
+      await submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD", temRec: "nao",
+        temCartao: "sim", cardNome: "  ", card4: "", cardLim: "0,500", cardVenc: "",
+      });
+      expect(mocks.createOrganization).toHaveBeenCalled();
+      expect(mocks.createCreditCard).not.toHaveBeenCalled();
+    });
+
     it("organização em R$: '1.500' continua 1500 e '1,5' continua 1,5", async () => {
       await submitOnboarding({
         orgNome: "Casa", orgTipo: "couple", orgMoeda: "BRL",

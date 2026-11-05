@@ -247,7 +247,8 @@ export async function submitOnboarding(data) {
   if (data.temRec === "sim" && moneyInputStatus(data.recVal, data.orgMoeda || "BRL") === "invalid") {
     throw new Error("Valor da receita inválido.");
   }
-  if (data.temCartao === "sim" && moneyInputStatus(data.cardLim, data.orgMoeda || "BRL") === "invalid") {
+  // Sem nome, o cartão não é criado (`buildOnboardingCreditCardPayload`) — o limite não conta.
+  if (data.temCartao === "sim" && data.cardNome?.trim() && moneyInputStatus(data.cardLim, data.orgMoeda || "BRL") === "invalid") {
     throw new Error("Limite do cartão inválido.");
   }
 

@@ -84,6 +84,8 @@ export function OrcamentosPage({
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
   // Limite lido na moeda do orçamento (#284); um novo nasce na moeda base.
   const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData });
+  // Enquanto a base não chega, um limite novo seria lido em R$ por engano ("1,500" = 1,5).
+  const baseLoading = shouldUseRealData && orgBase.status === "loading";
   const budgetsData = useBudgetsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -159,7 +161,12 @@ export function OrcamentosPage({
     setEditCat(cat);
     const raw =
       typeof cat.limite === "number" && Number.isFinite(cat.limite)
-        ? cat.limite.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        // Casas da moeda do orçamento (JPY/KRW: 0) — senão "150.000,00" num iene vira
+        // valor inválido e o Salvar trava sem ninguém ter mexido.
+        ? cat.limite.toLocaleString("pt-BR", {
+            minimumFractionDigits: currencyInfo(cat.moeda || "BRL").decimalPlaces,
+            maximumFractionDigits: currencyInfo(cat.moeda || "BRL").decimalPlaces,
+          })
         : String(cat.limite ?? "");
     setEditLimStr(raw);
     setShowEdit(true);
@@ -478,7 +485,7 @@ export function OrcamentosPage({
           : CATS_ORC_INIT.filter(c => !cats.find(x => x.id === c.id));
         const selCat    = available.find(c => c.id === addSelId) || null;
         const limVal    = parseBudgetAmountInput(addLimStr, orgBase.currency);
-        const canSave   = addSelId !== null && limVal > 0;
+        const canSave   = addSelId !== null && limVal > 0 && !baseLoading;
         const handleSave = async () => {
           if (!canSave) return;
           try {
@@ -588,7 +595,7 @@ export function OrcamentosPage({
       })()}
       {showEdit && editCat && (() => {
         const limVal = parseBudgetAmountInput(editLimStr, editCat.moeda ?? orgBase.currency);
-        const canSaveEdit = limVal > 0;
+        const canSaveEdit = limVal > 0 && !(editCat.moeda == null && baseLoading);
         const closeEdit = () => {
           if (!budgetsData.isSaving) {
             setShowEdit(false);

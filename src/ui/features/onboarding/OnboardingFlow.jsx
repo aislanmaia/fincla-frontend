@@ -107,7 +107,8 @@ export const OnboardingFlow = ({
   /* Valores lidos na moeda base escolhida (#284): em US$, "1234,567" é ambíguo —
      a tela recusa em vez de criar o cartão com limite 0 ou a receita sem valor. */
   const moneySymbol = currencyInfo(orgMoeda).symbol;
-  const cardLimInvalid = temCartao==="sim" && moneyInputStatus(cardLim, orgMoeda)==="invalid";
+  // Só com nome: sem nome ("Preencher depois") nenhum cartão é criado, e o limite não conta.
+  const cardLimInvalid = temCartao==="sim" && !!cardNome.trim() && moneyInputStatus(cardLim, orgMoeda)==="invalid";
   const recValInvalid = temRec==="sim" && moneyInputStatus(recVal, orgMoeda)==="invalid";
   const canNext = () => ({
     welcome:    true,
