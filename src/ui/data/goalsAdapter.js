@@ -6,6 +6,8 @@ import {
 import { handleApiError } from "../../api/client";
 import { effectiveTerm, priorityFromNumber, priorityToNumber } from "../features/goals/goalMeta.js";
 
+import { parseMoneyInputFor } from "../money/moneyInput.js";
+
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 function parseAmount(value) {
@@ -86,32 +88,38 @@ export function mapGoalToUi(goal) {
 }
 
 /** Monta o payload de criação a partir do form (campos reais; sem current_amount). */
-export function buildCreateGoalPayload(form) {
+/** Valor da meta lido na moeda dela (#284); sem moeda ou em R$, o `parseAmount` de sempre. */
+function readGoalAmount(value, currency) {
+  if (typeof value === "number") return value;
+  return parseMoneyInputFor(value, currency, parseAmount) ?? 0;
+}
+
+export function buildCreateGoalPayload(form, currency = null) {
   return {
     name: form.nome,
     description: form.desc || null,
-    target_amount: parseAmount(form.meta),
+    target_amount: readGoalAmount(form.meta, currency),
     deadline: monthInputToDeadline(form.deadline),
     type: form.type || null,
     term: form.term || null,
     priority: priorityToNumber(form.prioridade),
-    monthly_target: form.monthly_target ? parseAmount(form.monthly_target) : null,
+    monthly_target: form.monthly_target ? readGoalAmount(form.monthly_target, currency) : null,
     annual_return_rate: parsePercentToRate(form.annual_return_rate),
   };
 }
 
 /** current_amount NÃO é editável (deriva dos goal_contributions). */
-export function buildUpdateGoalPayload(form) {
+export function buildUpdateGoalPayload(form, currency = null) {
   return {
     name: form.nome,
     description: form.desc || null,
-    target_amount: parseAmount(form.meta),
+    target_amount: readGoalAmount(form.meta, currency),
     deadline: monthInputToDeadline(form.deadline),
     status: form.status || "active",
     type: form.type || null,
     term: form.term || null,
     priority: priorityToNumber(form.prioridade),
-    monthly_target: form.monthly_target ? parseAmount(form.monthly_target) : null,
+    monthly_target: form.monthly_target ? readGoalAmount(form.monthly_target, currency) : null,
     annual_return_rate: parsePercentToRate(form.annual_return_rate),
   };
 }

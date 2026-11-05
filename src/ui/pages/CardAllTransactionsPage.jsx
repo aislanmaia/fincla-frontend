@@ -39,6 +39,7 @@ import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
+import { parseMoneyInputFor } from "../money/moneyInput.js";
 import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
@@ -273,14 +274,18 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const filterBlocked = catalogBlocked || noInvoice || scopeWaiting;
   const sort = filter.sort[0] ?? { field: "date", dir: "desc" };
   const sortField = { val: "value", desc: "description", cat: "category" }[sort.field] ?? "date";
+  // Faixa lida na moeda dela (#284): a escolhida ou, num cartão, a do cartão.
+  const valueReadCurrency = filter.valueCurrency || (cardScope === "current" ? state.card?.currency : null) || null;
+  const valueMinNum = parseMoneyInputFor(filter.valueMin, valueReadCurrency, parseMoneyInput);
+  const valueMaxNum = parseMoneyInputFor(filter.valueMax, valueReadCurrency, parseMoneyInput);
   const queryFilter = {
     ...(invoiceMode ? { invoice_id: selectedInvoiceIds } : {}),
     ...(!invoiceMode && bounds.from ? { date_start: bounds.from } : {}),
     ...(!invoiceMode && bounds.to ? { date_end: bounds.to } : {}),
     ...(activeWeek ? { date_start: activeWeek.from, date_end: activeWeek.to } : {}),
     ...(debouncedSearch ? { description: debouncedSearch } : {}),
-    ...(parseMoneyInput(filter.valueMin) != null ? { value_min: parseMoneyInput(filter.valueMin) } : {}),
-    ...(parseMoneyInput(filter.valueMax) != null ? { value_max: parseMoneyInput(filter.valueMax) } : {}),
+    ...(valueMinNum != null ? { value_min: valueMinNum } : {}),
+    ...(valueMaxNum != null ? { value_max: valueMaxNum } : {}),
     ...(filter.valueCurrency && (filter.valueMin || filter.valueMax) ? { value_currency: filter.valueCurrency } : {}),
     ...(kind === "refund" ? { type: "refund" } : filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
     ...(kind === "one_off" || kind === "installment" ? { commitment_kind: kind } : kind === "recurring" ? { recurring: true } : {}),

@@ -279,6 +279,21 @@ describe("NovaTransacaoModal — conta: org, cache, Duplicar, carregamento, lega
     expect(await screen.findByText(/US\$\s?5,00/)).toBeInTheDocument();
   });
 
+  it("#284: numa conta em US$ o Valor não lê separador — '1,500' digitado é 1500 centavos, mostrado na hora como US$ 15,00", async () => {
+    // O campo é de máquina de somar (cada dígito empurra os centavos): vírgula e ponto
+    // não são lidos, em nenhuma moeda — então não existe a leitura errada "1,5". O que
+    // foi entendido aparece enquanto se digita, e a revisão confirma na moeda da conta.
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...baseProps} preConfig={{ accountId: ACC_USD }} />);
+    await screen.findByDisplayValue("Wise USD");
+    await user.type(document.querySelector("textarea"), "Hotel");
+    const amount = screen.getAllByPlaceholderText("0,00")[0];
+    await user.type(amount, "1,500");
+    expect(amount).toHaveValue("15,00");
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(await screen.findByText(/US\$\s?15,00/)).toBeInTheDocument();
+  });
+
   it("celular: passo 1 já mostra US$ com a Wise pré-selecionada", async () => {
     render(<NovaTransacaoModal {...baseProps} isMobile preConfig={{ accountId: ACC_USD }} />);
     await waitFor(() => expect(screen.getByTestId("amount-currency-symbol")).toHaveTextContent("US$"));

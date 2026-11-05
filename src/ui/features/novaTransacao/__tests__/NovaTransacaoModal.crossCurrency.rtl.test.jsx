@@ -316,5 +316,30 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     expect(screen.getByLabelText("Valor em R$")).toHaveValue("287,75");
     expect(quotationCalls().map(([url]) => url)).toEqual(["/quotations/USD/BRL"]);
   });
+
+  it("#284: o valor na moeda nova é lido em US$ — '1,500' é 1500 (aparece '1.500,00') e vai 1500 no PUT", async () => {
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const field = await screen.findByLabelText("Valor em US$");
+    await waitFor(() => expect(field).toHaveValue("52,29"));
+    await user.clear(field);
+    await user.type(field, "1,500");
+    await user.tab();
+    expect(field).toHaveValue("1.500,00");
+    await reviewAndConfirm(user);
+    await waitFor(() => expect(apiClient.put).toHaveBeenCalled());
+    expect(apiClient.put.mock.calls[0][1]).toMatchObject({ account_id: ACC_USD, value: 1500, value_currency: "USD" });
+  });
+
+  it("#284: valor ambíguo em US$ ('1234,567') pede correção em vez de virar outro número", async () => {
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const field = await screen.findByLabelText("Valor em US$");
+    await user.clear(field);
+    await user.type(field, "1234,567");
+    await user.click(await screen.findByRole("button", { name: /Revisar despesa/i }));
+    expect(within(screen.getByTestId("account-move-value")).getByRole("alert")).toHaveTextContent("Valor inválido em US$");
+    expect(apiClient.put).not.toHaveBeenCalled();
+  });
 });
 

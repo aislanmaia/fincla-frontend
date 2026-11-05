@@ -19,6 +19,7 @@ import { BudgetHistoryChart } from "../features/budgets/BudgetHistoryChart.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { formatMoney, formatMoneyAbs } from "../money/formatMoney.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 
 /* ─── ORÇAMENTOS DATA ────────────────────────────────────── */
 const BUDGET_CONFIG = { total: 6500, modo: "top-down" };
@@ -80,6 +81,8 @@ export function OrcamentosPage({
   const [mockCats, setMockCats] = useState(() => dataMode === "mock" ? CATS_ORC_INIT : []);
   const [mockBudget] = useState(() => dataMode === "mock" ? BUDGET_CONFIG.total : 0);
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  // Limite lido na moeda do orçamento (#284); um novo nasce na moeda base.
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData });
   const budgetsData = useBudgetsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -473,7 +476,7 @@ export function OrcamentosPage({
           ? budgetsData.choices
           : CATS_ORC_INIT.filter(c => !cats.find(x => x.id === c.id));
         const selCat    = available.find(c => c.id === addSelId) || null;
-        const limVal    = parseBudgetAmountInput(addLimStr);
+        const limVal    = parseBudgetAmountInput(addLimStr, orgBase.currency);
         const canSave   = addSelId !== null && limVal > 0;
         const handleSave = async () => {
           if (!canSave) return;
@@ -582,7 +585,7 @@ export function OrcamentosPage({
         );
       })()}
       {showEdit && editCat && (() => {
-        const limVal = parseBudgetAmountInput(editLimStr);
+        const limVal = parseBudgetAmountInput(editLimStr, editCat.moeda ?? orgBase.currency);
         const canSaveEdit = limVal > 0;
         const closeEdit = () => {
           if (!budgetsData.isSaving) {

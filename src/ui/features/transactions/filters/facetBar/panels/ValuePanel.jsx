@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { PanelHeader } from "./PanelHeader.jsx";
+import { currencyInfo } from "../../../../../money/currencyRegistry.js";
+import { parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../../../../money/moneyInput.js";
 
 const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -27,6 +29,8 @@ export function ValuePanel({
     : [];
   const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency) ? valueCurrency : moedas[0]) || "BRL";
   const varias = moedas.length > 1;
+  // Os campos são lidos na moeda da faixa (#284): em US$, "1,500" é 1500.
+  const parseFaixa = (v) => (typeof v === "string" ? parseMoneyInputFor(v, moedaAtiva, parseBrl) : null);
   const buckets = Array.isArray(todos)
     ? todos.filter((b) => (b.currency || "BRL") === moedaAtiva)
     : todos;
@@ -44,8 +48,8 @@ export function ValuePanel({
     // Clicar na barra que JÁ é a faixa inteira desmarca — o mesmo gesto
     // desfaz, sem precisar de um segundo controle para limpar.
     const soEla =
-      parseBrl(valueMin) === limiteRedondo(b.from) &&
-      parseBrl(valueMax) === limiteRedondo(b.to);
+      parseFaixa(valueMin) === limiteRedondo(b.from) &&
+      parseFaixa(valueMax) === limiteRedondo(b.to);
     if (soEla) {
       setValueMin("");
       setValueMax("");
@@ -69,8 +73,8 @@ export function ValuePanel({
   const arrastouRef = useRef(false);
 
   // Durante o arrasto, o histograma mostra a faixa do gesto — não a gravada.
-  const min = parseBrl(faixaArrasto ? faixaArrasto.min : valueMin);
-  const max = parseBrl(faixaArrasto ? faixaArrasto.max : valueMax);
+  const min = parseFaixa(faixaArrasto ? faixaArrasto.min : valueMin);
+  const max = parseFaixa(faixaArrasto ? faixaArrasto.max : valueMax);
   const temFaixa = min != null || max != null;
 
   /* A faixa que o arrasto cobre: da borda de baixo da primeira barra à borda de
@@ -362,6 +366,7 @@ export function ValuePanel({
           value={valueMin}
           placeholder="0,00"
           ariaLabel="Valor mínimo"
+          currency={moedaAtiva}
           onChange={setValueMin}
         />
         <ValueField
@@ -369,6 +374,7 @@ export function ValuePanel({
           value={valueMax}
           placeholder="sem limite"
           ariaLabel="Valor máximo"
+          currency={moedaAtiva}
           onChange={setValueMax}
         />
       </div>
@@ -499,7 +505,7 @@ export function bucketEdges(buckets, min, max) {
   return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : { first: -1, last: -1 };
 }
 
-function ValueField({ label, value, placeholder, ariaLabel, onChange }) {
+function ValueField({ label, value, placeholder, ariaLabel, currency = "BRL", onChange }) {
   return (
     <div>
       <div
@@ -526,13 +532,17 @@ function ValueField({ label, value, placeholder, ariaLabel, onChange }) {
           background: T.surface,
         }}
       >
-        <span style={{ ...G, fontSize: 12, color: T.inkLight, fontWeight: 600 }}>R$</span>
+        <span style={{ ...G, fontSize: 12, color: T.inkLight, fontWeight: 600 }}>{currencyInfo(currency).symbol}</span>
         <input
           value={value || ""}
           placeholder={placeholder}
           aria-label={ariaLabel}
           inputMode="decimal"
           onChange={(e) => onChange(e.target.value)}
+          onBlur={() => {
+            const shown = reformatMoneyInputOnBlur(value || "", currency);
+            if (shown !== (value || "")) onChange(shown);
+          }}
           style={{
             ...G,
             ...MONO,

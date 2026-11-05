@@ -64,6 +64,10 @@ vi.mock("../../features/transactions/useNarrowestFilter.js", () => ({
   useNarrowestFilter: (...args) => narrowestMock(...args),
 }));
 vi.mock("../../../api/transfers", () => ({ listTransfers: (...args) => listTransfersMock(...args) }));
+let orgBaseCurrency = "BRL";
+vi.mock("../../../api/organizations", () => ({
+  getOrganization: vi.fn(() => Promise.resolve({ id: "org-test", base_currency: orgBaseCurrency })),
+}));
 
 import { TransacoesPage, computePageSize } from "../TransacoesPage.jsx";
 import { readListPrefs, rowCost } from "../../features/transactions/listPrefs.js";
@@ -82,6 +86,7 @@ beforeEach(() => {
   transactionsDataMock.mockImplementation(defaultTransactionsData);
   transactionsList = baseTransactions;
   routerSearch = {};
+  orgBaseCurrency = "BRL";
   localStorage.clear();
   summaryMock = { total_income: 0, total_expenses: 120, total_refunds: 0, balance: -120, currency: "BRL" };
   listAccountsMock.mockResolvedValue(TWO_ACCOUNTS);
@@ -354,6 +359,27 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     await userEvent.click(within(chips).getByRole("button", { name: "Remover filtro de conta Conta B Nubank" }));
     await waitFor(() => expect(lastFilters().accountIds).toBeUndefined());
     expect(screen.queryByTestId("account-filter-chips")).toBeNull();
+  });
+
+  describe("faixa de valor lida na moeda base (#284)", () => {
+    async function typeMin(text) {
+      renderPage();
+      await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Valor\b/ }));
+      await userEvent.type(await screen.findByRole("textbox", { name: "Valor mínimo" }), text);
+    }
+
+    it("organização em US$: '1,500' chega ao hook como 1500", async () => {
+      orgBaseCurrency = "USD";
+      await typeMin("1,500");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(1500));
+    });
+
+    it("organização em R$: '1,5' continua 1,5", async () => {
+      await typeMin("1,5");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(1.5));
+    });
   });
 });
 

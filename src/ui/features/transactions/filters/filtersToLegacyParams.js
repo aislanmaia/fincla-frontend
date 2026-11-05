@@ -23,6 +23,7 @@
  */
 
 import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
+import { parseMoneyInputFor } from "../../../money/moneyInput.js";
 import { mapUiPaymentMethodToApi } from "../../../data/transactionsAdapter.js";
 
 const SORT_FIELD_TO_LEGACY = {
@@ -109,10 +110,14 @@ export function mapRecToLegacy(rec) {
   return undefined;
 }
 
-/** Converte strings BRL ("200,00") em números para `value_min`/`value_max` da API. */
-export function mapValueRangeToLegacy(valueMin, valueMax) {
-  const min = parseMoneyInput(valueMin);
-  const max = parseMoneyInput(valueMax);
+/**
+ * Converte os campos da faixa em números para `value_min`/`value_max` da API, lidos
+ * na moeda da faixa (#284): "200,00" em R$; "1,500" é 1500 em US$. Sem moeda (ou
+ * moeda de vírgula decimal), o parser de sempre.
+ */
+export function mapValueRangeToLegacy(valueMin, valueMax, currency = null) {
+  const min = parseMoneyInputFor(valueMin, currency, parseMoneyInput);
+  const max = parseMoneyInputFor(valueMax, currency, parseMoneyInput);
   return {
     ...(min != null ? { valueMin: min } : {}),
     ...(max != null ? { valueMax: max } : {}),
@@ -120,10 +125,10 @@ export function mapValueRangeToLegacy(valueMin, valueMax) {
 }
 
 /** Filtro client-side (mock): compara valor absoluto da transação com a faixa informada. */
-export function matchesValueRange(absAmount, valueMin, valueMax) {
+export function matchesValueRange(absAmount, valueMin, valueMax, currency = null) {
   if (!valueMin && !valueMax) return true;
-  const min = parseMoneyInput(valueMin);
-  const max = parseMoneyInput(valueMax);
+  const min = parseMoneyInputFor(valueMin, currency, parseMoneyInput);
+  const max = parseMoneyInputFor(valueMax, currency, parseMoneyInput);
   if (min != null && absAmount < min) return false;
   if (max != null && absAmount > max) return false;
   return true;
@@ -158,7 +163,9 @@ export function filtersToLegacyParams(
     customFrom: state.customFrom,
     customTo: state.customTo,
     sortBy: mapSortToLegacy(state.sort),
-    ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
+    // `valueReadCurrency`: a moeda em que a pessoa escreve a faixa quando ela não
+    // escolheu uma (organização de moeda única → a base). Só lê; não vai à API.
+    ...mapValueRangeToLegacy(state.valueMin, state.valueMax, state.valueCurrency || state.valueReadCurrency || null),
     // A moeda só viaja com uma faixa: sozinha ela não estreita nada, e mandá-la
     // mudaria o conjunto sem que ninguém tivesse pedido um recorte.
     ...(state.valueCurrency && (state.valueMin || state.valueMax)

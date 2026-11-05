@@ -15,8 +15,9 @@ import { buildCreateCreditCardPayload } from "../../data/creditCardsAdapter.js";
 import {
   buildOrganizationDescription,
   formatLocalIsoDate,
-  parseMoneyInput,
+  parseOnboardingMoney,
 } from "./onboardingValueUtils.js";
+import { currencyUsesDotDecimal } from "../../money/moneyInput.js";
 import { ONBOARDING_FLOW_TO_ICON_KEY } from "../../data/onboardingFlowCategories.js";
 
 function normalizeText(value) {
@@ -98,7 +99,7 @@ function buildRecurringStartDate() {
 }
 
 function buildOnboardingRecurringPayload(data) {
-  const value = parseMoneyInput(data?.recVal);
+  const value = parseOnboardingMoney(data?.recVal, data?.orgMoeda);
   if (data?.temRec !== "sim" || value == null || value <= 0) return null;
 
   return {
@@ -138,7 +139,11 @@ function buildOnboardingCreditCardPayload(data, organizationId) {
     brand: data.cardNome.trim(),
     displayName: data.cardNome.trim(),
     last4Digits: last4,
-    limitInput: data.cardLim || "",
+    // Moeda de ponto decimal: o número já lido (#284) passa direto pelo builder.
+    // Em R$, o texto vai como sempre, para o parser do builder.
+    limitInput: currencyUsesDotDecimal(data.orgMoeda)
+      ? (parseOnboardingMoney(data.cardLim, data.orgMoeda) ?? "")
+      : data.cardLim || "",
     dueDay: data.cardVenc || "",
     closingDay: data.cardFech || "",
   });
@@ -239,7 +244,7 @@ export async function submitOnboarding(data) {
   }
 
   const monthlyIncome =
-    data.temRec === "sim" ? parseMoneyInput(data.recVal) : null;
+    data.temRec === "sim" ? parseOnboardingMoney(data.recVal, data.orgMoeda) : null;
 
   const createPayload = {
     name: orgName,

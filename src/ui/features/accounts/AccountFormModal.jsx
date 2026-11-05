@@ -3,7 +3,8 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS, parseBRL } from "./accountMeta.js";
+import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS } from "./accountMeta.js";
+import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
 
 const inputStyle = {
@@ -40,7 +41,9 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
   const [iconKey, setIconKey] = useState(account?.icon_key || ACCOUNT_ICONS[0]);
   const [includeInTotal, setIncludeInTotal] = useState(account?.include_in_total ?? true);
 
-  const canSave = name.trim().length > 0 && !isSaving;
+  // Saldo inicial lido na moeda escolhida (#284): em US$, "1,500" é 1500.
+  const initialInvalid = !editing && moneyInputStatus(initial, currency) === "invalid";
+  const canSave = name.trim().length > 0 && !initialInvalid && !isSaving;
 
   function handleSubmit() {
     if (!canSave) return;
@@ -53,7 +56,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
       icon_key: iconKey,
       include_in_total: includeInTotal,
     };
-    onSubmit(editing ? base : { ...base, initial_balance: parseBRL(initial) });
+    onSubmit(editing ? base : { ...base, initial_balance: parseMoneyInputFor(initial, currency) ?? 0 });
   }
 
   return (
@@ -174,9 +177,13 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={initial}
             onChange={(e) => setInitial(e.target.value)}
+            onBlur={() => setInitial((cur) => reformatMoneyInputOnBlur(cur, currency))}
             placeholder={`${moedas.find((c) => c.code === currency)?.symbol || "R$"} 0,00`}
             inputMode="decimal"
+            aria-label="Saldo inicial"
+            aria-invalid={initialInvalid || undefined}
           />
+          {initialInvalid ? <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</div> : null}
         </div>
       ) : null}
 

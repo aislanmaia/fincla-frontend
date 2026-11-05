@@ -27,6 +27,7 @@ import { GoalProjectionModal } from "../features/goals/GoalProjectionModal.jsx";
 import { formatMoney } from "../money/formatMoney.js";
 import { formatAmountInput } from "../features/novaTransacao/accountConversion.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -170,6 +171,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   const urlSearch = useSearch({ strict: false });
   const live = shouldUseRealData(organizationId, dataMode);
   const goalsData = useGoalsData({ organizationId, enabled: live });
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: live });
   const capacity = useEconomyCapacityData({ organizationId, months: 3, enabled: live });
   const isWide = useIsWide(1100);
 
@@ -213,8 +215,9 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
     if (!form.nome.trim()) return;
     if (live) {
       try {
-        if (editing) await goalsData.updateGoal(editing.id, buildUpdateGoalPayload(form));
-        else await goalsData.createGoal({ ...buildCreateGoalPayload(form), organization_id: organizationId });
+        // Lido na moeda da meta (#284): a dela ao editar; a base ao criar.
+        if (editing) await goalsData.updateGoal(editing.id, buildUpdateGoalPayload(form, editing.moeda ?? orgBase.currency));
+        else await goalsData.createGoal({ ...buildCreateGoalPayload(form, orgBase.currency), organization_id: organizationId });
         setModalOpen(false);
       } catch { /* erro em goalsData.error */ }
     } else {

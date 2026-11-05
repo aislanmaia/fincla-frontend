@@ -9,7 +9,7 @@ const amountOf = (value) => {
 
 const transactionDateKey = (value) => /^(\d{4}-\d{2}-\d{2})(?:T.*)?$/.exec(value ?? "")?.[1] ?? "";
 
-export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode = "any", modality = "all", from = "", to = "", valueMin = "", valueMax = "" } = {}) {
+export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode = "any", modality = "all", from = "", to = "", valueMin = "", valueMax = "", valueCurrency = null } = {}) {
   const query = search.trim().toLocaleLowerCase("pt-BR");
   return (items ?? [])
     .map((item) => {
@@ -31,7 +31,7 @@ export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode 
       (tags.length === 0 || (tagMode === "all" ? tags.every((tag) => row.tags.includes(tag)) : tags.some((tag) => row.tags.includes(tag)))) &&
       (modality === "all" || row.modality === modality) &&
       (!from || row.transactionDate >= from) && (!to || row.transactionDate <= to) &&
-      (row.val == null ? !valueMin && !valueMax : matchesValueRange(Math.abs(row.val), valueMin, valueMax))
+      (row.val == null ? !valueMin && !valueMax : matchesValueRange(Math.abs(row.val), valueMin, valueMax, valueCurrency))
     ));
 }
 

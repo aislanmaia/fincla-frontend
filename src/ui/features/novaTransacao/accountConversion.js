@@ -1,5 +1,6 @@
 import { currencyInfo } from "../../money/currencyRegistry.js";
-import { formatDay, parseBRL } from "../accounts/accountMeta.js";
+import { formatDay } from "../accounts/accountMeta.js";
+import { parseMoneyInputFor } from "../../money/moneyInput.js";
 
 /**
  * Mover um lançamento para uma conta de OUTRA moeda (regra do Owner, opção 1): a
@@ -21,13 +22,15 @@ export function formatAmountInput(value, decimals = 2) {
 }
 
 /**
- * Texto do campo → número. "1.500" → 1500 e "1.500,25" → 1500.25 (milhar pt-BR,
- * via `parseBRL`); vazio → `null` (não é zero: é "ainda não informado").
+ * Texto do campo → número, na moeda do campo (#284). Moeda de vírgula decimal:
+ * "1.500" → 1500 e "1.500,25" → 1500.25 (milhar pt-BR, via `parseBRL`). Moeda de
+ * ponto decimal (US$): "1,500" → 1500, "52,40" → 52.4, ambíguo → `null`. Vazio →
+ * `null` (não é zero: é "ainda não informado").
  */
-export function parseAmountInput(text) {
+export function parseAmountInput(text, currency = null) {
   if (String(text ?? "").trim() === "") return null;
-  const n = parseBRL(text);
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  const n = parseMoneyInputFor(text, currency);
+  return n != null && Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
 const RATE_MAX_PLACES = 4;
