@@ -419,6 +419,39 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
       expect(lastFilters().valueCurrency).toBe("USD");
     });
 
+    it("histograma com duas moedas, faixa digitada SEM clicar aba: restringe à moeda da aba ativa (#289)", async () => {
+      facetBucketsMock = [
+        { from: 0, to: 49.99, count: 2, currency: "BRL" },
+        { from: 0, to: 49.99, count: 1, currency: "USD" },
+      ];
+      await typeMin("100");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(100));
+      // Organização em R$: a aba ativa (e a leitura dos campos) é BRL.
+      expect(lastFilters().valueCurrency).toBe("BRL");
+      // E o painel mostra a mesma aba ativa.
+      expect(screen.getByRole("tab", { name: /BRL|R\$/ })).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("contas em duas moedas, sem histograma ainda: a faixa vai com a moeda de leitura", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_EUR, name: "Conta EUR", currency: "EUR" }]);
+      await typeMin("100");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(100));
+      await waitFor(() => expect(lastFilters().valueCurrency).toBe("BRL"));
+    });
+
+    it("histograma com duas moedas mas SEM faixa: nenhuma moeda viaja (ela filtraria linhas sozinha)", async () => {
+      facetBucketsMock = [
+        { from: 0, to: 49.99, count: 2, currency: "BRL" },
+        { from: 0, to: 49.99, count: 1, currency: "USD" },
+      ];
+      renderPage();
+      await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Valor\b/ }));
+      await screen.findByRole("tab", { name: /USD|US\$/ });
+      expect(lastFilters()).not.toHaveProperty("valueCurrency");
+    });
+
     it("sem moeda escolhida, nenhuma valueCurrency viaja (organização em R$ segue igual)", async () => {
       await typeMin("10");
       await waitFor(() => expect(lastFilters().valueMin).toBe(10));
