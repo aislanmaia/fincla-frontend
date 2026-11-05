@@ -129,3 +129,13 @@ export function reformatMoneyInputOnBlur(text, currency) {
   if (status !== "ok") return text;
   return value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
+
+/**
+ * Placeholder de um campo de dinheiro na moeda DELE ("US$ 0,00", "€ 0,00"). O
+ * símbolo vem do registro (com o `Intl` de reserva), como em todo dinheiro do app:
+ * um "R$ 0,00" fixo num campo em dólar pede o número na unidade errada (#289).
+ * Sem moeda, real — o comportamento de sempre.
+ */
+export function moneyInputPlaceholder(currency) {
+  return `${currencyInfo(currency || "BRL").symbol} 0,00`;
+}

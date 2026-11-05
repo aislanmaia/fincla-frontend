@@ -13,6 +13,8 @@ import userEvent from "@testing-library/user-event";
 let routerSearch = {};
 /** Total do período sem os outros filtros (o "de N" do cabeçalho). */
 let facetTotalMock = null;
+/** Histograma da faixa de valor (por moeda) devolvido pelas facetas. */
+let facetBucketsMock = null;
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
   useSearch: () => routerSearch,
@@ -47,7 +49,7 @@ vi.mock("../../features/transactions/filters/useTransactionsTagCatalog.js", () =
   useTransactionsTagCatalog: () => ({ rows: [], loading: false, error: "" }),
 }));
 vi.mock("../../features/transactions/useTransactionsFacetCounts.js", () => ({
-  useTransactionsFacetCounts: () => ({ counts: null, isLoading: false, total: facetTotalMock, buckets: null, optionCount: () => null, optionCountByLabel: () => null, binaryCount: () => null }),
+  useTransactionsFacetCounts: () => ({ counts: null, isLoading: false, total: facetTotalMock, buckets: facetBucketsMock, optionCount: () => null, optionCountByLabel: () => null, binaryCount: () => null }),
 }));
 vi.mock("../../../api/balanceAdjustments", () => ({ listOrgBalanceAdjustments: vi.fn().mockResolvedValue([]) }));
 const listAccountsMock = vi.fn();
@@ -91,6 +93,7 @@ const TWO_ACCOUNTS = [
 
 beforeEach(() => {
   facetTotalMock = null;
+  facetBucketsMock = null;
   // `mockImplementation` de um teste sobrevive ao `clearAllMocks`: volta ao padrão.
   transactionsDataMock.mockImplementation(defaultTransactionsData);
   transactionsList = baseTransactions;
@@ -399,6 +402,60 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     it("organização em R$: '1,5' continua 1,5", async () => {
       await typeMin("1,5");
       await waitFor(() => expect(lastFilters().valueMin).toBe(1.5));
+    });
+
+    it("moeda escolhida no painel viaja com a faixa como valueCurrency (#289)", async () => {
+      facetBucketsMock = [
+        { from: 0, to: 49.99, count: 2, currency: "BRL" },
+        { from: 0, to: 49.99, count: 1, currency: "USD" },
+      ];
+      renderPage();
+      await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Valor\b/ }));
+      await userEvent.click(await screen.findByRole("tab", { name: /USD|US\$/ }));
+      await userEvent.type(await screen.findByRole("textbox", { name: "Valor mínimo" }), "1,500");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(1500));
+      expect(lastFilters().valueCurrency).toBe("USD");
+    });
+
+    it("histograma com duas moedas, faixa digitada SEM clicar aba: restringe à moeda da aba ativa (#289)", async () => {
+      facetBucketsMock = [
+        { from: 0, to: 49.99, count: 2, currency: "BRL" },
+        { from: 0, to: 49.99, count: 1, currency: "USD" },
+      ];
+      await typeMin("100");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(100));
+      // Organização em R$: a aba ativa (e a leitura dos campos) é BRL.
+      expect(lastFilters().valueCurrency).toBe("BRL");
+      // E o painel mostra a mesma aba ativa.
+      expect(screen.getByRole("tab", { name: /BRL|R\$/ })).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("contas em duas moedas, sem histograma ainda: a faixa vai com a moeda de leitura", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_EUR, name: "Conta EUR", currency: "EUR" }]);
+      await typeMin("100");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(100));
+      await waitFor(() => expect(lastFilters().valueCurrency).toBe("BRL"));
+    });
+
+    it("histograma com duas moedas mas SEM faixa: nenhuma moeda viaja (ela filtraria linhas sozinha)", async () => {
+      facetBucketsMock = [
+        { from: 0, to: 49.99, count: 2, currency: "BRL" },
+        { from: 0, to: 49.99, count: 1, currency: "USD" },
+      ];
+      renderPage();
+      await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Valor\b/ }));
+      await screen.findByRole("tab", { name: /USD|US\$/ });
+      expect(lastFilters()).not.toHaveProperty("valueCurrency");
+    });
+
+    it("sem moeda escolhida, nenhuma valueCurrency viaja (organização em R$ segue igual)", async () => {
+      await typeMin("10");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(10));
+      expect(lastFilters()).not.toHaveProperty("valueCurrency");
     });
   });
 

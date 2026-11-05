@@ -3,8 +3,8 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { formatBRL } from "./accountMeta.js";
-import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
+import { formatMoney } from "./accountMeta.js";
+import { moneyInputPlaceholder, moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 
 const inputStyle = {
   ...G,
@@ -110,6 +110,9 @@ export function AdjustBalanceModal({
 
   // Lido na moeda da conta (#284): numa conta em US$, "1,500" é 1500.
   const accountCurrency = account?.currency ?? null;
+  // Tudo nesta tela está na moeda da CONTA (#289): saldo, ajuste, histórico. O
+  // `formatBRL` de antes carimbava "R$" num saldo em dólar.
+  const fmt = (value) => formatMoney(Number(value || 0), accountCurrency || "BRL");
   const desiredNum = parseMoneyInputFor(desired, accountCurrency) ?? 0;
   const delta = (cents(desiredNum) - cents(current)) / 100;
   const desiredInvalid = moneyInputStatus(desired, accountCurrency) === "invalid";
@@ -228,7 +231,7 @@ export function AdjustBalanceModal({
                 ? `Saldo em ${String(date).split("-").reverse().join("/")}`
                 : "Saldo atual"}
         </span>
-        <span style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>{formatBRL(current)}</span>
+        <span style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>{fmt(current)}</span>
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -238,7 +241,7 @@ export function AdjustBalanceModal({
           value={desired}
           onChange={(e) => setDesired(e.target.value)}
           onBlur={() => setDesired((cur) => reformatMoneyInputOnBlur(cur, accountCurrency))}
-          placeholder="R$ 0,00"
+          placeholder={moneyInputPlaceholder(accountCurrency)}
           inputMode="decimal"
           aria-label="Saldo desejado"
           aria-invalid={desiredInvalid || undefined}
@@ -251,7 +254,7 @@ export function AdjustBalanceModal({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 10, padding: "8px 10px", background: T.grayLight, borderRadius: 9 }}>
           <span style={{ ...G, fontSize: 12, color: T.inkMid }}>Ajuste a aplicar</span>
           <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: deltaColor }}>
-            {delta > 0 ? "+" : ""}{formatBRL(delta)}
+            {delta > 0 ? "+" : ""}{fmt(delta)}
           </span>
         </div>
       ) : null}
@@ -355,7 +358,7 @@ export function AdjustBalanceModal({
             {coverage.count === 1 ? " coberto" : " cobertos"} por este acerto e não
             {coverage.count === 1 ? " altera" : " alteram"} mais o saldo
             {coverage.net !== 0
-              ? ` (efeito líquido de ${coverage.net > 0 ? "+" : "−"}${formatBRL(Math.abs(coverage.net))})`
+              ? ` (efeito líquido de ${coverage.net > 0 ? "+" : "−"}${fmt(Math.abs(coverage.net))})`
               : ""}
             .
           </span>
@@ -376,7 +379,7 @@ export function AdjustBalanceModal({
             <div key={adj.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: Number(adj.amount) >= 0 ? T.green : T.red }}>
-                  {Number(adj.amount) > 0 ? "+" : ""}{formatBRL(adj.amount)}
+                  {Number(adj.amount) > 0 ? "+" : ""}{fmt(adj.amount)}
                   <span style={{ ...G, fontWeight: 500, fontSize: 11, color: T.inkGhost, marginLeft: 8 }}>
                     {String(adj.date).slice(0, 10).split("-").reverse().join("/")}
                   </span>

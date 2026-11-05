@@ -1375,6 +1375,20 @@ function TransacoesPageBody({
     || (singleFilteredAccountId ? anyAccountById[singleFilteredAccountId]?.currency : null)
     || orgBase.currency
     || null;
+  /* Em que moeda a FAIXA restringe (#289). A escolhida na aba; sem escolha, numa
+     organização com mais de uma moeda (histograma com 2+ moedas, ou contas em 2+),
+     a moeda em que os campos são lidos — a da aba ativa: "100–200" digitado sem
+     clicar aba é "100–200 em R$", não "100–200 de qualquer moeda". Organização de
+     moeda única: nada viaja, como sempre. Só vai à API junto com uma faixa
+     (`filtersToLegacyParams`): sozinha ela filtraria linhas por moeda. */
+  const [histogramCurrencies, setHistogramCurrencies] = useState({ orgId: null, count: 0 });
+  const accountCurrencyCount = useMemo(
+    () => new Set([...accountsForFilter.map((a) => a.currency).filter(Boolean), ...(orgBase.currency ? [orgBase.currency] : [])]).size,
+    [accountsForFilter, orgBase.currency],
+  );
+  const severalCurrencies = accountCurrencyCount > 1
+    || (histogramCurrencies.orgId === organizationId && histogramCurrencies.count > 1);
+  const rangeCurrency = filter.valueCurrency || (severalCurrencies ? valueReadCurrency : "") || "";
 
   /* Filtro "Cartão" (#280): os cartões da ORGANIZAÇÃO (ids numéricos da API), não os
      que aparecem nas linhas carregadas. A seleção vai à API como `credit_card_id`
@@ -1579,6 +1593,9 @@ function TransacoesPageBody({
           sort: filter.sort,
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
+          // A moeda ESCOLHIDA no painel viaja junto com a faixa (#289) — sem ela
+          // "de 100 a 200 em US$" trazia também os 150 reais.
+          valueCurrency: rangeCurrency,
           settlement: filter.settlement,
           rec: filter.rec,
           tagMode: filter.tagMode,
@@ -1608,6 +1625,7 @@ function TransacoesPageBody({
       filter.sort,
       filter.valueMin,
       filter.valueMax,
+      rangeCurrency,
       filter.settlement,
       filter.rec,
       filter.tagMode,
@@ -1730,6 +1748,7 @@ function TransacoesPageBody({
         sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
         settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
         accountSel: effectiveAccountSel,
+        valueCurrency: rangeCurrency,
         valueReadCurrency,
         cardSel: effectiveCardSel,
         ...estado,
@@ -1746,7 +1765,7 @@ function TransacoesPageBody({
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
       visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
-      effectiveAccountSel, valueReadCurrency, effectiveCardSel]);
+      effectiveAccountSel, rangeCurrency, valueReadCurrency, effectiveCardSel]);
 
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
@@ -1754,6 +1773,19 @@ function TransacoesPageBody({
     enabled: shouldUseRealData && !tagFilterBlocked && anyFacetPanelOpen,
     refreshToken: transactionsRefreshToken,
   });
+  // Quantas moedas o histograma da faixa mostrou nesta org (ver `rangeCurrency`).
+  useEffect(() => {
+    const buckets = facetCounts.buckets;
+    if (!Array.isArray(buckets) || !organizationId) return;
+    const count = new Set(buckets.map((b) => b.currency || "BRL")).size;
+    // Só sobe (o maior já visto nesta org): o histograma recortado pela própria
+    // moeda da faixa mostraria UMA, e baixar aqui tiraria a moeda da consulta, que
+    // traria o histograma de volta com duas — um laço.
+    setHistogramCurrencies((cur) => {
+      const seen = cur.orgId === organizationId ? cur.count : 0;
+      return count > seen ? { orgId: organizationId, count } : cur;
+    });
+  }, [facetCounts.buckets, organizationId]);
 
   const txList = shouldUseRealData
     ? transactionsData.transactions
@@ -2551,7 +2583,7 @@ function TransacoesPageBody({
       period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
       sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
       settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
-      accountSel: effectiveAccountSel, valueReadCurrency, cardSel: effectiveCardSel,
+      accountSel: effectiveAccountSel, valueCurrency: rangeCurrency, valueReadCurrency, cardSel: effectiveCardSel,
     };
     const drops = {
       busca: { search: "" },
@@ -2626,7 +2658,7 @@ function TransacoesPageBody({
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
     totalCategoriesForBackend, categoryApiNameById, resolvedTagIds, effectiveAccountSel,
-    valueReadCurrency,
+    rangeCurrency, valueReadCurrency,
     effectiveCardSel,
   ]);
 
