@@ -25,6 +25,7 @@ import {
 import { resolveLocalData, shouldUseRealData } from "../dataMode.js";
 import { GoalProjectionModal } from "../features/goals/GoalProjectionModal.jsx";
 import { formatMoney } from "../money/formatMoney.js";
+import { formatAmountInput } from "../features/novaTransacao/accountConversion.js";
 
 /**
  * O `Intl` com `currency: "BRL"` chapado era o motivo de uma meta em euro sair
@@ -187,9 +188,11 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   function openEdit(g) {
     setEditing(g);
     setForm({
-      nome: g.nome, desc: g.desc || "", type: g.type || "other", meta: String(g.meta || ""),
+      nome: g.nome, desc: g.desc || "", type: g.type || "other", meta: g.meta ? formatAmountInput(g.meta) : "",
       deadline: deadlineToMonthInput(g.deadline), prioridade: g.prioridade || "media",
-      monthly_target: g.monthly_target ? String(g.monthly_target) : "",
+      /* No formato do campo ("1.500,50"), não `String(1500.5)`: o parser do campo
+         lê ponto como milhar, e "1500.5" virava 15005 ao salvar (#288). */
+      monthly_target: g.monthly_target ? formatAmountInput(g.monthly_target) : "",
       annual_return_rate: rateToPercentInput(g.annual_return_rate), term: g.termExplicit || "", status: g.status || "active",
     });
     setModalOpen(true);
