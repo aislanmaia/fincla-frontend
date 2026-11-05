@@ -1272,7 +1272,11 @@ function TransacoesPageBody({
       acerto e por isso não mexem no saldo. Falha silenciosa de propósito: sem elas a
       lista só deixa de mostrar a marca, o que é melhor do que não carregar a tela. */
   const [balanceAnchors, setBalanceAnchors] = useState({});
-  /** Contas ativas — a mesma leitura das âncoras; o detalhe usa para a «Conta» (#267).
+  /** Contas da org, ATIVAS E DESATIVADAS (`include_inactive`) — a mesma leitura das
+      âncoras; o detalhe usa para a «Conta» (#267). As desativadas entram porque o
+      filtro de conta da API as aceita (só conta de outra org/inexistente é 404): uma
+      seleção numa conta desativada em outra aba continua filtrando o histórico dela.
+      Painel, lote e âncoras seguem só com as ativas (`activeAccounts`).
       Guardadas COM a organização dona (#296): trocar de org não pode deixar as contas
       (nem os ids) da anterior valendo. `loaded`: a lista chegou com sucesso? Antes
       disso não dá para afirmar que há uma conta só — o filtro vindo da URL vale. */
@@ -1294,11 +1298,12 @@ function TransacoesPageBody({
     // depende apenas da lista de contas e não pode sumir junto.
     Promise.all([
       listOrgBalanceAdjustments(organizationId).catch(() => null),
-      listAccounts(organizationId).catch(() => null),
+      listAccounts(organizationId, true).catch(() => null),
     ])
       .then(([rows, accounts]) => {
         if (cancelled) return;
-        setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, accounts || []));
+        const active = (accounts || []).filter((a) => a.is_active !== false);
+        setBalanceAnchors(rows == null ? {} : latestAnchorByAccount(rows, active));
         // Releitura que falha não apaga as contas que já se sabia (mesma regra do
         // Cartão): só deixa de afirmar que a lista está completa.
         setAccountsState((cur) => (Array.isArray(accounts)
@@ -1317,9 +1322,8 @@ function TransacoesPageBody({
 
   /* Filtro "Conta" (#268): só existe com 2+ contas ativas. Com uma só ele não
      aparece e não tem efeito — o recorte vira vazio antes de chegar à API. */
-  // Só contas ATIVAS (o `GET /accounts` já as filtra; a guarda local cobre um
-  // backend que devolva desativadas). Filtro "Conta" e seleção em lote dependem
-  // de 2+ delas — desativada não conta.
+  // Só contas ATIVAS (a leitura traz também as desativadas). Filtro "Conta" e
+  // seleção em lote dependem de 2+ delas — desativada não conta.
   const accountsForFilter = useMemo(
     () => orgAccounts
       .filter((a) => a.is_active !== false)
@@ -1331,10 +1335,16 @@ function TransacoesPageBody({
     [accountsForFilter],
   );
   const accountFilterAvailable = !orgAccountsLoaded || accountsForFilter.length >= 2;
-  /* Só ids de contas ATIVAS que a organização tem viajam — a mesma regra do filtro
-     Cartão (#296): troca de org zera a seleção, conta sumida sai com aviso, e o 404
-     ACCOUNT_NOT_FOUND relê as contas uma vez (`useFilterNotFoundRecovery`). */
-  const activeAccountIds = useMemo(() => new Set(accountsForFilter.map((a) => a.id)), [accountsForFilter]);
+  /* Só ids de contas que a organização TEM viajam — ativas ou DESATIVADAS, porque a
+     API filtra pelas duas (#296). Mesma regra do filtro Cartão: troca de org zera a
+     seleção, conta sumida sai com aviso, e o 404 ACCOUNT_NOT_FOUND relê as contas
+     uma vez (`useFilterNotFoundRecovery`). */
+  const orgAccountIds = useMemo(() => new Set(orgAccounts.map((a) => String(a.id))), [orgAccounts]);
+  /** Nome/moeda de QUALQUER conta da org (chip e leitura da faixa numa desativada). */
+  const anyAccountById = useMemo(
+    () => Object.fromEntries(orgAccounts.map((a) => [String(a.id), { id: String(a.id), label: a.name, currency: a.currency ?? null }])),
+    [orgAccounts],
+  );
   const requestAccountsReload = useCallback(() => setAccountsReloadToken((n) => n + 1), []);
   const accountGuard = useGuardedFilterSelection({
     enabled: shouldUseRealData,
@@ -1343,7 +1353,7 @@ function TransacoesPageBody({
     setSelection: filter.setAccountSel,
     isWellFormedId: isApiAccountId,
     list: accountsState,
-    knownIds: activeAccountIds,
+    knownIds: orgAccountIds,
     requestListReload: requestAccountsReload,
     messages: ACCOUNT_FILTER_MESSAGES,
   });
@@ -1362,7 +1372,7 @@ function TransacoesPageBody({
      E passada ao painel: a escolhida no painel; senão a da conta do recorte (o
      histograma só tem a moeda dela); senão a base. Em US$, "1,500" é 1500. */
   const valueReadCurrency = filter.valueCurrency
-    || (singleFilteredAccountId ? accountsForFilterById?.[singleFilteredAccountId]?.currency : null)
+    || (singleFilteredAccountId ? anyAccountById[singleFilteredAccountId]?.currency : null)
     || orgBase.currency
     || null;
 
@@ -3694,7 +3704,7 @@ function TransacoesPageBody({
       {effectiveAccountSel.length > 0 && accountsForFilterById ? (
         <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 0" }}>
           {effectiveAccountSel.map((id) => {
-            const label = accountsForFilterById[id]?.label || "Conta";
+            const label = anyAccountById[id]?.label || "Conta";
             return (
               <span key={id} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600,
                 color: T.ink, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9999, padding: "3px 4px 3px 10px" }}>

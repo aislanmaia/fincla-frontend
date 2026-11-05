@@ -157,7 +157,7 @@ describe("filtro Conta pelo hook real (#296)", () => {
     await openAccountPanel();
     listAccountsMock.mockImplementation(() => Promise.reject(new Error("503")));
     rerender(<TransacoesPage {...props({ organizationId: "org-outra" })} />);
-    await waitFor(() => expect(listAccountsMock).toHaveBeenCalledWith("org-outra"));
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalledWith("org-outra", true));
     await tick();
     expect(screen.queryByRole("button", { name: /Conta B Nubank/ })).toBeNull();
   });
@@ -206,5 +206,57 @@ describe("filtro Conta pelo hook real (#296)", () => {
     await tick();
     await tick();
     expect(listAccountsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("lê as contas com include_inactive: a lista de referência do filtro inclui as desativadas", async () => {
+    render(<TransacoesPage {...props()} />);
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalledWith("org-test", true));
+  });
+
+  it("conta desativada em outra aba continua filtrando (a API aceita) — sem poda nem aviso", async () => {
+    const { rerender } = render(<TransacoesPage {...props()} />);
+    await openAccountPanel();
+    await userEvent.click(accountButton("Conta B Nubank"));
+    await waitFor(() => expect(sentAccounts()).toEqual([ACC_B]));
+    // B desativada em outra aba; uma transação salva relê as contas.
+    listAccountsMock.mockImplementation(() => Promise.resolve([ACCOUNTS[0], { ...ACCOUNTS[1], is_active: false }, ACCOUNTS[2]]));
+    listTransactionsMock.mockClear();
+    rerender(<TransacoesPage {...props({ transactionsRefreshToken: 1 })} />);
+    await waitFor(() => expect(listTransactionsMock).toHaveBeenCalled());
+    await tick();
+    await tick();
+    expect(sentAccounts()).toEqual([ACC_B]);
+    expect(screen.queryByTestId("account-filter-notice")).toBeNull();
+    // O chip continua com o nome dela.
+    expect(within(screen.getByTestId("account-filter-chips")).getByText("Conta B Nubank")).toBeInTheDocument();
+  });
+
+  it("link fc_account para uma conta já desativada: o filtro vale", async () => {
+    routerSearch = { fc_account: ACC_B };
+    listAccountsMock.mockImplementation(() => Promise.resolve([ACCOUNTS[0], { ...ACCOUNTS[1], is_active: false }, ACCOUNTS[2]]));
+    render(<TransacoesPage {...props()} />);
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await tick();
+    await tick();
+    expect(sentAccounts()).toEqual([ACC_B]);
+    expect(screen.queryByTestId("account-filter-notice")).toBeNull();
+  });
+
+  it("conjunto recusado não volta a viajar depois de salvar uma transação (releitura alheia não limpa a recusa)", async () => {
+    listTransactionsMock.mockImplementation((q) => (hasB(q) ? NOT_FOUND() : Promise.resolve(PAGE)));
+    summaryApiMock.mockImplementation((q) => (hasB(q) ? NOT_FOUND() : Promise.resolve(SUMMARY)));
+    const { rerender } = render(<TransacoesPage {...props()} />);
+    await openAccountPanel();
+    await userEvent.click(accountButton("Conta B Nubank"));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0]).not.toHaveProperty("account_id"), { timeout: 3000 });
+    await tick();
+    const accountReads = listAccountsMock.mock.calls.length;
+    listTransactionsMock.mockClear();
+    rerender(<TransacoesPage {...props({ transactionsRefreshToken: 1 })} />);
+    await waitFor(() => expect(listAccountsMock.mock.calls.length).toBeGreaterThan(accountReads));
+    await waitFor(() => expect(listTransactionsMock).toHaveBeenCalled());
+    await tick();
+    await tick();
+    for (const [q] of listTransactionsMock.mock.calls) expect(hasB(q)).toBe(false);
   });
 });

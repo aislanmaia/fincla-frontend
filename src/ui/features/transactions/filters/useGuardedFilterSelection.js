@@ -101,13 +101,21 @@ export function useGuardedFilterSelection({
     if (orgRef.current === organizationId) return;
     orgRef.current = organizationId;
     setNotice("");
+    // Recusas eram da org anterior; voltar a ela depois começa do zero.
+    setRejected({ orgId: null, ids: EMPTY_IDS, sets: EMPTY_IDS });
     if (selection.length > 0) setSelectionRef.current([]);
   }, [organizationId, selection.length]);
 
-  // Lista nova e confiável desta org: recusas de CONJUNTO (sem prova) deixam de valer.
-  // Declarado ANTES do efeito de releitura pendente, que pode recusar de novo.
+  /* Recusas de CONJUNTO (sem prova) só deixam de valer com uma lista nova que ESTE
+     hook pediu (releitura do 404) — ou na troca de org, porque as recusas são da org.
+     Uma releitura alheia (a de contas sobe a cada transação salva) não as limpa:
+     senão o conjunto recusado voltaria a viajar a cada salvamento — mais um 404 e
+     o erro piscando. Declarado ANTES do efeito de releitura pendente, que pode
+     recusar de novo. */
+  const ownReloadRef = useRef(false);
   useEffect(() => {
-    if (!listLoaded) return;
+    if (!listLoaded || !ownReloadRef.current) return;
+    ownReloadRef.current = false;
     setRejected((cur) => (cur.orgId === organizationId && cur.sets.length ? { ...cur, sets: EMPTY_IDS } : cur));
   }, [list, listLoaded, organizationId]);
 
@@ -167,6 +175,7 @@ export function useGuardedFilterSelection({
       notFoundCodeRef,
       reject,
       requestListReloadRef,
+      ownReloadRef,
     },
   };
 }
@@ -181,7 +190,7 @@ export function useGuardedFilterSelection({
 export function useFilterNotFoundRecovery(guard, { errorCode, notFoundCode }) {
   const {
     organizationId, effectiveSelRef, refetchedForRef, refetchPendingRef,
-    errorCodeRef, notFoundCodeRef, reject, requestListReloadRef,
+    errorCodeRef, notFoundCodeRef, reject, requestListReloadRef, ownReloadRef,
   } = guard.recovery;
   errorCodeRef.current = errorCode;
   notFoundCodeRef.current = notFoundCode;
@@ -199,6 +208,7 @@ export function useFilterNotFoundRecovery(guard, { errorCode, notFoundCode }) {
     }
     refetchedForRef.current.keys.add(key);
     refetchPendingRef.current = key;
+    ownReloadRef.current = true;
     requestListReloadRef.current();
-  }, [errorCode, notFoundCode, organizationId, reject, effectiveSelRef, refetchedForRef, refetchPendingRef, requestListReloadRef]);
+  }, [errorCode, notFoundCode, organizationId, reject, effectiveSelRef, refetchedForRef, refetchPendingRef, requestListReloadRef, ownReloadRef]);
 }
