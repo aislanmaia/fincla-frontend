@@ -64,8 +64,8 @@ function StubActionButton({ icon, label }) {
  * Dados reais por hook: `/consultant/financial-health-index` (KPIs clientes/saúde
  * + centro do semáforo), `/consultant/clients-at-risk` (lista de atenção),
  * `/consultant/clients` (distribuição 3-vias do semáforo, via saúde por-cliente).
- * Patrimônio/MRR seguem "em breve" (sem fonte). "Adicionar cliente" (S5) e
- * "Relatório com IA" (Trilha B) são stubs.
+ * "Adicionar cliente" (S5) e "Relatório com IA" (Trilha B) são gateados pelas
+ * capacidades correspondentes.
  */
 export function ConsultantPainelPage() {
   const evaluation = useEvaluationDrawer();

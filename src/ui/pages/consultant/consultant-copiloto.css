@@ -406,6 +406,7 @@
 .portfolio-expense__category-total { color: #374151; font-size: 9px; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .portfolio-expense__client-count { color: #4b5563; font-size: 9px; text-align: right; }
 .portfolio-expense__empty { margin: 8px 0 0; color: var(--pe-muted); font-size: 9.5px; line-height: 1.45; }
+.portfolio-expense__ai-note { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid #f0f1f3; color: var(--pe-muted); font-size: 9px; line-height: 1.45; }
 
 .portfolio-expense__rates { display: grid; }
 .portfolio-expense__rate { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid #f0f1f3; font-size: 9px; }
@@ -452,6 +453,9 @@
 .portfolio-expense__compare-note { padding: 10px 12px; border: 1px solid #eadfc1; border-radius: 9px; background: #fffbeb; color: #655238; font-size: 12px; line-height: 1.45; }
 .portfolio-expense__compare-note button { margin-left: 5px; padding: 0; border: 0; background: none; color: #7837e7; font: inherit; font-weight: 700; cursor: pointer; }
 .portfolio-expense__highlights h4 { margin: 7px 0; color: var(--pe-ink); font-size: 16px; }
+.portfolio-expense__insight-retry { margin-top: 10px; padding: 8px 11px; border: 1px solid #e5d9ff; border-radius: 8px; background: #f6f1ff; color: #7837e7; font: inherit; font-size: 12px; font-weight: 750; line-height: 1.2; cursor: pointer; }
+.portfolio-expense__insight-retry:hover { background: #eee5ff; border-color: #cebaff; }
+.portfolio-expense__insight-retry:focus-visible { outline: 2px solid var(--pe-purple); outline-offset: 2px; }
 .portfolio-expense__insight { padding: 10px 0; border-top: 1px solid var(--pe-border); }
 .portfolio-expense__insight strong { color: var(--pe-ink); font-size: 13px; }
 .portfolio-expense__insight p { margin: 5px 0 0; color: var(--pe-muted); font-size: 12px; line-height: 1.5; }
@@ -566,3 +570,44 @@
   .portfolio-expense__metric { min-height: 100px; }
   .portfolio-expense__context-chip { min-height: 24px; }
 }
+
+/* Long series in the drawer: shrink columns to fit instead of scrolling from the (often empty) oldest month. */
+.portfolio-expense__trend-bars--dense { overflow-x: visible; gap: 2px; }
+.portfolio-expense__trend-bars--dense .portfolio-expense__trend-point { flex: 1 1 0; min-width: 0; }
+.portfolio-expense__trend-bars--dense .portfolio-expense__trend-point strong { font-size: 8.5px; }
+.portfolio-expense__trend-bars--dense .portfolio-expense__trend-point small { font-size: 8.5px; white-space: nowrap; }
+.portfolio-expense__trend-bars--dense .portfolio-expense__trend-point > span { width: min(22px, 80%); }
+
+/* Mobile: the coverage banner stacks its action under the text (mockup v4), instead of squeezing the copy. */
+@media (max-width: 760px) {
+  .portfolio-expense__coverage-wrap { flex-direction: column; align-items: stretch; padding: 0 12px 12px; }
+  .portfolio-expense__coverage-wrap > button { width: 100%; }
+}
+
+/* Narrow screens: six most recent months fill the width; the full series lives in a bottom sheet. */
+.portfolio-expense__trend-bars--collapsed { overflow-x: visible; gap: 4px; }
+.portfolio-expense__trend-bars--collapsed .portfolio-expense__trend-point { flex: 1 1 0; min-width: 0; }
+.portfolio-expense__trend-bars--collapsed .portfolio-expense__trend-point > span { width: min(30px, 80%); }
+.portfolio-expense__series-more { display: block; width: 100%; min-height: 40px; margin: 10px 0 0; border: 1px solid var(--pe-border); border-radius: 9px; background: #fff; color: #6d4fd0; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+.portfolio-expense__sheet-backdrop { position: fixed; z-index: 1100; inset: 0; display: flex; align-items: flex-end; background: rgb(20 25 35 / 38%); }
+.portfolio-expense__sheet { box-sizing: border-box; display: flex; flex-direction: column; width: 100%; max-height: 82%; padding: 8px 16px 16px; border-radius: 18px 18px 0 0; background: #fff; box-shadow: 0 -10px 30px rgb(0 0 0 / 14%); outline: none; }
+.portfolio-expense__sheet-grip { width: 36px; height: 4px; margin: 4px auto 10px; border-radius: 99px; background: #d9dce3; flex: none; }
+.portfolio-expense__sheet header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; flex: none; }
+.portfolio-expense__sheet header h3 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.portfolio-expense__sheet header button { width: 32px; height: 32px; border: 0; border-radius: 8px; background: #f1f2f5; font-size: 18px; line-height: 1; cursor: pointer; }
+.portfolio-expense__sheet-list { min-height: 0; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.portfolio-expense__sheet-list li { display: grid; grid-template-columns: 64px 1fr 96px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #f0f1f3; font-size: 13px; }
+.portfolio-expense__sheet-list li span { color: var(--pe-muted); }
+.portfolio-expense__sheet-list li i { display: block; height: 6px; border-radius: 99px; background: #f0eefb; }
+.portfolio-expense__sheet-list li b { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #8b5cf6, #b69afa); }
+.portfolio-expense__sheet-list li strong { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Finishing pass (mockup v4): slimmer context bar, readable observations note, calmer follow-up chips. */
+.portfolio-expense__context { min-height: 40px; padding: 5px 10px; }
+.portfolio-expense__ai-note { margin: 12px 0 0; padding: 9px 11px; border: 0; border-radius: 8px; background: #f6f5fb; color: #5b6472; font-size: 11px; line-height: 1.5; }
+.portfolio-expense__followups > button { align-items: flex-start; gap: 8px; padding: 7px 11px; border-radius: 16px; font-size: 11.5px; line-height: 1.35; text-align: left; }
+@media (min-width: 761px) {
+  .portfolio-expense__context-chip { min-height: 26px; }
+}
+.portfolio-expense__series-unit { display: block; margin-top: 6px; color: var(--pe-muted); font-size: 10.5px; }

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { getConsultantPortfolioExpenseAnalysis, getConsultantPortfolioCategoryContributors } from "../../../api/consultant.ts";
+import { getConsultantPortfolioCategoryContributors, streamConsultantPortfolioExpenseAnalysis } from "../../../api/consultant.ts";
 import { DashboardPeriodSelector } from "../../features/dashboard/DashboardPeriodSelector.jsx";
 import { normalizeCustomRange, rangeForDashboardPreset } from "../../features/dashboard/dashboardDateRange.js";
 import { useIsNarrow } from "./consultantUi";
-import { fmtMoneyIn, portfolioExpenseInsightCopy } from "./consultantFormat";
+import { MonthlySeries } from "./MonthlySeries.jsx";
+import { fmtMoneyIn } from "./consultantFormat";
+import { EXPENSE_BASIS_NOTE } from "./portfolioExpensePdfText";
 
 const formatPercent = (value) => `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number(value) || 0)}%`;
 const categoryColors = ["#8266dc", "#4d8cdb", "#2ca583", "#d4a01d", "#cd6581", "#9b75cf", "#708191"];
@@ -65,61 +67,17 @@ function CoverageSummary({ block }) {
   );
 }
 
-function PortfolioExpenseHighlights({ highlights, includedClients, onFollowUp, analysis, readingCurrency }) {
-  if (analysis) {
-    const hasGrowth = analysis.comparison.delta_percentage != null && analysis.comparison.delta_percentage > 0;
-    const leader = analysis.categories[0]?.name || "gastos";
-    const second = analysis.categories[1]?.name;
-    const followUps = [
-      hasGrowth
-        ? ["Por que esses gastos subiram?", `Compare os gastos de ${leader}${second ? ` e ${second}` : ""} entre o período atual e o anterior. Quais evidências mostram a variação? Não atribua causa sem dados suficientes.`]
-        : ["O que explica esta distribuição?", `Descreva o alcance e a concentração de ${leader} no período. Não presuma alta nem atribua causa sem dados suficientes.`],
-      [hasGrowth ? "Alta espalhada ou concentrada?" : "Gastos espalhados ou concentrados?", `A concentração de ${leader} vem de muitos clientes ou de poucos?`],
-      ["Comparar mesma coorte", "Compare as principais categorias com o período anterior usando a mesma coorte"],
-    ];
-    return <section className="portfolio-expense__panel portfolio-expense__highlights" aria-labelledby="portfolio-expense-highlights">
+function PortfolioExpenseHighlights({ narrative, narrativeLoading, narrativeError, onRetry, onFollowUp }) {
+  return <section className="portfolio-expense__panel portfolio-expense__highlights" aria-labelledby="portfolio-expense-highlights">
     <h3 id="portfolio-expense-highlights" className="portfolio-expense__ai-kicker"><span aria-hidden="true">✣</span><strong>Leitura do Copiloto</strong></h3>
     <h4>O que merece atenção</h4>
-    {analysis.insights.length ? analysis.insights.map((insight, index) => <div className="portfolio-expense__insight" key={`${insight.kind}-${index}`}><strong>{index + 1}. {insight.title}</strong><p>{portfolioExpenseInsightCopy(insight, analysis.comparison, readingCurrency)}</p></div>) : <p className="portfolio-expense__empty">Ainda não há dados suficientes para uma leitura comparativa.</p>}
-    <p className="portfolio-expense__highlight-boundary">Essas são observações dos dados. A IA não atribui causa sem analisar transações e o contexto de cada cliente.</p>
-    {onFollowUp && <div className="portfolio-expense__followups"><strong>EXPLORE A ANÁLISE</strong>{followUps.map(([label, prompt]) => <button type="button" key={label} onClick={() => onFollowUp(prompt)}>{label} <span aria-hidden="true">↗</span></button>)}<small>Clique para enviar ao chat, mantendo escopo, período e coorte comparável.</small></div>}
+    {narrativeLoading ? <p role="status" className="portfolio-expense__empty">Interpretando os dados do período…</p>
+      : narrativeError ? <div role="alert"><p className="portfolio-expense__empty">{narrativeError.message || "Não foi possível gerar a leitura deste período."}</p>{narrativeError.code !== "quota_exceeded" && <button className="portfolio-expense__insight-retry" type="button" onClick={onRetry}>Tentar leitura novamente</button>}</div>
+        : narrative?.insights?.length ? narrative.insights.map((insight, index) => <div className="portfolio-expense__insight" key={`${insight.title}-${index}`}><strong>{index + 1}. {insight.title}</strong><p>{insight.description}</p></div>)
+          : <p className="portfolio-expense__empty">Sem observações adicionais sustentadas pelos dados deste período.</p>}
+    {!narrativeLoading && !narrativeError && narrative?.insights?.length > 0 && <p className="portfolio-expense__ai-note">Essas são observações dos dados. A IA não atribui causa à alta sem analisar transações e contexto de cada cliente.</p>}
+    {onFollowUp && narrative?.insights?.length > 0 && <div className="portfolio-expense__followups"><strong>EXPLORE A ANÁLISE</strong>{narrative.insights.map((insight) => <button type="button" key={insight.follow_up} onClick={() => onFollowUp(insight.follow_up)}>{insight.follow_up} <span aria-hidden="true">↗</span></button>)}<small>Clique para enviar ao chat, mantendo escopo e período.</small></div>}
   </section>;
-  }
-  const topCategories = highlights?.top_categories || [];
-  if (!topCategories.length) {
-    return (
-      <section className="portfolio-expense__panel" aria-labelledby="portfolio-expense-highlights">
-        <div className="portfolio-expense__panel-heading">
-          <div><h3 id="portfolio-expense-highlights">Leitura do Copiloto</h3><p>Síntese dos gastos agregados</p></div>
-        </div>
-        <p className="portfolio-expense__empty">Ainda não há gastos suficientes para gerar destaques neste período.</p>
-      </section>
-    );
-  }
-
-  const first = topCategories[0];
-  const second = topCategories[1];
-  const lead = second
-    ? <><strong>{first.name}</strong> e <strong>{second.name}</strong> concentram <strong>{formatPercent(highlights.combined_percentage)}</strong> dos gastos do período.</>
-    : <><strong>{first.name}</strong> representa <strong>{formatPercent(first.percentage)}</strong> dos gastos do período.</>;
-
-  return (
-    <section className="portfolio-expense__panel portfolio-expense__highlights" aria-labelledby="portfolio-expense-highlights">
-      <h3 id="portfolio-expense-highlights" className="portfolio-expense__ai-kicker"><span aria-hidden="true">✣</span><strong>Leitura do Copiloto</strong></h3>
-      <p className="portfolio-expense__highlight-lead">{lead}</p>
-      <p className="portfolio-expense__highlight-summary">{first.name} aparece em {first.client_count} de {includedClients} clientes{second ? `; ${second.name} aparece em ${second.client_count}.` : "."} Esta distribuição não explica, por si só, a causa dos gastos.</p>
-      <p className="portfolio-expense__highlight-boundary">Leitura baseada na participação e no número de clientes por categoria. Isso descreve a distribuição observada — não a causa dos gastos nem a uniformidade entre clientes.</p>
-      {onFollowUp && <div className="portfolio-expense__followups">
-        <strong>EXPLORE A ANÁLISE</strong>
-        {[
-          ["Comparar com período anterior", "Compare as principais categorias com o período anterior"],
-          ["Muitos clientes ou poucos?", "A concentração dessas categorias vem de muitos clientes ou de poucos?"],
-          ["Contribuição por cliente", `Quais clientes mais contribuíram para ${first.name}?`],
-        ].map(([label, prompt]) => <button type="button" key={label} onClick={() => onFollowUp(prompt)}>{label} <span aria-hidden="true">↗</span></button>)}
-        <small>Clique para enviar a pergunta no chat.</small>
-      </div>}
-    </section>
-  );
 }
 
 function PortfolioExpenseLoadingSkeleton() {
@@ -185,6 +143,9 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
   const initialRange = useMemo(() => ({ start: block.period_start, end: block.period_end }), [block.period_end, block.period_start]);
   const [report, setReport] = useState(block);
   const [analysis, setAnalysis] = useState(null);
+  const [narrative, setNarrative] = useState(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [contributors, setContributors] = useState(null);
   const [contributorsError, setContributorsError] = useState("");
@@ -198,7 +159,11 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const requestId = useRef(0);
+  const streamController = useRef(null);
   const initialPeriodKey = `${initialRange.start}|${initialRange.end}`;
+  const blockIdentity = `${initialPeriodKey}|${block.total_expenses?.amount}|${block.categories.length}`;
+  const resetIdentity = useRef(null);
+  const initialLoadIdentity = useRef(null);
   const lastRequestedPeriod = useRef(initialPeriodKey);
   const period = useMemo(() => periodPreset === "personalizado"
     ? normalizeCustomRange(customStart, customEnd)
@@ -209,9 +174,16 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
   }, []);
 
   useEffect(() => {
+    if (resetIdentity.current === blockIdentity) return;
+    resetIdentity.current = blockIdentity;
+    initialLoadIdentity.current = null;
+    streamController.current?.abort();
     requestId.current += 1;
     setReport(block);
     setAnalysis(null);
+    setNarrative(null);
+    setNarrativeLoading(false);
+    setNarrativeError(false);
     setPeriodPreset("personalizado");
     setCustomStart(block.period_start);
     setCustomEnd(block.period_end);
@@ -220,23 +192,70 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
     setError("");
   // Copiloto rebuilds block objects while rendering chat messages. Reset only
   // when the report identity changes, not on each new object reference.
-  }, [initialPeriodKey, block.total_expenses?.amount, block.categories.length]);
+  }, [blockIdentity, block.period_start, block.period_end]);
 
   const loadPeriod = useCallback(async (range) => {
+    streamController.current?.abort();
+    const controller = new AbortController();
+    streamController.current = controller;
     const thisRequest = ++requestId.current;
+    let reportReceived = false;
+    let outcomeReceived = false;
     setLoading(true);
     setError("");
+    setNarrative(null);
+    setNarrativeError(false);
+    setNarrativeLoading(false);
     try {
-      const result = await getConsultantPortfolioExpenseAnalysis({ date_start: range.start, date_end: range.end });
-      if (thisRequest !== requestId.current) return;
-      setReport({ type: "portfolio_expense_distribution", version: 1, ...result.report });
-      setAnalysis(result);
-      lastRequestedPeriod.current = `${range.start}|${range.end}`;
+      await streamConsultantPortfolioExpenseAnalysis({ date_start: range.start, date_end: range.end }, (event) => {
+        if (thisRequest !== requestId.current) return;
+        if (event.type === "report.ready") {
+          reportReceived = true;
+          setReport({ type: "portfolio_expense_distribution", version: 1, ...event.data.report });
+          setAnalysis(event.data);
+          lastRequestedPeriod.current = `${range.start}|${range.end}`;
+          setLoading(false);
+          setNarrativeLoading(true);
+        } else if (event.type === "insight.ready") {
+          if (event.data.period_start !== range.start || event.data.period_end !== range.end) throw new Error("Período da interpretação não corresponde ao relatório");
+          outcomeReceived = true;
+          setNarrative(event.data);
+          setNarrativeLoading(false);
+        } else if (event.type === "insight.failed") {
+          outcomeReceived = true;
+          setNarrativeError({ code: event.data.code, message: event.data.code === "quota_exceeded" ? event.data.message : null });
+          setNarrativeLoading(false);
+        }
+      }, controller.signal);
+      if (!reportReceived) throw new Error("Relatório ausente no stream");
     } catch {
-      if (thisRequest === requestId.current) setError("Não foi possível atualizar este relatório. Tente novamente.");
+      if (thisRequest === requestId.current && !controller.signal.aborted) {
+        if (reportReceived) { setNarrativeError(true); setNarrativeLoading(false); }
+        else setError("Não foi possível atualizar este relatório. Tente novamente.");
+      }
     } finally {
-      if (thisRequest === requestId.current) setLoading(false);
+      if (thisRequest === requestId.current) {
+        setLoading(false);
+        // A stream that ends without an insight outcome must not leave the spinner running
+        // nor pass as "no observations": the reading simply did not arrive.
+        if (reportReceived && !outcomeReceived && !controller.signal.aborted) setNarrativeError(true);
+        setNarrativeLoading(false);
+      }
     }
+  }, []);
+
+  // Leaving the screen cancels the paid stream. The teardown is deferred one tick: React StrictMode (dev)
+  // mounts, cleans up and mounts again at once, and that remount cancels the pending teardown, so the
+  // initial load neither restarts (a second paid reading) nor stays cancelled.
+  const teardownTimer = useRef(null);
+  useEffect(() => {
+    clearTimeout(teardownTimer.current);
+    return () => {
+      teardownTimer.current = setTimeout(() => {
+        streamController.current?.abort();
+        requestId.current += 1;
+      }, 0);
+    };
   }, []);
 
   useEffect(() => {
@@ -248,8 +267,10 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
 
   useEffect(() => {
     if (analysis || loading || error) return;
+    if (initialLoadIdentity.current === blockIdentity) return;
+    initialLoadIdentity.current = blockIdentity;
     void loadPeriod({ start: block.period_start, end: block.period_end });
-  }, [analysis, block.period_end, block.period_start, error, loadPeriod, loading]);
+  }, [analysis, block.period_end, block.period_start, blockIdentity, error, loadPeriod, loading]);
 
   useEffect(() => {
     if (!selectedCategory) return undefined;
@@ -286,6 +307,40 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
   const retry = () => {
     if (period) void loadPeriod(period);
   };
+  const retryNarrative = () => {
+    if (narrativeLoading) return;
+    streamController.current?.abort();
+    const controller = new AbortController();
+    streamController.current = controller;
+    const thisRequest = ++requestId.current;
+    let outcomeReceived = false;
+    setNarrativeError(false);
+    setNarrativeLoading(true);
+    void streamConsultantPortfolioExpenseAnalysis(
+      { date_start: report.period_start, date_end: report.period_end },
+      (event) => {
+        if (thisRequest !== requestId.current) return;
+        if (event.type === "insight.ready") {
+          if (event.data.period_start !== report.period_start || event.data.period_end !== report.period_end) throw new Error("Período da interpretação não corresponde ao relatório");
+          outcomeReceived = true;
+          setNarrative(event.data);
+          setNarrativeLoading(false);
+        } else if (event.type === "insight.failed") {
+          outcomeReceived = true;
+          setNarrativeError({ code: event.data.code, message: event.data.code === "quota_exceeded" ? event.data.message : null });
+          setNarrativeLoading(false);
+        }
+      },
+      controller.signal,
+      true,
+    )
+      .catch(() => { if (thisRequest === requestId.current && !controller.signal.aborted) setNarrativeError(true); })
+      .finally(() => {
+        if (thisRequest !== requestId.current) return;
+        if (!outcomeReceived && !controller.signal.aborted) setNarrativeError(true);
+        setNarrativeLoading(false);
+      });
+  };
   const excluded = useMemo(() => excludedCurrencyGroups(report.original_currency_slices), [report.original_currency_slices]);
   const maximum = Math.max(0, ...report.categories.map((category) => Number(category.total.amount) || 0));
   const total = report.total_expenses;
@@ -312,14 +367,14 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
     onFollowUp(`${prompt} no período de ${current}.`);
   });
   const exportPdf = async () => {
-    if (exporting || loading || error) return;
+    if (exporting || loading || narrativeLoading || error) return;
     setExportError("");
     setExporting(true);
     try {
       const [{ pdf }, { PortfolioExpenseReportPdf }] = await Promise.all([
         import("@react-pdf/renderer"), import("./PortfolioExpenseReportPdf.jsx"),
       ]);
-      const blob = await pdf(<PortfolioExpenseReportPdf report={report} analysis={analysis} excluded={excluded.map((group) => ({ ...group, client_count: group.clients.size }))} />).toBlob();
+      const blob = await pdf(<PortfolioExpenseReportPdf report={report} analysis={analysis} narrative={narrative} excluded={excluded.map((group) => ({ ...group, client_count: group.clients.size }))} />).toBlob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -343,8 +398,8 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
           <p>Evolução, alcance e concentração — detalhe individual somente ao explorar</p>
         </div>
         <div className="portfolio-expense__header-actions">
-          <span className="portfolio-expense__status" data-state={error ? "error" : loading ? "loading" : "complete"}><i aria-hidden="true" />{error ? "Atualização pendente" : loading ? "Atualizando análise" : "Análise concluída"}</span>
-          <button type="button" onClick={exportPdf} disabled={exporting || loading || Boolean(error)}>{exporting ? "Exportando…" : "↓ Exportar"}</button>
+          <span className="portfolio-expense__status" data-state={error ? "error" : loading || narrativeLoading ? "loading" : "complete"}><i aria-hidden="true" />{error ? "Atualização pendente" : loading ? "Atualizando análise" : narrativeLoading ? "Finalizando leitura" : "Análise concluída"}</span>
+          <button type="button" onClick={exportPdf} disabled={exporting || loading || narrativeLoading || Boolean(error)}>{exporting ? "Exportando…" : "↓ Exportar"}</button>
         </div>
       </header>
       {exportError && <div className="portfolio-expense__export-error" role="alert">{exportError} <button type="button" onClick={exportPdf}>Tentar novamente</button></div>}
@@ -353,6 +408,7 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
         <div className="portfolio-expense__period-control">
           <DashboardPeriodSelector
             isMobile={narrow}
+            compact
             presetId={periodPreset}
             onPresetChange={setPeriodPreset}
             customStart={customStart}
@@ -442,7 +498,14 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
           {analysis && <p className="portfolio-expense__table-foot">Variação de {datePt(analysis.comparison.period_start)} a {datePt(analysis.comparison.period_end)}, na mesma coorte de {analysis.comparison.comparable_client_count} clientes. Clique em uma categoria para ver tendência, alcance e concentração.{report.categories.some((category) => category.name === "Não classificado") && " “Não classificado” permanece separado."}</p>}
         </section>
 
-          {analysis && <section className="portfolio-expense__panel portfolio-expense__trend" aria-labelledby="portfolio-expense-trend"><div className="portfolio-expense__panel-heading"><div><h3 id="portfolio-expense-trend">Ritmo mensal da carteira</h3><p>Gastos agregados da coorte comparável no período</p></div>{analysis.comparison.delta_percentage != null && <span className="portfolio-expense__count-badge">{analysis.comparison.delta_percentage >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(analysis.comparison.delta_percentage))} vs período anterior</span>}</div><div className="portfolio-expense__trend-bars" role="img" aria-label={`Tendência mensal: ${analysis.monthly_trend.map((point) => `${datePt(point.period_end)} ${fmtMoneyIn(point.total.amount, report.reading_currency)}`).join(", ")}`}>{analysis.monthly_trend.map((point) => <div className="portfolio-expense__trend-point" key={point.period_end}><strong>{fmtMoneyIn(point.total.amount, report.reading_currency)}</strong><span style={{ height: `${Math.max(3, Number(point.total.amount) / Math.max(1, ...analysis.monthly_trend.map((item) => Number(item.total.amount))) * 90)}px` }} /><small>{new Date(`${point.period_end}T12:00:00`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })}</small></div>)}</div><p className="portfolio-expense__trend-foot">A série ajuda a distinguir evolução contínua de um pico isolado. Clique em uma categoria para inspecionar sua própria tendência.</p></section>}
+          {analysis && <section className="portfolio-expense__panel portfolio-expense__trend" aria-labelledby="portfolio-expense-trend"><div className="portfolio-expense__panel-heading"><div><h3 id="portfolio-expense-trend">Ritmo mensal da carteira</h3><p>Gastos agregados da coorte comparável no período</p></div>{analysis.comparison.delta_percentage != null && <span className="portfolio-expense__count-badge">{analysis.comparison.delta_percentage >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(analysis.comparison.delta_percentage))} vs período anterior</span>}</div><MonthlySeries
+            narrow={narrow}
+            currency={report.reading_currency}
+            height={90}
+            sheetTitle="Série mensal completa"
+            ariaLabel={`Tendência mensal: ${analysis.monthly_trend.map((point) => `${datePt(point.period_end)} ${fmtMoneyIn(point.total.amount, report.reading_currency)}`).join(", ")}`}
+            points={analysis.monthly_trend.map((point) => ({ key: point.period_end, periodEnd: point.period_end, amount: Number(point.total.amount) }))}
+          /><p className="portfolio-expense__trend-foot">A série ajuda a distinguir evolução contínua de um pico isolado. Clique em uma categoria para inspecionar sua própria tendência.</p></section>}
 
           {excluded.length > 0 && (
             <section className="portfolio-expense__excluded" aria-labelledby="portfolio-expense-excluded">
@@ -460,7 +523,7 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
         </div>
 
         <aside className="portfolio-expense__side">
-          <PortfolioExpenseHighlights highlights={report.highlights} includedClients={report.clients_converted} onFollowUp={followUp} analysis={analysis} readingCurrency={report.reading_currency} />
+          <PortfolioExpenseHighlights narrative={narrative} narrativeLoading={narrativeLoading} narrativeError={narrativeError} onRetry={retryNarrative} onFollowUp={followUp} />
           {report.conversion_rates.length > 0 && <section className="portfolio-expense__panel">
             <div className="portfolio-expense__panel-heading">
               <div><h3>Conversões aplicadas</h3><p>Taxas usadas para consolidar os valores</p></div>
@@ -489,6 +552,7 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
         {total
           ? `Percentuais calculados sobre ${fmtMoneyIn(total.amount, total.currency)} dos ${report.clients_converted} clientes incluídos.`
           : "Não há total comparável para calcular percentuais neste período."}
+        {` ${EXPENSE_BASIS_NOTE}.`}
         {report.clients_not_converted > 0 && " Os clientes sem conversão aparecem separados por moeda."}
         {report.categories.some((category) => category.name === "Não classificado") && " “Não classificado” permanece visível como categoria própria."}
       </footer>
@@ -535,7 +599,15 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
           <header><div><h2>{selectedCategory}</h2><p>Explore a categoria · {datePt(report.period_start)} – {datePt(report.period_end)} · mesma coorte comparável</p></div><button type="button" aria-label="Fechar detalhes da categoria" onClick={() => setSelectedCategory("")}>×</button></header>
           {analysis?.categories.find((item) => item.name === selectedCategory) && <>{(() => { const item = analysis.categories.find((entry) => entry.name === selectedCategory); return <><div className="portfolio-expense__drawer-metrics"><div><small>Gastos no período</small><strong>{fmtMoneyIn(item.current_total.amount, report.reading_currency)}</strong></div><div><small>Variação vs anterior</small><strong>{item.delta_percentage == null ? "Sem base anterior" : `${Number(item.delta.amount) >= 0 ? "+" : ""}${fmtMoneyIn(item.delta.amount, report.reading_currency)}`}</strong></div></div><p className="portfolio-expense__drawer-callout"><strong>{item.client_count} de {report.clients_converted} clientes</strong> tiveram gastos nesta categoria. O maior contribuidor responde por <strong>{formatPercent(item.top_client_share)}</strong> do total — alcance e concentração são medidas diferentes.</p></>; })()}</>}
           <h3>Tendência da categoria</h3>
-          {analysis && <div className="portfolio-expense__trend-bars portfolio-expense__drawer-chart" role="img" aria-label={`Gastos mensais de ${selectedCategory}`}>{analysis.monthly_trend.map((point) => <div className="portfolio-expense__trend-point" key={point.period_end}><strong>{fmtMoneyIn(point.categories[selectedCategory]?.amount || 0, report.reading_currency)}</strong><span style={{ height: `${Math.max(3, Number(point.categories[selectedCategory]?.amount || 0) / Math.max(1, ...analysis.monthly_trend.map((entry) => Number(entry.categories[selectedCategory]?.amount || 0))) * 82)}px` }} /><small>{new Date(`${point.period_end}T12:00:00`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })}</small></div>)}</div>}
+          {analysis && <MonthlySeries
+            narrow={narrow}
+            currency={report.reading_currency}
+            height={82}
+            className="portfolio-expense__drawer-chart"
+            sheetTitle={`Série mensal de ${selectedCategory}`}
+            ariaLabel={`Gastos mensais de ${selectedCategory}`}
+            points={analysis.monthly_trend.map((point) => ({ key: point.period_end, periodEnd: point.period_end, amount: Number(point.categories[selectedCategory]?.amount || 0) }))}
+          />}
           <h3>Principais contribuições</h3>
           {!contributors && !contributorsError && <p role="status">Carregando contribuições…</p>}
           {contributorsError && <p role="alert">{contributorsError} <button type="button" onClick={contributors ? loadMoreContributors : () => setContributorsRequest((value) => value + 1)}>Tentar novamente</button></p>}

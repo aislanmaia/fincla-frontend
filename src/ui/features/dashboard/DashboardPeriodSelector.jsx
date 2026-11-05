@@ -34,6 +34,7 @@ export function DashboardPeriodSelector({
   customStart,
   customEnd,
   onCustomDatesChange,
+  compact = false,
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [menuTab, setMenuTab] = useState("predefinido");
@@ -548,10 +549,10 @@ export function DashboardPeriodSelector({
           width: isMobile ? "100%" : "100%",
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          minHeight: isMobile ? 52 : 46,
-          padding: isMobile ? "12px 14px" : "10px 14px",
-          borderRadius: isMobile ? 14 : 12,
+          gap: compact ? 8 : 12,
+          minHeight: compact ? 32 : isMobile ? 52 : 46,
+          padding: compact ? "4px 10px" : isMobile ? "12px 14px" : "10px 14px",
+          borderRadius: compact ? 8 : isMobile ? 14 : 12,
           border: `1px solid ${T.border}`,
           background: T.surface,
           boxShadow: T.sm,
@@ -569,25 +570,29 @@ export function DashboardPeriodSelector({
           e.currentTarget.style.boxShadow = T.sm;
         }}
       >
-        <div
-          style={{
-            width: isMobile ? 40 : 36,
-            height: isMobile ? 40 : 36,
-            borderRadius: 10,
-            background: T.grayLight,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Calendar size={isMobile ? 20 : 18} color={T.inkMid} strokeWidth={2} />
-        </div>
+        {compact ? (
+          <Calendar size={14} color={T.inkMid} strokeWidth={2} aria-hidden />
+        ) : (
+          <div
+            style={{
+              width: isMobile ? 40 : 36,
+              height: isMobile ? 40 : 36,
+              borderRadius: 10,
+              background: T.grayLight,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Calendar size={isMobile ? 20 : 18} color={T.inkMid} strokeWidth={2} />
+          </div>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
               ...G,
-              fontSize: isMobile ? 15 : 14,
+              fontSize: compact ? 12 : isMobile ? 15 : 14,
               fontWeight: 600,
               color: T.ink,
               lineHeight: 1.25,
@@ -595,20 +600,22 @@ export function DashboardPeriodSelector({
           >
             {titleLine}
           </div>
-          <div
-            style={{
-              ...G,
-              fontSize: isMobile ? 13 : 12,
-              color: T.inkLight,
-              marginTop: 2,
-              lineHeight: 1.3,
-            }}
-          >
-            {rangeBadge}
-          </div>
+          {compact ? null : (
+            <div
+              style={{
+                ...G,
+                fontSize: isMobile ? 13 : 12,
+                color: T.inkLight,
+                marginTop: 2,
+                lineHeight: 1.3,
+              }}
+            >
+              {rangeBadge}
+            </div>
+          )}
         </div>
         <ChevronDown
-          size={isMobile ? 22 : 20}
+          size={compact ? 14 : isMobile ? 22 : 20}
           color={T.inkGhost}
           strokeWidth={2}
           style={{

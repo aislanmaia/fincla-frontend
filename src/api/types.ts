@@ -2993,6 +2993,12 @@ export interface ConsultantPortfolioExpenseAnalysisResponse {
   }[];
 }
 
+export interface ConsultantPortfolioExpenseNarrativeResponse {
+  period_start: string;
+  period_end: string;
+  insights: { title: string; description: string; follow_up: string; evidence_keys: string[] }[];
+}
+
 export interface ConsultantPortfolioCategoryContributorsResponse {
   category_name: string;
   category_total: CopilotoMoney;

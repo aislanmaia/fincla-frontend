@@ -45,3 +45,6 @@ export function filterTransactions(txs, { filter = "todos", query = "" } = {}) {
     return true;
   });
 }
+
+// The consultant tab loads only the newest rows of the period; totals cover just those.
+export const TRANSACTIONS_LIMIT = 100;

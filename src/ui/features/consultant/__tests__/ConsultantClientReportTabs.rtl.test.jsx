@@ -10,6 +10,12 @@ afterEach(() => {
 });
 
 describe("ConsultantClientReportTabs", () => {
+  it("mantém rolagem horizontal sem criar scrollbar vertical de um pixel", () => {
+    render(<ConsultantClientReportTabs active="overview" onSelect={() => {}} />);
+    const tabs = screen.getByRole("tablist", { name: "Seções do relatório" });
+    expect(tabs).toHaveStyle({ overflowX: "auto", overflowY: "hidden" });
+  });
+
   it("marca a aba ativa como selecionada", () => {
     render(<ConsultantClientReportTabs active="overview" onSelect={() => {}} />);
     expect(screen.getByRole("tab", { name: "Visão geral" })).toHaveAttribute("aria-selected", "true");

@@ -21,9 +21,14 @@ import { ConsultantClientOverviewTab } from "../../features/consultant/Consultan
 import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
 import { ConsultantClientCardsTab } from "../../features/consultant/ConsultantClientCardsTab";
 import { ConsultantClientCategoriesTab } from "../../features/consultant/ConsultantClientCategoriesTab";
-import { Icon } from "../../features/consultant/consultantUi";
+import { Icon, useIsNarrow } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
 import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
+import { DashboardPeriodSelector } from "../../features/dashboard/DashboardPeriodSelector.jsx";
+import {
+  normalizeCustomRange,
+  rangeForDashboardPreset,
+} from "../../features/dashboard/dashboardDateRange.js";
 
 function EmptyState({ title, text, action }) {
   return (
@@ -53,23 +58,48 @@ export function ConsultantClientReportPage() {
   const canEvaluate = useCanEvaluateClientWithAi();
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
+  const narrow = useIsNarrow(760);
   const { clients, hasLoaded, isLoading, error } = useConsultantClients();
 
   const { status, client } = resolveClientReportState({ clients, id, hasLoaded, isLoading, error });
 
   const [tab, setTab] = React.useState(DEFAULT_CLIENT_REPORT_TAB);
+  const initialPeriod = React.useMemo(() => rangeForDashboardPreset("este_mes"), []);
+  const [periodPreset, setPeriodPreset] = React.useState("este_mes");
+  const [customStart, setCustomStart] = React.useState(initialPeriod.start);
+  const [customEnd, setCustomEnd] = React.useState(initialPeriod.end);
+  const period = React.useMemo(
+    () => periodPreset === "personalizado"
+      ? normalizeCustomRange(customStart, customEnd) ?? initialPeriod
+      : rangeForDashboardPreset(periodPreset),
+    [customEnd, customStart, initialPeriod, periodPreset],
+  );
+  const changeCustomDates = React.useCallback(({ start, end }) => {
+    setCustomStart(start);
+    setCustomEnd(end);
+  }, []);
   // Os reads por-org só disparam quando o cliente é de fato da carteira (status
   // ready): evita buscas para um id inválido/fora da carteira.
   const ready = status === "ready";
   const health = useFinancialHealthData({ organizationId: id, enabled: ready });
-  const categories = useClientCategories({ organizationId: id, enabled: ready });
+  const categories = useClientCategories({
+    organizationId: id,
+    dateStart: period.start,
+    dateEnd: period.end,
+    enabled: ready,
+  });
   const goals = useGoalsData({ organizationId: id, enabled: ready });
   // Evolução mensal (por-org) — só na aba Visão geral (default), onde o card vive.
   const evolution = useClientMonthlyEvolution({ organizationId: id, enabled: ready && tab === "overview" });
   // Perfil privado (notas/tags) do consultor sobre o cliente — aba Visão geral.
   const profile = useConsultantClientProfile({ organizationId: id, enabled: ready && tab === "overview" });
   // Transações só carregam ao abrir a aba (evita um fetch pesado no Overview).
-  const transactions = useClientTransactions({ organizationId: id, enabled: ready && tab === "transactions" });
+  const transactions = useClientTransactions({
+    organizationId: id,
+    dateStart: period.start,
+    dateEnd: period.end,
+    enabled: ready && tab === "transactions",
+  });
   // Cartões só carregam ao abrir a aba (a resolução de fatura corrente é pesada).
   const cards = useClientCreditCards({ organizationId: id, enabled: ready && tab === "cards" });
 
@@ -100,6 +130,29 @@ export function ConsultantClientReportPage() {
           </button>
           <ConsultantClientReportHeader client={client}
             onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
+          <Card style={{ padding: narrow ? 14 : "14px 16px", display: "flex", alignItems: narrow ? "stretch" : "center", justifyContent: "space-between", gap: 14, flexDirection: narrow ? "column" : "row" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.grayLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon name="calendar" size={17} color={T.inkMid} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...G, fontSize: 12.5, fontWeight: 800, color: T.ink }}>Período do relatório</div>
+                <div style={{ ...G, marginTop: 2, fontSize: 11, color: T.inkLight, lineHeight: 1.45 }}>
+                  Filtra transações e gastos por categoria deste cliente.
+                </div>
+              </div>
+            </div>
+            <div style={{ width: narrow ? "100%" : 300, flexShrink: 0 }}>
+              <DashboardPeriodSelector
+                isMobile={narrow}
+                presetId={periodPreset}
+                onPresetChange={setPeriodPreset}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomDatesChange={changeCustomDates}
+              />
+            </div>
+          </Card>
           <ConsultantClientReportTabs active={tab} onSelect={setTab} />
           {tab === "overview" && (
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} profile={profile} />
