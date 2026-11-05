@@ -18,7 +18,7 @@ import { useBudgetsData } from "../useBudgetsData.js";
 
 const row = (id, spent = "10.00") => ({ id, tag_id: `t-${id}`, tag_name: id, amount: "100.00", spent_amount: spent,
   remaining_amount: "90.00", currency: "BRL", status: "ok", period_type: "monthly", is_active: true });
-const body = (...ids) => ({ budgets: ids.map((id) => row(id)) });
+const body = (...budgetIds) => ({ budgets: budgetIds.map((id) => row(id)) });
 const ids = (hook) => hook.current.data?.cats.map((c) => c.id) ?? [];
 const deferred = () => { let resolve; let reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 
