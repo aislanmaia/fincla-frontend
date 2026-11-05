@@ -6,6 +6,8 @@ import { G, S, NUM } from "../../typography";
 import { ONBOARDING_CATEGORY_ROWS } from "../../data/onboardingFlowCategories.js";
 import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
 import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
+import { moneyInputStatus } from "../../money/moneyInput.js";
 
 /* ─── ONBOARDING DATA & COMPONENTS ──────────────────────────── */
 
@@ -41,7 +43,7 @@ const SI = ({value,onChange,placeholder,type="text",autoFocus=false,pre=null,acc
       <input value={value} onChange={onChange} placeholder={placeholder}
         type={type} autoFocus={autoFocus}
         onFocus={()=>setF(true)} onBlur={()=>setF(false)}
-        style={{...G,width:"100%",padding:pre?"12px 14px 12px 30px":"12px 14px",
+        style={{...G,width:"100%",padding:pre?`12px 14px 12px ${pre.length<=2?30:14+pre.length*9}px`:"12px 14px",
           fontSize:14,color:T.ink,background:T.surface,
           border:`1.5px solid ${f?accent:T.border}`,borderRadius:10,outline:"none",
           boxShadow:f?`0 0 0 3px ${accentBg}`:"none",transition:"all 0.15s"}}/>
@@ -102,14 +104,19 @@ export const OnboardingFlow = ({
   const next   = () => goTo(Math.min(step+1,STEPS.length-1));
   const prev   = () => goTo(Math.max(step-1,0));
 
+  /* Valores lidos na moeda base escolhida (#284): em US$, "1234,567" é ambíguo —
+     a tela recusa em vez de criar o cartão com limite 0 ou a receita sem valor. */
+  const moneySymbol = currencyInfo(orgMoeda).symbol;
+  const cardLimInvalid = temCartao==="sim" && moneyInputStatus(cardLim, orgMoeda)==="invalid";
+  const recValInvalid = temRec==="sim" && moneyInputStatus(recVal, orgMoeda)==="invalid";
   const canNext = () => ({
     welcome:    true,
     org:        orgNome.trim().length>=2,
     categorias: cats.length>=1,
     // Cartão só é criado com os 4 dígitos — o backend exige exatamente 4.
     // Quem não quer informar agora deixa o nome vazio ("Preencher depois").
-    cartoes:    temCartao!==null && (temCartao!=="sim" || !cardNome.trim() || (card4.length===4 && isValidMonthDay(cardVenc) && isValidMonthDay(cardFech))),
-    receita:    temRec!==null,
+    cartoes:    temCartao!==null && (temCartao!=="sim" || !cardNome.trim() || (card4.length===4 && isValidMonthDay(cardVenc) && isValidMonthDay(cardFech) && !cardLimInvalid)),
+    receita:    temRec!==null && !recValInvalid,
     membros:    true,
     pronto:     true,
   }[stepId]);
@@ -365,7 +372,10 @@ export const OnboardingFlow = ({
                       <SI value={cardNome} onChange={e=>setCardNome(e.target.value)} placeholder="Nome do cartão (ex: Nubank Roxinho)"accent={cfg.accent} accentBg={cfg.accentBg}/>
                       <div style={{display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"0.85fr 1fr 1fr 1fr",gap:9}}>
                         <SI value={card4} onChange={e=>setCard4(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="4 últimos dígitos" accent={cfg.accent} accentBg={cfg.accentBg}/>
-                        <SI value={cardLim} onChange={e=>setCardLim(e.target.value)} placeholder="Limite" pre="R$"accent={cfg.accent} accentBg={cfg.accentBg}/>
+                        <div>
+                          <SI value={cardLim} onChange={e=>setCardLim(e.target.value)} placeholder="Limite" pre={moneySymbol} accent={cfg.accent} accentBg={cfg.accentBg}/>
+                          {cardLimInvalid&&<div role="alert" style={{...G,fontSize:11,color:T.red,marginTop:4}}>Valor inválido</div>}
+                        </div>
                         <SI value={cardVenc} onChange={e=>setCardVenc(e.target.value.replace(/\D/g,"").slice(0,2))} placeholder="Dia do vencimento"accent={cfg.accent} accentBg={cfg.accentBg}/>
                         <SI value={cardFech} onChange={e=>setCardFech(e.target.value.replace(/\D/g,"").slice(0,2))} placeholder="Dia do fechamento"accent={cfg.accent} accentBg={cfg.accentBg}/>
                       </div>
@@ -413,7 +423,10 @@ export const OnboardingFlow = ({
                     <div style={{display:"flex",flexDirection:"column",gap:9}}>
                       <SI value={recDesc} onChange={e=>setRecDesc(e.target.value)} placeholder="Descrição (ex: Salário, Pró-labore…)"accent={cfg.accent} accentBg={cfg.accentBg}/>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-                        <SI value={recVal} onChange={e=>setRecVal(e.target.value)} placeholder="0,00" pre="R$"accent={cfg.accent} accentBg={cfg.accentBg}/>
+                        <div>
+                          <SI value={recVal} onChange={e=>setRecVal(e.target.value)} placeholder="0,00" pre={moneySymbol} accent={cfg.accent} accentBg={cfg.accentBg}/>
+                          {recValInvalid&&<div role="alert" style={{...G,fontSize:11,color:T.red,marginTop:4}}>Valor inválido</div>}
+                        </div>
                         <div style={{position:"relative"}}>
                           <select value={recDia} onChange={e=>setRecDia(e.target.value)}
                             style={{...G,width:"100%",padding:"12px 14px",fontSize:14,color:T.ink,
@@ -538,8 +551,8 @@ export const OnboardingFlow = ({
                   {[
                     {ic:"🏢",l:"Organização",v:orgNome||"—",s:`${ORG_TIPOS.find(t=>t.id===orgTipo)?.l ?? ""}${orgMoeda&&orgMoeda!=="BRL"?` · ${orgMoeda}`:""}`},
                     {ic:"🗂", l:"Categorias",v:`${cats.length} selecionadas`,s:cats.slice(0,3).map((c)=>ONBOARDING_CATEGORY_ROWS.find((x)=>x.id===c)?.labelPt).join(", ")+(cats.length>3?"…":"")},
-                    {ic:"💳",l:"Cartões",v:temCartao==="sim"?(cardNome||"1 cartão"):"Não usa",s:temCartao==="sim"&&cardLim?`Limite R$ ${cardLim}`:null},
-                    {ic:"💰",l:"Receita",v:temRec==="sim"?(recVal?`R$ ${recVal}/mês`:"Configurada"):"A configurar",s:temRec==="sim"?recDesc:null},
+                    {ic:"💳",l:"Cartões",v:temCartao==="sim"?(cardNome||"1 cartão"):"Não usa",s:temCartao==="sim"&&cardLim?`Limite ${moneySymbol} ${cardLim}`:null},
+                    {ic:"💰",l:"Receita",v:temRec==="sim"?(recVal?`${moneySymbol} ${recVal}/mês`:"Configurada"):"A configurar",s:temRec==="sim"?recDesc:null},
                     {ic:"👥",l:"Membros",v:membros.filter(m=>m.trim()).length>0?`${membros.filter(m=>m.trim()).length} convidado${membros.filter(m=>m.trim()).length!==1?"s":""}` :"Só você por agora",s:null},
                   ].map((row,i,arr)=>(
                     <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px",

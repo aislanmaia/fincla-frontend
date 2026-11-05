@@ -5,7 +5,7 @@ import { PageTitle, Card, Btn, PageEnter } from "../components/primitives";
 import { useMonthlyPlanData } from "../features/monthlyPlan/useMonthlyPlanData.js";
 import { shouldUseRealData } from "../dataMode.js";
 import { categoryLabelPtForTag } from "../data/categoryLabels.js";
-import { parseMoneyInputFor } from "../money/moneyInput.js";
+import { moneyInputStatus, parseMoneyInputFor } from "../money/moneyInput.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -86,6 +86,9 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ planned_income: "", planned_expense: "", notes: "", items: {} });
+  // Algum valor que não se lê na moeda base (#284)? Salvar fica travado — nunca 0.
+  const planInvalid = [form.planned_income, form.planned_expense, ...Object.values(form.items)]
+    .some((text) => moneyInputStatus(text, orgBase.currency) === "invalid");
 
   function shiftMonth(delta) {
     setEditing(false);
@@ -109,6 +112,7 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
     setEditing(true);
   }
   async function submit() {
+    if (planInvalid) return;
     const items = (data?.items || [])
       .map((i) => ({ tag_id: i.tag_id, kind: i.kind, planned_amount: readPlanned(form.items[itemKey(i)]) }))
       .filter((i) => i.planned_amount > 0);
@@ -139,7 +143,8 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
           {editing ? (
             <>
               <Btn variant="outGray" onClick={() => setEditing(false)} small={isMobile}>Cancelar</Btn>
-              <Btn variant="dark" onClick={submit} small={isMobile}>{saving ? "Salvando…" : "Salvar"}</Btn>
+              {planInvalid ? <span role="alert" style={{ ...G, fontSize: 12, color: T.red }}>Valor inválido</span> : null}
+              <Btn variant="dark" onClick={submit} small={isMobile} disabled={planInvalid}>{saving ? "Salvando…" : "Salvar"}</Btn>
             </>
           ) : (
             <Btn variant="dark" onClick={startEdit} small={isMobile}>Editar plano</Btn>

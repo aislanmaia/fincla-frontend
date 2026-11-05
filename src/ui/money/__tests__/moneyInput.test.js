@@ -9,11 +9,12 @@ import {
   reformatMoneyInputOnBlur,
 } from "../moneyInput.js";
 
-describe("currencyUsesDotDecimal (derivado do Intl, não de uma lista de moedas)", () => {
+describe("currencyUsesDotDecimal (tabela explícita, sem Intl em tempo de execução)", () => {
   it.each([
-    ["USD", true], ["GBP", true], ["JPY", true], ["CAD", true], ["usd", true],
-    ["BRL", false], ["EUR", false], ["ARS", false], ["XAF", false],
-    [null, false], ["", false], ["US", false],
+    ["USD", true], ["GBP", true], ["JPY", true], ["CAD", true], ["MXN", true], ["CHF", true],
+    ["PEN", true], ["GTQ", true], ["DOP", true], ["usd", true],
+    ["BRL", false], ["EUR", false], ["ARS", false], ["CLP", false], ["COP", false], ["UYU", false],
+    ["ZAR", false], ["PYG", false], ["XAF", false], ["ZZZ", false], [null, false], ["", false],
   ])("%s → %s", (code, expected) => {
     expect(currencyUsesDotDecimal(code)).toBe(expected);
   });
@@ -36,6 +37,9 @@ describe("moeda de ponto decimal (USD): o inequívoco primeiro", () => {
     [" 2 500 ", 2500],
     ["-1,500", -1500],
     [".5", 0.5],
+    ["0,50", 0.5],
+    ["0.5", 0.5],
+    ["0,05", 0.05],
   ])("%s → %s", (text, value) => {
     expect(readDotDecimalMoney(text)).toEqual({ status: "ok", value });
     expect(parseMoneyInputFor(text, "USD")).toBe(value);
@@ -43,6 +47,8 @@ describe("moeda de ponto decimal (USD): o inequívoco primeiro", () => {
 
   it.each([
     "abc", "1,2,3", "1234,567", "1,23.4", "52.", "1,234.567", "1.234.56,7", "1,,500", "US$ 10", "1.2.3,45", "--1",
+    // Zero à esquerda + 3 dígitos é ambíguo (milhar ou decimal?), nunca 500.
+    "0,500", "0.005", "012,500", "0.500,00", "0,500.00", "00,500",
   ])("%s → inválido (null), nunca um número errado", (text) => {
     expect(readDotDecimalMoney(text).status).toBe("invalid");
     expect(parseMoneyInputFor(text, "USD")).toBeNull();
@@ -85,3 +91,15 @@ describe("moneyInputStatus / reformatMoneyInputOnBlur", () => {
     expect(parseMoneyInputFor(reformatMoneyInputOnBlur("1,500", "USD"), "USD")).toBe(1500);
   });
 });
+
+describe("moeda sem casas decimais (JPY)", () => {
+  it("milhar vale; qualquer decimal é recusado; o blur escreve sem casas", () => {
+    expect(parseMoneyInputFor("1,500", "JPY")).toBe(1500);
+    expect(parseMoneyInputFor("1500", "JPY")).toBe(1500);
+    expect(parseMoneyInputFor("1,500.50", "JPY")).toBeNull();
+    expect(parseMoneyInputFor("52,4", "JPY")).toBeNull();
+    expect(moneyInputStatus("1.5", "JPY")).toBe("invalid");
+    expect(reformatMoneyInputOnBlur("1,500", "JPY")).toBe("1.500");
+  });
+});
+

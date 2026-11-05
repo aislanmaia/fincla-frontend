@@ -93,3 +93,41 @@ describe("quem mora fora tem por onde", () => {
     expect(screen.queryByText(/Dólar americano/i)).not.toBeInTheDocument();
   });
 });
+
+describe("valores na moeda escolhida (#284)", () => {
+  const continuar = () => screen.getByRole("button", { name: /^Continuar/ });
+  function ateAReceita(moeda) {
+    ateOPassoDaOrganizacao();
+    fireEvent.change(screen.getByPlaceholderText(/Família Alves/), { target: { value: "Casa" } });
+    if (moeda) {
+      fireEvent.click(screen.getByText(/usar outra moeda/i));
+      fireEvent.click(screen.getByText(moeda));
+    }
+    fireEvent.click(continuar()); // → categorias
+    fireEvent.click(continuar()); // → cartões
+    fireEvent.click(screen.getByText("Não usamos"));
+    fireEvent.click(continuar()); // → receita
+    fireEvent.click(screen.getByText("Sim, quero registrar"));
+  }
+
+  it("organização em US$: o campo mostra US$; '1234,567' é 'Valor inválido' e não avança; '1,500' avança", () => {
+    ateAReceita(/Dólar americano/i);
+    const valor = screen.getByPlaceholderText("0,00");
+    expect(valor.parentElement).toHaveTextContent("US$");
+    fireEvent.change(valor, { target: { value: "1234,567" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Valor inválido");
+    expect(continuar()).toBeDisabled();
+    fireEvent.change(valor, { target: { value: "1,500" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(continuar()).toBeEnabled();
+  });
+
+  it("organização em R$: '1234,567' segue como hoje (sem aviso) e o campo mostra R$", () => {
+    ateAReceita(null);
+    const valor = screen.getByPlaceholderText("0,00");
+    expect(valor.parentElement).toHaveTextContent("R$");
+    fireEvent.change(valor, { target: { value: "1234,567" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(continuar()).toBeEnabled();
+  });
+});

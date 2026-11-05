@@ -163,7 +163,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           <WeeklyChart rows={weeks} currency={currency} />
         </div>
         <Card style={{ ...panel, display: "flex", flexDirection: "column", gap: 12 }}>
-          <TransactionsFilterBar filter={filter} categories={categories.map((row) => ({ id: row.id, label: row.name, color: row.color }))}
+          <TransactionsFilterBar valueReadCurrency={detail?.currency || state.card?.currency || null} filter={filter} categories={categories.map((row) => ({ id: row.id, label: row.name, color: row.color }))}
             allTags={tags} visibleFacetKeys={INVOICE_FACETS} visibleSortFields={INVOICE_SORT_FIELDS} compact={isMobile} filteredCount={rows.length}
             filterToolbarActive={Boolean(filter.search || filter.period !== "tudo" || filter.cats.length || filter.tags.length || filter.valueMin || filter.valueMax || modality !== "all")}
             onClearAll={() => setModality("all")} />

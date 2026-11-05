@@ -17,7 +17,7 @@ import {
   formatLocalIsoDate,
   parseOnboardingMoney,
 } from "./onboardingValueUtils.js";
-import { currencyUsesDotDecimal } from "../../money/moneyInput.js";
+import { currencyUsesDotDecimal, moneyInputStatus } from "../../money/moneyInput.js";
 import { ONBOARDING_FLOW_TO_ICON_KEY } from "../../data/onboardingFlowCategories.js";
 
 function normalizeText(value) {
@@ -241,6 +241,14 @@ export async function submitOnboarding(data) {
 
   if (!orgName) {
     throw new Error("Informe o nome da organizacao para concluir o onboarding.");
+  }
+
+  // Valor que não se lê na moeda escolhida não vira 0 nem some (#284): para aqui.
+  if (data.temRec === "sim" && moneyInputStatus(data.recVal, data.orgMoeda || "BRL") === "invalid") {
+    throw new Error("Valor da receita inválido.");
+  }
+  if (data.temCartao === "sim" && moneyInputStatus(data.cardLim, data.orgMoeda || "BRL") === "invalid") {
+    throw new Error("Limite do cartão inválido.");
   }
 
   const monthlyIncome =

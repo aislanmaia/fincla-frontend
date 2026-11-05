@@ -13,6 +13,8 @@ export function ValuePanel({
   setValueMin,
   setValueMax,
   valueCurrency = "",
+  /** Moeda em que os campos são lidos, decidida pela página (#284). Sem ela, a ativa do histograma. */
+  readCurrency = null,
   setValueCurrency = () => {},
   counts,
   onClose,
@@ -29,8 +31,10 @@ export function ValuePanel({
     : [];
   const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency) ? valueCurrency : moedas[0]) || "BRL";
   const varias = moedas.length > 1;
-  // Os campos são lidos na moeda da faixa (#284): em US$, "1,500" é 1500.
-  const parseFaixa = (v) => (typeof v === "string" ? parseMoneyInputFor(v, moedaAtiva, parseBrl) : null);
+  // Os campos são lidos na MESMA moeda que a página usa na consulta (#284): em US$,
+  // "1,500" é 1500. Duas fontes liam o mesmo texto em moedas diferentes.
+  const moedaDeLeitura = readCurrency || moedaAtiva;
+  const parseFaixa = (v) => (typeof v === "string" ? parseMoneyInputFor(v, moedaDeLeitura, parseBrl) : null);
   const buckets = Array.isArray(todos)
     ? todos.filter((b) => (b.currency || "BRL") === moedaAtiva)
     : todos;
@@ -366,7 +370,7 @@ export function ValuePanel({
           value={valueMin}
           placeholder="0,00"
           ariaLabel="Valor mínimo"
-          currency={moedaAtiva}
+          currency={moedaDeLeitura}
           onChange={setValueMin}
         />
         <ValueField
@@ -374,7 +378,7 @@ export function ValuePanel({
           value={valueMax}
           placeholder="sem limite"
           ariaLabel="Valor máximo"
-          currency={moedaAtiva}
+          currency={moedaDeLeitura}
           onChange={setValueMax}
         />
       </div>

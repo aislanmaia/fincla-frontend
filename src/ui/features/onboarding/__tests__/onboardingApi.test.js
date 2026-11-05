@@ -249,6 +249,19 @@ describe("submitOnboarding", () => {
       expect(mocks.createCreditCard).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 2500 }));
     });
 
+    it("organização em US$ com valor ambíguo: para antes de criar qualquer coisa (nem limite 0, nem renda sumida)", async () => {
+      await expect(submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD",
+        temRec: "sim", recDesc: "Salário", recVal: "1234,567", recDia: "10", recTipo: "fixo",
+      })).rejects.toThrow("Valor da receita inválido.");
+      await expect(submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD", temRec: "nao",
+        temCartao: "sim", cardNome: "Chase", card4: "1234", cardLim: "0,500", cardVenc: "10",
+      })).rejects.toThrow("Limite do cartão inválido.");
+      expect(mocks.createOrganization).not.toHaveBeenCalled();
+      expect(mocks.createCreditCard).not.toHaveBeenCalled();
+    });
+
     it("organização em R$: '1.500' continua 1500 e '1,5' continua 1,5", async () => {
       await submitOnboarding({
         orgNome: "Casa", orgTipo: "couple", orgMoeda: "BRL",

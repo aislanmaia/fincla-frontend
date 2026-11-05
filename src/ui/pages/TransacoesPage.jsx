@@ -1246,10 +1246,7 @@ function TransacoesPageBody({
   const searchAwaitingCommit = searchInput.trim() !== debouncedSearch;
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
-  /* Em que moeda ler a faixa de valor digitada (#284): a escolhida no painel ou,
-     sem escolha (organização de moeda única), a base. Em US$, "1,500" é 1500. */
   const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData });
-  const valueReadCurrency = filter.valueCurrency || orgBase.currency || null;
 
   /** Âncoras de saldo por conta — dizem quais lançamentos já estão contemplados num
       acerto e por isso não mexem no saldo. Falha silenciosa de propósito: sem elas a
@@ -1320,6 +1317,13 @@ function TransacoesPageBody({
   }, [accountFilterAvailable, filter.accountSel]);
   /** A conta do recorte quando é UMA só — extrato com transferências e "+ Transação" nela. */
   const singleFilteredAccountId = effectiveAccountSel.length === 1 ? effectiveAccountSel[0] : null;
+  /* Em que moeda ler a faixa de valor digitada (#284) — UMA fonte, usada na consulta
+     E passada ao painel: a escolhida no painel; senão a da conta do recorte (o
+     histograma só tem a moeda dela); senão a base. Em US$, "1,500" é 1500. */
+  const valueReadCurrency = filter.valueCurrency
+    || (singleFilteredAccountId ? accountsForFilterById?.[singleFilteredAccountId]?.currency : null)
+    || orgBase.currency
+    || null;
 
   /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
      2+ contas ativas. Ids em string (a lista mistura número e UUID). */
@@ -4253,6 +4257,7 @@ function TransacoesPageBody({
           <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <TransactionsFilterBar
+                valueReadCurrency={valueReadCurrency}
                 {...filterBarCommonProps}
                 hideSavedViews
                 hideFacets
@@ -4301,6 +4306,7 @@ function TransacoesPageBody({
       {!isMobile && !isDesktopCompact && (
         <>
           <TransactionsFilterBar
+                valueReadCurrency={valueReadCurrency}
             {...filterBarCommonProps}
             hideSavedViews
             hideFacets
@@ -4449,6 +4455,7 @@ function TransacoesPageBody({
             <div style={{ overflowY:"auto", flex:1, padding:"16px 16px 20px",
               overscrollBehavior:"contain" }}>
               <TransactionsFilterBar
+                valueReadCurrency={valueReadCurrency}
                 {...filterBarCommonProps}
                 compact
                 hideSearch
@@ -4660,6 +4667,7 @@ function TransacoesPageBody({
             transition: "width var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1)),"
               + " margin-left var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1))" }}>
             <TransactionsFilterPanel
+              valueReadCurrency={valueReadCurrency}
               filter={filter}
               facet={panelFacet}
               onFacetChange={setPanelFacet}

@@ -20,6 +20,7 @@ import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { formatMoney, formatMoneyAbs } from "../money/formatMoney.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import { moneyInputStatus } from "../money/moneyInput.js";
 
 /* ─── ORÇAMENTOS DATA ────────────────────────────────────── */
 const BUDGET_CONFIG = { total: 6500, modo: "top-down" };
@@ -556,11 +557,12 @@ export function OrcamentosPage({
                   <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
                     <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
                     <input value={addLimStr} onChange={e => setAddLimStr(e.target.value)}
-                      placeholder="0,00" type="text" inputMode="decimal" autoFocus
+                      placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
                       style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
                         color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                       onKeyDown={e => { if (e.key==="Enter") void handleSave(); }}/>
                   </div>
+                  {moneyInputStatus(addLimStr, orgBase.currency) === "invalid" ? <div role="alert" style={{ ...G, fontSize:11, color:T.red, marginTop:4 }}>Valor inválido</div> : null}
                 </div>
               )}
               <div style={{ display:"flex", gap:10, marginTop: selCat ? 0 : 4, flexShrink:0 }}>
@@ -651,11 +653,12 @@ export function OrcamentosPage({
                 <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
                   <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
                   <input value={editLimStr} onChange={e => setEditLimStr(e.target.value)}
-                    placeholder="0,00" type="text" inputMode="decimal" autoFocus
+                    placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
                     style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
                       color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                     onKeyDown={e => { if (e.key === "Enter") void handleEditSave(); }}/>
                 </div>
+                {moneyInputStatus(editLimStr, editCat.moeda ?? orgBase.currency) === "invalid" ? <div role="alert" style={{ ...G, fontSize:11, color:T.red, marginTop:4 }}>Valor inválido</div> : null}
               </div>
               <div style={{ display:"flex", gap:10, flexShrink:0 }}>
                 <button type="button" onClick={closeEdit}
