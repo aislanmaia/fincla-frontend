@@ -180,6 +180,8 @@ export function filtersToLegacyParams(
     // diferentes de linhas.
     settlement: state.settlement ?? "todas",
     ...(Array.isArray(state.accountSel) && state.accountSel.length ? { accountIds: state.accountSel } : {}),
+    // Cartão (#280): mesmo caminho da conta — lista, resumo, facetas e export.
+    ...(Array.isArray(state.cardSel) && state.cardSel.length ? { creditCardIds: state.cardSel } : {}),
     limit,
   };
 }

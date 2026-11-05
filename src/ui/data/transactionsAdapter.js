@@ -794,6 +794,7 @@ export function buildTransactionsQuery({
   recurring,
   settlement = "todas",
   accountIds = null,
+  creditCardIds = null,
   limit = 10,
 }) {
   const categoryFilter = resolveCategoryParams(filterCat);
@@ -818,6 +819,7 @@ export function buildTransactionsQuery({
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
     ...accountFilterParam(accountIds),
+    ...creditCardFilterParam(creditCardIds),
     page: 1,
     limit,
     ...resolveSort(sortBy),
@@ -915,6 +917,7 @@ export function buildTransactionsSummaryQuery({
   recurring,
   settlement = "todas",
   accountIds = null,
+  creditCardIds = null,
 }) {
   const categoryFilter = resolveCategoryParams(filterCat);
   const paymentMethod = resolvePaymentMethodParam(filterMethod);
@@ -943,6 +946,7 @@ export function buildTransactionsSummaryQuery({
     // Mesmo recorte de conta da lista (#268): sem ele o resumo descreveria a
     // organização inteira enquanto a lista mostra uma conta.
     ...accountFilterParam(accountIds),
+    ...creditCardFilterParam(creditCardIds),
   };
 }
 
@@ -953,6 +957,17 @@ export function buildTransactionsSummaryQuery({
 function accountFilterParam(accountIds) {
   const ids = Array.isArray(accountIds) ? accountIds.filter(Boolean).map(String) : [];
   return ids.length ? { account_id: ids } : {};
+}
+
+/**
+ * `credit_card_id` repetível (fincla-api#468): `?credit_card_id=5&credit_card_id=7`,
+ * OU entre os cartões. Só ids inteiros positivos viajam; vazio = sem recorte.
+ */
+function creditCardFilterParam(creditCardIds) {
+  const ids = (Array.isArray(creditCardIds) ? creditCardIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return ids.length ? { credit_card_id: ids } : {};
 }
 
 /** O intervalo `{date_start, date_end}` (YYYY-MM-DD) de um período da tela. */

@@ -599,3 +599,69 @@ describe("fincla-frontend#109 rodada 4, achado 7 — pageError é limpo no INÍC
     await waitFor(() => expect(result.current.transactions).toHaveLength(2));
   });
 });
+
+describe("#280 — filtro Cartão chega como credit_card_id (repetível) na chamada HTTP", () => {
+  it("um cartão → credit_card_id [5] na lista E no resumo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["5"] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0]).toMatchObject({ credit_card_id: [5] });
+    expect(getTransactionsSummary.mock.calls[0][0]).toMatchObject({ credit_card_id: [5] });
+  });
+
+  it("dois cartões → credit_card_id [5, 7]; ids que não são número não viajam", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["5", "Nubank ••1234", "7"] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
+    expect(getTransactionsSummary.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
+  });
+
+  it("sem cartão no filtro, nenhum credit_card_id", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: [] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0]).not.toHaveProperty("credit_card_id");
+  });
+
+  it("404 CREDIT_CARD_NOT_FOUND aparece como errorCode para a página reagir", async () => {
+    listTransactions.mockRejectedValue(Object.assign(new Error("404"), {
+      isAxiosError: true, response: { status: 404, data: { error: "CREDIT_CARD_NOT_FOUND", type: "not_found" } },
+    }));
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["9"] });
+    await waitFor(() => expect(result.current.errorCode).toBe("CREDIT_CARD_NOT_FOUND"));
+  });
+});
+
+describe("#293 — a consulta é identificada pelo CONTEÚDO dos filtros", () => {
+  it("objeto de filtros novo com o mesmo conteúdo: nenhuma busca nova", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const make = () => filtersToLegacyParams({ ...BASE_STATE, cardSel: ["5"] }, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: make() } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    rerender({ filters: make() });
+    rerender({ filters: { ...make() } });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(listTransactions).toHaveBeenCalledTimes(1);
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("recarga explícita com o mesmo conteúdo: busca de novo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    result.current.reload();
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(2));
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(2);
+  });
+});
+
