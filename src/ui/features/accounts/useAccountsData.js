@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getOrgBalances } from "../../../api/balances";
+import { handleApiError } from "../../../api/client";
 import {
   listAccounts as apiListAccounts,
   createAccount as apiCreateAccount,
@@ -27,11 +28,17 @@ const EMPTY = {
   hasLoaded: false,
 };
 
+/**
+ * Mesmo formatador do resto do app (`handleApiError`), que lê as três formas de
+ * `detail`: string, objeto `{code, message}` e o array de validação do FastAPI.
+ *
+ * A versão própria daqui só lia string e array. Desde o fincla-api#466 a
+ * transferência com uma conta desativada responde 422 com `detail` OBJETO, e a
+ * tela caía no `error.message` do axios ("Request failed with status code
+ * 422") em vez de dizer qual conta está desativada (#291).
+ */
 export function formatAccountsApiError(error) {
-  const detail = error?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
-  return error?.message || "Erro inesperado ao carregar contas.";
+  return handleApiError(error);
 }
 
 /**
