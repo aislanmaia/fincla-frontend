@@ -636,3 +636,32 @@ describe("#280 — filtro Cartão chega como credit_card_id (repetível) na cham
     await waitFor(() => expect(result.current.errorCode).toBe("CREDIT_CARD_NOT_FOUND"));
   });
 });
+
+describe("#293 — a consulta é identificada pelo CONTEÚDO dos filtros", () => {
+  it("objeto de filtros novo com o mesmo conteúdo: nenhuma busca nova", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const make = () => filtersToLegacyParams({ ...BASE_STATE, cardSel: ["5"] }, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: make() } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    rerender({ filters: make() });
+    rerender({ filters: { ...make() } });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(listTransactions).toHaveBeenCalledTimes(1);
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("recarga explícita com o mesmo conteúdo: busca de novo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    result.current.reload();
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(2));
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(2);
+  });
+});
+

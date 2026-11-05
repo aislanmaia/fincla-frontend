@@ -179,11 +179,44 @@ describe("filtro Cartão pelo hook real (#280)", () => {
     await tick();
     await tick();
     expect(listCreditCardsMock).toHaveBeenCalledTimes(2);
-    // Recusado nesta organização: escolher de novo não manda o id outra vez.
+    // Escolher de novo é deliberado: a combinação é perguntada outra vez, e o novo
+    // 404 recusa sem nova releitura (nada de laço).
     const before = listTransactionsMock.mock.calls.length;
-    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" }));
+    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" })); // tira
+    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" })); // põe de novo
+    await waitFor(() => expect(listTransactionsMock.mock.calls.slice(before).some(([q]) => has7(q))).toBe(true));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0]).not.toHaveProperty("credit_card_id"));
     await tick();
-    for (const [q] of listTransactionsMock.mock.calls.slice(before)) expect(has7(q)).toBe(false);
     expect(listCreditCardsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("dois cartões, um apagado em outra aba: a recuperação mantém o válido e avisa", async () => {
+    listTransactionsMock.mockImplementation((q) => (has7(q) ? NOT_FOUND() : Promise.resolve(PAGE)));
+    summaryApiMock.mockImplementation((q) => (has7(q) ? NOT_FOUND() : Promise.resolve(SUMMARY)));
+    render(<TransacoesPage {...props()} />);
+    await openCardPanel();
+    await userEvent.click(await screen.findByRole("button", { name: "Nubank Roxinho" }));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0].credit_card_id).toEqual([5]));
+    listCreditCardsMock.mockResolvedValue([CARDS[0]]); // o 7 sumiu
+    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" }));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0].credit_card_id).toEqual([5]), { timeout: 3000 });
+    expect(await screen.findByTestId("card-filter-notice")).toHaveTextContent("Um cartão selecionado não existe mais e foi removido do filtro.");
+    expect(screen.getByRole("button", { name: "Nubank Roxinho" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("dois cartões e a releitura FALHA: só a combinação é recusada — o cartão válido continua utilizável", async () => {
+    listTransactionsMock.mockImplementation((q) => (has7(q) ? NOT_FOUND() : Promise.resolve(PAGE)));
+    summaryApiMock.mockImplementation((q) => (has7(q) ? NOT_FOUND() : Promise.resolve(SUMMARY)));
+    render(<TransacoesPage {...props()} />);
+    await openCardPanel();
+    await userEvent.click(await screen.findByRole("button", { name: "Nubank Roxinho" }));
+    listCreditCardsMock.mockImplementation(() => Promise.reject(new Error("503")));
+    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" }));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0]).not.toHaveProperty("credit_card_id"), { timeout: 3000 });
+    expect(await screen.findByTestId("card-filter-notice")).toHaveTextContent("Não foi possível aplicar o filtro de cartão");
+    // O 5 não foi envenenado: sem o 7, o filtro por ele volta a valer.
+    await userEvent.click(screen.getByRole("button", { name: "Itaú Azul" }));
+    await waitFor(() => expect(listTransactionsMock.mock.calls.at(-1)[0].credit_card_id).toEqual([5]));
+    expect(screen.getByRole("button", { name: "Nubank Roxinho" })).toHaveAttribute("aria-pressed", "true");
   });
 });

@@ -1346,6 +1346,8 @@ function TransacoesPageBody({
       .then((cards) => {
         if (cancelled) return;
         setCardsState({ orgId: organizationId, cards: Array.isArray(cards) ? cards : EMPTY_CARD_IDS, loaded: Array.isArray(cards) });
+        // Lista nova e confiável: recusas de CONJUNTO (sem prova) deixam de valer.
+        setRejectedCards((cur) => (cur.orgId === organizationId && cur.sets.length ? { ...cur, sets: EMPTY_CARD_IDS } : cur));
       })
       .catch(() => {
         if (!cancelled) setCardsState((cur) => ({ ...cur, orgId: organizationId, loaded: false }));
@@ -1358,10 +1360,16 @@ function TransacoesPageBody({
   const orgCards = cardsOfThisOrg ? cardsState.cards : EMPTY_CARD_IDS;
   const orgCardsLoaded = cardsOfThisOrg && cardsState.loaded;
   const orgCardIds = useMemo(() => new Set(orgCards.map((c) => String(c.id))), [orgCards]);
-  /* Ids que a API já recusou (404) NESTA organização: nunca mais viajam, nem com a
-     lista de cartões fora do ar — senão a página ficaria presa no mesmo erro. */
-  const [rejectedCards, setRejectedCards] = useState({ orgId: null, ids: EMPTY_CARD_IDS });
+  /* Recusas da API (404) NESTA organização, em dois níveis:
+     - `ids`: cartões PROVADOS inexistentes (a lista de cartões carregou sem eles);
+       saem da seleção e não viajam mais.
+     - `sets`: um CONJUNTO exato recusado sem prova de qual id falhou (a releitura
+       dos cartões falhou, ou a lista ainda os traz). Só aquela combinação deixa de
+       viajar — nenhum cartão válido fica "envenenado" — e uma lista de cartões
+       carregada com sucesso as limpa. */
+  const [rejectedCards, setRejectedCards] = useState({ orgId: null, ids: EMPTY_CARD_IDS, sets: EMPTY_CARD_IDS });
   const rejectedIds = rejectedCards.orgId === organizationId ? rejectedCards.ids : EMPTY_CARD_IDS;
+  const rejectedSets = rejectedCards.orgId === organizationId ? rejectedCards.sets : EMPTY_CARD_IDS;
   const cardOrgRef = useRef(organizationId);
   /* Só ids de cartões que a organização TEM viajam: um id velho (visão salva, link,
      cartão apagado) sairia como 404 e derrubaria a lista inteira. Antes de a lista
@@ -1372,24 +1380,49 @@ function TransacoesPageBody({
     // zera) — neste render ela não viaja.
     if (!shouldUseRealData || cardOrgRef.current !== organizationId) return "";
     const numeric = filter.cardSel.map(String).filter((id) => /^[1-9]\d*$/.test(id) && !rejectedIds.includes(id));
-    return (orgCardsLoaded ? numeric.filter((id) => orgCardIds.has(id)) : numeric).join(",");
+    const key = (orgCardsLoaded ? numeric.filter((id) => orgCardIds.has(id)) : numeric).join(",");
+    return rejectedSets.includes(key) ? "" : key;
   })();
   const effectiveCardSel = useMemo(
     () => (effectiveCardKey ? effectiveCardKey.split(",") : EMPTY_CARD_IDS),
     [effectiveCardKey],
   );
-  // E o próprio estado do filtro larga o id que não existe (chip, contador, visões).
+  // E o próprio estado do filtro larga o id que não existe (chip, contador, visões),
+  // avisando — um chip que some calado parece defeito.
+  const [cardFilterNotice, setCardFilterNotice] = useState("");
   const setCardSelRef = useRef(filter.setCardSel);
   setCardSelRef.current = filter.setCardSel;
   useEffect(() => {
     if (!shouldUseRealData) return;
     const kept = filter.cardSel.filter((id) => !rejectedIds.includes(String(id)) && (!orgCardsLoaded || orgCardIds.has(String(id))));
-    if (kept.length !== filter.cardSel.length) setCardSelRef.current(kept);
+    if (kept.length === filter.cardSel.length) return;
+    setCardSelRef.current(kept);
+    // Ids não numéricos (visões salvas antigas) também saem; o aviso fala do que a pessoa vê.
+    setCardFilterNotice(filter.cardSel.length - kept.length === 1
+      ? "Um cartão selecionado não existe mais e foi removido do filtro."
+      : "Cartões selecionados não existem mais e foram removidos do filtro.");
   }, [shouldUseRealData, orgCardsLoaded, orgCardIds, rejectedIds, filter.cardSel]);
+  /* Escolha DELIBERADA de um cartão (painel, visão salva) vale mais que uma recusa
+     antiga: o id sai das recusas e a combinação nova é perguntada à API de novo. */
+  const prevCardSelRef = useRef(filter.cardSel);
+  useEffect(() => {
+    const before = new Set(prevCardSelRef.current.map(String));
+    prevCardSelRef.current = filter.cardSel;
+    const added = filter.cardSel.map(String).filter((id) => !before.has(id));
+    if (added.length === 0) return;
+    setCardFilterNotice("");
+    setRejectedCards((cur) => {
+      if (cur.orgId !== organizationId) return cur;
+      const ids = cur.ids.filter((id) => !added.includes(id));
+      const sets = cur.sets.filter((set) => !set.split(",").some((id) => added.includes(id)));
+      return ids.length === cur.ids.length && sets.length === cur.sets.length ? cur : { ...cur, ids, sets };
+    });
+  }, [filter.cardSel, organizationId]);
   // Trocar de organização: os cartões escolhidos eram da outra.
   useEffect(() => {
     if (cardOrgRef.current === organizationId) return;
     cardOrgRef.current = organizationId;
+    setCardFilterNotice("");
     if (filter.cardSel.length > 0) setCardSelRef.current([]);
     // A seleção zera no estado; o render seguinte já vem sem ela.
   }, [organizationId, filter.cardSel.length]);
@@ -1618,11 +1651,21 @@ function TransacoesPageBody({
   const cardRefetchPendingRef = useRef(null);
   const effectiveCardSelRef = useRef(effectiveCardSel);
   effectiveCardSelRef.current = effectiveCardSel;
-  const rejectCards = useCallback((ids) => {
+  const cardsLoadedRef = useRef({ loaded: false, ids: orgCardIds });
+  cardsLoadedRef.current = { loaded: orgCardsLoaded, ids: orgCardIds };
+  /* Recusa um conjunto enviado: com a lista de cartões carregada, só os ids que ela
+     PROVA inexistentes; sem prova (lista fora do ar, ou a API recusa um cartão que a
+     lista ainda traz), só a combinação exata — nunca um id válido. */
+  const rejectCards = useCallback((sent) => {
+    const { loaded, ids: known } = cardsLoadedRef.current;
+    const missing = loaded ? sent.filter((id) => !known.has(id)) : [];
     setRejectedCards((cur) => {
-      const base = cur.orgId === organizationId ? cur.ids : [];
-      return { orgId: organizationId, ids: [...new Set([...base, ...ids])] };
+      const base = cur.orgId === organizationId ? cur : { ids: EMPTY_CARD_IDS, sets: EMPTY_CARD_IDS };
+      if (missing.length) return { orgId: organizationId, ids: [...new Set([...base.ids, ...missing])], sets: base.sets };
+      const key = sent.join(",");
+      return { orgId: organizationId, ids: base.ids, sets: base.sets.includes(key) ? base.sets : [...base.sets, key] };
     });
+    if (!missing.length) setCardFilterNotice("Não foi possível aplicar o filtro de cartão agora — a lista mostra todos os cartões.");
   }, [organizationId]);
   useEffect(() => {
     if (transactionsData.errorCode !== "CREDIT_CARD_NOT_FOUND") return;
@@ -4202,6 +4245,20 @@ function TransacoesPageBody({
           style={{ ...G, fontSize:13, color:T.amber, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:12, padding:"12px 14px" }}
         >
           {tagFilterStatusMessage(tagFilterStatus)}
+        </div>
+      )}
+
+      {/* Filtro Cartão ajustado sozinho (#280): cartão apagado em outra aba saiu da
+          seleção, ou a combinação não pôde ser aplicada. Nunca em silêncio. */}
+      {cardFilterNotice && (
+        <div
+          role="status"
+          data-testid="card-filter-notice"
+          style={{ ...G, fontSize:13, color:T.amber, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10 }}
+        >
+          <span style={{ flex:1 }}>{cardFilterNotice}</span>
+          <button type="button" onClick={() => setCardFilterNotice("")} aria-label="Fechar aviso do filtro de cartão"
+            style={{ ...G, background:"none", border:"none", cursor:"pointer", color:T.amber, fontWeight:700 }}>×</button>
         </div>
       )}
 
