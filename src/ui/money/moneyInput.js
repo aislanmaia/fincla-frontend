@@ -149,13 +149,19 @@ export function moneyInputPlaceholder(currency) {
  * escrito de novo como o app escreve dinheiro ("1.500,00"), que as duas
  * convenções leem igual — o que aparece no campo é o que será salvo.
  *
- * Vazio ou ilegível na moeda antiga: o texto fica como está (nunca vira 0 nem um
- * número inventado; o campo continua acusando o que estiver inválido).
+ * Devolve `null` quando NÃO dá para levar o número: texto ilegível na moeda
+ * antiga, ou com mais casas do que a moeda nova guarda (arredondar seria mudar o
+ * número em silêncio). Quem chama mantém o texto e pede para a pessoa conferir.
+ * Vazio volta vazio.
  */
 export function rewriteMoneyInputForCurrency(text, fromCurrency, toCurrency) {
-  if (moneyInputStatus(text, fromCurrency) !== "ok") return text;
+  const status = moneyInputStatus(text, fromCurrency);
+  if (status === "empty") return text;
+  if (status !== "ok") return null;
   const value = parseMoneyInputFor(text, fromCurrency);
-  if (value == null || !Number.isFinite(value)) return text;
+  if (value == null || !Number.isFinite(value)) return null;
   const decimals = decimalsOf(toCurrency);
+  const scaled = value * 10 ** decimals;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-6) return null;
   return value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }

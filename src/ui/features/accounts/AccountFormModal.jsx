@@ -50,20 +50,28 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
 
   // Saldo inicial lido na moeda escolhida (#284): em US$, "1,500" é 1500.
   const initialInvalid = !editing && moneyInputStatus(initial, currency) === "invalid";
-  const canSave = name.trim().length > 0 && !initialInvalid && !isSaving;
+  // Aviso de conferência ativo (#290): o número no campo pode não ser o que a
+  // pessoa quis — não salva até ela mexer nele.
+  const canSave = name.trim().length > 0 && !initialInvalid && !initialNotice && !isSaving;
 
   /* Trocar a moeda com o saldo inicial já digitado (#290): o texto é relido na
      moeda ANTIGA e reescrito na nova com o mesmo número — "1,500" em R$ (1,5) vira
      "1,50", não 1.500 em US$. O que fica no campo é o que será salvo. */
   function changeCurrency(next) {
     if (next === currency) return;
-    if (!editing) {
-      // Ilegível na moeda antiga: não há número para levar. O texto fica (nunca
-      // vira 0), e a tela pede para conferir — na moeda nova ele pode ser lido
-      // de outro jeito.
-      const unreadable = moneyInputStatus(initial, currency) === "invalid";
-      setInitial(rewriteMoneyInputForCurrency(initial, currency, next));
-      setInitialNotice(unreadable ? "Confira o saldo inicial: o valor digitado não pôde ser lido na moeda anterior." : "");
+    // Com o aviso ativo o texto fica parado: reescrever agora levaria para a moeda
+    // nova um número que a pessoa ainda não conferiu. O aviso só sai quando ela
+    // mexe no campo.
+    if (!editing && !initialNotice) {
+      const rewritten = rewriteMoneyInputForCurrency(initial, currency, next);
+      if (rewritten == null) {
+        // Ilegível na moeda antiga, ou com mais casas do que a nova guarda: não há
+        // número para levar sem mudá-lo. O texto fica (nunca vira 0) e a tela pede
+        // para conferir; salvar fica travado até lá.
+        setInitialNotice("Confira o saldo inicial: o valor digitado não pôde ser levado para a moeda escolhida.");
+      } else {
+        setInitial(rewritten);
+      }
     }
     setCurrency(next);
   }
@@ -90,7 +98,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
       footer={
         <>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={handleSubmit}>{isSaving ? "Salvando…" : "Salvar conta"}</Btn>
+          <Btn variant="dark" onClick={handleSubmit} disabled={!!initialNotice}>{isSaving ? "Salvando…" : "Salvar conta"}</Btn>
         </>
       }
     >
