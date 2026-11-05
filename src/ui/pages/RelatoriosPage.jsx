@@ -324,6 +324,8 @@ export function RelatoriosPage({
   extraRecs = [],
   dataMode = "live",
   organizationId = null,
+  /** Sobe a cada transação salva no app (#272): os relatórios são feitos delas. */
+  transactionsRefreshToken = 0,
 }) {
   const [periodo,     setPeriodo]     = useState("6m");
   const [relTab,      setRelTab]      = useState("resumo");
@@ -341,6 +343,7 @@ export function RelatoriosPage({
     organizationId,
     periodo,
     enabled: shouldUseRealData,
+    refreshKey: transactionsRefreshToken,
   });
   const activeData = shouldUseRealData ? reportsData.monthlyData : (dataMode === "mock" ? mockScoreData : []);
   const scoreData = activeData;

@@ -63,6 +63,8 @@ export function OrcamentosPage({
   extraRecs = [],
   orgTipo = "personal",
   organizationId = null,
+  /** Sobe a cada transação salva no app (#272): gasto e restante mudam com ela. */
+  transactionsRefreshToken = 0,
 }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
@@ -89,6 +91,7 @@ export function OrcamentosPage({
   const budgetsData = useBudgetsData({
     organizationId,
     enabled: shouldUseRealData,
+    refreshKey: transactionsRefreshToken,
   });
 
   useEffect(() => {

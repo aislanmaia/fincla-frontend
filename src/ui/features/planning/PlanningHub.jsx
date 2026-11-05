@@ -65,7 +65,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
           />
         );
       case "budgets":
-        return <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} />;
+        return <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} transactionsRefreshToken={transactionsRefreshToken} />;
       case "calendar":
         return (
           <CalendarPage

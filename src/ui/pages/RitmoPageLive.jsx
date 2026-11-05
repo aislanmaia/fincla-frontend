@@ -45,6 +45,8 @@ export function RitmoPageLive({
   isMobile = false,
   organizationId,
   onNewTx,
+  /** Sobe a cada transação salva no app (#272): o ritmo é feito delas. */
+  transactionsRefreshToken = 0,
 }) {
   const bounds = useMemo(() => monthNavBounds(), []);
   const [year, setYear] = useState(bounds.currentYear);
@@ -55,6 +57,7 @@ export function RitmoPageLive({
     enabled: Boolean(organizationId),
     year,
     month,
+    refreshKey: transactionsRefreshToken,
   });
 
   const canGoNext =
@@ -98,7 +101,19 @@ export function RitmoPageLive({
     isOk,
     estouroDia,
     isClosed,
+    refreshFailed,
   } = sp;
+
+  /* Recarga depois de uma transação falhou (#272): o gráfico continua com os números
+     anteriores, e a tela diz isso em vez de fingir que estão atualizados. */
+  const refreshFailedNotice = refreshFailed ? (
+    <div role="status" style={{ ...G, fontSize: 12, color: T.ink, background: T.amber + "18", border: `1px solid ${T.amber}44`, borderRadius: 12, padding: "10px 14px" }}>
+      Não foi possível atualizar o ritmo agora — mostrando os números anteriores.{" "}
+      <button type="button" onClick={() => refetch()} style={{ ...G, fontWeight: 700, color: T.blue, background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+        Tentar novamente
+      </button>
+    </div>
+  ) : null;
 
   const pastLight = viewMode === "pastLight";
   const showBudgetChart = !pastLight && hasBudget;
@@ -288,6 +303,7 @@ export function RitmoPageLive({
             onNext={goNext}
           />
         </div>
+        {refreshFailedNotice}
         <Card>
           <CardEmptyWithCta
             icon="📈"
@@ -319,6 +335,7 @@ export function RitmoPageLive({
             onNext={goNext}
           />
         </div>
+        {refreshFailedNotice}
         <div style={{ ...G, fontSize: 12, color: T.inkLight, lineHeight: 1.5 }}>
           Visão do gasto real neste mês. O comparativo com orçamento fica no{" "}
           <strong>mês atual</strong>.
@@ -357,6 +374,7 @@ export function RitmoPageLive({
           onNext={goNext}
         />
       </div>
+      {refreshFailedNotice}
 
       {pastLight && (
         <div style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.55 }}>
