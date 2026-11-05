@@ -1,3 +1,4 @@
+import { parseMoneyInputFor } from "../money/moneyInput.js";
 import {
   createBudget,
   listBudgets,
@@ -250,12 +251,20 @@ export function buildCreateBudgetPayload(tagId, amount) {
   };
 }
 
-export function parseBudgetAmountInput(value) {
+function parseBudgetAmountLegacy(value) {
   const normalized = String(value || "")
     .replace(/\s/g, "")
     .replace(/\./g, "")
     .replace(",", ".");
   return Number.parseFloat(normalized) || 0;
+}
+
+/**
+ * Limite do orçamento lido na moeda dele (#284): em US$, "1,500" é 1500 e o ambíguo
+ * vira 0 (não salva). Sem moeda ou em R$, a leitura de sempre.
+ */
+export function parseBudgetAmountInput(value, currency = null) {
+  return parseMoneyInputFor(value, currency, parseBudgetAmountLegacy) ?? 0;
 }
 
 export function mapBudgetHistoryToUi(months) {

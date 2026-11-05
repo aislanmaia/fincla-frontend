@@ -12,6 +12,7 @@ import { PLAIN_DECIMAL_RE } from "../../../money/convertAmount.js";
 import { formatMoneyPlainSpace } from "../../../money/formatMoney.js";
 import { currencyInfo } from "../../../money/currencyRegistry.js";
 import { conversionHeadline, parseAmountInput } from "../../novaTransacao/accountConversion.js";
+import { moneyInputStatus, reformatMoneyInputOnBlur } from "../../../money/moneyInput.js";
 import { formatTransactionsApiError, updateTransactionForUi } from "../../../data/transactionsAdapter.js";
 import { buildMovePayload, planBulkMove, rowCurrency, runWithConcurrency, suggestedMoveValue } from "./bulkMoveModel.js";
 
@@ -76,9 +77,9 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
           const text = values[tx.id] ?? "";
           // Problema do valor apontado NA linha, não só no botão travado: texto que não é
           // número ("abc") é inválido; número que arredonda para 0,00 pede um maior.
-          // parseBRL devolve 0 para texto sem número, então "sem dígito" é o sinal de inválido.
-          const parsed = /\d/.test(text) ? parseAmountInput(text) : null;
-          const invalid = text.trim() !== "" && parsed === null;
+          // Leitura na moeda do destino (#284): em US$, "1,500" é 1500 e "1234,567" é inválido.
+          const invalid = moneyInputStatus(text, target.currency) === "invalid";
+          const parsed = invalid ? null : parseAmountInput(text, target.currency);
           const zeroed = parsed !== null && parsed <= 0;
           return (
           <li key={tx.id} style={{ ...G, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12 }}>
@@ -89,6 +90,10 @@ function CrossCurrencyGroup({ group, target, quote, mode, onMode, values, onValu
               <span style={{ color: T.inkMid, fontWeight: 600 }}>{toSymbol}</span>
               <input aria-label={`Valor de ${tx.desc} em ${toSymbol}`} inputMode="decimal" placeholder="0,00" value={values[tx.id] ?? ""}
                 onChange={(e) => onValue(tx.id, e.target.value)}
+                onBlur={() => {
+                  const shown = reformatMoneyInputOnBlur(text, target.currency);
+                  if (shown !== text) onValue(tx.id, shown);
+                }}
                 style={{ ...G, ...NUM, width: 76, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 700, color: T.ink }} />
             </label>
             {invalid || zeroed ? (
@@ -233,7 +238,8 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
   const anyQuoteLoading = plan
     ? plan.crossGroups.some((g) => (modes[g.from] || "convert") === "convert" && (quotes[g.from] ?? QUOTE_PENDING).status === "loading")
     : false;
-  const crossValid = crossItems.every((tx) => (parseAmountInput(values[tx.id]) ?? 0) > 0);
+  const targetCurrency = plan?.target.currency ?? null;
+  const crossValid = crossItems.every((tx) => (parseAmountInput(values[tx.id], targetCurrency) ?? 0) > 0);
   const total = plan ? plan.eligible.length : 0;
   const canConfirm = state === "confirm" && total > 0 && crossValid && !anyQuoteLoading;
 
@@ -241,7 +247,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
     setState("running");
     const outcome = await runWithConcurrency(items, CONCURRENCY, (tx) => {
       const cross = rowCurrency(tx, baseCurrency) !== plan.target.currency;
-      const payload = buildMovePayload(tx, plan.target.id, cross ? { value: parseAmountInput(values[tx.id]), currency: plan.target.currency } : {});
+      const payload = buildMovePayload(tx, plan.target.id, cross ? { value: parseAmountInput(values[tx.id], plan.target.currency), currency: plan.target.currency } : {});
       return updateTransactionForUi(tx.id, organizationId, payload);
     });
     const perItem = items.map((tx, i) => (outcome[i].ok

@@ -493,5 +493,48 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     const quotes = apiClient.get.mock.calls.map(([u]) => u).filter((u) => u.startsWith("/quotations"));
     expect(quotes).toEqual(["/quotations/USD/BRL"]);
   });
+
+  it("#284: valor em US$ lido na moeda do destino — '1,500' é 1500 (aparece '1.500,00') e vai 1500 no PUT", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+    await waitFor(() => expect(field).toHaveValue("52,29"));
+    await user.clear(field);
+    await user.type(field, "1,500");
+    await user.tab();
+    expect(field).toHaveValue("1.500,00");
+    await user.click(screen.getByRole("button", { name: "Mover 1 lançamento" }));
+    await screen.findByTestId("bulk-move-results");
+    expect(puts()[0].body).toMatchObject({ value: 1500, value_currency: "USD" });
+  });
+
+  it("#284: em US$, '1234,567' é ambíguo — 'Valor inválido' na linha, sem mover", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+    await user.clear(field);
+    await user.type(field, "1234,567");
+    expect(within(screen.getByTestId("bulk-move-group-BRL")).getByRole("alert")).toHaveTextContent("Valor inválido");
+    expect(screen.getByRole("button", { name: "Mover 1 lançamento" })).toBeDisabled();
+  });
+
+  it("#284: sem sair do campo (Enter/clique direto), o PUT também lê '1,500' em US$ como 1500", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Jantar em Nova York");
+    await openMoveTo(user, "Wise");
+    const field = await screen.findByLabelText("Valor de Jantar em Nova York em US$");
+    await waitFor(() => expect(field).toHaveValue("52,29"));
+    await user.clear(field);
+    await user.type(field, "1,500");
+    // fireEvent não tira o foco: o texto chega ao PUT como foi digitado.
+    fireEvent.click(screen.getByRole("button", { name: "Mover 1 lançamento" }));
+    await screen.findByTestId("bulk-move-results");
+    expect(puts()[0].body).toMatchObject({ value: 1500, value_currency: "USD" });
+  });
 });
 

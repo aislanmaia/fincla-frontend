@@ -53,6 +53,8 @@ export function facetSelectionCounts(filter, defaultPeriod = "mes") {
 }
 
 export function TransactionsFilterPanel({
+  /** Moeda em que a faixa de valor é lida (#284) — a página decide, uma fonte só. */
+  valueReadCurrency = null,
   filter,
   facet,
   onFacetChange,
@@ -226,6 +228,7 @@ export function TransactionsFilterPanel({
             valueMin={filter.valueMin}
             valueMax={filter.valueMax}
             valueCurrency={filter.valueCurrency}
+            valueReadCurrency={valueReadCurrency}
             setValueCurrency={filter.setValueCurrency}
             setValueMin={filter.setValueMin}
             setValueMax={filter.setValueMax}

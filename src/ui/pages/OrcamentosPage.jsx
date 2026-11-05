@@ -19,6 +19,8 @@ import { BudgetHistoryChart } from "../features/budgets/BudgetHistoryChart.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { formatMoney, formatMoneyAbs } from "../money/formatMoney.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import { moneyInputStatus } from "../money/moneyInput.js";
 
 /* ─── ORÇAMENTOS DATA ────────────────────────────────────── */
 const BUDGET_CONFIG = { total: 6500, modo: "top-down" };
@@ -80,6 +82,10 @@ export function OrcamentosPage({
   const [mockCats, setMockCats] = useState(() => dataMode === "mock" ? CATS_ORC_INIT : []);
   const [mockBudget] = useState(() => dataMode === "mock" ? BUDGET_CONFIG.total : 0);
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  // Limite lido na moeda do orçamento (#284); um novo nasce na moeda base.
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData });
+  // Enquanto a base não chega, um limite novo seria lido em R$ por engano ("1,500" = 1,5).
+  const baseLoading = shouldUseRealData && orgBase.status === "loading";
   const budgetsData = useBudgetsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -155,7 +161,12 @@ export function OrcamentosPage({
     setEditCat(cat);
     const raw =
       typeof cat.limite === "number" && Number.isFinite(cat.limite)
-        ? cat.limite.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        // Casas da moeda do orçamento (JPY/KRW: 0) — senão "150.000,00" num iene vira
+        // valor inválido e o Salvar trava sem ninguém ter mexido.
+        ? cat.limite.toLocaleString("pt-BR", {
+            minimumFractionDigits: currencyInfo(cat.moeda || "BRL").decimalPlaces,
+            maximumFractionDigits: currencyInfo(cat.moeda || "BRL").decimalPlaces,
+          })
         : String(cat.limite ?? "");
     setEditLimStr(raw);
     setShowEdit(true);
@@ -473,8 +484,8 @@ export function OrcamentosPage({
           ? budgetsData.choices
           : CATS_ORC_INIT.filter(c => !cats.find(x => x.id === c.id));
         const selCat    = available.find(c => c.id === addSelId) || null;
-        const limVal    = parseBudgetAmountInput(addLimStr);
-        const canSave   = addSelId !== null && limVal > 0;
+        const limVal    = parseBudgetAmountInput(addLimStr, orgBase.currency);
+        const canSave   = addSelId !== null && limVal > 0 && !baseLoading;
         const handleSave = async () => {
           if (!canSave) return;
           try {
@@ -553,11 +564,12 @@ export function OrcamentosPage({
                   <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
                     <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
                     <input value={addLimStr} onChange={e => setAddLimStr(e.target.value)}
-                      placeholder="0,00" type="text" inputMode="decimal" autoFocus
+                      placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
                       style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
                         color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                       onKeyDown={e => { if (e.key==="Enter") void handleSave(); }}/>
                   </div>
+                  {moneyInputStatus(addLimStr, orgBase.currency) === "invalid" ? <div role="alert" style={{ ...G, fontSize:11, color:T.red, marginTop:4 }}>Valor inválido</div> : null}
                 </div>
               )}
               <div style={{ display:"flex", gap:10, marginTop: selCat ? 0 : 4, flexShrink:0 }}>
@@ -582,8 +594,8 @@ export function OrcamentosPage({
         );
       })()}
       {showEdit && editCat && (() => {
-        const limVal = parseBudgetAmountInput(editLimStr);
-        const canSaveEdit = limVal > 0;
+        const limVal = parseBudgetAmountInput(editLimStr, editCat.moeda ?? orgBase.currency);
+        const canSaveEdit = limVal > 0 && !(editCat.moeda == null && baseLoading);
         const closeEdit = () => {
           if (!budgetsData.isSaving) {
             setShowEdit(false);
@@ -648,11 +660,12 @@ export function OrcamentosPage({
                 <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
                   <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
                   <input value={editLimStr} onChange={e => setEditLimStr(e.target.value)}
-                    placeholder="0,00" type="text" inputMode="decimal" autoFocus
+                    placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
                     style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
                       color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                     onKeyDown={e => { if (e.key === "Enter") void handleEditSave(); }}/>
                 </div>
+                {moneyInputStatus(editLimStr, editCat.moeda ?? orgBase.currency) === "invalid" ? <div role="alert" style={{ ...G, fontSize:11, color:T.red, marginTop:4 }}>Valor inválido</div> : null}
               </div>
               <div style={{ display:"flex", gap:10, flexShrink:0 }}>
                 <button type="button" onClick={closeEdit}

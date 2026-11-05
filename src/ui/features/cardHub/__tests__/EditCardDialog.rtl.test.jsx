@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -115,3 +115,49 @@ describe("EditCardDialog — cancelar a mudança agendada", () => {
     expect(screen.queryByRole("button", { name: /Cancelar mudança agendada/ })).toBeNull();
   });
 });
+
+describe("EditCardDialog — limite na moeda do cartão (#284)", () => {
+  const limitField = () => screen.getByLabelText(/Limite total/);
+
+  it("cartão em US$: '1,500.00' e '1,500' são 1500; o limite atual (5.000,00) continua válido", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = setup({ currency: "USD" });
+    expect(save()).toBeEnabled();
+    await user.clear(limitField());
+    await user.type(limitField(), "1,500");
+    await user.tab();
+    expect(limitField()).toHaveValue("1.500,00");
+    await user.click(save());
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 1500 }));
+  });
+
+  it("cartão em US$: '1234,567' é ambíguo e não salva", async () => {
+    const user = userEvent.setup();
+    const { save } = setup({ currency: "USD" });
+    await user.clear(limitField());
+    await user.type(limitField(), "1234,567");
+    expect(save()).toBeDisabled();
+  });
+
+  it("cartão em R$: regra de sempre — '1.500,50' salva 1500,5 e '1,500.00' é recusado", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = setup({ currency: "BRL" });
+    await user.clear(limitField());
+    await user.type(limitField(), "1,500.00");
+    expect(save()).toBeDisabled();
+    await user.clear(limitField());
+    await user.type(limitField(), "1.500,50");
+    await user.click(save());
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 1500.5 }));
+  });
+
+  it("cartão em US$, salvando sem sair do campo: '1,500' ainda vai 1500", async () => {
+    const user = userEvent.setup();
+    const { onSave, save } = setup({ currency: "USD" });
+    await user.clear(limitField());
+    await user.type(limitField(), "1,500");
+    fireEvent.click(save());
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 1500 })));
+  });
+});
+

@@ -39,6 +39,7 @@ import { useAiSuggestion } from "./useAiSuggestion.js";
 import { useAmountInput } from "./useValorInput.js";
 import { AccountMoveValue } from "./AccountMoveValue.jsx";
 import { formatAmountInput, parseAmountInput } from "./accountConversion.js";
+import { moneyInputStatus, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import { PLAIN_DECIMAL_RE } from "../../money/convertAmount.js";
 import { convertByQuote, quoteDirection } from "../../money/quoteDirection.js";
 import { useOrganizationBaseCurrency } from "../../money/useOrganizationBaseCurrency.js";
@@ -781,7 +782,8 @@ export const NovaTransacaoModal = ({
     setMoveValueError("");
     setMoveDrafts((cur) => ({ ...cur, [movePairKey]: { text, touched: true } }));
   };
-  const moveValueNum = crossCurrencyMove ? parseAmountInput(moveValueText) : null;
+  const moveValueNum = crossCurrencyMove ? parseAmountInput(moveValueText, moveTo) : null;
+  const moveValueInvalid = crossCurrencyMove && moneyInputStatus(moveValueText, moveTo) === "invalid";
   const moveCurrencyUnknownMessage = "Não foi possível identificar a moeda deste lançamento. A conta não pode ser trocada agora — mantenha a conta atual ou tente mais tarde.";
   /** Revisar/salvar só com a troca de conta resolvida: moeda conhecida e valor na moeda nova. */
   const moveReadyOrExplain = () => {
@@ -790,7 +792,7 @@ export const NovaTransacaoModal = ({
       return false;
     }
     if (crossCurrencyMove && !(moveValueNum > 0)) {
-      setMoveValueError(`Informe o valor em ${currencyInfo(moveTo).symbol}`);
+      setMoveValueError(moveValueInvalid ? `Valor inválido em ${currencyInfo(moveTo).symbol}` : `Informe o valor em ${currencyInfo(moveTo).symbol}`);
       return false;
     }
     return true;
@@ -1937,6 +1939,10 @@ export const NovaTransacaoModal = ({
             loading={moveQuote.status === "loading"}
             value={moveValueText}
             onChange={setMoveValueByUser}
+            onBlur={() => {
+              const shown = reformatMoneyInputOnBlur(moveValueText, moveTo);
+              if (shown !== moveValueText) setMoveValueByUser(shown);
+            }}
             originalAmount={Math.abs(amountNum || 0)}
             onUseSameNumber={() => setMoveValueByUser(formatAmountInput(Math.abs(amountNum || 0)))}
             error={moveValueError}

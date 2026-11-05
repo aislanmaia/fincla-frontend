@@ -14,7 +14,7 @@ import { conversionHeadline, formatAmountInput } from "./accountConversion.js";
  * No nível do módulo, não dentro do modal: um componente definido no corpo do
  * modal remontaria o input a cada render e a pessoa perderia o foco ao digitar.
  */
-export function AccountMoveValue({ from, to, quote, loading, value, onChange, originalAmount, onUseSameNumber, error = "" }) {
+export function AccountMoveValue({ from, to, quote, loading, value, onChange, onBlur, originalAmount, onUseSameNumber, error = "" }) {
   if (!from || !to) return null;
   const toSymbol = currencyInfo(to).symbol;
   const headline = conversionHeadline({ to, quote, direction: quote?.direction });
@@ -40,6 +40,7 @@ export function AccountMoveValue({ from, to, quote, loading, value, onChange, or
           placeholder="0,00"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           style={{ ...G, ...NUM, flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: T.ink, border: "none", outline: "none", background: "transparent" }}
         />
       </label>

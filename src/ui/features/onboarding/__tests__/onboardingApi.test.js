@@ -237,6 +237,51 @@ describe("submitOnboarding", () => {
     expect(profileCallOrder).toBeGreaterThan(categoryCallOrder);
   });
 
+  describe("valores lidos na moeda base escolhida (#284)", () => {
+    it("organização em US$: renda '1,500' é 1500 e limite '2,500.00' é 2500", async () => {
+      await submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD",
+        temRec: "sim", recDesc: "Salário", recVal: "1,500", recDia: "10", recTipo: "fixo",
+        temCartao: "sim", cardNome: "Chase", card4: "1234", cardLim: "2,500.00", cardVenc: "10",
+      });
+      expect(mocks.createOrganization).toHaveBeenCalledWith(expect.objectContaining({ base_currency: "USD", monthly_income: 1500 }));
+      expect(mocks.createRecurringSeries).toHaveBeenCalledWith("org-1", expect.objectContaining({ value: 1500 }));
+      expect(mocks.createCreditCard).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 2500 }));
+    });
+
+    it("organização em US$ com valor ambíguo: para antes de criar qualquer coisa (nem limite 0, nem renda sumida)", async () => {
+      await expect(submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD",
+        temRec: "sim", recDesc: "Salário", recVal: "1234,567", recDia: "10", recTipo: "fixo",
+      })).rejects.toThrow("Valor da receita inválido.");
+      await expect(submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD", temRec: "nao",
+        temCartao: "sim", cardNome: "Chase", card4: "1234", cardLim: "0,500", cardVenc: "10",
+      })).rejects.toThrow("Limite do cartão inválido.");
+      expect(mocks.createOrganization).not.toHaveBeenCalled();
+      expect(mocks.createCreditCard).not.toHaveBeenCalled();
+    });
+
+    it("cartão sem nome ('Preencher depois') com limite inválido: não trava — nenhum cartão é criado", async () => {
+      await submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "USD", temRec: "nao",
+        temCartao: "sim", cardNome: "  ", card4: "", cardLim: "0,500", cardVenc: "",
+      });
+      expect(mocks.createOrganization).toHaveBeenCalled();
+      expect(mocks.createCreditCard).not.toHaveBeenCalled();
+    });
+
+    it("organização em R$: '1.500' continua 1500 e '1,5' continua 1,5", async () => {
+      await submitOnboarding({
+        orgNome: "Casa", orgTipo: "couple", orgMoeda: "BRL",
+        temRec: "sim", recDesc: "Salário", recVal: "1,5", recDia: "10", recTipo: "fixo",
+        temCartao: "sim", cardNome: "Nubank", card4: "1234", cardLim: "1.500", cardVenc: "10",
+      });
+      expect(mocks.createOrganization).toHaveBeenCalledWith(expect.objectContaining({ monthly_income: 1.5 }));
+      expect(mocks.createCreditCard).toHaveBeenCalledWith(expect.objectContaining({ credit_limit: 1500 }));
+    });
+  });
+
   describe("moeda base", () => {
     it("NÃO viaja quando é real — o backend já tem BRL como padrão", async () => {
       // Mandar o padrão de volta seria ruído no corpo, e faria toda organização

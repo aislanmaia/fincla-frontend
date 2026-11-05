@@ -5,6 +5,8 @@ import { PageTitle, Card, Btn, PageEnter } from "../components/primitives";
 import { useMonthlyPlanData } from "../features/monthlyPlan/useMonthlyPlanData.js";
 import { shouldUseRealData } from "../dataMode.js";
 import { categoryLabelPtForTag } from "../data/categoryLabels.js";
+import { moneyInputStatus, parseMoneyInputFor } from "../money/moneyInput.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -73,6 +75,9 @@ function CompareCard({ title, planned, actual, kind }) {
 /** M5 — Planejado × Realizado. Sub-área "planned" do hub. */
 export function PlannedVsActualPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const live = shouldUseRealData(organizationId, dataMode);
+  // O plano é na moeda base (#284): numa organização em US$, "1,500" é 1500.
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: live });
+  const readPlanned = (text) => parseMoneyInputFor(text, orgBase.currency, parseBRL) ?? 0;
   const isWide = useIsWide(1024);
   const now = useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 }), []);
   const [cursor, setCursor] = useState(now);
@@ -81,6 +86,9 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ planned_income: "", planned_expense: "", notes: "", items: {} });
+  // Algum valor que não se lê na moeda base (#284)? Salvar fica travado — nunca 0.
+  const planInvalid = [form.planned_income, form.planned_expense, ...Object.values(form.items)]
+    .some((text) => moneyInputStatus(text, orgBase.currency) === "invalid");
 
   function shiftMonth(delta) {
     setEditing(false);
@@ -103,11 +111,14 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
     });
     setEditing(true);
   }
+  // Enquanto a base não chega, "1,500" seria lido em R$ (1,5) numa organização em US$.
+  const baseLoading = live && orgBase.status === "loading";
   async function submit() {
+    if (planInvalid || baseLoading) return;
     const items = (data?.items || [])
-      .map((i) => ({ tag_id: i.tag_id, kind: i.kind, planned_amount: parseBRL(form.items[itemKey(i)]) }))
+      .map((i) => ({ tag_id: i.tag_id, kind: i.kind, planned_amount: readPlanned(form.items[itemKey(i)]) }))
       .filter((i) => i.planned_amount > 0);
-    const body = { planned_income: parseBRL(form.planned_income), planned_expense: parseBRL(form.planned_expense), notes: form.notes || null, status: "active", items };
+    const body = { planned_income: readPlanned(form.planned_income), planned_expense: readPlanned(form.planned_expense), notes: form.notes || null, status: "active", items };
     if (live) {
       try { await save(body); setEditing(false); } catch { /* erro em error */ }
     } else {
@@ -134,7 +145,8 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
           {editing ? (
             <>
               <Btn variant="outGray" onClick={() => setEditing(false)} small={isMobile}>Cancelar</Btn>
-              <Btn variant="dark" onClick={submit} small={isMobile}>{saving ? "Salvando…" : "Salvar"}</Btn>
+              {planInvalid ? <span role="alert" style={{ ...G, fontSize: 12, color: T.red }}>Valor inválido</span> : null}
+              <Btn variant="dark" onClick={submit} small={isMobile} disabled={planInvalid || baseLoading}>{saving ? "Salvando…" : "Salvar"}</Btn>
             </>
           ) : (
             <Btn variant="dark" onClick={startEdit} small={isMobile}>Editar plano</Btn>

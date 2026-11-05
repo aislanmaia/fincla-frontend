@@ -39,6 +39,8 @@ import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
+import { parseMoneyInputFor } from "../money/moneyInput.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
@@ -97,6 +99,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkKey]);
   const categoryCatalog = useCategoryTagsData({ organizationId, enabled });
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled });
   const tagCatalog = useTransactionsTagCatalog({ organizationId, enabled });
   const [debouncedSearch, setDebouncedSearch] = useState(link.query);
   const [prefs, setPrefs] = useState(readListPrefs);
@@ -273,14 +276,19 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const filterBlocked = catalogBlocked || noInvoice || scopeWaiting;
   const sort = filter.sort[0] ?? { field: "date", dir: "desc" };
   const sortField = { val: "value", desc: "description", cat: "category" }[sort.field] ?? "date";
+  // Faixa lida na moeda dela (#284): a escolhida; num cartão, a do cartão; em
+  // "todos os cartões", a base da organização. A mesma vai ao painel.
+  const valueReadCurrency = filter.valueCurrency || (cardScope === "current" ? state.card?.currency : null) || orgBase.currency || null;
+  const valueMinNum = parseMoneyInputFor(filter.valueMin, valueReadCurrency, parseMoneyInput);
+  const valueMaxNum = parseMoneyInputFor(filter.valueMax, valueReadCurrency, parseMoneyInput);
   const queryFilter = {
     ...(invoiceMode ? { invoice_id: selectedInvoiceIds } : {}),
     ...(!invoiceMode && bounds.from ? { date_start: bounds.from } : {}),
     ...(!invoiceMode && bounds.to ? { date_end: bounds.to } : {}),
     ...(activeWeek ? { date_start: activeWeek.from, date_end: activeWeek.to } : {}),
     ...(debouncedSearch ? { description: debouncedSearch } : {}),
-    ...(parseMoneyInput(filter.valueMin) != null ? { value_min: parseMoneyInput(filter.valueMin) } : {}),
-    ...(parseMoneyInput(filter.valueMax) != null ? { value_max: parseMoneyInput(filter.valueMax) } : {}),
+    ...(valueMinNum != null ? { value_min: valueMinNum } : {}),
+    ...(valueMaxNum != null ? { value_max: valueMaxNum } : {}),
     ...(filter.valueCurrency && (filter.valueMin || filter.valueMax) ? { value_currency: filter.valueCurrency } : {}),
     ...(kind === "refund" ? { type: "refund" } : filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
     ...(kind === "one_off" || kind === "installment" ? { commitment_kind: kind } : kind === "recurring" ? { recurring: true } : {}),
@@ -689,7 +697,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         </div>
       </div>}
       {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
-      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
+      {!isMobile && <TransactionsFilterBar valueReadCurrency={valueReadCurrency} filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
         density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
         onDensityChange={(density) => setPreference({ density })}
         onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
@@ -719,7 +727,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => setDialog({ kind: "export", selection: { rows: selectedRowObjects, sum: selectionSum } })} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" && onRefund ? requestRefund : undefined} onOpenOriginal={openOriginal} /></Card></div>}
-        {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
+        {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel valueReadCurrency={valueReadCurrency} filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
@@ -749,7 +757,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           {FACETS.map((key) => <div key={key} ref={(node) => { mobileFacetButtonRefs.current[key] = node; }}><FacetCard compact expanded={false} facet={tileFacet(key)} onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} /></div>)}
         </div>
       </div>}
-      {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column" }}><h2 ref={mobileFacetHeadingRef} tabIndex={-1} style={{ ...G, fontSize: 14, margin: "0 0 8px", color: T.ink }}>{FACET_LABELS[activeFacet] || "Filtros ativos"}</h2><div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div></div>}
+      {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column" }}><h2 ref={mobileFacetHeadingRef} tabIndex={-1} style={{ ...G, fontSize: 14, margin: "0 0 8px", color: T.ink }}>{FACET_LABELS[activeFacet] || "Filtros ativos"}</h2><div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel valueReadCurrency={valueReadCurrency} filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div></div>}
     </MobileFilterSheet>}
   </div>;
 }

@@ -3,7 +3,8 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { accountMeta, formatDay, formatMoney, parseBRL } from "./accountMeta.js";
+import { accountMeta, formatDay, formatMoney } from "./accountMeta.js";
+import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import { currencyInfo } from "../../money/currencyRegistry.js";
 import { convertAmountExact } from "../../money/convertAmount.js";
 
@@ -43,8 +44,11 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
   const crossCurrency = !!fromId && !!toId && fromCurrency !== toCurrency;
 
   const sameAccount = !!fromId && fromId === toId;
-  const amountNum = parseBRL(amount);
-  const toAmountNum = parseBRL(toAmount);
+  // Cada campo lido na moeda da SUA conta (#284): em US$, "1,500" é 1500.
+  const amountNum = parseMoneyInputFor(amount, fromCurrency) ?? 0;
+  const toAmountNum = parseMoneyInputFor(toAmount, toCurrency) ?? 0;
+  const amountInvalid = moneyInputStatus(amount, fromCurrency) === "invalid";
+  const toAmountInvalid = crossCurrency && moneyInputStatus(toAmount, toCurrency) === "invalid";
   // Entre moedas, o valor que ENTROU é obrigatório: o backend não calcula, porque
   // gravar a taxa de mercado deixaria o saldo errado para sempre.
   const canSave =
@@ -155,9 +159,13 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => setAmount((cur) => reformatMoneyInputOnBlur(cur, fromCurrency))}
             placeholder={`${currencyInfo(fromCurrency).symbol} 0,00`}
             inputMode="decimal"
+            aria-label={crossCurrency ? "Valor que sai" : "Valor"}
+            aria-invalid={amountInvalid || undefined}
           />
+          {amountInvalid ? <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</div> : null}
         </div>
         <div>
           <label style={labelStyle}>Data</label>
@@ -172,9 +180,13 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={toAmount}
             onChange={(e) => setToAmount(e.target.value)}
+            onBlur={() => setToAmount((cur) => reformatMoneyInputOnBlur(cur, toCurrency))}
             placeholder={`${toCurrency ? currencyInfo(toCurrency).symbol : ""} 0,00`}
             inputMode="decimal"
+            aria-label="Valor que entrou"
+            aria-invalid={toAmountInvalid || undefined}
           />
+          {toAmountInvalid ? <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</div> : null}
           <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 6, lineHeight: 1.45 }}>
             {quotationError ? (
               <span style={{ color: T.amber }}>{quotationError}</span>

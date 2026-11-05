@@ -187,6 +187,24 @@ describe("Lançamentos de um cartão", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("#284: cartão em US$ — a faixa '1,500' é mil e quinhentos, não 1,5", async () => {
+    const usd = (amount) => ({ amount, currency: "USD" });
+    const invoice = {
+      ...detail,
+      total_amount: usd("140.00"),
+      items: detail.items.map((entry) => ({ ...entry, amount: usd(entry.amount.amount) })),
+      category_breakdown: detail.category_breakdown.map((entry) => ({ ...entry, total: usd(entry.total.amount) })),
+    };
+    serve({ invoice, cardList: [{ ...cards[0], currency: "USD" }] });
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    await user.click(screen.getByRole("button", { name: /Valor: Qualquer/ }));
+    await user.type(screen.getByRole("textbox", { name: "Valor mínimo" }), "1,500");
+    // Lido como 1,5 (o defeito), todos os lançamentos passariam; como 1500, nenhum.
+    expect(screen.getByText(/Exibindo 0 de 3 lançamentos/)).toBeInTheDocument();
+  });
+
   it("não consulta fatura de cartão fora da organização", async () => {
     const calls = serve({ cardList: [] });
     render(<CardTransactionsPage organizationId={ORG_ID} />);

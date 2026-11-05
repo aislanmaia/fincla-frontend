@@ -3,7 +3,8 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { formatBRL, parseBRL } from "./accountMeta.js";
+import { formatBRL } from "./accountMeta.js";
+import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 
 const inputStyle = {
   ...G,
@@ -107,9 +108,12 @@ export function AdjustBalanceModal({
     };
   }, [loadBalanceAt, account?.id, date, includesSameDay]);
 
-  const desiredNum = parseBRL(desired);
+  // Lido na moeda da conta (#284): numa conta em US$, "1,500" é 1500.
+  const accountCurrency = account?.currency ?? null;
+  const desiredNum = parseMoneyInputFor(desired, accountCurrency) ?? 0;
   const delta = (cents(desiredNum) - cents(current)) / 100;
-  const hasDesired = desired.trim() !== "";
+  const desiredInvalid = moneyInputStatus(desired, accountCurrency) === "invalid";
+  const hasDesired = desired.trim() !== "" && !desiredInvalid;
   // Sem exigir delta != 0: reafirmar o saldo que a tela já mostra é a forma natural
   // de fixar uma âncora numa data, e o backend passou a aceitar isso.
   const canSave = hasDesired && reason.trim() !== "" && includesSameDay !== null && !isSaving;
@@ -233,10 +237,14 @@ export function AdjustBalanceModal({
           style={{ ...inputStyle, ...NUM }}
           value={desired}
           onChange={(e) => setDesired(e.target.value)}
+          onBlur={() => setDesired((cur) => reformatMoneyInputOnBlur(cur, accountCurrency))}
           placeholder="R$ 0,00"
           inputMode="decimal"
+          aria-label="Saldo desejado"
+          aria-invalid={desiredInvalid || undefined}
           autoFocus
         />
+        {desiredInvalid ? <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</div> : null}
       </div>
 
       {hasDesired ? (

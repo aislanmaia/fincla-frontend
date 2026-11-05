@@ -133,7 +133,9 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const rows = useMemo(() => filter.sortItems(invoiceRows(detail?.items, {
     search: filter.search, cats: filter.cats, tags: filter.tags, tagMode: filter.tagMode,
     modality, from: bounds.from, to: bounds.to, valueMin: filter.valueMin, valueMax: filter.valueMax,
-  })), [detail, filter, modality, bounds.from, bounds.to]);
+    // Faixa lida na moeda da fatura/cartão (#284): em US$, "1,500" é 1500.
+    valueCurrency: detail?.currency || state.card?.currency || null,
+  })), [detail, filter, modality, bounds.from, bounds.to, state.card?.currency]);
   const weeks = useMemo(() => weeklySpending(detail?.items), [detail]);
   const setPreference = (patch) => setPrefs((before) => { const next = { ...before, ...patch }; writeListPrefs(next); return next; });
   const goBack = () => navigate({ to: invoiceDashboardPath(cardId, year, month) });
@@ -161,7 +163,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           <WeeklyChart rows={weeks} currency={currency} />
         </div>
         <Card style={{ ...panel, display: "flex", flexDirection: "column", gap: 12 }}>
-          <TransactionsFilterBar filter={filter} categories={categories.map((row) => ({ id: row.id, label: row.name, color: row.color }))}
+          <TransactionsFilterBar valueReadCurrency={detail?.currency || state.card?.currency || null} filter={filter} categories={categories.map((row) => ({ id: row.id, label: row.name, color: row.color }))}
             allTags={tags} visibleFacetKeys={INVOICE_FACETS} visibleSortFields={INVOICE_SORT_FIELDS} compact={isMobile} filteredCount={rows.length}
             filterToolbarActive={Boolean(filter.search || filter.period !== "tudo" || filter.cats.length || filter.tags.length || filter.valueMin || filter.valueMax || modality !== "all")}
             onClearAll={() => setModality("all")} />

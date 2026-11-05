@@ -27,6 +27,8 @@ import { GoalProjectionModal } from "../features/goals/GoalProjectionModal.jsx";
 import { formatMoney } from "../money/formatMoney.js";
 import { formatAmountInput } from "../features/novaTransacao/accountConversion.js";
 import { currencyInfo } from "../money/currencyRegistry.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import { moneyInputStatus } from "../money/moneyInput.js";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -170,6 +172,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   const urlSearch = useSearch({ strict: false });
   const live = shouldUseRealData(organizationId, dataMode);
   const goalsData = useGoalsData({ organizationId, enabled: live });
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: live });
   const capacity = useEconomyCapacityData({ organizationId, months: 3, enabled: live });
   const isWide = useIsWide(1100);
 
@@ -209,12 +212,19 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
     navigate({ replace: true, search: (prev) => { const n = { ...prev }; delete n[FC.ADD]; return n; } });
   }, [urlSearch[FC.ADD], navigate]);
 
+  // Moeda dos valores do formulário (#284): a da meta ao editar; a base ao criar.
+  const formCurrency = editing?.moeda ?? orgBase.currency ?? null;
+  const formMoneyInvalid = goalFormMoneyInvalid(form, formCurrency);
+  // Moeda ainda chegando (base da org): salvar agora leria "1,500" em R$ por engano.
+  const formCurrencyPending = !editing?.moeda && live && orgBase.status === "loading";
+
   async function submit() {
-    if (!form.nome.trim()) return;
+    if (!form.nome.trim() || formMoneyInvalid.meta || formMoneyInvalid.monthly_target || formCurrencyPending) return;
     if (live) {
       try {
-        if (editing) await goalsData.updateGoal(editing.id, buildUpdateGoalPayload(form));
-        else await goalsData.createGoal({ ...buildCreateGoalPayload(form), organization_id: organizationId });
+        // Lido na moeda da meta (#284): a dela ao editar; a base ao criar.
+        if (editing) await goalsData.updateGoal(editing.id, buildUpdateGoalPayload(form, formCurrency));
+        else await goalsData.createGoal({ ...buildCreateGoalPayload(form, formCurrency), organization_id: organizationId });
         setModalOpen(false);
       } catch { /* erro em goalsData.error */ }
     } else {
@@ -355,7 +365,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       ) : null}
 
       {modalOpen ? (
-        <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} />
+        <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} currency={formCurrency} currencyPending={formCurrencyPending} />
       ) : null}
 
       {projGoal ? (
@@ -375,7 +385,21 @@ function Field({ label, children }) {
 }
 const inputStyle = { ...G, width: "100%", fontSize: 14, color: T.ink, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 9, padding: "9px 11px", outline: "none", boxSizing: "border-box" };
 
-function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving }) {
+/** Valor ou aporte que não se lê na moeda da meta (#284) — nunca vira 0 em silêncio. */
+function goalFormMoneyInvalid(form, currency) {
+  return {
+    meta: moneyInputStatus(form.meta, currency) === "invalid",
+    monthly_target: moneyInputStatus(form.monthly_target, currency) === "invalid",
+  };
+}
+
+function InvalidHint({ show }) {
+  return show ? <span role="alert" style={{ ...G, display: "block", fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</span> : null;
+}
+
+function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, currency = null, currencyPending = false }) {
+  const invalid = goalFormMoneyInvalid(form, currency);
+  const symbol = currencyInfo(currency || "BRL").symbol;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "100%", background: T.surface, borderRadius: 14, boxShadow: T.lg, padding: 20 }}>
@@ -398,12 +422,12 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving }) 
         </Field>
 
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}><Field label="Valor da meta (R$)"><input style={inputStyle} value={form.meta} onChange={(e) => setF("meta", e.target.value)} placeholder="30.000,00" inputMode="decimal" /></Field></div>
+          <div style={{ flex: 1 }}><Field label={`Valor da meta (${symbol})`}><input style={inputStyle} value={form.meta} onChange={(e) => setF("meta", e.target.value)} placeholder="30.000,00" inputMode="decimal" aria-invalid={invalid.meta || undefined} /><InvalidHint show={invalid.meta} /></Field></div>
           <div style={{ flex: 1 }}><Field label="Prazo (mês/ano)"><input type="month" style={inputStyle} value={form.deadline} onChange={(e) => setF("deadline", e.target.value)} /></Field></div>
         </div>
 
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}><Field label="Aporte mensal alvo (R$)"><input style={inputStyle} value={form.monthly_target} onChange={(e) => setF("monthly_target", e.target.value)} placeholder="1.000,00" inputMode="decimal" /></Field></div>
+          <div style={{ flex: 1 }}><Field label={`Aporte mensal alvo (${symbol})`}><input style={inputStyle} value={form.monthly_target} onChange={(e) => setF("monthly_target", e.target.value)} placeholder="1.000,00" inputMode="decimal" aria-invalid={invalid.monthly_target || undefined} /><InvalidHint show={invalid.monthly_target} /></Field></div>
           {typeSupportsReturn(form.type) ? (
             <div style={{ flex: 1 }}><Field label="Rendimento esperado (% a.a.)"><input style={inputStyle} value={form.annual_return_rate} onChange={(e) => setF("annual_return_rate", e.target.value)} placeholder="10,5" inputMode="decimal" /></Field></div>
           ) : null}
@@ -424,7 +448,7 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving }) 
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 6 }}>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={onSubmit}>{isSaving ? "Salvando…" : editing ? "Salvar" : "Criar projeto"}</Btn>
+          <Btn variant="dark" onClick={onSubmit} disabled={invalid.meta || invalid.monthly_target || currencyPending}>{isSaving ? "Salvando…" : editing ? "Salvar" : "Criar projeto"}</Btn>
         </div>
       </div>
     </div>

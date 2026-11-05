@@ -53,6 +53,7 @@ export function FacetPanelContent({
   valueMin,
   valueMax,
   valueCurrency,
+  valueReadCurrency = null,
   setValueCurrency,
   setValueMin,
   setValueMax,
@@ -159,6 +160,7 @@ export function FacetPanelContent({
           valueMin={valueMin}
           valueMax={valueMax}
           valueCurrency={valueCurrency}
+          readCurrency={valueReadCurrency}
           setValueCurrency={setValueCurrency}
           setValueMin={setValueMin}
           setValueMax={setValueMax}

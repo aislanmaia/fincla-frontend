@@ -3,6 +3,7 @@ import { useState } from "react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { currencyInfo } from "../../money/currencyRegistry.js";
+import { currencyUsesDotDecimal, readDotDecimalMoney, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import {
   buildUpdateCreditCardPayload,
   formatCreditCardsApiError,
@@ -16,7 +17,12 @@ import { APPLY_FROM, CycleChangeOptions, ScheduledCycleNotice, applyFromToSend, 
 const field = { ...G, width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, color: T.ink, background: T.surface };
 const label = { ...G, display: "block", marginBottom: 5, fontSize: 11, fontWeight: 700, color: T.inkMid };
 const validDay = (value) => /^\d{1,2}$/.test(value) && Number(value) >= 1 && Number(value) <= 31;
-const validLimit = (value) => !value || /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(value);
+/* O limite é lido na moeda do cartão (#284): em US$, "1,500.00" e "1,500" são 1500
+   e o ambíguo é recusado; em R$, a regra de sempre. */
+const validLimit = (value, currency) => !value || (currencyUsesDotDecimal(currency)
+  ? readDotDecimalMoney(value).status === "ok"
+  : /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(value));
+const limitToSend = (value, currency) => (currencyUsesDotDecimal(currency) && value ? readDotDecimalMoney(value).value : value);
 
 /** Edits the fields supported by PATCH /credit-cards/{id}; the settling account is immutable here. */
 export function EditCardDialog({ card, organizationId, isMobile, onSave, onCancelScheduled, onClose }) {
@@ -37,7 +43,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onCance
 
   const canSave = brand.trim().length >= 2 && brand.trim().length <= 50 && name.trim().length > 0
     && /^\d{4}$/.test(last4) && validDay(dueDay)
-    && validDay(closingDay) && validLimit(limit.trim())
+    && validDay(closingDay) && validLimit(limit.trim(), card.currency)
     && (!color || /^#[0-9a-fA-F]{6}$/.test(color))
     && !(daysChanged && applyFrom === APPLY_FROM.ALL && !confirmRewrite)
     && !cancelling;
@@ -53,7 +59,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onCance
         brand: brand.trim(),
         displayName: name.trim(),
         last4Digits: last4,
-        limitInput: limit.trim(),
+        limitInput: limitToSend(limit.trim(), card.currency),
         dueDay,
         closingDay,
         color: color || undefined,
@@ -97,7 +103,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onCance
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
         {input("4 últimos dígitos", last4, (value) => setLast4(value.replace(/\D/g, "").slice(0, 4)), { inputMode: "numeric", maxLength: 4, required: true })}
         <label><span style={label}>Limite total ({currencyInfo(card.currency).symbol})</span>
-          <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder="Não cadastrado" style={field} />
+          <input value={limit} onChange={(event) => setLimit(event.target.value)} onBlur={() => setLimit((cur) => reformatMoneyInputOnBlur(cur, card.currency))} inputMode="decimal" placeholder="Não cadastrado" style={field} />
         </label>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>

@@ -1,3 +1,5 @@
+import { parseMoneyInputFor } from "../../money/moneyInput.js";
+
 const MONTHS_SHORT_PT = [
   "Jan",
   "Fev",
@@ -24,6 +26,14 @@ export function parseMoneyInput(value) {
 
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Valor do onboarding lido na moeda base escolhida (`orgMoeda`, #284): numa
+ * organização em US$, "1,500" é 1500. Em R$ (o padrão), `parseMoneyInput` de sempre.
+ */
+export function parseOnboardingMoney(value, currency) {
+  return parseMoneyInputFor(value, currency || "BRL", parseMoneyInput);
 }
 
 export function buildOrganizationDescription(orgType) {
@@ -73,7 +83,7 @@ function resolveNextRecurringDate(dayOfMonth, now = new Date()) {
 }
 
 export function buildImmediateRecurringPreview(data, now = new Date()) {
-  const value = parseMoneyInput(data?.recVal);
+  const value = parseOnboardingMoney(data?.recVal, data?.orgMoeda);
   if (data?.temRec !== "sim" || value == null || value <= 0) return null;
 
   const day = Number.parseInt(data?.recDia, 10) || 5;
@@ -108,7 +118,7 @@ export function buildImmediateCreditCardPreview(data) {
   const last4 = String(data?.card4 ?? "").replace(/\D/g, "").slice(-4);
   if (last4.length !== 4) return null;
 
-  const limit = parseMoneyInput(data?.cardLim) || 0;
+  const limit = parseOnboardingMoney(data?.cardLim, data?.orgMoeda) || 0;
   const dueDay = Number.parseInt(data?.cardVenc, 10) || 10;
 
   return {
