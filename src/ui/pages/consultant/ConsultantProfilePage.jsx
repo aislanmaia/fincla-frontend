@@ -21,14 +21,13 @@ function prettyPlan(slug) {
   return String(slug).split(/[_-]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
-function StatCard({ label, value, icon, soon }) {
+function StatCard({ label, value, icon }) {
   return (
     <Card style={{ padding: "16px 18px" }}>
       <Icon name={icon} size={17} color={T.purple} />
-      <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color: soon ? T.inkGhost : T.ink, marginTop: 10 }}>{value}</div>
+      <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color: T.ink, marginTop: 10 }}>{value}</div>
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
         {label}
-        {soon && <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 4, padding: "1px 4px" }}>em breve</span>}
       </div>
     </Card>
   );
@@ -51,11 +50,11 @@ function InfoRow({ icon, label, value, soon, last }) {
 
 /**
  * Perfil do consultor (S6) — reimplementado fiel à referência (`cons-perfil.jsx`):
- * cartão de conta (avatar + nome + plano) + stats (clientes / patrimônio sob gestão /
- * honorários) + lista de dados (e-mail / plano / notificações). Consome dado real do
+ * cartão de conta (avatar + nome + plano) + stats (clientes / patrimônio sob gestão)
+ * + lista de dados (e-mail / plano / notificações). Consome dado real do
  * usuário logado (`useFinclaPages`) e da carteira (`useConsultantClients`). Sem
- * fonte de dado — **honorários/MRR**, **notificações de risco** (sem toggle no
- * backend) e **editar perfil** — ficam como **stub "em breve"** (não inventa número).
+ * fonte de dado — **notificações de risco** (sem toggle no backend) e **editar
+ * perfil** — ficam como **stub "em breve"** (não inventa número).
  */
 export function ConsultantProfilePage() {
   const pages = useFinclaPages();
@@ -100,7 +99,6 @@ export function ConsultantProfilePage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <StatCard label="Clientes" value={clients.length} icon="users" />
         <StatCard label="Patrimônio sob gestão" value={fmtMoney(patrimonio)} icon="wallet" />
-        <StatCard label="Honorários recorrentes" value="—" icon="repeat" soon />
       </div>
 
       {user?.subscription?.checkout_selection?.persona === "consultant" && <ConsultantSubscriptionPanel />}

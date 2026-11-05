@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 
 import { listTransactionsForUi, mapApiTransactionToUi } from "../../data/transactionsAdapter.js";
 import { handleApiError } from "../../../api/client";
+import { TRANSACTIONS_LIMIT } from "./consultantClientTransactions";
 
 const EMPTY = { loading: false, error: "", transactions: [], hasLoaded: false };
 
 /**
  * Carrega as transações da org do cliente para a aba "Transações" do relatório
  * (RF.2), mapeadas para a UI (`mapApiTransactionToUi`). Mesmo padrão por-org
- * (guard `cancelled`, `enabled`, `hasLoaded`). Traz as mais recentes (limit 100).
+ * (guard `cancelled`, `enabled`, `hasLoaded`). `dateStart`/`dateEnd` aplicam o
+ * período escolhido no relatório. Traz até 100 itens daquele intervalo.
  */
-export function useClientTransactions({ organizationId, enabled = true }) {
+export function useClientTransactions({ organizationId, dateStart, dateEnd, enabled = true }) {
   const [state, setState] = useState(EMPTY);
 
   useEffect(() => {
@@ -22,7 +24,9 @@ export function useClientTransactions({ organizationId, enabled = true }) {
     setState({ ...EMPTY, loading: true });
     listTransactionsForUi({
       organization_id: organizationId,
-      limit: 100,
+      date_start: dateStart,
+      date_end: dateEnd,
+      limit: TRANSACTIONS_LIMIT,
       sort_by: "date",
       sort_order: "desc",
     })
@@ -37,7 +41,7 @@ export function useClientTransactions({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId]);
+  }, [dateEnd, dateStart, enabled, organizationId]);
 
   return state;
 }

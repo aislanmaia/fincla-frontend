@@ -87,7 +87,7 @@ export function ConsultantClientCategoriesTab({ categories }) {
       return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Não foi possível carregar as categorias.</div>;
     }
     if (rows.length === 0) {
-      return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Nenhum gasto por categoria neste mês.</div>;
+      return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Nenhum gasto por categoria no período.</div>;
     }
     return rows.map((row) => <CategoryRow key={row.id} row={row} max={max} narrow={narrow} />);
   };
@@ -95,7 +95,7 @@ export function ConsultantClientCategoriesTab({ categories }) {
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "14px 18px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Gasto por categoria · este mês</div>
+        <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Gasto por categoria · no período</div>
         <span style={{ ...G, fontSize: 11, color: T.inkLight, whiteSpace: "nowrap" }}>{rows.length} categoria{rows.length === 1 ? "" : "s"} ativa{rows.length === 1 ? "" : "s"}</span>
       </div>
       {body()}

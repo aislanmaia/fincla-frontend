@@ -6,7 +6,7 @@ import { G, NUM } from "../../typography";
 import { getCategoryLucideIcon } from "../../data/categoryLucideIcons.js";
 import { fmtBRL0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
-import { TX_FILTERS, filterTransactions, summarizeTransactions } from "./consultantClientTransactions";
+import { TRANSACTIONS_LIMIT, TX_FILTERS, filterTransactions, summarizeTransactions } from "./consultantClientTransactions";
 
 const CAT_COLORS = ["#0F0F0D", "#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626", "#9CA3AF"];
 
@@ -115,10 +115,11 @@ export function ConsultantClientTransactionsTab({ transactions }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 12 }}>
-        <SummaryCard label="Receitas no mês" value={`+${fmtBRL0(income)}`} color={T.green} />
-        <SummaryCard label="Despesas no mês" value={`−${fmtBRL0(expense)}`} color={T.ink} />
+        <SummaryCard label="Receitas no período" value={`+${fmtBRL0(income)}`} color={T.green} />
+        <SummaryCard label="Despesas no período" value={`−${fmtBRL0(expense)}`} color={T.ink} />
         <SummaryCard label="Resultado" value={`${result >= 0 ? "+" : ""}${fmtBRL0(result)}`} color={result >= 0 ? T.green : T.red} />
       </div>
+      {all.length >= TRANSACTIONS_LIMIT && <div role="note" style={{ ...G, fontSize: 12, color: T.inkLight }}>Mostrando as {TRANSACTIONS_LIMIT} transações mais recentes do período. Os totais acima consideram só essas.</div>}
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "13px 18px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: `1px solid ${T.border}` }}>

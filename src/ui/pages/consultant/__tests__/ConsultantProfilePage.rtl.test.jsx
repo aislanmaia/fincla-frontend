@@ -48,7 +48,7 @@ describe("<ConsultantProfilePage> (S6)", () => {
     expect(screen.getByText("Patrimônio sob gestão")).toBeInTheDocument();
 
     // stubs honestos
-    expect(screen.getByText("Honorários recorrentes")).toBeInTheDocument();
+    expect(screen.queryByText("Honorários recorrentes")).not.toBeInTheDocument();
     expect(screen.getByText("Notificações de risco")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Editar/ })).toBeDisabled();
   });

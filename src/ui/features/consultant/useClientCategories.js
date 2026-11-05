@@ -9,8 +9,9 @@ const EMPTY = { loading: false, error: "", categories: [], hasLoaded: false };
  * Carrega `GET /v1/analytics/by-category` (despesas por categoria) para a org do
  * cliente — alimenta o donut "para onde vai o dinheiro" do relatório (RF.1b).
  * Mesmo padrão dos demais hooks por-org (guard `cancelled`, `enabled`, `hasLoaded`).
+ * `dateStart`/`dateEnd` aplicam o período escolhido no relatório.
  */
-export function useClientCategories({ organizationId, enabled = true }) {
+export function useClientCategories({ organizationId, dateStart, dateEnd, enabled = true }) {
   const [state, setState] = useState(EMPTY);
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export function useClientCategories({ organizationId, enabled = true }) {
     }
     let cancelled = false;
     setState({ ...EMPTY, loading: true });
-    getByCategory(organizationId, { transactionType: "expense" })
+    getByCategory(organizationId, { dateStart, dateEnd, transactionType: "expense" })
       .then((data) => {
         if (!cancelled) setState({ loading: false, error: "", categories: data.categories ?? [], hasLoaded: true });
       })
@@ -30,7 +31,7 @@ export function useClientCategories({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId]);
+  }, [dateEnd, dateStart, enabled, organizationId]);
 
   return state;
 }

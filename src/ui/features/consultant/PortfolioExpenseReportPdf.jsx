@@ -1,7 +1,8 @@
 import React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
-import { fmtMoneyIn, portfolioExpenseInsightCopy } from "./consultantFormat";
+import { fmtMoneyIn } from "./consultantFormat";
+import { EXPENSE_BASIS_NOTE, pdfCohortLine, pdfDate, pdfDateRange, pdfInsightLine } from "./portfolioExpensePdfText";
 
 const styles = StyleSheet.create({
   page: { paddingTop: 34, paddingBottom: 42, paddingHorizontal: 38, color: "#20242c", fontFamily: "Helvetica", fontSize: 9 },
@@ -34,16 +35,16 @@ function Metric({ label, value, note }) {
   return <View style={styles.card}><Text style={styles.label}>{label}</Text><Text style={styles.value}>{value}</Text><Text style={styles.note}>{note}</Text></View>;
 }
 
-export function PortfolioExpenseReportPdf({ report, analysis, excluded = [] }) {
+export function PortfolioExpenseReportPdf({ report, analysis, narrative, excluded = [] }) {
   const included = report.clients_converted + report.clients_without_expenses;
   const partial = report.clients_not_converted > 0;
-  const top = report.highlights?.top_categories || [];
   const rates = report.conversion_rates || [];
   return <Document title="Fincla — Distribuição de gastos da carteira" author="Fincla">
     <Page size="A4" style={styles.page}>
       <Text style={styles.brand}>FINCLA · CONSULTOR</Text>
       <Text style={styles.title}>Distribuição de gastos da carteira</Text>
-      <Text style={styles.subtitle}>Resumo analítico por categoria · {report.period_start} a {report.period_end} · Moeda de leitura: {report.reading_currency}</Text>
+      <Text style={styles.subtitle}>Resumo analítico por categoria · {pdfDateRange(report.period_start, report.period_end)} · Moeda de leitura: {report.reading_currency}</Text>
+      <Text style={styles.note}>{EXPENSE_BASIS_NOTE}.</Text>
 
       {partial && <Section title="Conversão e cobertura"><Text>{included} de {report.client_count} clientes analisados; {report.clients_not_converted} sem conversão. Valores não convertidos não compõem o total.</Text></Section>}
 
@@ -55,7 +56,7 @@ export function PortfolioExpenseReportPdf({ report, analysis, excluded = [] }) {
         </View>
       </Section>
 
-      {analysis && <Section title="Comparação de períodos"><Text style={styles.note}>Período anterior: {analysis.comparison.period_start} a {analysis.comparison.period_end}. {analysis.comparison.comparable_client_count} clientes comparáveis; {analysis.comparison.excluded_from_comparison} excluídos da comparação. A mesma cotação de leitura foi aplicada aos dois períodos. {Math.abs(Number(report.total_expenses?.amount || 0) - Number(analysis.comparison.current_total.amount)) >= 0.01 ? `A coorte comparável soma ${fmtMoneyIn(analysis.comparison.current_total.amount, report.reading_currency)} no período atual e não corresponde ao total integral exibido.` : ""}</Text></Section>}
+      {analysis && <Section title="Comparação de períodos"><Text style={styles.note}>Período anterior: {pdfDateRange(analysis.comparison.period_start, analysis.comparison.period_end)}. {analysis.comparison.comparable_client_count} clientes comparáveis; {analysis.comparison.excluded_from_comparison} excluídos da comparação. A mesma cotação de leitura foi aplicada aos dois períodos. {Math.abs(Number(report.total_expenses?.amount || 0) - Number(analysis.comparison.current_total.amount)) >= 0.01 ? `A coorte comparável soma ${fmtMoneyIn(analysis.comparison.current_total.amount, report.reading_currency)} no período atual e não corresponde ao total integral exibido.` : ""}</Text></Section>}
 
       <Section title="Onde a carteira mais gasta">
         <Text style={styles.note}>{report.clients_converted} clientes no agregado. Percentuais sobre o total incluído.</Text>
@@ -66,15 +67,17 @@ export function PortfolioExpenseReportPdf({ report, analysis, excluded = [] }) {
         {!report.categories?.length && <Text style={styles.note}>Nenhum gasto comparável neste período.</Text>}
       </Section>
 
-      {analysis && <Section title="Ritmo mensal da carteira">{analysis.monthly_trend.map((point) => <View key={point.period_end} style={styles.tableRow}><Text style={{ width: "45%" }}>{point.period_start} a {point.period_end}</Text><Text style={{ width: "55%", textAlign: "right" }}>{fmtMoneyIn(point.total.amount, report.reading_currency)}</Text></View>)}</Section>}
+      {analysis && <Section title="Ritmo mensal da carteira">{analysis.monthly_trend.map((point) => <View key={point.period_end} style={styles.tableRow}><Text style={{ width: "45%" }}>{pdfDateRange(point.period_start, point.period_end)}</Text><Text style={{ width: "55%", textAlign: "right" }}>{fmtMoneyIn(point.total.amount, report.reading_currency)}</Text></View>)}</Section>}
 
-      <Section title="Leitura do Copiloto">
-        {analysis ? analysis.insights.map((insight, index) => <Text key={`${insight.kind}-${index}`} style={styles.note}>{index + 1}. {insight.title} {portfolioExpenseInsightCopy(insight, analysis.comparison, report.reading_currency)}</Text>) : top.length ? <Text>{top.map((category) => `${category.name}: ${pct(category.percentage)} dos gastos; ${category.client_count} clientes`).join(" · ")}. A distribuição descreve onde estão os gastos, não sua causa.</Text> : <Text>Não há dados suficientes para destaques neste período.</Text>}
-      </Section>
+      {narrative?.insights?.length > 0 && <Section title="Leitura do Copiloto">
+        {narrative.insights.map((insight, index) => <Text key={`${insight.title}-${index}`} style={styles.note}>{pdfInsightLine(index, insight)}</Text>)}
+      </Section>}
+      {narrative && !narrative.insights.length && <Section title="Leitura do Copiloto"><Text style={styles.note}>Sem observações adicionais sustentadas pelos dados deste período.</Text></Section>}
+      {analysis && !narrative && <Section title="Leitura do Copiloto"><Text style={styles.note}>A interpretação por IA não estava disponível ao exportar. Os indicadores deste relatório permanecem calculados a partir dos dados da carteira.</Text></Section>}
 
       {rates.length > 0 && <Section title="Conversões aplicadas">
-        {(report.converted_cohorts || []).map((cohort) => <Text key={cohort.base_currency} style={styles.note}>{cohort.client_count} clientes · {cohort.base_currency} → {cohort.reading_currency}: {fmtMoneyIn(cohort.original_total.amount, cohort.base_currency)} → {fmtMoneyIn(cohort.converted_total.amount, cohort.reading_currency)}</Text>)}
-        {rates.map((rate, index) => <Text key={`${rate.base}-${rate.quote}-${index}`} style={styles.note}>1 {rate.base} = {Number(rate.rate).toLocaleString("pt-BR", { maximumFractionDigits: 6 })} {rate.quote} · Cotação de {rate.quoted_on}</Text>)}
+        {(report.converted_cohorts || []).map((cohort) => <Text key={cohort.base_currency} style={styles.note}>{pdfCohortLine(cohort)}</Text>)}
+        {rates.map((rate, index) => <Text key={`${rate.base}-${rate.quote}-${index}`} style={styles.note}>1 {rate.base} = {Number(rate.rate).toLocaleString("pt-BR", { maximumFractionDigits: 6 })} {rate.quote} · Cotação de {pdfDate(rate.quoted_on)}</Text>)}
       </Section>}
 
       {excluded.length > 0 && <Section title="Valores fora do agregado">{excluded.map((group) => <Text key={group.currency} style={styles.note}>{group.currency}: {fmtMoneyIn(group.amount, group.currency)} · {group.client_count} {group.client_count === 1 ? "cliente" : "clientes"}. Não somados ao total convertido.</Text>)}</Section>}

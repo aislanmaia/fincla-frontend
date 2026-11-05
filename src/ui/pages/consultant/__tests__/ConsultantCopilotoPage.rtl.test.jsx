@@ -24,7 +24,7 @@ vi.mock("../../../features/consultant/useConsultantClients", () => ({
 vi.mock("../../../../api/consultant", () => ({
   askCopiloto: vi.fn(),
   getAiCopilotoRun: vi.fn(),
-  getConsultantPortfolioExpenseAnalysis: vi.fn(),
+  streamConsultantPortfolioExpenseAnalysis: vi.fn(),
   getConsultantPortfolioCategoryContributors: vi.fn(),
   newEvaluationRequestId: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
 }));
@@ -36,7 +36,7 @@ vi.mock("../../../features/consultant/ConsultantEvaluationDrawer.jsx", () => ({
   ConsultantEvaluationDrawer: ({ clientName }) => <div data-testid="eval-drawer">{clientName}</div>,
 }));
 
-import { askCopiloto, getConsultantPortfolioExpenseAnalysis } from "../../../../api/consultant";
+import { askCopiloto, streamConsultantPortfolioExpenseAnalysis } from "../../../../api/consultant";
 import { __resetStore } from "../../../features/consultant/copilotoStore.js";
 import { ConsultantCopilotoPage } from "../ConsultantCopilotoPage.jsx";
 
@@ -165,10 +165,15 @@ describe("ConsultantCopilotoPage", () => {
       conversion_rates: [{ base: "USD", quote: "BRL", rate: "5.00", quoted_on: "2026-01-30" }],
       converted_cohorts: [],
     };
-    vi.mocked(getConsultantPortfolioExpenseAnalysis).mockResolvedValue({
+    const analysis = {
       report: reportBlock,
       comparison: { period_start: "2025-12-01", period_end: "2025-12-31", current_total: { amount: "1200.00", currency: "BRL" }, previous_total: { amount: "0", currency: "BRL" }, delta: { amount: "1200.00", currency: "BRL" }, delta_percentage: null, comparable_client_count: 3, current_client_count: 3, excluded_from_comparison: 1, quotation_policy: "same_reading_quotation" },
       categories: [], monthly_trend: [], insights: [],
+    };
+    vi.mocked(streamConsultantPortfolioExpenseAnalysis).mockImplementation(async (_params, onEvent) => {
+      onEvent({ type: "report.ready", data: analysis });
+      onEvent({ type: "insight.ready", data: { period_start: "2026-01-01", period_end: "2026-01-31", insights: [] } });
+      onEvent({ type: "completed", data: {} });
     });
     vi.mocked(askCopiloto).mockResolvedValue({
       correlation_id: "c", session_id: "s", run_id: "r",

@@ -17,7 +17,7 @@ afterEach(() => cleanup());
 describe("ConsultantClientCategoriesTab", () => {
   it("lista as categorias ordenadas com % do total, valor e nº de transações", () => {
     render(<ConsultantClientCategoriesTab categories={state()} />);
-    expect(screen.getByText("Gasto por categoria · este mês")).toBeInTheDocument();
+    expect(screen.getByText("Gasto por categoria · no período")).toBeInTheDocument();
     expect(screen.getByText("2 categorias ativas")).toBeInTheDocument();
     expect(screen.getByText("Alimentação")).toBeInTheDocument();
     expect(screen.getByText("Transporte")).toBeInTheDocument();
@@ -33,6 +33,6 @@ describe("ConsultantClientCategoriesTab", () => {
     rerender(<ConsultantClientCategoriesTab categories={state({ error: "boom", categories: [] })} />);
     expect(screen.getByText("Não foi possível carregar as categorias.")).toBeInTheDocument();
     rerender(<ConsultantClientCategoriesTab categories={state({ categories: [] })} />);
-    expect(screen.getByText("Nenhum gasto por categoria neste mês.")).toBeInTheDocument();
+    expect(screen.getByText("Nenhum gasto por categoria no período.")).toBeInTheDocument();
   });
 });

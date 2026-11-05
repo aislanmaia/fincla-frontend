@@ -19,8 +19,8 @@ afterEach(() => cleanup());
 describe("ConsultantClientTransactionsTab", () => {
   it("mostra resumo (receitas/despesas/resultado) e a lista", () => {
     render(<ConsultantClientTransactionsTab transactions={state()} />);
-    expect(screen.getByText("Receitas no mês")).toBeInTheDocument();
-    expect(screen.getByText("Despesas no mês")).toBeInTheDocument();
+    expect(screen.getByText("Receitas no período")).toBeInTheDocument();
+    expect(screen.getByText("Despesas no período")).toBeInTheDocument();
     expect(screen.getByText("Resultado")).toBeInTheDocument();
     // Resultado = 5000 − 3900 = 1100 (valor único, não colide com nenhuma linha).
     expect(screen.getByText(/R\$\s*1\.100/)).toBeInTheDocument();
@@ -60,5 +60,16 @@ describe("ConsultantClientTransactionsTab", () => {
     expect(screen.getByText("Carregando transações…")).toBeInTheDocument();
     rerender(<ConsultantClientTransactionsTab transactions={state({ transactions: [] })} />);
     expect(screen.getByText("Nenhuma transação encontrada.")).toBeInTheDocument();
+  });
+
+  it("warns that totals cover only the newest 100 rows when the period has more", () => {
+    const many = Array.from({ length: 100 }, (_, index) => ({ id: `m${index}`, desc: `Item ${index}`, cat: "Moradia", val: -10, method: "Pix", date: "05/06/2026", cartaoId: null, categoryIconKey: null }));
+    render(<ConsultantClientTransactionsTab transactions={state({ transactions: many })} />);
+    expect(screen.getByText(/100 transações mais recentes do período/)).toBeInTheDocument();
+  });
+
+  it("shows no truncation warning for a short list", () => {
+    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    expect(screen.queryByText(/mais recentes do período/)).not.toBeInTheDocument();
   });
 });

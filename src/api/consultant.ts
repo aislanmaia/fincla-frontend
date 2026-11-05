@@ -3,6 +3,7 @@
 // descartada de propósito, porque estes agregados ainda somam moedas sem converter
 // (fincla-api#170) e um rótulo daria ao número uma autoridade que ele não tem.
 import apiClient from './client';
+import { API_CONFIG } from './config';
 import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
 import type { WireMoney } from './money';
 import type {
@@ -38,6 +39,7 @@ import type {
   SaveConsultantCategoryTemplateRequest,
   ConsultantPortfolioExpenseDistributionResponse,
   ConsultantPortfolioExpenseAnalysisResponse,
+  ConsultantPortfolioExpenseNarrativeResponse,
   ConsultantPortfolioCategoryContributorsResponse,
 } from './types';
 
@@ -52,13 +54,68 @@ export const getConsultantPortfolioExpenseDistribution = async (
   return response.data;
 };
 
-export const getConsultantPortfolioExpenseAnalysis = async (
+export type PortfolioExpenseStreamEvent =
+  | { type: 'report.ready'; data: ConsultantPortfolioExpenseAnalysisResponse }
+  | { type: 'insight.started'; data: Record<string, never> }
+  | { type: 'insight.ready'; data: ConsultantPortfolioExpenseNarrativeResponse }
+  | { type: 'insight.failed'; data: { code?: string; message: string } }
+  | { type: 'completed'; data: Record<string, never> };
+
+export const streamConsultantPortfolioExpenseAnalysis = async (
   params: { date_start: string; date_end: string },
-): Promise<ConsultantPortfolioExpenseAnalysisResponse> => {
-  const response = await apiClient.get<ConsultantPortfolioExpenseAnalysisResponse>(
-    '/consultant/expenses-distribution/analysis', { params },
-  );
-  return response.data;
+  onEvent: (event: PortfolioExpenseStreamEvent) => void,
+  signal?: AbortSignal,
+  insightOnly = false,
+): Promise<void> => {
+  const query = new URLSearchParams({ ...params, ...(insightOnly ? { insight_only: 'true' } : {}) });
+  const token = localStorage.getItem('auth_token');
+  const requestId = globalThis.crypto?.randomUUID?.();
+  const response = await fetch(`${API_CONFIG.BASE_URL}/consultant/expenses-distribution/analysis/stream?${query}`, {
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(requestId ? { 'X-Request-Id': requestId } : {}),
+    },
+    signal,
+  });
+  if (response.status === 401) {
+    localStorage.removeItem('auth_token');
+    window.dispatchEvent(new CustomEvent('fincla:auth-expired'));
+  }
+  if (!response.ok || !response.body) throw new Error(`Report stream failed (${response.status})`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let completed = false;
+  let finished = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      buffer = buffer.replace(/\r\n/g, '\n');
+      if (buffer.length > 2_000_000) throw new Error('Report stream frame too large');
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const name = frame.split('\n').find((line) => line.startsWith('event: '))?.slice(7);
+        const data = frame.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+        if (name && data) {
+          const event = { type: name, data: JSON.parse(data) } as PortfolioExpenseStreamEvent;
+          onEvent(event);
+          if (name === 'completed') completed = true;
+        }
+        boundary = buffer.indexOf('\n\n');
+      }
+      if (done) { finished = true; break; }
+    }
+  } finally {
+    // A handler or parse error leaves the connection open (and the backend generating a paid
+    // reading): cancel it. After a clean end there is nothing left to cancel.
+    if (!finished) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  if (!completed) throw new Error('Report stream ended before completion');
 };
 
 export const getConsultantPortfolioCategoryContributors = async (

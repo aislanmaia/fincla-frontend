@@ -147,10 +147,10 @@ function SpendingDonutCard({ categories }) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
         {/* Centro do donut é `position:absolute; inset:0` sem overflow:hidden
-            (ver Donut em consultantUi.jsx) — subir a legenda "gasto/mês" não
+            (ver Donut em consultantUi.jsx) — subir a legenda "no período" não
             corta, só reduz um pouco a folga visual dentro do círculo. */}
         <Donut segments={segments} size={140} stroke={20}
-          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>gasto/mês</span></>} />
+          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>no período</span></>} />
         <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 10 }}>
           {segments.slice(0, 6).map((x) => (
             <div key={x.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>

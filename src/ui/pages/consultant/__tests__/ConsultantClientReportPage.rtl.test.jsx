@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
@@ -37,6 +37,7 @@ import { getFinancialHealth } from "../../../../api/financialHealth";
 import { getByCategory } from "../../../../api/analytics";
 import { listGoalsForUi } from "../../../data/goalsAdapter.js";
 import { ConsultantClientReportPage } from "../ConsultantClientReportPage.jsx";
+import { rangeForDashboardPreset } from "../../../features/dashboard/dashboardDateRange.js";
 
 const HEALTH = {
   reference_month: "2026-06-01",
@@ -85,11 +86,29 @@ describe("ConsultantClientReportPage", () => {
     render(<ConsultantClientReportPage />);
 
     await waitFor(() => expect(screen.getByText("Mariana Costa")).toBeInTheDocument());
+    expect(screen.getByText("Período do relatório")).toBeInTheDocument();
+    expect(screen.getByText(/Filtra transações e gastos por categoria deste cliente/)).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Visão geral" })).toBeInTheDocument();
     expect(screen.getByText("Saudável")).toBeInTheDocument(); // RiskBadge no header (health 82)
     // A aba "Visão geral" consome os reads por-org (metas do /score, donut de by-category).
     await waitFor(() => expect(screen.getByText("3 de 5")).toBeInTheDocument());
     expect(screen.getByText("Para onde vai o dinheiro")).toBeInTheDocument();
+  });
+
+  it("mantém um período próprio no relatório e refaz os agregados ao trocá-lo", async () => {
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [client()] });
+    render(<ConsultantClientReportPage />);
+
+    await waitFor(() => expect(screen.getByText("Mariana Costa")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Este mês/i }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Mês passado" }));
+
+    const previous = rangeForDashboardPreset("mes_passado");
+    await waitFor(() => expect(getByCategory).toHaveBeenLastCalledWith("a", {
+      dateStart: previous.start,
+      dateEnd: previous.end,
+      transactionType: "expense",
+    }));
   });
 
   it("não busca a saúde quando o id não é cliente do consultor", async () => {

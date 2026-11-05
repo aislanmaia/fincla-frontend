@@ -152,9 +152,8 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
  * via `@react-pdf/renderer` carregado sob demanda) ou **CSV** — do consolidado
  * (`/consultant/reports/consolidated`); o PDF cruza os agregados já em tela.
  *
- * Único stub restante = **"Tendências detectadas pela IA"** (Trilha B) e o botão
- * "Relatório com IA". A "taxa de retenção" saiu (é métrica comercial do consultor,
- * outro produto — como honorários).
+ * O período consolidado ainda segue os defaults dos endpoints; o relatório por
+ * cliente possui seu próprio seletor de período.
  */
 export function ConsultantInsightsPage() {
   const navigate = useNavigate();

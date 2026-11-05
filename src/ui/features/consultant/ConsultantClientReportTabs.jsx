@@ -12,7 +12,7 @@ import { CLIENT_REPORT_TABS } from "./consultantReportTabs";
  */
 export function ConsultantClientReportTabs({ active, onSelect }) {
   return (
-    <div role="tablist" aria-label="Seções do relatório" style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 2, overflowX: "auto" }}>
+    <div role="tablist" aria-label="Seções do relatório" style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 2, overflowX: "auto", overflowY: "hidden" }}>
       {CLIENT_REPORT_TABS.map((tab) => {
         const isActive = tab.id === active;
         return (
