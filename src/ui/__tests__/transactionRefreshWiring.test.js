@@ -21,8 +21,21 @@ describe("App entrega o token de transações às telas de saldo", () => {
     expect(elementSource("NovaTransacaoModal")).toMatch(/onTransactionSaved=\{bumpTransactionsList\}/);
   });
 
-  it.each(["AccountsPage", "DashboardPageView", "TransacoesPageView"])("%s recebe transactionsRefreshToken", (tag) => {
+  it.each([
+    "AccountsPage", "DashboardPageView", "TransacoesPageView",
+    // #272: números derivados de transações também.
+    "OrcamentosPage", "RelatoriosPage", "RitmoPageView",
+  ])("%s recebe transactionsRefreshToken", (tag) => {
     expect(elementSource(tag)).toMatch(/transactionsRefreshToken=\{transactionsListVersion\}/);
+  });
+});
+
+describe("Planejamento repassa o token a Orçamentos (#272)", () => {
+  it("PlanningHub entrega o token ao OrcamentosPage", () => {
+    const hub = readFileSync(resolve(__dirname, "../features/planning/PlanningHub.jsx"), "utf8");
+    const start = hub.search(/<OrcamentosPage\s/);
+    expect(start).toBeGreaterThan(-1);
+    expect(hub.slice(start, hub.indexOf("/>", start))).toMatch(/transactionsRefreshToken=\{transactionsRefreshToken\}/);
   });
 });
 

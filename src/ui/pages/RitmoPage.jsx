@@ -436,6 +436,7 @@ export function RitmoPage({
   dataMode = "live",
   organizationId = null,
   onNewTx,
+  transactionsRefreshToken = 0,
 }) {
   if (dataMode === "empty") {
     return <RitmoEmptyState onNewTx={onNewTx} />;
@@ -447,6 +448,7 @@ export function RitmoPage({
     return (
       <RitmoPageLive
         organizationId={organizationId}
+        transactionsRefreshToken={transactionsRefreshToken}
         onNav={onNav}
         isMobile={isMobile}
         onNewTx={onNewTx}

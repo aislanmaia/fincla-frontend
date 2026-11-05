@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -22,6 +22,10 @@ import {
 const EMPTY = {
   isLoading: false,
   error: "",
+  /** Relendo (transação salva, "tentar de novo") com o gráfico anterior na tela. */
+  isRefreshing: false,
+  /** A última recarga falhou e os números na tela são os anteriores. */
+  refreshFailed: false,
   refetch: () => {},
   viewMode: "current",
   periodLabel: "",
@@ -48,7 +52,14 @@ function shiftYearMonth(year, month, delta) {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-export function useSpendingPaceData({ organizationId, enabled, year, month }) {
+export function useSpendingPaceData({
+  organizationId,
+  enabled,
+  year,
+  month,
+  /** Sobe a cada transação criada/editada/excluída no app (#272). */
+  refreshKey = 0,
+}) {
   const [fetchTick, setFetchTick] = useState(0);
   const refetch = useCallback(() => setFetchTick((n) => n + 1), []);
 
@@ -57,6 +68,7 @@ export function useSpendingPaceData({ organizationId, enabled, year, month }) {
     [year, month],
   );
 
+  const loadedKeyRef = useRef(null);
   const [state, setState] = useState(() => ({
     ...EMPTY,
     isLoading: Boolean(enabled && organizationId),
@@ -65,17 +77,20 @@ export function useSpendingPaceData({ organizationId, enabled, year, month }) {
 
   useEffect(() => {
     if (!enabled || !organizationId) {
+      loadedKeyRef.current = null;
       setState({ ...EMPTY, refetch });
       return;
     }
 
     let cancelled = false;
-    setState((s) => ({
-      ...s,
-      isLoading: true,
-      error: "",
-      refetch,
-    }));
+    // Mesma org e mesmo mês da última leitura BEM-SUCEDIDA = recarga (transação
+    // salva, "tentar de novo"): o gráfico fica até o novo chegar, e uma falha não
+    // apaga o que se sabia — só marca `refreshFailed`.
+    const key = `${organizationId}|${ctx.start}|${ctx.end}`;
+    const isRefresh = loadedKeyRef.current === key;
+    setState((s) => (isRefresh
+      ? { ...s, isRefreshing: true, refreshFailed: false, refetch }
+      : { ...s, isLoading: true, error: "", refreshFailed: false, refetch }));
 
     const run = async () => {
       try {
@@ -195,12 +210,17 @@ export function useSpendingPaceData({ organizationId, enabled, year, month }) {
           start: ctx.start,
           end: ctx.end,
         });
+        loadedKeyRef.current = key;
       } catch (error) {
         if (cancelled) return;
         const msg =
           formatDashboardApiError(error) ||
           formatBudgetsApiError(error) ||
           String(error?.message || error);
+        if (isRefresh) {
+          setState((s) => ({ ...s, isRefreshing: false, refreshFailed: true, refetch }));
+          return;
+        }
         setState({
           ...EMPTY,
           isLoading: false,
@@ -233,6 +253,7 @@ export function useSpendingPaceData({ organizationId, enabled, year, month }) {
     ctx.viewMode,
     ctx.periodLabel,
     fetchTick,
+    refreshKey,
   ]);
 
   return state;
