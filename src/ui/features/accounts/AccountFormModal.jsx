@@ -4,7 +4,13 @@ import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
 import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS } from "./accountMeta.js";
-import { moneyInputPlaceholder, moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
+import {
+  moneyInputPlaceholder,
+  moneyInputStatus,
+  parseMoneyInputFor,
+  reformatMoneyInputOnBlur,
+  rewriteMoneyInputForCurrency,
+} from "../../money/moneyInput.js";
 import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
 
 const inputStyle = {
@@ -36,6 +42,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
   // caso a tela mostra o seletor e deixa o backend recusar, como sempre fez.
   const travada = account?.currency_locked === true;
   const [initial, setInitial] = useState("");
+  const [initialNotice, setInitialNotice] = useState("");
   const [institution, setInstitution] = useState(account?.institution || "");
   const [color, setColor] = useState(account?.color || ACCOUNT_COLORS[0]);
   const [iconKey, setIconKey] = useState(account?.icon_key || ACCOUNT_ICONS[0]);
@@ -43,7 +50,31 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
 
   // Saldo inicial lido na moeda escolhida (#284): em US$, "1,500" é 1500.
   const initialInvalid = !editing && moneyInputStatus(initial, currency) === "invalid";
-  const canSave = name.trim().length > 0 && !initialInvalid && !isSaving;
+  // Aviso de conferência ativo (#290): o número no campo pode não ser o que a
+  // pessoa quis — não salva até ela mexer nele.
+  const canSave = name.trim().length > 0 && !initialInvalid && !initialNotice && !isSaving;
+
+  /* Trocar a moeda com o saldo inicial já digitado (#290): o texto é relido na
+     moeda ANTIGA e reescrito na nova com o mesmo número — "1,500" em R$ (1,5) vira
+     "1,50", não 1.500 em US$. O que fica no campo é o que será salvo. */
+  function changeCurrency(next) {
+    if (next === currency) return;
+    // Com o aviso ativo o texto fica parado: reescrever agora levaria para a moeda
+    // nova um número que a pessoa ainda não conferiu. O aviso só sai quando ela
+    // mexe no campo.
+    if (!editing && !initialNotice) {
+      const rewritten = rewriteMoneyInputForCurrency(initial, currency, next);
+      if (rewritten == null) {
+        // Ilegível na moeda antiga, ou com mais casas do que a nova guarda: não há
+        // número para levar sem mudá-lo. O texto fica (nunca vira 0) e a tela pede
+        // para conferir; salvar fica travado até lá.
+        setInitialNotice("Confira o saldo inicial: o valor digitado não pôde ser levado para a moeda escolhida.");
+      } else {
+        setInitial(rewritten);
+      }
+    }
+    setCurrency(next);
+  }
 
   function handleSubmit() {
     if (!canSave) return;
@@ -67,7 +98,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
       footer={
         <>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={handleSubmit}>{isSaving ? "Salvando…" : "Salvar conta"}</Btn>
+          <Btn variant="dark" onClick={handleSubmit} disabled={!!initialNotice}>{isSaving ? "Salvando…" : "Salvar conta"}</Btn>
         </>
       }
     >
@@ -125,7 +156,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             return (
               <button
                 key={c.code}
-                onClick={() => !travada && setCurrency(c.code)}
+                onClick={() => !travada && changeCurrency(c.code)}
                 aria-pressed={active}
                 disabled={travada}
                 style={{
@@ -176,7 +207,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
           <input
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={initial}
-            onChange={(e) => setInitial(e.target.value)}
+            onChange={(e) => { setInitial(e.target.value); setInitialNotice(""); }}
             onBlur={() => setInitial((cur) => reformatMoneyInputOnBlur(cur, currency))}
             placeholder={moneyInputPlaceholder(currency)}
             inputMode="decimal"
@@ -184,6 +215,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             aria-invalid={initialInvalid || undefined}
           />
           {initialInvalid ? <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>Valor inválido</div> : null}
+          {initialNotice ? <div role="status" style={{ ...G, fontSize: 11, color: T.amber, marginTop: 4 }}>{initialNotice}</div> : null}
         </div>
       ) : null}
 

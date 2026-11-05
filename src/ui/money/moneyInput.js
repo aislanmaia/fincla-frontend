@@ -139,3 +139,29 @@ export function reformatMoneyInputOnBlur(text, currency) {
 export function moneyInputPlaceholder(currency) {
   return `${currencyInfo(currency || "BRL").symbol} 0,00`;
 }
+
+/**
+ * Reescreve o texto de um campo de dinheiro quando a MOEDA do campo muda (#290).
+ *
+ * O texto não tem moeda, a leitura tem: "1,500" em R$ é 1,5 e em US$ é 1.500.
+ * Trocar a moeda com o texto parado mudaria o número sem ninguém ver. Aqui o
+ * texto é lido na moeda ANTIGA (o que a pessoa quis dizer quando digitou) e
+ * escrito de novo como o app escreve dinheiro ("1.500,00"), que as duas
+ * convenções leem igual — o que aparece no campo é o que será salvo.
+ *
+ * Devolve `null` quando NÃO dá para levar o número: texto ilegível na moeda
+ * antiga, ou com mais casas do que a moeda nova guarda (arredondar seria mudar o
+ * número em silêncio). Quem chama mantém o texto e pede para a pessoa conferir.
+ * Vazio volta vazio.
+ */
+export function rewriteMoneyInputForCurrency(text, fromCurrency, toCurrency) {
+  const status = moneyInputStatus(text, fromCurrency);
+  if (status === "empty") return text;
+  if (status !== "ok") return null;
+  const value = parseMoneyInputFor(text, fromCurrency);
+  if (value == null || !Number.isFinite(value)) return null;
+  const decimals = decimalsOf(toCurrency);
+  const scaled = value * 10 ** decimals;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-6) return null;
+  return value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
