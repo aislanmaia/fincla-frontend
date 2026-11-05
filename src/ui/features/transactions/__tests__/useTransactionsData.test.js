@@ -599,3 +599,40 @@ describe("fincla-frontend#109 rodada 4, achado 7 — pageError é limpo no INÍC
     await waitFor(() => expect(result.current.transactions).toHaveLength(2));
   });
 });
+
+describe("#280 — filtro Cartão chega como credit_card_id (repetível) na chamada HTTP", () => {
+  it("um cartão → credit_card_id [5] na lista E no resumo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["5"] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0]).toMatchObject({ credit_card_id: [5] });
+    expect(getTransactionsSummary.mock.calls[0][0]).toMatchObject({ credit_card_id: [5] });
+  });
+
+  it("dois cartões → credit_card_id [5, 7]; ids que não são número não viajam", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["5", "Nubank ••1234", "7"] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
+    expect(getTransactionsSummary.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
+  });
+
+  it("sem cartão no filtro, nenhum credit_card_id", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: [] });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(listTransactions.mock.calls[0][0]).not.toHaveProperty("credit_card_id");
+  });
+
+  it("404 CREDIT_CARD_NOT_FOUND aparece como errorCode para a página reagir", async () => {
+    listTransactions.mockRejectedValue(Object.assign(new Error("404"), {
+      isAxiosError: true, response: { status: 404, data: { error: "CREDIT_CARD_NOT_FOUND", type: "not_found" } },
+    }));
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+    const { result } = renderWithFilters({ ...BASE_STATE, cardSel: ["9"] });
+    await waitFor(() => expect(result.current.errorCode).toBe("CREDIT_CARD_NOT_FOUND"));
+  });
+});

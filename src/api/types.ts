@@ -660,8 +660,10 @@ export type SortOrder = 'asc' | 'desc';
 
 export interface ListTransactionsQuery {
   organization_id: string;
-  /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
-  credit_card_id?: number;
+  /** Lançamentos de um ou mais cartões (param repetido, OU entre cartões; E com os
+   *  outros filtros — fincla-api#468). Cartão inexistente/de outra org → 404
+   *  `CREDIT_CARD_NOT_FOUND`. */
+  credit_card_id?: number | number[];
   /** Uma ou mais faturas (id do histórico/fatura atual); param repetido. */
   invoice_id?: number | number[];
   type?: 'income' | 'expense' | 'refund';
@@ -795,7 +797,8 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
-  credit_card_id?: number;
+  /** Repetível, como na lista (fincla-api#468). Com vários, `projected_by_invoice` vem `null`. */
+  credit_card_id?: number | number[];
   invoice_id?: number | number[];
   include_breakdown?: boolean;
   locale?: string;
@@ -841,6 +844,8 @@ export interface FiltersInfo {
   date_end: string | null;
   recurring?: boolean | null;
   tag_id?: string | null;
+  /** Um cartão → número; vários → lista (fincla-api#468). */
+  credit_card_id?: number | number[] | null;
 }
 
 /** Projeção de recorrências na mesma janela que date_start/date_end (séries ativas; não é soma de linhas em transactions). */

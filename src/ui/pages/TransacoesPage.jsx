@@ -85,6 +85,7 @@ import {
 import { SavedViewsCards } from "../features/transactions/filters/savedViews/SavedViewsCards.jsx";
 import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
 import { listAccounts } from "../../api/accounts";
+import { listCreditCards } from "../../api/creditCards";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
 import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
 import { transactionAccountLabel } from "../features/transactions/shared/transactionAccountLabel.js";
@@ -1325,6 +1326,51 @@ function TransacoesPageBody({
     || orgBase.currency
     || null;
 
+  /* Filtro "Cartão" (#280): os cartões da ORGANIZAÇÃO (ids numéricos da API), não os
+     que aparecem nas linhas carregadas. A seleção vai à API como `credit_card_id`
+     repetível. `cardsReloadToken` relê a lista quando a API diz que um cartão do
+     filtro não existe mais (apagado em outra aba). */
+  const [orgCards, setOrgCards] = useState([]);
+  const [orgCardsLoaded, setOrgCardsLoaded] = useState(false);
+  const [cardsReloadToken, setCardsReloadToken] = useState(0);
+  useEffect(() => {
+    if (!shouldUseRealData || !organizationId) {
+      setOrgCards([]);
+      setOrgCardsLoaded(false);
+      return undefined;
+    }
+    let cancelled = false;
+    listCreditCards(organizationId)
+      .then((cards) => {
+        if (cancelled) return;
+        setOrgCards(Array.isArray(cards) ? cards : []);
+        setOrgCardsLoaded(Array.isArray(cards));
+      })
+      .catch(() => {
+        if (!cancelled) setOrgCardsLoaded(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldUseRealData, organizationId, cardsReloadToken]);
+  const orgCardIds = useMemo(() => new Set(orgCards.map((c) => String(c.id))), [orgCards]);
+  /* Só ids de cartões que a organização TEM viajam: um id velho (visão salva, link,
+     cartão apagado) sairia como 404 e derrubaria a lista inteira. Antes de a lista
+     de cartões chegar, só os ids numéricos (a API decide). */
+  const effectiveCardSel = useMemo(() => {
+    if (!shouldUseRealData) return [];
+    const numeric = filter.cardSel.map(String).filter((id) => /^[1-9]\d*$/.test(id));
+    return orgCardsLoaded ? numeric.filter((id) => orgCardIds.has(id)) : numeric;
+  }, [shouldUseRealData, filter.cardSel, orgCardsLoaded, orgCardIds]);
+  // E o próprio estado do filtro larga o id que não existe (chip, contador, visões).
+  const setCardSelRef = useRef(filter.setCardSel);
+  setCardSelRef.current = filter.setCardSel;
+  useEffect(() => {
+    if (!shouldUseRealData || !orgCardsLoaded) return;
+    const kept = filter.cardSel.filter((id) => orgCardIds.has(String(id)));
+    if (kept.length !== filter.cardSel.length) setCardSelRef.current(kept);
+  }, [shouldUseRealData, orgCardsLoaded, orgCardIds, filter.cardSel]);
+
   /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
      2+ contas ativas. Ids em string (a lista mistura número e UUID). */
   const selectionEnabled = shouldUseRealData && accountsForFilter.length >= 2;
@@ -1487,6 +1533,7 @@ function TransacoesPageBody({
           tagMode: filter.tagMode,
           accountSel: effectiveAccountSel,
           valueReadCurrency,
+          cardSel: effectiveCardSel,
         },
         {
           limit: visible,
@@ -1499,6 +1546,7 @@ function TransacoesPageBody({
     [
       effectiveAccountSel,
       valueReadCurrency,
+      effectiveCardSel,
       debouncedSearch,
       filter.type,
       filter.method,
@@ -1537,6 +1585,12 @@ function TransacoesPageBody({
     refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
   transactionsDataRef.current = transactionsData;
+  /* Cartão do filtro apagado em outra aba (#280): a API responde 404
+     CREDIT_CARD_NOT_FOUND. Em vez de a página ficar presa no erro, relê os cartões
+     — o id velho sai da seleção (efeito acima) e a lista volta sozinha. */
+  useEffect(() => {
+    if (transactionsData.errorCode === "CREDIT_CARD_NOT_FOUND") setCardsReloadToken((n) => n + 1);
+  }, [transactionsData.errorCode]);
   /* Total do período SEM os demais filtros — o "de 20" de "17 de 20
      transações". Sozinho, "17" não diz se o filtro cortou muito ou pouco, e é
      essa relação que responde "meu filtro está certo?".
@@ -1605,6 +1659,7 @@ function TransacoesPageBody({
     recorrencia: { rec: "any" },
     situacao: { settlement: "todas" },
     conta: { accountSel: [] },
+    cartao: { cardSel: [] },
   }), []);
 
   /* Qual faceta está com os contadores à vista. São DUAS superfícies: a barra
@@ -1626,6 +1681,7 @@ function TransacoesPageBody({
         settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
         accountSel: effectiveAccountSel,
         valueReadCurrency,
+        cardSel: effectiveCardSel,
         ...estado,
       },
       {
@@ -1640,7 +1696,7 @@ function TransacoesPageBody({
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
       visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
-      effectiveAccountSel, valueReadCurrency]);
+      effectiveAccountSel, valueReadCurrency, effectiveCardSel]);
 
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
@@ -1845,8 +1901,16 @@ function TransacoesPageBody({
     return Array.from(set).sort();
   }, [shouldUseRealData, tagCatalog.error, tagOptions, txList]);
 
-  /** Cartões cadastrados — placeholder até integração com `useCreditCardsData`. */
+  /** Cartões do filtro: os da organização (ids da API) no modo real; no demo, os das linhas. */
   const cardsForFilter = useMemo(() => {
+    if (shouldUseRealData) {
+      return orgCards.map((c) => ({
+        id: String(c.id),
+        label: c.description || c.brand || `Cartão ${c.last4 ?? ""}`.trim(),
+        last4: c.last4 || "",
+        color: c.color || T.purple,
+      }));
+    }
     const set = new Map();
     txList.forEach((t) => {
       const id = t.parcela?.cartao || null;
@@ -1860,7 +1924,7 @@ function TransacoesPageBody({
       }
     });
     return Array.from(set.values());
-  }, [txList]);
+  }, [shouldUseRealData, orgCards, txList]);
 
   const categoryFromUrl = urlSearch[FC.CATEGORY];
   useEffect(() => {
@@ -2437,7 +2501,7 @@ function TransacoesPageBody({
       period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
       sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
       settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
-      accountSel: effectiveAccountSel, valueReadCurrency,
+      accountSel: effectiveAccountSel, valueReadCurrency, cardSel: effectiveCardSel,
     };
     const drops = {
       busca: { search: "" },
@@ -2450,6 +2514,7 @@ function TransacoesPageBody({
       recorrencia: { rec: "any" },
       situacao: { settlement: "todas" },
       conta: { accountSel: [] },
+      cartao: { cardSel: [] },
     };
     const active = new Set(allFacets.filter((f) => f.active).map((f) => f.key));
     if (debouncedSearch) active.add("busca");
@@ -2512,6 +2577,7 @@ function TransacoesPageBody({
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
     totalCategoriesForBackend, categoryApiNameById, resolvedTagIds, effectiveAccountSel,
     valueReadCurrency,
+    effectiveCardSel,
   ]);
 
   const facetLabels = useMemo(() => {
@@ -2786,11 +2852,12 @@ function TransacoesPageBody({
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    /* Recorte por conta (#268): o export do servidor de Transações aceita os MESMOS
-       filtros da lista, inclusive `account_id` repetível (fincla-api#446). O CSV
+    /* Recorte por conta (#268) ou cartão (#280): o export do servidor de Transações
+       aceita os MESMOS filtros da lista, inclusive `account_id` (fincla-api#446) e
+       `credit_card_id` (fincla-api#468) repetíveis. O CSV
        legado de analytics não conhece conta — usá-lo aqui exportaria a organização
        inteira com um chip de conta na tela. */
-    if (shouldUseRealData && organizationId && effectiveAccountSel.length > 0) {
+    if (shouldUseRealData && organizationId && (effectiveAccountSel.length > 0 || effectiveCardSel.length > 0)) {
       const { page: _page, limit: _limit, sort_by: _sortBy, sort_order: _sortOrder, ...query } =
         buildTransactionsQuery({ organizationId, ...transactionsFilters });
       exportTransactionsCsv(query)

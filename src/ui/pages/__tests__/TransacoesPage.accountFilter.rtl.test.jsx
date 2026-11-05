@@ -59,6 +59,11 @@ vi.mock("../../../api/transactions", async (importOriginal) => ({
   exportTransactionsCsv: (...args) => exportMock(...args),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
+const listCreditCardsMock = vi.fn();
+vi.mock("../../../api/creditCards", async (importOriginal) => ({
+  ...(await importOriginal()),
+  listCreditCards: (...args) => listCreditCardsMock(...args),
+}));
 const narrowestMock = vi.fn(() => ({ narrowest: null }));
 vi.mock("../../features/transactions/useNarrowestFilter.js", () => ({
   useNarrowestFilter: (...args) => narrowestMock(...args),
@@ -75,6 +80,10 @@ import { readListPrefs, rowCost } from "../../features/transactions/listPrefs.js
 const ACC_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACC_B = "bbbbbbbb-0000-4000-8000-000000000002";
 const ACC_EUR = "eeeeeeee-0000-4000-8000-000000000003";
+const CARDS = [
+  { id: 5, description: "Nubank Roxinho", brand: "Mastercard", last4: "1234", color: null },
+  { id: 7, description: "Itaú Azul", brand: "Visa", last4: "9876", color: null },
+];
 const TWO_ACCOUNTS = [
   { id: ACC_A, name: "Conta A Itaú", currency: "BRL" },
   { id: ACC_B, name: "Conta B Nubank", currency: "BRL" },
@@ -91,6 +100,7 @@ beforeEach(() => {
   summaryMock = { total_income: 0, total_expenses: 120, total_refunds: 0, balance: -120, currency: "BRL" };
   listAccountsMock.mockResolvedValue(TWO_ACCOUNTS);
   listTransfersMock.mockResolvedValue([]);
+  listCreditCardsMock.mockResolvedValue(CARDS);
   Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
   Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 900 });
 });
@@ -389,6 +399,58 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     it("organização em R$: '1,5' continua 1,5", async () => {
       await typeMin("1,5");
       await waitFor(() => expect(lastFilters().valueMin).toBe(1.5));
+    });
+  });
+
+  describe("filtro Cartão chega à API (#280)", () => {
+    async function pickCards(...labels) {
+      renderPage();
+      await waitFor(() => expect(listCreditCardsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Cartão\b/ }));
+      for (const label of labels) await userEvent.click(await screen.findByRole("button", { name: label }));
+    }
+
+    it("um cartão: o id numérico da API vai no filtro", async () => {
+      await pickCards("Nubank Roxinho");
+      await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5"]));
+    });
+
+    it("dois cartões: os dois vão (OU na API)", async () => {
+      await pickCards("Nubank Roxinho", "Itaú Azul");
+      await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5", "7"]));
+    });
+
+    it("exportar CSV com cartões filtrados vai ao export de Transações com credit_card_id", async () => {
+      exportMock.mockResolvedValue(new Blob(["x"]));
+      await pickCards("Nubank Roxinho", "Itaú Azul");
+      await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5", "7"]));
+      const exportar = screen.queryAllByRole("button", { name: /Exportar|CSV/i })[0];
+      await userEvent.click(exportar);
+      const csvItem = screen.queryAllByRole("menuitem", { name: /CSV/i })[0] ?? screen.queryAllByRole("button", { name: /CSV/i }).find((b) => b !== exportar);
+      if (csvItem) await userEvent.click(csvItem);
+      await waitFor(() => expect(exportMock).toHaveBeenCalled());
+      expect(exportMock.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
+    });
+
+    it("cartão apagado em outra aba: o 404 relê os cartões e o id velho sai da seleção", async () => {
+      await pickCards("Nubank Roxinho", "Itaú Azul");
+      await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5", "7"]));
+      // O cartão 7 foi apagado: a API recusa o filtro e a lista de cartões já não o tem.
+      listCreditCardsMock.mockResolvedValue([CARDS[0]]);
+      transactionsDataMock.mockImplementation(() => ({
+        ...defaultTransactionsData(),
+        error: "Cartão não encontrado.", errorCode: "CREDIT_CARD_NOT_FOUND", hasLoaded: false, transactions: [],
+      }));
+      // Qualquer render novo entrega o erro à página.
+      await userEvent.click(screen.getByRole("button", { name: "Nubank Roxinho" }));
+      await userEvent.click(screen.getByRole("button", { name: "Nubank Roxinho" }));
+      await waitFor(() => expect(listCreditCardsMock).toHaveBeenCalledTimes(2));
+      transactionsDataMock.mockImplementation(defaultTransactionsData);
+      await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5"]));
+      // O próprio estado larga o id: o chip não conta um cartão que não existe mais.
+      await waitFor(() => expect(screen.queryByText(/2 cartões/)).toBeNull());
+      expect(screen.getAllByText(/Nubank Roxinho/).length).toBeGreaterThan(0);
     });
   });
 });

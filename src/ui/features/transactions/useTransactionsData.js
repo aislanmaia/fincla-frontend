@@ -17,6 +17,9 @@ const EMPTY_STATE = {
      a pessoa já está lendo enquanto o scroll infinito busca a próxima página. */
   isAppending: false,
   error: "",
+  /* Código do erro da API (`{"error": "CREDIT_CARD_NOT_FOUND"}`), para a página reagir
+     a um caso conhecido — ex.: cartão do filtro apagado em outra aba (#280). */
+  errorCode: "",
   // fincla-frontend#109 rodada 3, achado 2: canal SEPARADO pra falha ao
   // "carregar mais" (scroll infinito) — nunca pode contaminar `error`
   // (que `hasMore` abaixo usa pra decidir se continua oferecendo páginas).
@@ -39,6 +42,13 @@ const EMPTY_STATE = {
 // que o efeito está prestes a fazer).
 function initialState(enabled, organizationId) {
   return { ...EMPTY_STATE, isLoading: Boolean(enabled && organizationId) };
+}
+
+/** `{"error": "CODE"}` da resposta da API (ou `detail.error`), senão "". */
+function apiErrorCodeOf(error) {
+  const data = error?.response?.data;
+  const code = data?.error ?? data?.detail?.error;
+  return typeof code === "string" ? code : "";
 }
 
 export function useTransactionsData({
@@ -150,12 +160,14 @@ export function useTransactionsData({
         isLoading: true,
         isAppending: carregandoMaisPaginas,
         error: "",
+        errorCode: "",
         pageError: "",
       }));
     } else {
       setState((current) => ({
         ...current,
         error: "",
+        errorCode: "",
         pageError: "",
       }));
     }
@@ -172,6 +184,7 @@ export function useTransactionsData({
           isLoading: false,
           isAppending: false,
           error: "",
+          errorCode: "",
           pageError: "",
           summary,
           transactions,
@@ -184,6 +197,7 @@ export function useTransactionsData({
         if (cancelled) return;
 
         const message = formatTransactionsApiError(error);
+        const errorCode = apiErrorCodeOf(error);
         setState((current) => {
           if (softRefreshOnly) {
             // Stale-while-revalidate de verdade (mesmo padrão do
@@ -191,7 +205,7 @@ export function useTransactionsData({
             // `refreshToken` mudou (ex.: transação salva em outra tela). Os
             // dados na tela continuam válidos pra ESTE contexto, então
             // preserva (`...current`) e só o aviso de erro liga.
-            return { ...current, isLoading: false, isAppending: false, error: message };
+            return { ...current, isLoading: false, isAppending: false, error: message, errorCode };
           }
           if (samePaginationContext) {
             // fincla-frontend#109 rodada 3, achado 2: uma falha ao "carregar
@@ -204,7 +218,7 @@ export function useTransactionsData({
             // nada re-disparando o fetch. Fica num canal PRÓPRIO
             // (`pageError`) — `error`/`hasLoaded`/`hasMore` continuam lendo
             // o estado de ANTES desta página, que é válido.
-            return { ...current, isLoading: false, isAppending: false, pageError: message };
+            return { ...current, isLoading: false, isAppending: false, pageError: message, errorCode };
           }
           // Organização OU filtros de verdade mudaram (fincla-frontend#109
           // achado 3, rodada 1): `current` é de OUTRO contexto — preservar
@@ -216,6 +230,7 @@ export function useTransactionsData({
             isLoading: false,
             isAppending: false,
             error: message,
+            errorCode,
             pageError: "",
             summary: null,
             transactions: [],
@@ -320,6 +335,7 @@ export function useTransactionsData({
     isLoading: state.isLoading,
     isAppending: state.isAppending,
     error: state.error,
+    errorCode: state.errorCode,
     pageError: state.pageError,
     hasLoaded: state.hasLoaded,
     summary: state.summary,
