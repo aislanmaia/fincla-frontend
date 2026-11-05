@@ -29,6 +29,7 @@ import { formatAmountInput } from "../features/novaTransacao/accountConversion.j
 import { currencyInfo } from "../money/currencyRegistry.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 import { moneyInputStatus, parseMoneyInputFor } from "../money/moneyInput.js";
+import { todayLocalYmd } from "../data/transactionsAdapter.js";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -95,7 +96,7 @@ function ProjectCard({ g, onEdit, onContribuir, onProjection }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         <span style={ghost}>{g.monthly_target ? `${fmt(g.monthly_target, g.moeda)}/mês` : "sem aporte"} · {g.prazo}</span>
-        {onContribuir ? (
+        {onContribuir && (g.status ?? "active") === "active" ? (
           <button onClick={(e) => { e.stopPropagation(); onContribuir(g); }} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ Aportar</button>
         ) : null}
       </div>
@@ -387,7 +388,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       ) : null}
 
       {contribGoal ? (
-        <ContributionModal goal={contribGoal} onClose={() => setContribGoal(null)} onSubmit={submitContribution} isSaving={live && goalsData.isSaving} error={live ? goalsData.error : ""} />
+        <ContributionModal goal={contribGoal} onClose={() => setContribGoal(null)} onSubmit={submitContribution} isSaving={live && goalsData.isSaving} />
       ) : null}
 
       {projGoal ? (
@@ -477,27 +478,29 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, cu
   );
 }
 
-/** Hoje no fuso de quem usa (YYYY-MM-DD) — `toISOString` daria o dia de Greenwich. */
-function todayLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function ContributionModal({ goal, onClose, onSubmit, isSaving = false, error = "" }) {
+function ContributionModal({ goal, onClose, onSubmit, isSaving = false }) {
   const currency = goal.moeda || "BRL";
   const symbol = currencyInfo(currency).symbol;
   const [valor, setValor] = useState("");
-  const [date, setDate] = useState(todayLocal);
+  const [date, setDate] = useState(() => todayLocalYmd());
   const [note, setNote] = useState("");
+  const [error, setError] = useState("");
   const status = moneyInputStatus(valor, currency);
   const amount = status === "ok" ? parseMoneyInputFor(valor, currency) : null;
-  const canSave = amount != null && amount > 0 && !!date && !isSaving;
+  // Aporte é dinheiro que já saiu: data futura não vale (o `max` do campo não
+  // segura quem digita, e "hoje" é lido agora, não quando o modal abriu).
+  const futureDate = !!date && date > todayLocalYmd();
+  const canSave = amount != null && amount > 0 && !!date && !futureDate && !isSaving;
 
   async function save() {
     if (!canSave) return;
+    setError("");
     try {
       await onSubmit(goal, { amount, contributed_at: date, note: note.trim() || null });
-    } catch { /* o erro aparece no modal; o que foi digitado fica */ }
+    } catch (e) {
+      // O aporte não foi gravado: o modal fica, com o que foi digitado.
+      setError(e?.message || "Não foi possível registrar o aporte.");
+    }
   }
 
   return (
@@ -515,7 +518,10 @@ function ContributionModal({ goal, onClose, onSubmit, isSaving = false, error = 
           <input style={inputStyle} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="500,00" inputMode="decimal" autoFocus aria-invalid={status === "invalid" || undefined} />
           <InvalidHint show={status === "invalid"} />
         </Field>
-        <Field label="Data do aporte"><input type="date" style={inputStyle} value={date} max={todayLocal()} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="Data do aporte">
+          <input type="date" style={inputStyle} value={date} max={todayLocalYmd()} onChange={(e) => setDate(e.target.value)} aria-invalid={futureDate || undefined} />
+          {futureDate ? <span role="alert" style={{ ...G, display: "block", fontSize: 11, color: T.red, marginTop: 4 }}>A data não pode ser no futuro</span> : null}
+        </Field>
         <Field label="Observação (opcional)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex: sobra do mês" /></Field>
 
         {error ? <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "8px 11px", marginBottom: 10 }}>{error}</div> : null}

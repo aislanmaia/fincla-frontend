@@ -28,10 +28,7 @@ vi.mock("../../features/goals/useGoalsData.js", () => ({
 
 import { LifeProjectsPage } from "../LifeProjectsPage.jsx";
 
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+import { todayLocalYmd as today } from "../../data/transactionsAdapter.js";
 
 beforeEach(() => { goals = [META]; });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -62,8 +59,8 @@ describe("+ Aportar", () => {
     expect(contribute).not.toHaveBeenCalled();
   });
 
-  it("erro do servidor mantém o modal aberto com o que foi digitado", async () => {
-    contribute.mockRejectedValueOnce(new Error("boom"));
+  it("erro do servidor mantém o modal aberto com o que foi digitado e mostra a mensagem", async () => {
+    contribute.mockRejectedValueOnce(new Error("Meta não está ativa"));
     const user = userEvent.setup();
     render(<LifeProjectsPage organizationId="org-1" dataMode="live" />);
     await user.click(screen.getByRole("button", { name: "+ Aportar" }));
@@ -71,6 +68,25 @@ describe("+ Aportar", () => {
     await user.click(screen.getByRole("button", { name: "Registrar aporte" }));
     await waitFor(() => expect(contribute).toHaveBeenCalled());
     expect(screen.getByLabelText(/Valor do aporte/)).toHaveValue("400,00");
+    expect(await screen.findByText("Meta não está ativa")).toBeInTheDocument();
+  });
+
+  it("data futura digitada não grava", async () => {
+    const user = userEvent.setup();
+    render(<LifeProjectsPage organizationId="org-1" dataMode="live" />);
+    await user.click(screen.getByRole("button", { name: "+ Aportar" }));
+    await user.type(screen.getByLabelText(/Valor do aporte/), "400,00");
+    const date = screen.getByLabelText(/Data do aporte/);
+    await user.clear(date);
+    await user.type(date, "2099-01-15");
+    expect(screen.getByText("A data não pode ser no futuro")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar aporte" })).toBeDisabled();
+  });
+
+  it("meta concluída ou cancelada não oferece aporte", () => {
+    goals = [{ ...META, status: "completed" }, { ...META, id: "g2", nome: "Outra", status: "cancelled" }];
+    render(<LifeProjectsPage organizationId="org-1" dataMode="live" />);
+    expect(screen.queryByRole("button", { name: "+ Aportar" })).not.toBeInTheDocument();
   });
 
   it("no modo demonstração o aporte soma na meta local", async () => {
