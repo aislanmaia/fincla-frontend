@@ -9,11 +9,15 @@ import { formatDay, parseBRL } from "../accounts/accountMeta.js";
  * das contas — um parser só.
  */
 
-/** Número em pt-BR com 2 casas, sem símbolo: 52.4 → "52,40". */
-export function formatAmountInput(value) {
+/**
+ * Número em pt-BR, sem símbolo, com as casas da moeda (padrão 2): 52.4 → "52,40";
+ * com `decimals = 0` (JPY/KRW), 150000 → "150.000".
+ */
+export function formatAmountInput(value, decimals = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "";
-  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const places = Number.isInteger(decimals) && decimals >= 0 ? decimals : 2;
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: places, maximumFractionDigits: places });
 }
 
 /**
