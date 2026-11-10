@@ -632,7 +632,7 @@ export function DashboardPage({
         tooltip: DISPONIVEL_TOOLTIP,
         negative: reserve.free < 0,
         value: reserve.free < 0 ? fmtSgn(reserve.free) : fmtAbs(reserve.free),
-        notePrefix: `de ${fmtAbs(reserve.total)} no total · `,
+        notePrefix: `de ${reserve.total < 0 ? fmtSgn(reserve.total) : fmtAbs(reserve.total)} no total · `,
         accountCount,
       };
     }
