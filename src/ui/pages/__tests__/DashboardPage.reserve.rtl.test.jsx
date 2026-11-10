@@ -147,6 +147,8 @@ describe("DashboardPage — reserva das metas no saldo", () => {
     const text = screen.getByTestId("goal-reserve-breakdown").textContent;
     expect(text).toMatch(/usou todo o dinheiro das metas \(R\$\s150,00\) e está R\$\s2\.005,29 no negativo/);
     expect(text).not.toMatch(/2\.155,29 do dinheiro das metas/);
+    // The total keeps its sign: "de R$ 2.005,29" would read as money the account has.
+    expect(screen.getByTestId("dashboard-headline-saldo-conta").textContent).toMatch(/de\s[−-]R\$\s2\.005,29 no total/);
   });
 
   it("total zerado: tudo o que era das metas já foi gasto, sem saldo negativo", () => {
