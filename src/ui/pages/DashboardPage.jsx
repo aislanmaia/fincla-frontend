@@ -43,6 +43,9 @@ import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboar
 import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
 import { AccountBalancesNote } from "../features/dashboard/AccountBalancesBreakdown.jsx";
+import { useReservedSummary } from "../features/goals/useReservedSummary.js";
+import { reserveView } from "../features/goals/goalReserve.js";
+import { GoalReserveBreakdown } from "../features/goals/GoalReserveBreakdown.jsx";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
   formatDashboardKpiPeriodPhrase,
@@ -58,6 +61,11 @@ import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 
 /** Os dois "saldos" da tela respondem perguntas diferentes; o tooltip é o que
  *  impede o usuário de ler um pelo outro. */
+const DISPONIVEL_TOOLTIP =
+  "O saldo das suas contas menos o que está reservado nas suas metas. É quanto você " +
+  "pode gastar sem mexer no dinheiro que guardou para elas. O saldo de cada conta " +
+  "continua igual ao do banco.";
+
 const SALDO_EM_CONTA_TOOLTIP =
   "Dinheiro que você tem hoje, somando suas contas. Conta só o que já foi pago " +
   "de fato — compromissos a pagar ainda não entram aqui. Diferente do 'Saldo do " +
@@ -152,6 +160,12 @@ export function DashboardPage({
     dateEnd: appliedRange.end,
     refreshKey: transactionsRefreshToken,
   });
+  // O que está reservado nas metas sai do que dá para gastar (Owner, 2026-11-05).
+  const reservedSummary = useReservedSummary({ organizationId, enabled: apiDataEnabled, refreshKey: transactionsRefreshToken });
+  const reserve = useMemo(
+    () => reserveView(dashboardData.balanceSummary, reservedSummary?.summary, reservedSummary?.includedAccountIds),
+    [dashboardData.balanceSummary, reservedSummary],
+  );
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
   const hasComparison = categoryData.some((c) => typeof c.avg === "number" && c.avg > 0);
@@ -569,7 +583,9 @@ export function DashboardPage({
     const byCycle = measuresAgainstDeclared
       ? Math.max(0, yardstick.base - exp)
       : Math.max(0, bal);
-    const cash = dashboardData.balanceSummary?.total_available;
+    // Com reserva nas metas, o caixa que vale para o conselho é o DISPONÍVEL: o
+    // dinheiro prometido a uma meta não entra no "pode gastar por dia".
+    const cash = reserve ? reserve.free : dashboardData.balanceSummary?.total_available;
     if (typeof cash !== "number") {
       return { value: Math.round(byCycle / daysLeftInRange), noCash: false };
     }
@@ -589,7 +605,7 @@ export function DashboardPage({
       // dizem que `total_available` ausente não vira zero.
       noCash: byCash <= 0,
     };
-  }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome, measuresAgainstDeclared, yardstick.base, exp]);
+  }, [bal, daysLeftInRange, dashboardData.balanceSummary, reserve, projectedToCome, measuresAgainstDeclared, yardstick.base, exp]);
 
   /**
    * Saldo em conta no HEADLINE (opção D).
@@ -609,6 +625,17 @@ export function DashboardPage({
     // prefixo e a contagem do resumo — que inclui as contas fora do total, por isso
     // o rótulo "em N contas" só é afirmado depois da leitura por conta.
     const accountCount = summaryBalance?.account_count ?? 0;
+    if (reserve) {
+      return {
+        available: true,
+        label: "Disponível para gastar",
+        tooltip: DISPONIVEL_TOOLTIP,
+        negative: reserve.free < 0,
+        value: reserve.free < 0 ? fmtSgn(reserve.free) : fmtAbs(reserve.free),
+        notePrefix: `de ${fmtAbs(reserve.total)} no total · `,
+        accountCount,
+      };
+    }
     if (typeof total !== "number") {
       // Sem total (ex.: moedas sem cotação) o saldo POR CONTA continua alcançável:
       // é justamente onde o "por moeda" aparece.
@@ -623,7 +650,7 @@ export function DashboardPage({
       notePrefix: total < 0 ? "conta negativa · " : "dinheiro disponível hoje · ",
       accountCount,
     };
-  }, [dashboardData.balanceSummary]);
+  }, [dashboardData.balanceSummary, reserve]);
 
   const { Icon: MoodIcon, InsightIcon } = mood;
   /**
@@ -1265,12 +1292,14 @@ export function DashboardPage({
                   {accountHeadline.available ? (
                     <div data-testid="dashboard-headline-saldo-conta" style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginBottom: 18 }}>
                       <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                        Saldo em conta
+                        {accountHeadline.label ?? "Saldo em conta"}
+                        {accountHeadline.tooltip ? <InfoTip width={280} text={accountHeadline.tooltip} /> : null}
                       </div>
                       <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                         {accountHeadline.value}
                       </div>
                       <AccountBalancesNote prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                      <GoalReserveBreakdown view={reserve} />
                     </div>
                   ) : null}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1320,12 +1349,14 @@ export function DashboardPage({
                       degradada é justamente a que esconde o único dado que ela tem. */}
                   <div data-testid="dashboard-headline-saldo-conta" style={{ marginBottom: 18 }}>
                     <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                      Saldo em conta
+                      {accountHeadline.label ?? "Saldo em conta"}
+                      {accountHeadline.tooltip ? <InfoTip width={280} text={accountHeadline.tooltip} /> : null}
                     </div>
                     <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                       {accountHeadline.value}
                     </div>
                     <AccountBalancesNote prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                    <GoalReserveBreakdown view={reserve} />
                   </div>
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{kpiPeriodPhrase}</div>
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, marginBottom: 18, lineHeight: 1.55 }}>
@@ -1467,9 +1498,9 @@ export function DashboardPage({
                 <div data-testid="dashboard-headline-saldo-conta" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ ...G, display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      Saldo em conta
+                      {accountHeadline.label ?? "Saldo em conta"}
                     </span>
-                    <InfoTip width={280} text={SALDO_EM_CONTA_TOOLTIP} />
+                    <InfoTip width={280} text={accountHeadline.tooltip ?? SALDO_EM_CONTA_TOOLTIP} />
                   </div>
                   <div
                     style={{ ...S, ...NUM, fontSize: isMobile ? "2.2rem" : "3.3rem", lineHeight: 1.02, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px" }}
@@ -1477,6 +1508,7 @@ export function DashboardPage({
                     {accountHeadline.value}
                   </div>
                   <AccountBalancesNote as="span" prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} inlineContainer={balancesSlot} />
+                  <GoalReserveBreakdown view={reserve} />
                 </div>
 
                 {isMobile ? null : (

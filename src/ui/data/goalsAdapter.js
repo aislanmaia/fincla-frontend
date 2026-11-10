@@ -1,5 +1,7 @@
 import {
+  contributeToGoal,
   createGoal,
+  getGoal,
   listGoals,
   updateGoal,
 } from "../../api/goals";
@@ -134,6 +136,15 @@ export async function createGoalForUi(payload) {
 
 export async function updateGoalForUi(goalId, organizationId, payload) {
   return updateGoal(goalId, organizationId, payload);
+}
+
+export async function getGoalForUi(goalId, organizationId) {
+  return getGoal(goalId, organizationId);
+}
+
+/** Aporte na meta: vira uma contribuição, de onde o `current_amount` é derivado. */
+export async function contributeToGoalForUi(goalId, organizationId, payload) {
+  return contributeToGoal(goalId, organizationId, payload);
 }
 
 export function formatGoalsApiError(error) {

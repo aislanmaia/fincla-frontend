@@ -29,6 +29,9 @@ import { formatAmountInput } from "../features/novaTransacao/accountConversion.j
 import { currencyInfo } from "../money/currencyRegistry.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 import { moneyInputStatus } from "../money/moneyInput.js";
+import { ContributionModal } from "../features/goals/ContributionModal.jsx";
+import { createAccount } from "../../api/accounts";
+import { handleApiError } from "../../api/client";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -95,7 +98,7 @@ function ProjectCard({ g, onEdit, onContribuir, onProjection }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         <span style={ghost}>{g.monthly_target ? `${fmt(g.monthly_target, g.moeda)}/mês` : "sem aporte"} · {g.prazo}</span>
-        {onContribuir ? (
+        {onContribuir && (g.status ?? "active") === "active" ? (
           <button onClick={(e) => { e.stopPropagation(); onContribuir(g); }} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ Aportar</button>
         ) : null}
       </div>
@@ -167,7 +170,7 @@ function laneSubtotal(items) {
 const EMPTY_FORM = { nome: "", desc: "", type: "emergency_fund", meta: "", deadline: "", prioridade: "media", monthly_target: "", annual_return_rate: "", term: "", status: "active" };
 
 /** M1 — Projetos de Vida. Vive dentro do hub Planejamento (área "goals"). */
-export function LifeProjectsPage({ organizationId = null, dataMode = "live", isMobile = false, onContribuir, initialMetas }) {
+export function LifeProjectsPage({ organizationId = null, dataMode = "live", isMobile = false, initialMetas }) {
   const navigate = useNavigate();
   const urlSearch = useSearch({ strict: false });
   const live = shouldUseRealData(organizationId, dataMode);
@@ -186,6 +189,42 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
   const [projGoal, setProjGoal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const [contribGoal, setContribGoal] = useState(null);
+
+  /**
+   * O aporte é da META: grava uma contribuição nela (e a barra anda). Antes o
+   * botão abria a transação genérica como receita e a meta ficava parada.
+   */
+  async function submitContribution(goal, payload, { newAccount = null } = {}) {
+    if (live) {
+      let body = payload;
+      if (newAccount) {
+        // A conta nasce antes do aporte. Se o aporte falhar depois, ela já existe:
+        // o erro leva a conta junto, e o modal passa a usá-la em vez de criar outra.
+        let created;
+        try {
+          created = await createAccount(organizationId, newAccount);
+        } catch (e) {
+          throw new Error(handleApiError(e));
+        }
+        body = { ...payload, destination_account_id: created.id };
+        try {
+          await goalsData.contribute(goal.id, body);
+        } catch (e) {
+          throw Object.assign(new Error(e?.message || "Não foi possível registrar o aporte."), { createdAccount: created });
+        }
+      } else {
+        await goalsData.contribute(goal.id, body);
+      }
+    } else {
+      setLocalGoals((cur) => cur.map((g) => {
+        if (g.id !== goal.id) return g;
+        const atual = Number(g.atual || 0) + payload.amount;
+        return { ...g, atual, progress: g.meta ? Math.min(100, (atual / Number(g.meta)) * 100) : 0 };
+      }));
+    }
+    setContribGoal(null);
+  }
 
   function openCreate(term = "") {
     setEditing(null);
@@ -333,7 +372,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.short}</span>
                   {items.length ? <span style={{ ...ghost, marginLeft: "auto" }}>{laneSubtotal(items)}</span> : null}
                 </div>
-                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -349,7 +388,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.label}</span>
                   <span style={{ ...ghost, marginLeft: "auto" }}>{items.length ? laneSubtotal(items) : "0"}</span>
                 </div>
-                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -360,12 +399,16 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       {byTerm.none.length ? (
         <Card style={{ marginTop: 14, padding: "12px 14px" }}>
           <div style={{ ...G, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🗓️ Sem prazo definido · {byTerm.none.length}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={setContribGoal} onProjection={setProjGoal} />)}</div>
         </Card>
       ) : null}
 
       {modalOpen ? (
         <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} currency={formCurrency} currencyPending={formCurrencyPending} />
+      ) : null}
+
+      {contribGoal ? (
+        <ContributionModal goal={contribGoal} organizationId={organizationId} live={live} onClose={() => setContribGoal(null)} onSubmit={submitContribution} isSaving={live && goalsData.isSaving} />
       ) : null}
 
       {projGoal ? (
@@ -454,3 +497,4 @@ function ProjectFormModal({ editing, form, setF, onClose, onSubmit, isSaving, cu
     </div>
   );
 }
+

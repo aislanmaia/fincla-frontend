@@ -6,6 +6,7 @@
 import apiClient from './client';
 import { unwrapMoney } from './money';
 import type {
+  ReservedSummary,
   Goal,
   GoalProjection,
   CreateGoalRequest,
@@ -106,6 +107,17 @@ export const contributeToGoal = async (
     data,
     { params: { organization_id: organizationId } }
   );
+  return unwrapMoney(response.data);
+};
+
+/**
+ * O dinheiro reservado nas metas: por moeda, por conta e por meta. É o que a tela
+ * subtrai do saldo das contas para mostrar o "disponível para gastar".
+ */
+export const getReservedSummary = async (organizationId: string): Promise<ReservedSummary> => {
+  const response = await apiClient.get<ReservedSummary>('/goals/reserved', {
+    params: { organization_id: organizationId },
+  });
   return unwrapMoney(response.data);
 };
 

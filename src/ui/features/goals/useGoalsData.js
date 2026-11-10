@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  contributeToGoalForUi,
   createGoalForUi,
   formatGoalsApiError,
+  getGoalForUi,
   listGoalsForUi,
   mapGoalToUi,
   updateGoalForUi,
@@ -20,6 +22,9 @@ export function useGoalsData({
   enabled = true,
 }) {
   const [state, setState] = useState(EMPTY_STATE);
+  // A organização viva agora: resposta atrasada de outra org não escreve aqui.
+  const orgRef = useRef(organizationId);
+  orgRef.current = organizationId;
 
   useEffect(() => {
     if (!enabled || !organizationId) {
@@ -113,10 +118,57 @@ export function useGoalsData({
     }
   }, [organizationId]);
 
+  /**
+   * Registra um aporte e relê a meta no servidor: o progresso (e o "No ritmo")
+   * deriva das contribuições, então só a releitura é a verdade.
+   *
+   * Gravou mas a releitura falhou? O aporte EXISTE — tratar como falha levaria a
+   * pessoa a repetir e contar o dinheiro duas vezes. Então resolve com sucesso e
+   * deixa um aviso na página. Só a recusa do POST rejeita (com a mensagem pronta),
+   * e ela não toca o `error` da página: o modal mostra o próprio erro.
+   */
+  const contribute = useCallback(async (goalId, payload) => {
+    if (!organizationId) return null;
+    const org = organizationId;
+
+    setState((current) => ({ ...current, isSaving: true }));
+
+    let contribution;
+    try {
+      contribution = await contributeToGoalForUi(goalId, org, payload);
+    } catch (error) {
+      if (orgRef.current === org) setState((current) => ({ ...current, isSaving: false }));
+      throw new Error(formatGoalsApiError(error));
+    }
+
+    try {
+      const fresh = await getGoalForUi(goalId, org);
+      if (orgRef.current === org) {
+        setState((current) => ({
+          ...current,
+          isSaving: false,
+          // Releitura certa: um aviso de releitura que falhou antes deixa de valer.
+          error: "",
+          goals: current.goals.map((goal, index) => (goal.id === goalId ? mapGoalToUi(fresh, index) : goal)),
+        }));
+      }
+    } catch {
+      if (orgRef.current === org) {
+        setState((current) => ({
+          ...current,
+          isSaving: false,
+          error: "Aporte registrado, mas não consegui atualizar a meta. Recarregue a página para ver o progresso.",
+        }));
+      }
+    }
+    return contribution;
+  }, [organizationId]);
+
   return useMemo(() => ({
     ...state,
     createGoal,
     updateGoal,
+    contribute,
     hasRealData: state.hasLoaded,
-  }), [createGoal, state, updateGoal]);
+  }), [contribute, createGoal, state, updateGoal]);
 }
