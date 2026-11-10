@@ -2,6 +2,7 @@ import React from "react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
+import { freeShare } from "./goalReserve.js";
 
 const fmt = (v, moeda) => formatMoney(Number(v || 0), moeda) ?? "";
 
@@ -10,17 +11,23 @@ const fmt = (v, moeda) => formatMoney(Number(v || 0), moeda) ?? "";
  * para gastar, o que está prometido e para quais metas — e a sugestão de gastar só o
  * disponível (Owner, 2026-11-05). Sem reserva, nada aparece.
  */
+/** A barra livre × reservado — a mesma no modal de aporte e na Visão Geral. */
+export function ReserveBar({ total, free }) {
+  return (
+    <div aria-hidden="true" style={{ height: 8, borderRadius: 99, background: T.grayLight, display: "flex", overflow: "hidden", gap: 2 }}>
+      <i style={{ display: "block", width: `${freeShare(total, free)}%`, background: T.green }} />
+      <i style={{ display: "block", flex: 1, background: T.amberBar }} />
+    </div>
+  );
+}
+
 export function GoalReserveBreakdown({ view }) {
   if (!view) return null;
-  const { currency, total, reserved, free, goals, goalCount, elsewhere } = view;
-  const pctFree = total > 0 ? Math.max(0, Math.min(100, (free / total) * 100)) : 0;
+  const { currency, total, reserved, free, goals, goalCount } = view;
   const metas = goalCount === 1 ? "1 meta" : `${goalCount} metas`;
   return (
     <div data-testid="goal-reserve-breakdown" style={{ ...G, marginTop: 10, maxWidth: 420 }}>
-      <div aria-hidden="true" style={{ height: 8, borderRadius: 99, background: T.grayLight, display: "flex", overflow: "hidden", gap: 2 }}>
-        <i style={{ display: "block", width: `${pctFree}%`, background: T.green }} />
-        <i style={{ display: "block", flex: 1, background: T.amberBar }} />
-      </div>
+      <ReserveBar total={total} free={free} />
       <div style={{ display: "grid", gap: 4, marginTop: 8, fontSize: 12, ...NUM }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <span style={{ color: T.inkMid }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: T.green, marginRight: 7 }} />Disponível</span>
@@ -33,7 +40,7 @@ export function GoalReserveBreakdown({ view }) {
         {goals.slice(0, 3).map((g) => (
           <div key={g.goal_id} style={{ display: "flex", justifyContent: "space-between", gap: 12, color: T.inkLight, paddingLeft: 16 }}>
             <span>{g.name}</span>
-            <span>{fmt(g.amount, currency)}</span>
+            <span>{fmt(g.amount, g.currency)}</span>
           </div>
         ))}
         {goals.length > 3 ? <div style={{ color: T.inkLight, paddingLeft: 16 }}>e mais {goals.length - 3}</div> : null}
@@ -43,11 +50,6 @@ export function GoalReserveBreakdown({ view }) {
           ? `Você já está usando ${fmt(-free, currency)} do dinheiro das metas.`
           : `Gaste até ${fmt(free, currency)} sem mexer nas suas metas.`}
       </div>
-      {elsewhere.length ? (
-        <div style={{ marginTop: 4, fontSize: 11, color: T.inkLight }}>
-          Também reservado em outra moeda: {elsewhere.map((e) => fmt(e.amount, e.currency)).join(" · ")}
-        </div>
-      ) : null}
     </div>
   );
 }

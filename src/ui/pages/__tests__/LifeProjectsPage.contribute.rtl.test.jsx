@@ -33,6 +33,7 @@ const EURO = { id: "acc-eur", name: "Euro", type: "checking", currency: "EUR", i
 let accounts;
 let balances;
 let reserved;
+let reservedFails = false;
 const createAccount = vi.fn();
 vi.mock("../../../api/accounts", () => ({
   listAccounts: () => Promise.resolve(accounts),
@@ -42,7 +43,7 @@ vi.mock("../../../api/balances", () => ({
   getOrgBalances: () => Promise.resolve({ accounts: balances }),
 }));
 vi.mock("../../../api/goals", () => ({
-  getReservedSummary: () => Promise.resolve(reserved),
+  getReservedSummary: () => (reservedFails ? Promise.reject(new Error("500")) : Promise.resolve(reserved)),
 }));
 
 import { LifeProjectsPage } from "../LifeProjectsPage.jsx";
@@ -57,6 +58,7 @@ beforeEach(() => {
     { account_id: "acc-eur", balance: 900, currency: "EUR" },
   ];
   reserved = { totals: [], by_account: [], by_goal: [] };
+  reservedFails = false;
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -106,7 +108,7 @@ describe("+ Aportar", () => {
   });
 
   it("a prévia mostra total, reservado e disponível", async () => {
-    reserved = { totals: [{ currency: "BRL", amount: 100 }], by_account: [], by_goal: [] };
+    reserved = { totals: [{ currency: "BRL", amount: 100 }], by_account: [{ account_id: "acc-main", currency: "BRL", amount: 100 }], by_goal: [] };
     const user = userEvent.setup();
     const dialog = await openAporte(user);
     await user.type(within(dialog).getByLabelText(/Valor do aporte/), "400,00");
@@ -153,6 +155,49 @@ describe("+ Aportar", () => {
     await waitFor(() => expect(contribute).toHaveBeenCalledTimes(2));
     expect(createAccount).toHaveBeenCalledTimes(1);
     expect(contribute.mock.calls[1][1]).toMatchObject({ destination_account_id: "acc-new" });
+  });
+
+  it("duplo clique em 'Criar conta e transferir' cria uma conta só", async () => {
+    accounts = [MAIN];
+    let release;
+    createAccount.mockReturnValue(new Promise((r) => { release = r; }));
+    const user = userEvent.setup();
+    const dialog = await openAporte(user);
+    await user.type(within(dialog).getByLabelText(/Valor do aporte/), "400,00");
+    await user.selectOptions(within(dialog).getByLabelText("Onde o dinheiro fica guardado"), "new");
+    const button = within(dialog).getByRole("button", { name: "Criar conta e transferir" });
+    await user.click(button);
+    await user.click(within(dialog).getByRole("button", { name: "Salvando…" }));
+    release({ id: "acc-new", name: "Poupança", type: "savings", currency: "BRL" });
+
+    await waitFor(() => expect(contribute).toHaveBeenCalled());
+    expect(createAccount).toHaveBeenCalledTimes(1);
+    expect(contribute).toHaveBeenCalledTimes(1);
+  });
+
+  it("a leitura do reservado fora do ar não impede o aporte (só some a prévia)", async () => {
+    reservedFails = true;
+    const user = userEvent.setup();
+    const dialog = await openAporte(user);
+    await user.type(within(dialog).getByLabelText(/Valor do aporte/), "400,00");
+    expect(within(dialog).queryByLabelText("Prévia do aporte")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: money("Reservar R$ 400,00") }));
+    await waitFor(() => expect(contribute).toHaveBeenCalled());
+  });
+
+  it("a prévia usa só as contas que entram no total, como a Visão Geral", async () => {
+    accounts = [MAIN, { ...SAVINGS, include_in_total: false }];
+    balances = [
+      { account_id: "acc-main", balance: 5000, currency: "BRL" },
+      { account_id: "acc-save", balance: 9000, currency: "BRL" },
+    ];
+    reserved = { totals: [], by_account: [{ account_id: "acc-save", currency: "BRL", amount: 9000 }], by_goal: [] };
+    const user = userEvent.setup();
+    const dialog = await openAporte(user);
+    await user.type(within(dialog).getByLabelText(/Valor do aporte/), "400,00");
+    const preview = within(dialog).getByLabelText("Prévia do aporte");
+    expect(preview.textContent).toMatch(money("R$ 5.000,00"));
+    expect(preview.textContent).toMatch(money("R$ 4.600,00"));
   });
 
   it("sem valor (ou valor zero) não grava nada", async () => {

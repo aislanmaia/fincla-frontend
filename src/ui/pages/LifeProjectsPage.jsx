@@ -31,6 +31,7 @@ import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrenc
 import { moneyInputStatus } from "../money/moneyInput.js";
 import { ContributionModal } from "../features/goals/ContributionModal.jsx";
 import { createAccount } from "../../api/accounts";
+import { handleApiError } from "../../api/client";
 
 /** Casas da moeda da meta (JPY/KRW: 0) — o campo pré-preenchido segue a moeda. */
 const goalDecimals = (g) => currencyInfo(g.moeda || "BRL").decimalPlaces;
@@ -200,7 +201,12 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       if (newAccount) {
         // A conta nasce antes do aporte. Se o aporte falhar depois, ela já existe:
         // o erro leva a conta junto, e o modal passa a usá-la em vez de criar outra.
-        const created = await createAccount(organizationId, newAccount);
+        let created;
+        try {
+          created = await createAccount(organizationId, newAccount);
+        } catch (e) {
+          throw new Error(handleApiError(e));
+        }
         body = { ...payload, destination_account_id: created.id };
         try {
           await goalsData.contribute(goal.id, body);

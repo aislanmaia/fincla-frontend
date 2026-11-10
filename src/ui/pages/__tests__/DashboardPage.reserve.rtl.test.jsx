@@ -7,7 +7,7 @@ import { DashboardPage } from "../DashboardPage.jsx";
 
 let mockReserved = null;
 vi.mock("../../features/goals/useReservedSummary.js", () => ({
-  useReservedSummary: () => mockReserved,
+  useReservedSummary: () => (mockReserved ? { summary: mockReserved, includedAccountIds: new Set(["main"]) } : null),
 }));
 
 let mockDashboardData;
@@ -119,7 +119,7 @@ describe("DashboardPage — reserva das metas no saldo", () => {
   it("com reserva: abre pelo disponível, mostra o total, a reserva por meta e a sugestão", () => {
     mockReserved = {
       totals: [{ currency: "BRL", amount: 400 }],
-      by_account: [],
+      by_account: [{ account_id: "main", currency: "BRL", amount: 400 }],
       by_goal: [{ goal_id: "g1", name: "Viagem para o Nordeste", currency: "BRL", amount: 400 }],
     };
     renderDash();
@@ -135,7 +135,7 @@ describe("DashboardPage — reserva das metas no saldo", () => {
 
   it("gastos acima do disponível: avisa que o dinheiro das metas está sendo usado", () => {
     mockDashboardData = { ...baseData(), balanceSummary: balance(250) };
-    mockReserved = { totals: [{ currency: "BRL", amount: 400 }], by_account: [], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 400 }] };
+    mockReserved = { totals: [{ currency: "BRL", amount: 400 }], by_account: [{ account_id: "main", currency: "BRL", amount: 400 }], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 400 }] };
     renderDash();
     expect(screen.getByTestId("goal-reserve-breakdown").textContent).toMatch(/usando R\$\s150,00 do dinheiro das metas/);
   });
@@ -150,7 +150,7 @@ describe("DashboardPage — reserva das metas no saldo", () => {
 
   it("o conselho por dia usa o disponível, não o saldo com a reserva dentro", () => {
     // Sobra do ciclo = 600; saldo 5.000 com 4.940 reservados → disponível 60.
-    mockReserved = { totals: [{ currency: "BRL", amount: 4940 }], by_account: [], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 4940 }] };
+    mockReserved = { totals: [{ currency: "BRL", amount: 4940 }], by_account: [{ account_id: "main", currency: "BRL", amount: 4940 }], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 4940 }] };
     renderDash();
     const hoje = new Date();
     const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);

@@ -11,6 +11,7 @@ import { accountMeta } from "../accounts/accountMeta.js";
 import { listAccounts } from "../../../api/accounts";
 import { getOrgBalances } from "../../../api/balances";
 import { getReservedSummary } from "../../../api/goals";
+import { ReserveBar } from "./GoalReserveBreakdown.jsx";
 
 /**
  * Novo aporte — todo aporte sai de algum lugar (Owner, 2026-11-05).
@@ -37,23 +38,30 @@ const fmt = (v, moeda) => formatMoney(Number(v || 0), moeda || "BRL") ?? "";
 
 /** Contas, saldos e o reservado de hoje — só o que o modal precisa para a prévia. */
 function useContributionContext(organizationId, currency, enabled) {
-  const [state, setState] = useState({ loading: enabled, error: "", accounts: [], reserved: 0 });
+  const [state, setState] = useState({ loading: enabled, error: "", accounts: [], reservedIn: null });
   useEffect(() => {
     if (!enabled || !organizationId) return undefined;
     let cancelled = false;
-    Promise.all([listAccounts(organizationId), getOrgBalances(organizationId), getReservedSummary(organizationId)])
-      .then(([accounts, balances, reserved]) => {
+    // Só as contas são indispensáveis: saldo e reservado alimentam a PRÉVIA. Uma
+    // leitura acessória fora do ar não pode impedir o aporte.
+    Promise.allSettled([listAccounts(organizationId), getOrgBalances(organizationId), getReservedSummary(organizationId)])
+      .then(([accRes, balRes, resRes]) => {
         if (cancelled) return;
-        const saldo = Object.fromEntries((balances?.accounts || []).map((b) => [b.account_id, b.balance]));
-        const naMoeda = (accounts || [])
+        if (accRes.status !== "fulfilled") {
+          setState({ loading: false, error: "Não consegui carregar suas contas.", accounts: [], reservedIn: null });
+          return;
+        }
+        const saldo = balRes.status === "fulfilled"
+          ? Object.fromEntries((balRes.value?.accounts || []).map((b) => [b.account_id, b.balance]))
+          : null;
+        const naMoeda = (accRes.value || [])
           .filter((a) => a.is_active !== false && (a.currency || "BRL") === currency)
           .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
-          .map((a) => ({ ...a, balance: saldo[a.id] ?? null }));
-        const reservedNow = (reserved?.totals || []).find((t) => t.currency === currency)?.amount ?? 0;
-        setState({ loading: false, error: "", accounts: naMoeda, reserved: Number(reservedNow) || 0 });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ loading: false, error: "Não consegui carregar suas contas.", accounts: [], reserved: 0 });
+          .map((a) => ({ ...a, balance: saldo ? saldo[a.id] ?? null : null }));
+        const reservedIn = resRes.status === "fulfilled"
+          ? Object.fromEntries((resRes.value?.by_account || []).filter((r) => r.account_id && r.currency === currency).map((r) => [r.account_id, Number(r.amount) || 0]))
+          : null;
+        setState({ loading: false, error: "", accounts: naMoeda, reservedIn });
       });
     return () => {
       cancelled = true;
@@ -94,6 +102,11 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
   const [dest, setDest] = useState(SAME);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("savings");
+  // Em voo: o botão não grava duas vezes (a conta nova nasce ANTES do aporte, quando
+  // o `isSaving` da página ainda é falso) e o modal não fecha no meio da gravação.
+  const [submitting, setSubmitting] = useState(false);
+  const busy = submitting || isSaving;
+  const close = () => { if (!busy) onClose(); };
 
   // Conta criada aqui num aporte que depois falhou: entra na lista e fica escolhida.
   const [created, setCreated] = useState([]);
@@ -113,17 +126,22 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
   const noAccount = needsAccounts && accounts.length === 0;
   const newOk = dest !== NEW || newName.trim().length > 0;
   const canSave =
-    amount != null && amount > 0 && !!date && !futureDate && !isSaving && newOk && (!live || (needsAccounts && !!origin));
+    amount != null && amount > 0 && !!date && !futureDate && !busy && newOk && (!live || (needsAccounts && !!origin));
 
   function chooseDest(value) {
     setDest(value);
     if (value === NEW && !newName) setNewName(single ? "Poupança" : "");
   }
 
-  const total = accounts.reduce((s, a) => s + (Number(a.balance) || 0), 0);
-  const reservedAfter = ctx.reserved + (amount || 0);
+  // Mesma régua da Visão Geral: só contas que entram no total, e o reservado nelas.
+  const inTotal = accounts.filter((a) => a.include_in_total !== false);
+  const canPreview = !!ctx.reservedIn && inTotal.every((a) => typeof a.balance === "number");
+  const total = inTotal.reduce((s, a) => s + a.balance, 0);
+  const holder = dest === SAME ? origin : dest === NEW ? null : accounts.find((a) => a.id === dest);
+  const landsInTotal = dest === NEW ? true : holder ? holder.include_in_total !== false : false;
+  const reservedNow = canPreview ? inTotal.reduce((s, a) => s + (ctx.reservedIn[a.id] || 0), 0) : 0;
+  const reservedAfter = reservedNow + (landsInTotal ? amount || 0 : 0);
   const free = total - reservedAfter;
-  const pctFree = total > 0 ? Math.max(0, Math.min(100, (free / total) * 100)) : 0;
 
   const verb = !live || !amount ? "Registrar aporte" : dest === SAME ? `Reservar ${fmt(amount, currency)}` : dest === NEW ? "Criar conta e transferir" : `Transferir ${fmt(amount, currency)}`;
 
@@ -137,6 +155,7 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
       if (dest === NEW) newAccount = { name: newName.trim(), type: newType, currency };
       else if (dest !== SAME) payload.destination_account_id = dest;
     }
+    setSubmitting(true);
     try {
       await onSubmit(goal, payload, { newAccount });
     } catch (e) {
@@ -146,15 +165,17 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
         setDest(e.createdAccount.id);
       }
       setError(e?.message || "Não foi possível registrar o aporte.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+    <div onClick={close} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
       <div role="dialog" aria-label="Novo aporte" onClick={(e) => e.stopPropagation()} style={{ width: 440, maxWidth: "100%", background: T.surface, borderRadius: 14, boxShadow: T.lg, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <PageTitle sans="Novo" serif="aporte" />
-          <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight }}><X size={18} /></button>
+          <button onClick={close} aria-label="Fechar" disabled={busy} style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight }}><X size={18} /></button>
         </div>
         <div style={{ ...G, fontSize: 12, color: T.inkLight, marginBottom: 14 }}>
           Para <b data-contribution-goal style={{ color: T.ink }}>{goal.nome}</b> · {fmt(goal.atual, currency)} de {fmt(goal.meta, currency)}
@@ -226,13 +247,10 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
                   </div>
                 ) : null}
 
-                {amount ? (
+                {amount && canPreview ? (
                   <div aria-label="Prévia do aporte" style={{ borderRadius: 12, background: T.grayLight, padding: 12, display: "grid", gap: 7, marginBottom: 12 }}>
                     <Row label="Total nas contas" value={fmt(total, currency)} strong />
-                    <div style={{ height: 8, borderRadius: 99, background: T.border, display: "flex", overflow: "hidden", gap: 2 }}>
-                      <i style={{ display: "block", width: `${pctFree}%`, background: T.green }} />
-                      <i style={{ display: "block", flex: 1, background: T.amberBar }} />
-                    </div>
+                    <ReserveBar total={total} free={free} />
                     <Row label="Reservado nas metas" value={fmt(reservedAfter, currency)} />
                     <Row label="Disponível para gastar" value={fmt(free, currency)} color={free < 0 ? T.red : T.green} />
                   </div>
@@ -251,8 +269,8 @@ export function ContributionModal({ goal, organizationId = null, live = false, o
         {error ? <div role="alert" style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "8px 11px", marginBottom: 10 }}>{error}</div> : null}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, marginTop: 6 }}>
-          <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={save} disabled={!canSave}>{isSaving ? "Salvando…" : verb}</Btn>
+          <Btn variant="outGray" onClick={close} disabled={busy}>Cancelar</Btn>
+          <Btn variant="dark" onClick={save} disabled={!canSave}>{busy ? "Salvando…" : verb}</Btn>
         </div>
       </div>
     </div>

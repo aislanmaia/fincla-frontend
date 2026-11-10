@@ -163,7 +163,7 @@ export function DashboardPage({
   // O que está reservado nas metas sai do que dá para gastar (Owner, 2026-11-05).
   const reservedSummary = useReservedSummary({ organizationId, enabled: apiDataEnabled, refreshKey: transactionsRefreshToken });
   const reserve = useMemo(
-    () => reserveView(dashboardData.balanceSummary, reservedSummary),
+    () => reserveView(dashboardData.balanceSummary, reservedSummary?.summary, reservedSummary?.includedAccountIds),
     [dashboardData.balanceSummary, reservedSummary],
   );
   const recentTransactions = dashboardData.transactions;
@@ -1293,11 +1293,13 @@ export function DashboardPage({
                     <div data-testid="dashboard-headline-saldo-conta" style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginBottom: 18 }}>
                       <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
                         {accountHeadline.label ?? "Saldo em conta"}
+                        {accountHeadline.tooltip ? <InfoTip width={280} text={accountHeadline.tooltip} /> : null}
                       </div>
                       <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                         {accountHeadline.value}
                       </div>
                       <AccountBalancesNote prefix={accountHeadline.notePrefix} accountCount={accountHeadline.accountCount} isMobile={isMobile} organizationId={organizationId} refreshKey={transactionsRefreshToken} />
+                      <GoalReserveBreakdown view={reserve} />
                     </div>
                   ) : null}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1348,6 +1350,7 @@ export function DashboardPage({
                   <div data-testid="dashboard-headline-saldo-conta" style={{ marginBottom: 18 }}>
                     <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
                       {accountHeadline.label ?? "Saldo em conta"}
+                      {accountHeadline.tooltip ? <InfoTip width={280} text={accountHeadline.tooltip} /> : null}
                     </div>
                     <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
                       {accountHeadline.value}

@@ -147,6 +147,8 @@ export function useGoalsData({
         setState((current) => ({
           ...current,
           isSaving: false,
+          // Releitura certa: um aviso de releitura que falhou antes deixa de valer.
+          error: "",
           goals: current.goals.map((goal, index) => (goal.id === goalId ? mapGoalToUi(fresh, index) : goal)),
         }));
       }
