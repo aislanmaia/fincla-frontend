@@ -140,6 +140,22 @@ describe("DashboardPage — reserva das metas no saldo", () => {
     expect(screen.getByTestId("goal-reserve-breakdown").textContent).toMatch(/usando R\$\s150,00 do dinheiro das metas/);
   });
 
+  it("total já negativo: o dinheiro das metas foi todo usado — nunca um valor maior que a reserva", () => {
+    mockDashboardData = { ...baseData(), balanceSummary: balance(-2005.29) };
+    mockReserved = { totals: [{ currency: "BRL", amount: 150 }], by_account: [{ account_id: "main", currency: "BRL", amount: 150 }], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 150 }] };
+    renderDash();
+    const text = screen.getByTestId("goal-reserve-breakdown").textContent;
+    expect(text).toMatch(/usou todo o dinheiro das metas \(R\$\s150,00\) e está R\$\s2\.005,29 no negativo/);
+    expect(text).not.toMatch(/2\.155,29 do dinheiro das metas/);
+  });
+
+  it("total zerado: tudo o que era das metas já foi gasto, sem saldo negativo", () => {
+    mockDashboardData = { ...baseData(), balanceSummary: balance(0) };
+    mockReserved = { totals: [{ currency: "BRL", amount: 150 }], by_account: [{ account_id: "main", currency: "BRL", amount: 150 }], by_goal: [{ goal_id: "g1", name: "Viagem", currency: "BRL", amount: 150 }] };
+    renderDash();
+    expect(screen.getByTestId("goal-reserve-breakdown").textContent).toMatch(/usando R\$\s150,00 do dinheiro das metas/);
+  });
+
   it("sem reserva (ou leitura de reserva falhou): o cartão fica como sempre foi", () => {
     renderDash();
     const headline = screen.getByTestId("dashboard-headline-saldo-conta");
