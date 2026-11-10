@@ -21,6 +21,19 @@ export function ReserveBar({ total, free }) {
   );
 }
 
+/**
+ * The line under the breakdown. The goals' money is at most what is reserved: when the
+ * total itself is already negative, all of it is spent and the rest is the account in
+ * the red — never "using R$ 2.155 of the goals" with R$ 150 reserved.
+ */
+function overdraftMessage({ currency, total, reserved, free }) {
+  if (free >= 0) return `Gaste até ${fmt(free, currency)} sem mexer nas suas metas.`;
+  if (total < 0) {
+    return `Você já usou todo o dinheiro das metas (${fmt(reserved, currency)}) e está ${fmt(-total, currency)} no negativo.`;
+  }
+  return `Você já está usando ${fmt(-free, currency)} do dinheiro das metas.`;
+}
+
 export function GoalReserveBreakdown({ view }) {
   if (!view) return null;
   const { currency, total, reserved, free, goals, goalCount } = view;
@@ -46,9 +59,7 @@ export function GoalReserveBreakdown({ view }) {
         {goals.length > 3 ? <div style={{ color: T.inkLight, paddingLeft: 16 }}>e mais {goals.length - 3}</div> : null}
       </div>
       <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: free < 0 ? T.red : T.green }}>
-        {free < 0
-          ? `Você já está usando ${fmt(-free, currency)} do dinheiro das metas.`
-          : `Gaste até ${fmt(free, currency)} sem mexer nas suas metas.`}
+        {overdraftMessage(view)}
       </div>
     </div>
   );
