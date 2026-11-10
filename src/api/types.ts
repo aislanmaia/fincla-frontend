@@ -1403,6 +1403,20 @@ export interface CreateGoalContributionRequest {
   amount: number;
   contributed_at?: string | null; // YYYY-MM-DD (default: hoje)
   note?: string | null;
+  /** De onde o dinheiro sai. */
+  account_id?: string | null;
+  /**
+   * Para onde ele vai. Ausente ou igual a `account_id`: fica lá, RESERVADO (nada se
+   * move no banco). Outra conta: o backend cria a transferência na mesma gravação.
+   */
+  destination_account_id?: string | null;
+}
+
+/** Dinheiro prometido às metas (`GET /goals/reserved`). Nunca somado entre moedas. */
+export interface ReservedSummary {
+  totals: { currency: string; amount: number }[];
+  by_account: { account_id: string | null; currency: string; amount: number }[];
+  by_goal: { goal_id: string; name: string; currency: string; amount: number }[];
 }
 
 export interface GoalContribution {
@@ -1412,6 +1426,8 @@ export interface GoalContribution {
   contributed_at: string;
   created_at: string;
   note: string | null;
+  /** A transferência que levou o aporte a `account_id` (null = reservado onde já estava). */
+  transfer_id?: string | null;
 }
 
 export interface GoalContributionListResponse {
