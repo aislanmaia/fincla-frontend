@@ -3,6 +3,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
+import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { formatMoney } from "./accountMeta.js";
 import { moneyInputPlaceholder, moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 
@@ -20,9 +21,6 @@ const inputStyle = {
 };
 const labelStyle = { ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 6, display: "block" };
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** "2026-08-13" -> "2026-08-12". Em UTC de propósito: é aritmética de calendário. */
 function previousDayYmd(ymd) {
@@ -64,7 +62,7 @@ export function AdjustBalanceModal({
   const [balanceAtDate, setBalanceAtDate] = useState(null);
   const current = balanceAtDate ?? balanceToday;
   const [desired, setDesired] = useState("");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(todayLocalYmd());
   const [reason, setReason] = useState("");
   /** null = ainda não respondeu. SEM pré-seleção de propósito: os dois casos são
    *  frequentes em qualquer data e nada no dado os distingue (transação não guarda
@@ -227,7 +225,7 @@ export function AdjustBalanceModal({
             ? "Saldo atual"
             : includesSameDay === false
               ? `Saldo antes de ${String(date).split("-").reverse().join("/")}`
-              : date !== todayISO()
+              : date !== todayLocalYmd()
                 ? `Saldo em ${String(date).split("-").reverse().join("/")}`
                 : "Saldo atual"}
         </span>
@@ -265,7 +263,7 @@ export function AdjustBalanceModal({
           style={{ ...inputStyle, ...NUM }}
           type="date"
           value={date}
-          max={todayISO()}
+          max={todayLocalYmd()}
           onChange={(e) => setDate(e.target.value)}
         />
       </div>
