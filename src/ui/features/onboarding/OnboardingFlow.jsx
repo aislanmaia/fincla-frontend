@@ -12,7 +12,7 @@ import { moneyInputStatus } from "../../money/moneyInput.js";
 /* ─── ONBOARDING DATA & COMPONENTS ──────────────────────────── */
 
 const STEPS = [
-  { id:"welcome",    leftBg:"#0F0F0D", leftAcc:"#F8F7F5", accent:"#0F0F0D", accentBg:"rgba(15,15,13,0.06)", leftDec:"✦",   leftNum:null, leftH:"Bem-vindo ao Fincla",        leftS:"A plataforma de finanças para famílias e organizações que querem clareza sobre seu dinheiro." },
+  { id:"welcome",    leftBg:"#0F0F0D", leftAcc:"#F8F7F5", accent:"#0F0F0D", accentBg:"rgba(15,15,13,0.06)", leftDec:"✦",   leftNum:null, leftH:"Boas-vindas ao Fincla",      leftS:"A plataforma de finanças para famílias e organizações que querem clareza sobre seu dinheiro." },
   { id:"org",        leftBg:"#1E3A5F", leftAcc:"#93C5FD", accent:"#1E3A5F", accentBg:"#EFF6FF",            leftDec:null,  leftNum:"01", leftH:"Quem usa o Fincla?",         leftS:"Dê uma identidade à sua organização. Isso personaliza a linguagem e os relatórios." },
   { id:"categorias", leftBg:"#14532D", leftAcc:"#86EFAC", accent:"#166534", accentBg:"#ECFDF5",            leftDec:null,  leftNum:"02", leftH:"Onde vai o seu dinheiro?",  leftS:"As categorias selecionadas aparecem primeiro ao lançar transações — menos cliques no dia a dia." },
   { id:"cartoes",    leftBg:"#4C1D95", leftAcc:"#C4B5FD", accent:"#4C1D95", accentBg:"#F5F3FF",            leftDec:null,  leftNum:"03", leftH:"Cartões de crédito?",       leftS:"Se você usa cartões, o Fincla rastreia faturas, parcelas e assinaturas automaticamente." },

@@ -99,7 +99,7 @@ for (const offer of [
     await expect(page.getByText('Sua carteira está vazia')).toBeVisible();
     await expect(page.getByText(`${offer.seats} vagas restantes`)).toBeVisible();
     expect(payments).toBe(1);
-    await expect(page.getByRole('heading', { name: 'Bem-vindo ao Fincla' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Boas-vindas ao Fincla' })).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath('consultant-portfolio.png'), fullPage: true });
   });
 }

@@ -73,6 +73,6 @@ test('annual signup, real session bootstrap, payment and reload preserve the pen
   await page.getByRole('button',{name:'Verificar pagamento'}).click();
   await expect(page.getByRole('heading',{name:'Seu acesso está liberado'})).toBeVisible();
   await page.getByRole('button',{name:'Continuar para o Fincla'}).click();
-  await expect(page.getByRole('heading',{name:'Bem-vindo ao Fincla'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Boas-vindas ao Fincla'})).toBeVisible();
   expect(payments).toBe(1);
 });
