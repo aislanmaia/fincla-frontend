@@ -3,6 +3,7 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
+import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { accountMeta, formatDay, formatMoney } from "./accountMeta.js";
 import { moneyInputStatus, parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../money/moneyInput.js";
 import { currencyInfo } from "../../money/currencyRegistry.js";
@@ -22,16 +23,13 @@ const inputStyle = {
 };
 const labelStyle = { ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 6, display: "block" };
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** Modal de transferência entre contas próprias da org. */
 export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, error }) {
   const [fromId, setFromId] = useState(accounts[0]?.account_id || "");
   const [toId, setToId] = useState(accounts[1]?.account_id || accounts[0]?.account_id || "");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(todayLocalYmd());
   const [note, setNote] = useState("");
 
   const [toAmount, setToAmount] = useState("");
