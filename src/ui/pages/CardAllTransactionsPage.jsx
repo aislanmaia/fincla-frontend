@@ -312,7 +312,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const toggleDay = (key) => { const next = new Set(collapsedDays); if (!next.delete(key)) next.add(key); setCollapsedDays(next); };
   const dayControls = collapsible ? { onCollapseAll: () => setCollapsedDays(new Set(state.rows.map(dayKey))), onExpandAll: () => setCollapsedDays(new Set()) } : {};
   const summaryKey = `${state.card?.id ?? "none"}:${filterKey}`;
-  const facets = filter.buildFacets({ categoriesById });
+  const facets = filter.buildFacets({ categoriesById, valueCurrency: valueReadCurrency });
   const activeFacets = facets.filter((facet) => FACETS.includes(facet.key) && facet.active).filter((facet) => facet.key !== "cartao" && facet.key !== "periodo");
   if (cardScope === "all") activeFacets.push({ key: "cartao", label: "Cartão", value: "Todos os cartões" });
   const hasMore = state.total != null ? state.rows.length < state.total : state.rows.length > 0 && state.rows.length % PAGE_SIZE === 0;

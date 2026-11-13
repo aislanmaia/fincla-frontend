@@ -21,7 +21,21 @@ describe("deletionScope", () => {
     expect(deletionScope({ parcela: { atual: 1, total: 1, valorTotal: 30 } })).toBeNull();
   });
   it("reports the whole purchase for an installment", () => {
-    expect(deletionScope(parcel)).toEqual({ count: 3, total: 90, atual: 2 });
+    expect(deletionScope(parcel)).toEqual({ count: 3, total: 90, atual: 2, currency: null });
+  });
+});
+
+/** #315 — o total da compra saía em "R$" chapado, qualquer que fosse a moeda dela. */
+describe("delete confirmation — the purchase's own currency", () => {
+  it("writes the total in the purchase's currency, never R$", () => {
+    render(<ConfirmActionModal kind="delete" desc="Sofá" tx={{ ...parcel, currency: "USD" }} />);
+    const text = screen.getByRole("alertdialog").textContent;
+    expect(text).toMatch(/cerca de US\$\u00a090,00 no total/);
+    expect(text).not.toMatch(/cerca de R\$/);
+  });
+  it("BRL stays byte-identical", () => {
+    render(<ConfirmActionInline kind="delete" desc="Sofá" tx={{ ...parcel, currency: "BRL" }} />);
+    expect(screen.getByRole("alertdialog").textContent).toMatch(/cerca de R\$\u00a090,00 no total/);
   });
 });
 

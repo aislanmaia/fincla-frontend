@@ -14,6 +14,13 @@ vi.mock("@tanstack/react-router", () => ({
   useSearch: () => searchMock.value,
 }));
 
+// Moeda base em real, já resolvida: estes testes falam dos ESTADOS da busca. O que a
+// tela ESCREVE com outra base (#315) está em CalendarPage.currency.rtl.test.jsx, pela
+// rede, sem dublê do hook.
+vi.mock("../../money/useOrganizationBaseCurrency.js", () => ({
+  useOrganizationBaseCurrency: () => ({ status: "ready", currency: "BRL" }),
+}));
+
 vi.mock("../../../api/transactions", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, listTransactions: vi.fn() };

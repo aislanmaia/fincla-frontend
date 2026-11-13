@@ -187,7 +187,7 @@ export function TransactionsFilterBar({
     return map;
   }, [accounts]);
 
-  const facets = filter.buildFacets({ categoriesById, cardsById, accountsById })
+  const facets = filter.buildFacets({ categoriesById, cardsById, accountsById, valueCurrency: valueReadCurrency })
     .filter((facet) => !visibleFacetKeys || visibleFacetKeys.includes(facet.key));
 
   const activeFacets = facets

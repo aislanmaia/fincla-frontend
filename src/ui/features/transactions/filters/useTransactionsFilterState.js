@@ -5,6 +5,7 @@ import {
   isPaymentMethodAllowedForType,
 } from "./paymentMethodOptions.js";
 import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
+import { currencyInfo } from "../../../money/currencyRegistry.js";
 
 /**
  * Estado canônico dos filtros + ordenação da página de Transações (Variação C).
@@ -171,7 +172,10 @@ export function useTransactionsFilterState({
 
   /** Lista canônica de facets para a FacetBar, derivada do estado. */
   const buildFacets = useCallback(
-    ({ categoriesById = {}, cardsById = {}, accountsById = null } = {}) => {
+    // `valueCurrency`: a moeda em que a faixa de valor é LIDA e aplicada — a mesma
+    // que a página manda à consulta (`valueReadCurrency`). `null` = não se sabe, e o
+    // chip sai sem símbolo em vez de afirmar "R$" (#315).
+    ({ categoriesById = {}, cardsById = {}, accountsById = null, valueCurrency = null } = {}) => {
       const presetPeriodLabels = {
         tudo: "Todo período",
         hoje: "Hoje",
@@ -280,7 +284,7 @@ export function useTransactionsFilterState({
         {
           key: "valor",
           label: "Valor",
-          value: rangeLabel(state.valueMin, state.valueMax),
+          value: rangeLabel(state.valueMin, state.valueMax, valueCurrency),
           icon: "wallet",
           active: Boolean(state.valueMin || state.valueMax),
         },
@@ -356,9 +360,11 @@ export function useTransactionsFilterState({
   };
 }
 
-function rangeLabel(min, max) {
+/** O rótulo do chip de valor na moeda da faixa; sem moeda conhecida, só os números. */
+function rangeLabel(min, max, currency) {
   if (!min && !max) return "Qualquer";
-  if (min && max) return `R$ ${min} – ${max}`;
-  if (min) return `≥ R$ ${min}`;
-  return `≤ R$ ${max}`;
+  const sym = currency ? `${currencyInfo(currency).symbol} ` : "";
+  if (min && max) return `${sym}${min} – ${max}`;
+  if (min) return `≥ ${sym}${min}`;
+  return `≤ ${sym}${max}`;
 }

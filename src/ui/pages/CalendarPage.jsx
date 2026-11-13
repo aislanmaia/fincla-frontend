@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -35,9 +35,22 @@ function weekLabel(ymdStr) {
 }
 import { shouldUseRealData } from "../dataMode.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
+import { baseMoneyFormatters, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
+import { formatMoney } from "../money/formatMoney.js";
 
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const fmt = (v) => brl.format(Number(v || 0));
+/**
+ * Os formatadores na moeda BASE da organização (#315), para os totais do mês e do
+ * dia — antes um `Intl.NumberFormat(..., "BRL")` de módulo, que escrevia "R$" em
+ * qualquer base. Contexto e não prop porque KPIs, lista do dia e grade (em mais de
+ * um lugar cada) escrevem dinheiro; o padrão é "moeda desconhecida" → travessão.
+ */
+const CalendarMoney = createContext(baseMoneyFormatters(null));
+
+/** Um lançamento na moeda DELE (a da conta em que caiu); sem moeda declarada, a base. */
+function fmtEvent(e, money) {
+  const abs = Math.abs(Number(e.value) || 0);
+  return e.currency ? formatMoney(abs, e.currency) : money.fmtIntl(abs);
+}
 const fmtShort = (v) => `${v < 0 ? "−" : "+"}${Math.round(Math.abs(Number(v || 0))).toLocaleString("pt-BR")}`;
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
@@ -120,6 +133,7 @@ function groupByCategory(events) {
 /** Calendário Financeiro v2 — workspace, estado no URL (deep-linkável). */
 export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction, transactionsRefreshToken = 0 }) {
   const live = shouldUseRealData(organizationId, dataMode);
+  const money = useBaseCurrencyMoney(organizationId, { live });
   const navigate = useNavigate();
   const search = useSearch({ strict: false });
   const today = useMemo(() => todayParts(), []);
@@ -265,6 +279,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
   return (
+    <CalendarMoney.Provider value={money}>
     <PageEnter>
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6 }}>Planejamento · Rotina</div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
@@ -327,6 +342,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
         </>
       )}
     </PageEnter>
+    </CalendarMoney.Provider>
   );
 }
 
@@ -348,6 +364,7 @@ function Segmented({ value, onChange }) {
 }
 
 function KpiCards({ totals, unknownLoading = false, unknownError = false }) {
+  const fmt = useContext(CalendarMoney).fmtIntl;
   // Enquanto o período nunca carregou com sucesso (1º carregamento em voo ou já
   // falhou), "R$ 0,00 / 0 lançamentos" é uma AFIRMAÇÃO falsa sobre o mês — não
   // sabemos ainda. Troca o valor por um placeholder e o rótulo por um aviso.
@@ -447,6 +464,7 @@ function MoreRow({ n, onSeeExtrato }) {
 }
 
 function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoading = false, loadFailed = false, staleError = false }) {
+  const fmt = useContext(CalendarMoney).fmtIntl;
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   // Ajustes de saldo entram no SALDO, fora de Receitas/Despesas.
@@ -644,6 +662,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
 }
 
 function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, week, compact }) {
+  const money = useContext(CalendarMoney);
   const cells = grid.flat();
   const minH = week ? 300 : compact ? 64 : 96;
   const maxEv = week ? 10 : 2;
@@ -688,7 +707,7 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
                     style={{ ...G, fontSize: 12, fontWeight: 600, borderRadius: 6, padding: "2px 7px", color: c.color, background: c.bg, border: `1px solid ${c.border}`, display: "flex", alignItems: "baseline", gap: 6, cursor: clickable ? "pointer" : "default" }}
                   >
                     <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</span>
-                    <span style={{ ...NUM, flexShrink: 0 }}>{brl.format(Math.abs(Number(e.value) || 0))}</span>
+                    <span style={{ ...NUM, flexShrink: 0 }}>{fmtEvent(e, money)}</span>
                   </span>
                 );
               })}

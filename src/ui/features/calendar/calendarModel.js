@@ -72,13 +72,15 @@ export function buildCalendarEvents(transactions, year, month, adjustments = [])
       category: "Ajuste de saldo",
     });
   }
+  // `currency`: a moeda DA LINHA (a da conta em que caiu, carimbada como
+  // `value_currency` por `listTransactions`) — o chip de cada lançamento se escreve nela (#315).
   for (const tx of transactions || []) {
     // Cartão: cada parcela com vencimento no mês vira um evento de fatura.
     if (Array.isArray(tx.installment_info) && tx.installment_info.length) {
       for (const inst of tx.installment_info) {
         if (inMonth(inst.due_date)) {
           const cardCat = txCategoryName(tx);
-          add(inst.due_date, { id: tx.id ?? null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false, paymentMethod: tx.payment_method || "credit", category: cardCat === "Sem categoria" ? "Fatura de cartão" : cardCat });
+          add(inst.due_date, { id: tx.id ?? null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), currency: tx.value_currency ?? null, paid: false, paymentMethod: tx.payment_method || "credit", category: cardCat === "Sem categoria" ? "Fatura de cartão" : cardCat });
         }
       }
       continue;
@@ -88,7 +90,7 @@ export function buildCalendarEvents(transactions, year, month, adjustments = [])
     const paid = Boolean(tx.paid_at) || tx.status === "paid" || tx.status === "completed";
     const kind = tx.type === "income" ? "income" : tx.type === "refund" ? "refund" : "expense";
     const sign = kind === "expense" ? -1 : 1;
-    add(day, { id: tx.id ?? null, kind, type: kind, desc: tx.description, value: sign * Math.abs(Number(tx.value) || 0), paid, paymentMethod: tx.payment_method || null, category: txCategoryName(tx) });
+    add(day, { id: tx.id ?? null, kind, type: kind, desc: tx.description, value: sign * Math.abs(Number(tx.value) || 0), currency: tx.value_currency ?? null, paid, paymentMethod: tx.payment_method || null, category: txCategoryName(tx) });
   }
   return byDay;
 }

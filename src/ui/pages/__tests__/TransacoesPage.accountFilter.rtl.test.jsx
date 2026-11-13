@@ -452,10 +452,106 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
       expect(lastFilters()).not.toHaveProperty("valueCurrency");
     });
 
+    /* #315 — o chip da faixa dizia "R$" em qualquer moeda: a moeda do rótulo é a
+       mesma em que a faixa é lida e aplicada. */
+    const valueChipText = () => document.body.textContent ?? "";
+
+    it("chip da faixa: organização em US$ diz US$, nunca R$ (#315)", async () => {
+      orgBaseCurrency = "USD";
+      await typeMin("1,500");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(1500));
+      await waitFor(() => expect(valueChipText()).toContain("≥ US$ 1,500"));
+      expect(valueChipText()).not.toMatch(/[≥≤] R\$/);
+    });
+
+    it("chip da faixa: recorte numa conta em US$ diz US$ mesmo com a base em R$ (#315)", async () => {
+      const ACC_USD = "dddddddd-0000-4000-8000-000000000004";
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_USD, name: "Wise USD", currency: "USD" }]);
+      routerSearch = { fc_account: ACC_USD };
+      await typeMin("52.40");
+      await waitFor(() => expect(valueChipText()).toContain("≥ US$ 52.40"));
+    });
+
+    it("chip da faixa: organização em R$ continua \"≥ R$ 10\" (#315)", async () => {
+      await typeMin("10");
+      await waitFor(() => expect(valueChipText()).toContain("≥ R$ 10"));
+    });
+
     it("sem moeda escolhida, nenhuma valueCurrency viaja (organização em R$ segue igual)", async () => {
       await typeMin("10");
       await waitFor(() => expect(lastFilters().valueMin).toBe(10));
       expect(lastFilters()).not.toHaveProperty("valueCurrency");
+    });
+  });
+
+  /* #315 (Owner): na tela de Transações o símbolo segue a MOEDA DA CONTA. A linha
+     já sai na dela; o chip da faixa sai na moeda em que a API aplica a faixa
+     (`value_currency` = a das contas do recorte quando são todas de uma moeda; com
+     contas de moedas diferentes, a base); os totais do resumo saem na moeda que o
+     servidor declara (`summary.currency`); o subtotal do dia, por moeda das linhas. */
+  describe("moeda da conta no recorte (#315)", () => {
+    const ACC_USD = "dddddddd-0000-4000-8000-000000000004";
+    const ACC_USD2 = "dddddddd-0000-4000-8000-000000000005";
+    const usdRow = (id, val) => ({ id, date: "10/11/2026", desc: `Compra ${id}`, cat: "Alimentação", val, method: "Pix",
+      type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [], settled: true, settleable: true, currency: "USD" });
+    const body = () => document.body.textContent ?? "";
+    async function typeMinIn(text) {
+      await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+      await openFilters();
+      await userEvent.click(await screen.findByRole("button", { name: /^Valor\b/ }));
+      await userEvent.type(await screen.findByRole("textbox", { name: "Valor mínimo" }), text);
+    }
+
+    it("conta em US$: chip, totais e subtotal do dia em US$, nenhum R$", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_USD, name: "Wise USD", currency: "USD" }]);
+      routerSearch = { fc_account: ACC_USD };
+      transactionsList = [usdRow("u1", -100), usdRow("u2", -20)];
+      // Recorte numa conta só: o servidor responde o resumo na moeda dela.
+      summaryMock = { total_income: 0, total_expenses: 999, total_refunds: 0, balance: -999, currency: "USD" };
+      localStorage.setItem("fincla:transactions:list-prefs", JSON.stringify({ grouped: true }));
+      renderPage();
+      await typeMinIn("10");
+      await waitFor(() => expect(body()).toContain("≥ US$ 10"));
+      expect(body()).toMatch(/−US\$\s999,00/); // resultado do resumo
+      expect(body()).toMatch(/−US\$\s120,00/); // subtotal do dia
+      expect(body()).not.toMatch(/R\$/);
+    });
+
+    it("duas contas em US$ numa organização em R$: a faixa é lida e aplicada em US$", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS,
+        { id: ACC_USD, name: "Wise USD", currency: "USD" }, { id: ACC_USD2, name: "Nomad USD", currency: "USD" }]);
+      routerSearch = { fc_account: `${ACC_USD},${ACC_USD2}` };
+      renderPage();
+      await typeMinIn("1,500");
+      await waitFor(() => expect(lastFilters().valueMin).toBe(1500));
+      expect(lastFilters().valueCurrency).toBe("USD");
+      expect(body()).toContain("≥ US$ 1,500");
+    });
+
+    it("conta em R$: chip e totais em R$, como sempre", async () => {
+      routerSearch = { fc_account: ACC_B };
+      renderPage();
+      await typeMinIn("10");
+      await waitFor(() => expect(body()).toContain("≥ R$ 10"));
+      expect(body()).toMatch(/−R\$\s120,00/);
+    });
+
+    it("contas de moedas diferentes: a faixa restringe na base (value_currency) e o chip diz a base", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_USD, name: "Wise USD", currency: "USD" }]);
+      routerSearch = { fc_account: `${ACC_B},${ACC_USD}` };
+      renderPage();
+      await typeMinIn("10");
+      await waitFor(() => expect(lastFilters().valueCurrency).toBe("BRL"));
+      expect(body()).toContain("≥ R$ 10");
+    });
+
+    it("sem recorte, dia com linhas em moedas diferentes: subtotal por moeda, nunca somado", async () => {
+      listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_USD, name: "Wise USD", currency: "USD" }]);
+      transactionsList = [usdRow("u1", -100), { ...usdRow("b1", -40), currency: "BRL" }];
+      localStorage.setItem("fincla:transactions:list-prefs", JSON.stringify({ grouped: true }));
+      renderPage();
+      await waitFor(() => expect(body()).toMatch(/−US\$\s100,00 · −R\$\s40,00/));
+      expect(body()).not.toMatch(/140,00/);
     });
   });
 

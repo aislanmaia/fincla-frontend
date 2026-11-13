@@ -5,9 +5,8 @@ import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { getGoalProjection } from "../../../api/goals";
 import { goalTypeMeta } from "./goalMeta.js";
-
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const fmt = (v) => brl.format(Number(v || 0));
+import { baseMoneyFormatters } from "../../money/useBaseCurrencyMoney.js";
+import { MOEDA_PADRAO } from "../../money/currencyRegistry.js";
 const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: T.inkLight };
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
@@ -61,6 +60,10 @@ export function GoalProjectionModal({ goal, organizationId, onClose }) {
   }, [goal, organizationId]);
 
   if (!goal) return null;
+  // Tudo aqui é dinheiro DA META, na moeda dela (fincla-api#142) — não em real
+  // chapado (#315). Sem organização é a demonstração, em real de propósito; com
+  // organização e sem moeda conhecida, travessão.
+  const fmt = baseMoneyFormatters(goal.moeda ?? (organizationId ? null : MOEDA_PADRAO)).fmtIntl;
   const meta = goalTypeMeta(goal.type);
   const data = state.data;
   const sum = data?.summary;

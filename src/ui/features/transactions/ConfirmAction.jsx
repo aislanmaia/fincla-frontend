@@ -1,7 +1,7 @@
 import React from "react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
-import { fmtBRL } from "./shared/transactionFormat.js";
+import { fmtValorDaLinha } from "./shared/transactionFormat.js";
 import { settlementCopy } from "./settlementCopy.js";
 
 /**
@@ -24,13 +24,14 @@ import { settlementCopy } from "./settlementCopy.js";
 export function deletionScope(tx) {
   const p = tx?.parcela;
   if (!p || !(p.total > 1)) return null;
-  return { count: p.total, total: p.valorTotal, atual: p.atual };
+  // A moeda da compra: o total se escreve nela, não em real chapado (#315).
+  return { count: p.total, total: p.valorTotal, atual: p.atual, currency: tx.currency ?? null };
 }
 
 export function scopeNotice(scope) {
   const head = `Esta é a ${scope.atual}ª de ${scope.count} parcelas de uma compra parcelada. Excluir apaga a compra inteira: ${scope.count} parcelas`;
   // O total vem de valor × nº de parcelas: pode errar por centavos quando a última leva o resto.
-  return scope.total != null && Number.isFinite(Number(scope.total)) ? `${head}, cerca de ${fmtBRL(scope.total)} no total.` : `${head}.`;
+  return scope.total != null && Number.isFinite(Number(scope.total)) ? `${head}, cerca de ${fmtValorDaLinha(scope.total, scope.currency)} no total.` : `${head}.`;
 }
 
 export const CONFIRM_COPY = {

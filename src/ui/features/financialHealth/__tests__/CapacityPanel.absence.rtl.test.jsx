@@ -13,6 +13,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { CapacityPanel } from "../CapacityPanel.jsx";
 
+// Moeda base em real, já resolvida: o que importa aqui é a AUSÊNCIA. O que a tela
+// escreve com outra base (#315) está no teste de moeda, pela rede.
+vi.mock("../../../money/useOrganizationBaseCurrency.js", () => ({
+  useOrganizationBaseCurrency: () => ({ status: "ready", currency: "BRL" }),
+}));
+
 const live = { data: null };
 
 vi.mock("../useEconomyCapacityData.js", () => ({
