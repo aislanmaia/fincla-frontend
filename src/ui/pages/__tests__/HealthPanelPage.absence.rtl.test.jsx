@@ -20,6 +20,12 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
  * Uma revisão adversarial achou os três. Estes casos existem para eles não voltarem.
  */
 
+// Moeda base em real, já resolvida: o que importa aqui é a AUSÊNCIA. O que a tela
+// escreve com outra base (#315) está no teste de moeda, pela rede.
+vi.mock("../../money/useOrganizationBaseCurrency.js", () => ({
+  useOrganizationBaseCurrency: () => ({ status: "ready", currency: "BRL" }),
+}));
+
 const getFinancialHealthMock = vi.fn();
 vi.mock("../../../api/financialHealth", () => ({
   getFinancialHealth: (...args) => getFinancialHealthMock(...args),

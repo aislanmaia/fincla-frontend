@@ -7,10 +7,10 @@ import { shouldUseRealData } from "../dataMode.js";
 import { categoryLabelPtForTag } from "../data/categoryLabels.js";
 import { moneyInputStatus, parseMoneyInputFor } from "../money/moneyInput.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import { baseMoneyFormatters } from "../money/useBaseCurrencyMoney.js";
+import { MOEDA_PADRAO } from "../money/currencyRegistry.js";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const fmt = (v) => brl.format(Number(v || 0));
 const parseBRL = (s) => Number(String(s ?? "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) || 0;
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
@@ -49,7 +49,7 @@ function useIsWide(bp = 1024) {
   return w;
 }
 
-function CompareCard({ title, planned, actual, kind }) {
+function CompareCard({ title, planned, actual, kind, fmt }) {
   const variance = actual - planned;
   const pct = planned > 0 ? Math.min(100, (actual / planned) * 100) : actual > 0 ? 100 : 0;
   const vc = varColor(kind, variance);
@@ -78,6 +78,10 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
   // O plano é na moeda base (#284): numa organização em US$, "1,500" é 1500.
   const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: live });
   const readPlanned = (text) => parseMoneyInputFor(text, orgBase.currency, parseBRL) ?? 0;
+  // E é nela que os valores se escrevem (#315) — não em real chapado. A demonstração
+  // é em real de propósito; enquanto a base não chega, travessão.
+  const moneyCurrency = live ? orgBase.currency : MOEDA_PADRAO;
+  const fmt = useMemo(() => baseMoneyFormatters(moneyCurrency).fmtIntl, [moneyCurrency]);
   const isWide = useIsWide(1024);
   const now = useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 }), []);
   const [cursor, setCursor] = useState(now);
@@ -171,15 +175,15 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
             </Card>
           ) : (
             <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
-              <CompareCard title="Receita" planned={data.planned_income} actual={data.actual_income} kind="income" />
-              <CompareCard title="Despesa" planned={data.planned_expense} actual={data.actual_expense} kind="expense" />
-              <CompareCard title="Saldo do mês" planned={netPlanned} actual={netActual} kind="net" />
+              <CompareCard title="Receita" planned={data.planned_income} actual={data.actual_income} kind="income" fmt={fmt} />
+              <CompareCard title="Despesa" planned={data.planned_expense} actual={data.actual_expense} kind="expense" fmt={fmt} />
+              <CompareCard title="Saldo do mês" planned={netPlanned} actual={netActual} kind="net" fmt={fmt} />
             </div>
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: isWide && incomes.length ? "1fr 1fr" : "1fr", gap: 16, alignItems: "start" }}>
-            <Section title="Despesas por categoria" items={expenses} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} />
-            {incomes.length ? <Section title="Receitas por categoria" items={incomes} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} /> : null}
+            <Section title="Despesas por categoria" items={expenses} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} fmt={fmt} />
+            {incomes.length ? <Section title="Receitas por categoria" items={incomes} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} fmt={fmt} /> : null}
           </div>
 
           {!editing ? (
@@ -191,7 +195,7 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
   );
 }
 
-function Section({ title, items, editing, form, setForm, inputStyle }) {
+function Section({ title, items, editing, form, setForm, inputStyle, fmt }) {
   if (!items.length) return null;
   return (
     <Card style={{ marginTop: 14, padding: "4px 16px 12px" }}>

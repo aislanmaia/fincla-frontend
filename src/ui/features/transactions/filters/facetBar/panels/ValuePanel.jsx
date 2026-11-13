@@ -33,7 +33,7 @@ export function ValuePanel({
      histograma a tem) — aba, barras e campos falam da mesma moeda; senão a primeira. */
   const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency)
     ? valueCurrency
-    : readCurrency && moedas.includes(readCurrency) ? readCurrency : moedas[0]) || "BRL";
+    : readCurrency && moedas.includes(readCurrency) ? readCurrency : moedas[0]) || readCurrency || null;
   const varias = moedas.length > 1;
   // Os campos são lidos na MESMA moeda que a página usa na consulta (#284): em US$,
   // "1,500" é 1500. Duas fontes liam o mesmo texto em moedas diferentes.
@@ -42,7 +42,10 @@ export function ValuePanel({
   const buckets = Array.isArray(todos)
     ? todos.filter((b) => (b.currency || "BRL") === moedaAtiva)
     : todos;
-  const cifrao = simboloDaMoeda(moedaAtiva);
+  // Sem histograma, a moeda é a de leitura (a da conta do recorte, ou a base) — e não
+  // "R$" chapado (#315). Sem moeda conhecida, os atalhos saem só com os números.
+  const cifrao = moedaAtiva ? simboloDaMoeda(moedaAtiva) : "";
+  const c$ = cifrao ? `${cifrao} ` : "";
   const rotulo = (b) => bucketLabel(b, cifrao);
   const peak = Array.isArray(buckets) ? Math.max(1, ...buckets.map((b) => b.count)) : 1;
 
@@ -136,9 +139,9 @@ export function ValuePanel({
      transação de exatos R$ 50,00 entrar no recorte, que é justamente o que
      "até R$ 50" promete. */
   const ATALHOS = [
-    { label: `até ${cifrao} 50`, from: null, to: 50 },
-    { label: `${cifrao} 50–250`, from: 50, to: 250 },
-    { label: `acima de ${cifrao} 250`, from: 250, to: null },
+    { label: `até ${c$}50`, from: null, to: 50 },
+    { label: `${c$}50–250`, from: 50, to: 250 },
+    { label: `acima de ${c$}250`, from: 250, to: null },
   ];
   /* Quantas transações cada atalho traria. Conta só as barras INTEIRAMENTE
      dentro do intervalo, não as que ele apenas toca: com atalhos em números
@@ -513,7 +516,7 @@ export function bucketEdges(buckets, min, max) {
   return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : { first: -1, last: -1 };
 }
 
-function ValueField({ label, value, placeholder, ariaLabel, currency = "BRL", onChange }) {
+function ValueField({ label, value, placeholder, ariaLabel, currency = null, onChange }) {
   return (
     <div>
       <div
@@ -540,7 +543,7 @@ function ValueField({ label, value, placeholder, ariaLabel, currency = "BRL", on
           background: T.surface,
         }}
       >
-        <span style={{ ...G, fontSize: 12, color: T.inkLight, fontWeight: 600 }}>{currencyInfo(currency).symbol}</span>
+        <span style={{ ...G, fontSize: 12, color: T.inkLight, fontWeight: 600 }}>{currency ? currencyInfo(currency).symbol : ""}</span>
         <input
           value={value || ""}
           placeholder={placeholder}

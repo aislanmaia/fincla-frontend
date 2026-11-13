@@ -339,7 +339,23 @@ export function larguraColunaTags(txs, { visiveis = TAGS_VISIVEIS, tetoChip = TA
 
 
 /** Subtotal do dia SEM transferências: elas não são receita nem despesa (#268). */
-const diaSemTransferencias = (txs) => txs.filter((t) => t.kind !== "transfer").reduce((s, t) => s + t.val, 0);
+/**
+ * Subtotal do dia (sem transferências) POR MOEDA (#315). As linhas são cada uma na
+ * moeda da sua conta, e o dia não é convertido por ninguém: somar euro com real e
+ * carimbar a moeda do resumo é um número de moeda nenhuma. Uma moeda só (o caso de
+ * toda organização de moeda única, e de qualquer recorte numa conta) → uma fatia.
+ * `fallback`: a moeda de uma linha que não declara a dela (a do resumo).
+ */
+const subtotaisDoDia = (txs, fallback) => {
+  const porMoeda = new Map();
+  for (const t of txs) {
+    if (t.kind === "transfer") continue;
+    const moeda = t.currency || fallback || null;
+    porMoeda.set(moeda, (porMoeda.get(moeda) ?? 0) + t.val);
+  }
+  return [...porMoeda.entries()].map(([moeda, total]) => ({ moeda, total }));
+};
+const fmtSubtotal = ({ moeda, total }) => `${total >= 0 ? "+" : "−"}${fmtValorDaLinha(Math.abs(total), moeda)}`;
 
 /**
  * Detalhe de uma TRANSFERÊNCIA no extrato de uma conta (#268). Só leitura: ela não
@@ -526,8 +542,8 @@ const DetailPanel = ({
           ...(tx.parcela ? [
             { label:"Parcela",      val: `${tx.parcela.atual}ª de ${tx.parcela.total}` },
             { label:"Vencimento",   val: tx.parcela.vencimento },
-            { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
-            { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
+            { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtValorDaLinha(tx.parcela.valParcela, tx.currency)}/mês</span> },
+            { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtValorDaLinha(tx.parcela.valorTotal, tx.currency)}</span> },
           ] : []),
         ].map(({label,val})=>(
           /* Na sanfona: rótulo EM CIMA do valor, como no artefato. Lado a lado
@@ -751,7 +767,7 @@ const DetailPanel = ({
 
 export function TransacoesPage(props) {
   if (props.dataMode === "empty") {
-    return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} />;
+    return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} organizationId={props.organizationId} />;
   }
   return <TransacoesPageBody {...props} />;
 }
@@ -1368,11 +1384,20 @@ function TransacoesPageBody({
   }, [accountFilterAvailable, filter.accountSel]);
   /** A conta do recorte quando é UMA só — extrato com transferências e "+ Transação" nela. */
   const singleFilteredAccountId = effectiveAccountSel.length === 1 ? effectiveAccountSel[0] : null;
+  /* A moeda das contas do recorte quando TODAS são da mesma (uma conta, ou várias em
+     US$); `null` sem recorte, com contas de moedas diferentes ou moeda desconhecida. */
+  const filteredAccountsCurrency = useMemo(() => {
+    if (effectiveAccountSel.length === 0) return null;
+    const moedas = new Set(effectiveAccountSel.map((id) => anyAccountById[id]?.currency || null));
+    return moedas.size === 1 ? [...moedas][0] : null;
+  }, [effectiveAccountSel, anyAccountById]);
   /* Em que moeda ler a faixa de valor digitada (#284) — UMA fonte, usada na consulta
-     E passada ao painel: a escolhida no painel; senão a da conta do recorte (o
-     histograma só tem a moeda dela); senão a base. Em US$, "1,500" é 1500. */
+     E passada ao painel (e ao chip da faixa, #315): a escolhida no painel; senão a
+     das contas do recorte, quando são todas de uma moeda (o histograma só tem a moeda
+     delas); senão a base. Em US$, "1,500" é 1500. Com contas de moedas diferentes no
+     recorte, a base: é nela que a faixa restringe (`value_currency`, abaixo). */
   const valueReadCurrency = filter.valueCurrency
-    || (singleFilteredAccountId ? anyAccountById[singleFilteredAccountId]?.currency : null)
+    || filteredAccountsCurrency
     || orgBase.currency
     || null;
   /* Em que moeda a FAIXA restringe (#289). A escolhida na aba; sem escolha, numa
@@ -2568,8 +2593,8 @@ function TransacoesPageBody({
   );
 
   const allFacets = useMemo(
-    () => filter.buildFacets({ categoriesById, cardsById, accountsById: accountsForFilterById }),
-    [filter, categoriesById, cardsById, accountsForFilterById],
+    () => filter.buildFacets({ categoriesById, cardsById, accountsById: accountsForFilterById, valueCurrency: valueReadCurrency }),
+    [filter, categoriesById, cardsById, accountsForFilterById, valueReadCurrency],
   );
 
 
@@ -3939,8 +3964,8 @@ function TransacoesPageBody({
                   }}>{fmtDateLabel(date)}</div>
                   <div style={{ flex:1 }}/>
                   <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
-                    color: diaSemTransferencias(txs) >= 0 ? T.green : T.red, fontWeight:700 }}>
-                    {diaSemTransferencias(txs) >= 0 ? "+" : "−"}{fmtResumo(Math.abs(diaSemTransferencias(txs)))}
+                    color: (() => { const f = subtotaisDoDia(txs, summaryCurrency); return f.length > 1 ? T.inkMid : (f[0]?.total ?? 0) >= 0 ? T.green : T.red; })(), fontWeight:700 }}>
+                    {subtotaisDoDia(txs, summaryCurrency).map(fmtSubtotal).join(" · ") || fmtSubtotal({ moeda: summaryCurrency, total: 0 })}
                   </div>
                 </div>
               )}
@@ -4502,8 +4527,9 @@ function TransacoesPageBody({
             cat: confirmAcao.tx.cat,
             method: confirmAcao.tx.method,
             type: confirmAcao.tx.type,
-            valorFormatado: fmtBRL(Math.abs(confirmAcao.tx.val)),
+            valorFormatado: fmtValorDaLinha(confirmAcao.tx.val, confirmAcao.tx.currency),
             parcela: confirmAcao.tx.parcela,
+            currency: confirmAcao.tx.currency,
           }}
           busy={deletingBusy}
           onCancel={() => setConfirmAcao(null)}

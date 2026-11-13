@@ -17,7 +17,7 @@ import { transactionStatus } from "../shared/transactionFormat.js";
 
 afterEach(cleanup);
 
-const nbsp = " ";
+const nbsp = "\u00a0";
 
 const expense = {
   id: "t1",
@@ -145,6 +145,24 @@ describe("TxRow desktop", () => {
     expect(screen.getByText("↺")).toBeTruthy();
     expect(screen.getByText("Antes da abertura")).toBeTruthy();
     expect(screen.getByText(/Crédito ●● 1234/)).toBeTruthy();
+  });
+
+  /* #315 — os tooltips de parcela e de estorno escreviam "R$" chapado: são valores
+     da LINHA, e saem na moeda dela. */
+  it("tooltips de parcela e de estorno saem na moeda da linha (#315)", () => {
+    row({
+      tx: {
+        ...expense, method: "Crédito", currency: "USD",
+        parcela: { atual: 2, total: 12, cartao: "Nubank ••1234", valParcela: 100 },
+        refundsSummary: { count: 2, totalValue: 30 },
+      },
+    });
+    // Um tooltip aberto por vez (#105): lê cada um logo depois de abrir.
+    fireEvent.mouseEnter(screen.getByText("2/12×"));
+    expect(screen.getByRole("tooltip").textContent).toContain(`US$${nbsp}100,00/mês`);
+    fireEvent.mouseEnter(screen.getByText("↺"));
+    expect(screen.getByRole("tooltip").textContent).toContain(`US$${nbsp}30,00 abatidos`);
+    expect(screen.getByRole("tooltip").textContent).not.toMatch(/R\$/);
   });
 
   it("anel 'A pagar' só quando liquidável e não liquidado", () => {

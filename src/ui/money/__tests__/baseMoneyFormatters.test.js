@@ -29,4 +29,16 @@ describe("baseMoneyFormatters (#310)", () => {
   it("fmtK ignora o índice que o recharts passa como 2º argumento", () => {
     expect(baseMoneyFormatters("EUR").fmtK(2000, 3)).toBe("€2.0k");
   });
+
+  it("fmtIntl: BRL byte a byte como o Intl de sempre (U+00A0, sinal do Intl)", () => {
+    const intl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+    const m = baseMoneyFormatters("BRL");
+    for (const v of [0, 1234.5, -120, 7300]) expect(m.fmtIntl(v)).toBe(intl.format(v));
+  });
+
+  it("fmtIntl: USD escreve US$; ausente e moeda desconhecida viram travessão", () => {
+    expect(baseMoneyFormatters("USD").fmtIntl(1234.5)).toBe("US$\u00a01.234,50");
+    expect(baseMoneyFormatters("USD").fmtIntl(null)).toBe(UNKNOWN_MONEY);
+    expect(baseMoneyFormatters(null).fmtIntl(10)).toBe(UNKNOWN_MONEY);
+  });
 });

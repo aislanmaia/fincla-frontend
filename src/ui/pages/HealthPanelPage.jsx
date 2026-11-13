@@ -4,14 +4,8 @@ import { G, NUM } from "../typography";
 import { PageTitle, Card, PageEnter } from "../components/primitives";
 import { useFinancialHealthData } from "../features/health/useFinancialHealthData.js";
 import { shouldUseRealData } from "../dataMode.js";
+import { useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-// Dinheiro, ou um travessão — nunca um zero de consolo. `Number(null || 0)` devolvia
-// `0`, e a tela mostrava "R$ 0,00" para o valor que o backend deliberadamente NÃO
-// afirmou: sem cotação para converter as moedas do cliente, ele manda `null` para não
-// inventar um número. "R$ 0,00" diz que a pessoa não tem nada — o oposto de "nós é
-// que não sabemos ler".
-const fmt = (v) => (v === null || v === undefined ? "—" : brl.format(Number(v)));
 const pct = (v) => (v === null || v === undefined ? "—" : `${Math.round(Number(v) * 100)}%`);
 const money = (valor, moeda) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: moeda || "BRL" }).format(
@@ -89,6 +83,11 @@ function Metric({ label, value, sub, color }) {
 /** M7 — Painel de Saúde Financeira. Sub-área "health" do hub. */
 export function HealthPanelPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const live = shouldUseRealData(organizationId, dataMode);
+  // Dinheiro na moeda BASE da organização (#315) — antes um `Intl` chapado em "BRL" —,
+  // ou um travessão, nunca um zero de consolo: sem cotação para converter as moedas do
+  // cliente, o backend manda `null` para não inventar um número, e "R$ 0,00" diria que
+  // a pessoa não tem nada. Enquanto a base não chega, também travessão.
+  const fmt = useBaseCurrencyMoney(organizationId, { live }).fmtIntl;
   const { data: liveData, loading, error, insufficientData } = useFinancialHealthData({
     organizationId,
     enabled: live,

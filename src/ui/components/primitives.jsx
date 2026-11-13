@@ -40,7 +40,20 @@ export function AnimBar({ pct, color, h = 4, delay = 0 }) {
   );
 }
 
-export function AnimNum({ value, prefix = "R$\u00a0", style = {}, suffix = "" }) {
+/**
+ * Número animado. `prefix` é OBRIGATÓRIO (#315): o padrão era `"R$\u00a0"`, e é o
+ * mesmo padrão silencioso que os formatadores perderam no #310 — um valor em dólar
+ * esquecido sem prefixo sairia em real. Quem chama passa o símbolo da moeda dos
+ * valores (`""` para um número sem unidade). Esquecer é defeito de quem chama: no
+ * teste lança; fora dele, loga e desenha travessão — nunca "R$".
+ */
+export function AnimNum({ value, prefix, style = {}, suffix = "" }) {
+  const semPrefixo = prefix === undefined;
+  if (semPrefixo) {
+    const msg = "AnimNum: prefixo ausente — passe o símbolo da moeda dos valores (ver #315)";
+    if (import.meta.env?.MODE === "test") throw new Error(msg);
+    console.error(msg);
+  }
   const target =
     typeof value === "number" ? value : parseFloat(String(value).replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
   const [display, setDisplay] = useState(target);
@@ -72,6 +85,7 @@ export function AnimNum({ value, prefix = "R$\u00a0", style = {}, suffix = "" })
     return () => cancelAnimationFrame(raf);
   }, [target]);
   const fmt = display.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (semPrefixo) return <span style={style}>—</span>;
   return (
     <span style={{ ...style, animation: "countUp 0.3s ease both" }}>
       {prefix}

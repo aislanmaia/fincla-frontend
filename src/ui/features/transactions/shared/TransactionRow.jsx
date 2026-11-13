@@ -4,7 +4,7 @@ import { T } from "../../../tokens";
 import { G } from "../../../typography";
 import { Tip } from "../../../components/Tip.jsx";
 import { SWIPE_WIDTH } from "../useSwipeActions.js";
-import { catBg, catColor, fmtBRL, fmtValorDaLinha } from "./transactionFormat.js";
+import { catBg, catColor, fmtValorDaLinha } from "./transactionFormat.js";
 import { settlementCopy } from "../settlementCopy.js";
 
 /* O corpo dos micro-rótulos da linha (pílula de categoria, chips de tag,
@@ -466,7 +466,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             {tx.desc}
           </span>
           {hasRefundsLinked && !isRefund && (
-            <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
+            <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtValorDaLinha(tx.refundsSummary.totalValue, tx.currency)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
               <span style={{ ...G, fontSize:11, color:T.green, background:T.greenLight,
                 borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default",
                 whiteSpace:"nowrap" }}>↺</span>
@@ -505,7 +505,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             {accountLabel ? ` · ${accountLabel}` : ""}
           </span>
           {hasParcela && (
-            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${readOnly ? shownValue : fmtBRL(tx.parcela.valParcela)}/mês`}>
+            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${readOnly ? shownValue : fmtValorDaLinha(tx.parcela.valParcela, tx.currency)}/mês`}>
               <span style={{ ...G, fontFamily:"'Geist Mono',monospace", color:T.blue,
                 fontWeight:600, whiteSpace:"nowrap" }}>
                 {tx.parcela.atual}/{tx.parcela.total}×

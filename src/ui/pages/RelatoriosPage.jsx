@@ -33,6 +33,14 @@ import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMon
 import { listRecurringSeries } from "../../api/recurringSeries";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 
+/**
+ * Insight da composição — cópia de DEMONSTRAÇÃO, com números inventados ("R$ 3.300",
+ * "Março"). Só aparece fora dos dados reais: com dados reais a página não tem esse
+ * cálculo, e o insight some em vez de afirmar números de outra pessoa (#315).
+ */
+const COMPOSITION_DEMO_INSIGHT_MOBILE = `<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes de gastar — fixo e recorrências. Margem discricionária real: <strong>R$\u00a01.081</strong> em Março.`;
+const COMPOSITION_DEMO_INSIGHT = `<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes do primeiro gasto — fixo e recorrências. Margem discricionária real em Março: <strong>R$\u00a01.081</strong>.`;
+
 /* ─── RELATÓRIOS DATA — 12 meses ────────────────────────── */
 const REL_MONTHLY = [
   { mes:"Abr'25", receita:7800, gasto:6200, budget:6000, score:72, fixo:3100, disc:3100 },
@@ -1009,10 +1017,14 @@ export function RelatoriosPage({
 
           {/* COMPOSIÇÃO */}
           {relTab==="composicao" && (<>
-            <InsightChip
-              color={T.amber} icon="🔒"
-              text={`<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes de gastar — fixo e recorrências. Margem discricionária real: <strong>R$\u00a01.081</strong> em Março.`}
-            />
+            {/* Cópia de DEMONSTRAÇÃO, com números inventados: só fora dos dados reais.
+                Com dados reais não há este cálculo — o insight some (#315). */}
+            {!shouldUseRealData && (
+              <InsightChip
+                color={T.amber} icon="🔒"
+                text={COMPOSITION_DEMO_INSIGHT_MOBILE}
+              />
+            )}
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 14px" }}>
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:14 }}>
                 Composição{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
@@ -1146,8 +1158,7 @@ export function RelatoriosPage({
         {/* 3-col: col3 row2 | 2-col: full-width (span 2) */}
         <Section title="Composição dos" serifWord="gastos"
           style={desktopCols===3 ? { gridColumn:3, gridRow:2 } : { gridColumn:"1 / -1" }}
-          insight={{ color:T.amber, icon:"🔒",
-            text:`<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes do primeiro gasto — fixo e recorrências. Margem discricionária real em Março: <strong>R$\u00a01.081</strong>.` }}>
+          insight={shouldUseRealData ? undefined : { color:T.amber, icon:"🔒", text: COMPOSITION_DEMO_INSIGHT }}>
           <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
           <ComposicaoDonutSection
             compositionData={compositionData}

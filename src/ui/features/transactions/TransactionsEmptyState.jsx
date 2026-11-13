@@ -1,13 +1,18 @@
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { PageTitle } from "../../components/primitives";
+import { useBaseCurrencyMoney } from "../../money/useBaseCurrencyMoney.js";
 
 /**
  * Empty state da página Transações.
  * - Se `extraTx` (transações semeadas pelo onboarding) tem itens, mostra a lista preview.
  * - Caso contrário, mostra placeholder com CTA.
+ *
+ * Os valores semeados são da organização recém-criada: escrevem-se na moeda BASE
+ * dela, não em real chapado (#315). Sem organização é a demonstração, em real.
  */
-export function TransactionsEmptyState({ extraTx = [], onNewTx }) {
+export function TransactionsEmptyState({ extraTx = [], onNewTx, organizationId = null }) {
+  const { fmtAbs } = useBaseCurrencyMoney(organizationId, { live: Boolean(organizationId) && extraTx.length > 0 });
   if (extraTx.length > 0) {
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
@@ -31,7 +36,7 @@ export function TransactionsEmptyState({ extraTx = [], onNewTx }) {
               </div>
               <div style={{ ...G, ...NUM, fontSize:14, fontWeight:700, flexShrink:0,
                 color: tx.val > 0 ? T.green : T.ink }}>
-                {tx.val > 0 ? "+" : "−"}R$ {Math.abs(tx.val).toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                {tx.val > 0 ? "+" : "−"}{fmtAbs(tx.val)}
               </div>
             </div>
           ))}

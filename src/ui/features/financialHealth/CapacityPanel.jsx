@@ -3,21 +3,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { PageTitle, Card } from "../../components/primitives";
 import { useEconomyCapacityData } from "./useEconomyCapacityData.js";
-
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-
-/**
- * Dinheiro, ou um travessão — nunca um zero de consolo.
- *
- * `Number(null || 0)` devolvia `0`, e a tela mostrava "R$ 0,00" para o valor que o
- * backend deliberadamente NÃO afirmou: quando falta cotação para converter as moedas
- * do cliente, ele manda `null` justamente para não inventar um número. Trazer o zero
- * de volta aqui desfazia isso na última camada, e "R$ 0,00" afirma que a pessoa não
- * tem nada — o oposto de "nós é que não sabemos ler".
- */
-function formatBRL(v) {
-  return v === null || v === undefined ? "—" : brl.format(Number(v));
-}
+import { useBaseCurrencyMoney } from "../../money/useBaseCurrencyMoney.js";
 
 /** Formata uma moeda qualquer: a quebra vem com a moeda de cada fatia. */
 function formatMoney(valor, moeda) {
@@ -86,7 +72,7 @@ function BreakdownOrRate({ data }) {
   );
 }
 
-function MonthBars({ months }) {
+function MonthBars({ months, formatBase }) {
   // `p.surplus` pode ser `null` (sem cotação). `Number(null)` é 0, e uma barra de
   // altura zero afirma "este mês fechou no zero" — não "não sabemos ler este mês".
   const maxAbs = months.reduce(
@@ -112,7 +98,7 @@ function MonthBars({ months }) {
                 style={{ ...G, ...NUM, fontWeight: 700, color: semNumero ? T.inkLight : s >= 0 ? T.ink : T.red }}
                 title={semNumero ? "Sem cotação para converter este mês" : undefined}
               >
-                {semNumero ? "—" : formatBRL(s)}
+                {semNumero ? "—" : formatBase(s)}
               </span>
             </div>
             <div style={{ width: "100%", height: 8, borderRadius: 99, background: T.grayLight, overflow: "hidden" }}>
@@ -131,6 +117,13 @@ function MonthBars({ months }) {
 export function CapacityPanel({ organizationId, dataMode = "live", months = 3 }) {
   const enabled = !!organizationId && dataMode === "live";
   const { isLoading, error, data, hasLoaded } = useEconomyCapacityData({ organizationId, months, enabled });
+  /**
+   * Os agregados na moeda BASE da organização (#315) — antes um `Intl` chapado em
+   * "BRL". Dinheiro, ou um travessão — nunca um zero de consolo: quando falta cotação
+   * o backend manda `null` para não inventar um número, e "R$ 0,00" afirmaria que a
+   * pessoa não tem nada. Enquanto a base não chega, também travessão.
+   */
+  const formatBase = useBaseCurrencyMoney(organizationId, { live: enabled }).fmtIntl;
 
   const surplusColor = data && Number(data.avg_surplus) < 0 ? T.red : T.green;
   const windowCopy = data
@@ -163,18 +156,18 @@ export function CapacityPanel({ organizationId, dataMode = "live", months = 3 })
                 <TrendChip trend={data.trend} />
               </div>
               <div style={{ ...G, ...NUM, fontSize: 34, fontWeight: 800, letterSpacing: "-0.02em", color: surplusColor, marginTop: 8 }}>
-                {formatBRL(data.avg_surplus)}
+                {formatBase(data.avg_surplus)}
               </div>
               <BreakdownOrRate data={data} />
               <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4 }}>{windowCopy}</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
                 <div>
                   <div style={cap}>Receita média</div>
-                  <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 700, marginTop: 4 }}>{formatBRL(data.avg_income)}</div>
+                  <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 700, marginTop: 4 }}>{formatBase(data.avg_income)}</div>
                 </div>
                 <div>
                   <div style={cap}>Despesa média</div>
-                  <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 700, marginTop: 4 }}>{formatBRL(data.avg_expense)}</div>
+                  <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 700, marginTop: 4 }}>{formatBase(data.avg_expense)}</div>
                 </div>
               </div>
             </Card>
@@ -182,7 +175,7 @@ export function CapacityPanel({ organizationId, dataMode = "live", months = 3 })
             <Card style={{ padding: 20 }}>
               <div style={{ ...cap, marginBottom: 14 }}>Sobra por mês</div>
               {data.months.length ? (
-                <MonthBars months={data.months} />
+                <MonthBars months={data.months} formatBase={formatBase} />
               ) : (
                 <div style={{ ...G, fontSize: 13, color: T.inkLight }}>Sem meses completos ainda.</div>
               )}
@@ -194,11 +187,11 @@ export function CapacityPanel({ organizationId, dataMode = "live", months = 3 })
               <div>
                 <span style={cap}>{data.current_month.month_name} · em andamento</span>
                 <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 3 }}>
-                  receita {formatBRL(data.current_month.income)} · despesa {formatBRL(data.current_month.expense)}
+                  receita {formatBase(data.current_month.income)} · despesa {formatBase(data.current_month.expense)}
                 </div>
               </div>
               <span style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, color: Number(data.current_month.surplus) < 0 ? T.red : T.green }}>
-                {formatBRL(data.current_month.surplus)}
+                {formatBase(data.current_month.surplus)}
               </span>
             </Card>
           ) : null}

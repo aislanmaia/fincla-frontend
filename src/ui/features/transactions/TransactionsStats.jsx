@@ -332,9 +332,8 @@ export function TransactionsStats({
             ) : (
               <>
                 {values[i].sinal}
-                {/* Sem `prefix`: o default de `AnimNum` já é "R$\u00a0" com o caractere
-                    de verdade. Passar "R$&nbsp;" imprimia a entidade literal, porque
-                    React não decodifica HTML em string de JS. */}
+                {/* `prefix` com o U+00A0 de verdade: "R$&nbsp;" imprimiria a entidade
+                    literal, porque React não decodifica HTML em string de JS. */}
                 <AnimNum value={values[i].valor} prefix={animPrefix} />
               </>
             )}
