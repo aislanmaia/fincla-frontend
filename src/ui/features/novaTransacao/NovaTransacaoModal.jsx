@@ -24,7 +24,6 @@ import {
   fmtSaldoLine,
   clearNovaTransacaoSummaryCache,
 } from "./useNovaTransacaoPeriodSaldo.js";
-import { ParcelaHybrid } from "./ParcelaHybrid.jsx";
 import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
 import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
 import { useRefundPicker } from "./useRefundPicker.js";
@@ -3596,9 +3595,6 @@ export const NovaTransacaoModal = ({
                     )}
                   </div>
                 </div>
-              )}
-              {modalityChoice === "parcelado" && (
-                <ParcelaHybrid installments={installments} amountNum={amountNum} currency={formCurrency}/>
               )}
             </div>
             </div>
