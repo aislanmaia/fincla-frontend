@@ -111,6 +111,32 @@ describe("impact screen", () => {
     expect(header).toHaveTextContent("Cotação: US$ 1 = R$ 5,4526 (05/11)");
   });
 
+  it("going back USD → BRL shows the rate as 'US$ 1 = R$ x' too, and keeps the API's converted amounts (#311)", async () => {
+    const m = (amount, currency) => ({ amount, currency });
+    const back = impactPreview({
+      from_currency: "USD", to_currency: "BRL",
+      quote: { base: "USD", quote: "BRL", rate: "5.6436000000", quoted_on: "2026-11-12" },
+      groups: [{ group: "budgets", count: 1, locked_count: 0, undisclosed_count: 0, items: [
+        { key: "budget:b1:amount", entity_id: "b1", field: "amount", label: "Mercado", can_skip: true, locked_reason: null,
+          current: m("100.00", "USD"), kept: m("100.00", "BRL"), converted: m("564.36", "BRL") },
+      ] }],
+    });
+    backend({ previews: [back], orgBase: "USD" });
+    const user = userEvent.setup();
+    renderDialog({ currentCurrency: "USD" });
+    await user.click(await screen.findByRole("button", { name: /Real brasileiro/ }));
+    const header = await screen.findByTestId("bcc-header");
+    expect(header).toHaveTextContent("Cotação: US$ 1 = R$ 5,6436 (12/11)");
+    expect(header).not.toHaveTextContent("R$ 1 =");
+    const convert = screen.getByRole("radio", { name: /Converter pela cotação/ });
+    expect(convert.closest("label")).toHaveTextContent("(US$ 1 = R$ 5,6436)");
+    expect(convert.closest("label")).not.toHaveTextContent("R$ 1 =");
+    await user.click(convert);
+    await user.click(screen.getByRole("button", { name: /Orçamentos \(1\)/ }));
+    // Display-only fix: the converted amount is still the API's, untouched.
+    expect(await screen.findByTestId("bcc-item-budget:b1:amount")).toHaveTextContent("564,36");
+  });
+
   it("requires the global choice before confirming, and the groups start collapsed with counts", async () => {
     backend();
     const user = userEvent.setup();

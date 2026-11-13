@@ -75,17 +75,24 @@ export function invertRate(rate, places = 10) {
   return places > 0 ? `${s.slice(0, -places)}.${s.slice(-places)}` : s;
 }
 
+/** A moeda em que a cotação é escrita quando ela está num dos lados: "US$ 1 = R$ x". */
+const DISPLAY_ANCHOR = "BRL";
+
 /**
  * A cotação da prévia como o app sempre a escreve — "US$ 1 = R$ 5,4525" — e a data
- * dela ("05/11"). A API manda `from → to` (R$ 1 = US$ 0,1834); a regra do Owner é
- * "1 <estrangeira> = <base>" a partir da base que a pessoa conhece (a atual), então
- * o par mostrado vem de `quoteDirection` e a taxa só é invertida para exibição.
- * `null` sem cotação.
+ * dela ("05/11"). A API manda `from → to` (R$ 1 = US$ 0,1834 indo para US$;
+ * US$ 1 = R$ 5,6436 voltando para R$). A regra do Owner (a mesma da troca de conta)
+ * é "1 <estrangeira> = R$ x" nos DOIS sentidos (#311): o real ancora a direção, não a
+ * base antiga. Sem real em nenhum lado (EUR ↔ USD), `quoteDirection` sem âncora dá
+ * "1 <origem> = <destino> x" — a direção da própria API. A taxa só é invertida para
+ * exibição; os valores convertidos são os do servidor. `null` sem cotação.
  */
 export function quoteDisplay(preview) {
   const q = preview?.quote;
   if (!q?.rate) return null;
-  const direction = quoteDirection({ from: preview.from_currency, to: preview.to_currency, base: preview.from_currency });
+  const sides = [preview.from_currency, preview.to_currency].map((c) => String(c ?? "").toUpperCase());
+  const anchor = sides.includes(DISPLAY_ANCHOR) ? DISPLAY_ANCHOR : null;
+  const direction = quoteDirection({ from: preview.from_currency, to: preview.to_currency, base: anchor });
   const sameWay = String(q.base).toUpperCase() === direction.base && String(q.quote).toUpperCase() === direction.quote;
   const rate = sameWay ? String(q.rate) : invertRate(q.rate);
   if (rate == null) return null;
