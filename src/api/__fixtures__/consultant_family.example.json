@@ -18,7 +18,14 @@
     "period_end": "2026-06-30",
     "consolidation": {
       "target_currency": "BRL",
-      "rates": [],
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2026-06-30"
+        }
+      ],
       "unavailable": null
     }
   },
@@ -45,7 +52,19 @@
     "organizations_count": 2,
     "period_start": "2026-01-01",
     "period_end": "2026-06-30",
-    "formula_info": "media aritmetica do score canonico dos clientes com snapshot"
+    "formula_info": "media aritmetica do score canonico dos clientes com snapshot",
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2026-06-30"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "total_credit_card_debt": {
     "total_debt": {
@@ -53,7 +72,19 @@
       "currency": "BRL"
     },
     "organizations_count": 2,
-    "as_of_date": "2026-06-30"
+    "as_of_date": "2026-06-30",
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2026-06-30"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "cash_flow": {
     "monthly_data": [
@@ -93,7 +124,19 @@
       }
     ],
     "period_start": "2026-05-01",
-    "period_end": "2026-06-30"
+    "period_end": "2026-06-30",
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2026-06-30"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "expenses_by_category": {
     "categories": [
@@ -127,7 +170,19 @@
       "currency": "BRL"
     },
     "period_start": "2026-01-01",
-    "period_end": "2026-06-30"
+    "period_end": "2026-06-30",
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2026-06-30"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "income_commitment": {
     "monthly_data": [

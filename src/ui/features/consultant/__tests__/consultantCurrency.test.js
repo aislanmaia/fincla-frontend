@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fmtTotals, portfolioCurrency, sumByCurrency, trustedPortfolioLabel } from "../consultantCurrency.js";
+import { aggregateCurrency, fmtTotals, portfolioCurrency, sumByCurrency, trustedPortfolioLabel } from "../consultantCurrency.js";
 import { fmtMoney, fmtMoney0 } from "../consultantFormat.js";
 import { summarizeTransactionsByCurrency } from "../consultantClientTransactions.js";
 
@@ -12,6 +12,25 @@ import { summarizeTransactionsByCurrency } from "../consultantClientTransactions
  */
 const usd = { currency: "USD" };
 const brl = { currency: "BRL" };
+
+describe("aggregateCurrency (fincla-api#505)", () => {
+  it("convertido pelo backend: a moeda de leitura vale mesmo com a carteira mista", () => {
+    expect(aggregateCurrency({ currency: "BRL", converted: true }, [brl, usd])).toBe("BRL");
+  });
+
+  it("convertido, carteira toda noutra moeda: continua a de leitura", () => {
+    expect(aggregateCurrency({ currency: "BRL", converted: true }, [usd])).toBe("BRL");
+  });
+
+  it("não convertido (API anterior): só o rótulo confiável", () => {
+    expect(aggregateCurrency({ currency: "BRL", converted: false }, [brl, usd])).toBeNull();
+    expect(aggregateCurrency({ currency: "USD" }, [usd, usd])).toBe("USD");
+  });
+
+  it("sem agregado: null", () => {
+    expect(aggregateCurrency(undefined, [brl])).toBeNull();
+  });
+});
 
 describe("trustedPortfolioLabel", () => {
   it("confia no rótulo quando todo cliente está nele", () => {

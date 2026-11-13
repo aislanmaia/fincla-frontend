@@ -8,13 +8,14 @@
  *    cliente, `client.currency`, extraída do rótulo na fronteira da API.
  * 2. **Um agregado que o backend CONVERTE** (`/summary`, `/financial-health-index`,
  *    o relatório de gastos da carteira): na moeda de leitura que veio com ele.
- * 3. **Um agregado que o backend só ROTULA** (`/total-credit-card-debt`,
- *    `/cash-flow`, `/expenses-by-category`): a soma empilha clientes de moedas
- *    diferentes sem cotação (fincla-api#170) e recebe o rótulo da moeda de leitura
- *    do consultor. O rótulo só diz a verdade quando TODOS os clientes estão nele —
- *    é o que `trustedPortfolioLabel` confere. Fora disso a moeda é desconhecida e o
- *    valor sai "—": um número em várias moedas escrito com um símbolo só é o número
- *    certo com a unidade errada, que engana mais do que não mostrar nada.
+ * 3. **`/total-credit-card-debt`, `/cash-flow`, `/expenses-by-category`**: desde a
+ *    fincla-api#505 o backend CONVERTE estes também, e manda o recibo
+ *    `consolidation` — viram o caso 2 (`aggregateCurrency`). Uma API anterior à #505
+ *    (sem recibo) só ROTULA uma soma que empilha clientes de moedas diferentes: o
+ *    rótulo só diz a verdade quando TODOS os clientes estão nele — é o que
+ *    `trustedPortfolioLabel` confere. Fora disso a moeda é desconhecida e o valor sai
+ *    "—": um número em várias moedas escrito com um símbolo só é o número certo com
+ *    a unidade errada, que engana mais do que não mostrar nada.
  */
 
 // Sem importar de `consultantFormat`: ele importa `consultantClientsView`, que importa
@@ -82,4 +83,17 @@ export function trustedPortfolioLabel(label, clients, loaded = true) {
   if (!label || !loaded) return null;
   const list = Array.isArray(clients) ? clients : [];
   return list.every((c) => c?.currency === label) ? label : null;
+}
+
+/**
+ * A moeda em que escrever um dos três agregados da carteira (`{ currency, converted }`,
+ * como os hooks do consultor os devolvem), ou `null`.
+ *
+ * Convertido pelo backend (fincla-api#505): a moeda de leitura vale para a carteira
+ * inteira, mista ou não — e um total ausente (faltou cotação) continua ausente, sai
+ * "—" pelo próprio `null`. Não convertido (API anterior): só o rótulo confiável.
+ */
+export function aggregateCurrency(aggregate, clients, loaded = true) {
+  if (aggregate?.converted) return aggregate.currency ?? null;
+  return trustedPortfolioLabel(aggregate?.currency, clients, loaded);
 }

@@ -254,8 +254,9 @@ function ClientRefChip({ block, onOpenClient }) {
   );
 }
 
-// `currency`: a moeda base do cliente do bloco — o bloco traz só números, e a tool
-// lê os gastos dele já convertidos para a base dele (#314).
+// `currency`: a moeda base do cliente do bloco. Desde a fincla-api#505 o próprio
+// bloco a declara (`block.currency`, copiada do resultado da tool); um bloco antigo
+// traz só números, e aí vale a moeda do cliente na carteira (#314).
 function ClientCategoriesCard({ block, onOpenClient, currency }) {
   const [expanded, setExpanded] = useState(false);
   const categories = [...(block.categories || [])].sort((a, b) => Number(b.total) - Number(a.total));
@@ -359,7 +360,7 @@ function AnswerRenderer({ output, onOpenClient, onEvaluate, onFollowUp, clients 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))", gap: 10 }}>
             {clientCategories.map((block) => (
               <ClientCategoriesCard key={block.organization_id} block={block} onOpenClient={onOpenClient}
-                currency={(clients || []).find((c) => c.organization_id === block.organization_id)?.currency ?? null} />
+                currency={block.currency ?? (clients || []).find((c) => c.organization_id === block.organization_id)?.currency ?? null} />
             ))}
           </div>
         </div>

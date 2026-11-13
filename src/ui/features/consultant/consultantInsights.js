@@ -25,12 +25,21 @@ export function selectExpenseRows(categories, limit = 6) {
     .slice(0, limit)
     .map((c, i) => ({
       label: c.name ? categoryLabelPtForTag(c) : "Sem categoria",
-      value: Number(c.total) || 0,
-      pct: Math.round(Number(c.percentage) || 0),
+      // `null` quando faltou cotação para converter (fincla-api#505): a linha sai
+      // "—" e sem barra — zero afirmaria que ninguém gastou nada ali.
+      value: numberOrNull(c.total),
+      pct: c.percentage == null ? null : Math.round(Number(c.percentage) || 0),
       color: EXPENSE_PALETTE[i % EXPENSE_PALETTE.length],
     }));
-  const max = rows.reduce((m, r) => Math.max(m, r.value), 0);
+  const max = rows.reduce((m, r) => Math.max(m, r.value ?? 0), 0);
   return { rows, max };
+}
+
+/** Número finito, ou `null` — ausência nunca vira zero. */
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -61,11 +70,13 @@ function monthLabel(monthNumber, year) {
  */
 export function selectCashFlowSeries(monthlyData, limit = 12) {
   const list = Array.isArray(monthlyData) ? monthlyData : [];
+  // `null` quando faltou cotação (fincla-api#505): o gráfico não desenha a barra e o
+  // tooltip mostra "—", em vez de um zero que diria "não houve receita nem gasto".
   return list.slice(-limit).map((m) => ({
     month: monthLabel(m?.month_number, m?.year),
-    income: Number(m?.total_income) || 0,
-    expenses: Number(m?.total_expenses) || 0,
-    balance: Number(m?.balance) || 0,
+    income: numberOrNull(m?.total_income),
+    expenses: numberOrNull(m?.total_expenses),
+    balance: numberOrNull(m?.balance),
   }));
 }
 

@@ -6,7 +6,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Avatar, Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
-import { fmtTotals, trustedPortfolioLabel } from "../../features/consultant/consultantCurrency.js";
+import { aggregateCurrency, fmtTotals } from "../../features/consultant/consultantCurrency.js";
 import { countClientsByBand, totalPatrimonio } from "../../features/consultant/consultantClientsView";
 import {
   buildConsolidatedCsv,
@@ -172,13 +172,14 @@ export function ConsultantInsightsPage() {
   const clients = wallet.clients;
   const counts = countClientsByBand(clients);
   const patrimonio = totalPatrimonio(clients);
-  // Dívida de cartão, gastos por categoria e fluxo vêm SOMADOS sem conversão e
-  // rotulados com a moeda de leitura do consultor (fincla-api#170). O rótulo só vale
-  // quando a carteira inteira está nele; senão o valor sai "—" — uma soma de real com
-  // dólar escrita com um símbolo só é a unidade errada (#314).
-  const cardDebtCurrency = trustedPortfolioLabel(cardDebt.currency, clients, wallet.loadedOk);
-  const expensesCurrency = trustedPortfolioLabel(expenses.currency, clients, wallet.loadedOk);
-  const cashFlowCurrency = trustedPortfolioLabel(cashFlow.currency, clients, wallet.loadedOk);
+  // Dívida de cartão, gastos por categoria e fluxo: desde a fincla-api#505 o backend
+  // os CONVERTE para a moeda de leitura do consultor (com recibo) — valem para a
+  // carteira inteira, mista ou não, e um total sem cotação chega `null` e sai "—".
+  // Numa API anterior eles vinham só ROTULADOS sobre uma soma não convertida, e o
+  // rótulo só vale quando a carteira inteira está nele (#314): `aggregateCurrency`.
+  const cardDebtCurrency = aggregateCurrency(cardDebt, clients, wallet.loadedOk);
+  const expensesCurrency = aggregateCurrency(expenses, clients, wallet.loadedOk);
+  const cashFlowCurrency = aggregateCurrency(cashFlow, clients, wallet.loadedOk);
   const fmtExpense = React.useCallback((v) => fmtMoney(v, expensesCurrency), [expensesCurrency]);
   const { rows: expenseRows, max: expenseMax } = selectExpenseRows(expenses.categories);
   const { gainers, decliners } = selectMovers(clients);
