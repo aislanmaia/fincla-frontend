@@ -114,11 +114,18 @@ export const previewTransactionImpact = async (
   );
   // A moeda em que os valores vieram (a base da organização, #315) — o desembrulho
   // a apaga, e sem ela a tela não sabe em que moeda escrever o impacto.
-  const raw = response.data as unknown as { category?: Record<string, unknown>; budgets_summary?: Record<string, unknown> };
+  const raw = response.data as unknown as {
+    category?: Record<string, unknown>;
+    budgets_summary?: Record<string, unknown>;
+    draft_amount?: unknown;
+  };
   const currency =
     toCurrency(raw?.category?.spent_after) ??
     toCurrency(raw?.category?.spent_before) ??
     toCurrency(raw?.budgets_summary?.total_spent_after) ??
     null;
-  return { ...unwrapMoney(response.data), currency };
+  // E a moeda do RASCUNHO (fincla-api#503): o desembrulho a apagaria também, e é ela
+  // que diz se o valor digitado entrou no consumo ou ficou fora por ser outra moeda.
+  const draft_currency = toCurrency(raw?.draft_amount) ?? null;
+  return { ...unwrapMoney(response.data), currency, draft_currency };
 };
