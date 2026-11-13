@@ -1127,6 +1127,61 @@ it("cancelar no modal NÃO liquida", async () => {
     });
   }
 
+  /* No toque a pergunta é IN-PLACE, dentro da sanfona — é o único caminho de
+     confirmação do detalhe no mobile (o "armar e confirmar" antigo do
+     DetailPanel era código morto e saiu, #317). */
+  function seedMobileSettleDelete(setTransactionSettled, removeTransaction) {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false,
+      error: "",
+      summary: { total_income: 0, total_expenses: 80, total_refunds: 0, balance: -80 },
+      transactions: [
+        { id: "tx-mob", date: "21/05", desc: "Padaria", cat: "Alimentação", val: -80, method: "Pix",
+          type: "expense", icon: "🥖", status: "confirmado", rec: false, tags: [],
+          settled: false, settleable: true, paidAt: null },
+      ],
+      total: 1,
+      hasMore: false,
+      removeTransaction,
+      setTransactionSettled,
+      reload: recarregarMock,
+    });
+  }
+
+  it("mobile: excluir pela sanfona pergunta ali mesmo e exclui ao confirmar (#317)", async () => {
+    const removeTransaction = vi.fn().mockResolvedValue(undefined);
+    seedMobileSettleDelete(vi.fn(), removeTransaction);
+    renderPage({ isMobile: true });
+
+    await userEvent.click(screen.getAllByText("Padaria")[0]);
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    await userEvent.click(within(detail).getByRole("button", { name: /^🗑 Excluir$/ }));
+    // Sem modal: a pergunta ocupa o lugar dos botões DENTRO da sanfona.
+    const pergunta = within(detail).getByRole("alertdialog");
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(within(pergunta).getByText("Excluir esta transação?")).toBeInTheDocument();
+    expect(removeTransaction).not.toHaveBeenCalled();
+    await userEvent.click(within(pergunta).getByRole("button", { name: /Excluir/ }));
+
+    await waitFor(() => expect(removeTransaction).toHaveBeenCalledWith("tx-mob"));
+  });
+
+  it("mobile: marcar como pago pela sanfona pergunta ali mesmo e liquida ao confirmar (#317)", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedMobileSettleDelete(setTransactionSettled, vi.fn());
+    renderPage({ isMobile: true });
+
+    await userEvent.click(screen.getAllByText("Padaria")[0]);
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    await userEvent.click(within(detail).getByRole("button", { name: /Marcar como pago/i }));
+    const pergunta = within(detail).getByRole("alertdialog");
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(setTransactionSettled).not.toHaveBeenCalled();
+    await userEvent.click(within(pergunta).getByRole("button", { name: /Confirmar pagamento/i }));
+
+    await waitFor(() => expect(setTransactionSettled).toHaveBeenCalledWith("tx-mob", true));
+  });
+
   it("numa receita a sanfona e o diálogo falam em receber, não em pagar", async () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedIncome(setTransactionSettled, false);

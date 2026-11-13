@@ -164,12 +164,3 @@ export function buildUpdatedView(view, { name, icon, color, filters }) {
     filters: filters ?? view.filters,
   });
 }
-
-/**
- * Exibe a seção de visualizações salvas acima da busca quando:
- *  - já existe ao menos uma view salva, ou
- *  - há filtros/busca ativos (para permitir "+ Nova").
- */
-export function shouldShowSavedViewsSection(savedViewsCount, filtersActive) {
-  return savedViewsCount > 0 || Boolean(filtersActive);
-}

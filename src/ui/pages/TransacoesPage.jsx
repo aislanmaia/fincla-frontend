@@ -1,11 +1,9 @@
-import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { FC } from "../routing/searchContract.js";
 import {
   Search,
   X,
-  Pencil,
-  Trash2,
   Download,
   SlidersHorizontal,
 } from "lucide-react";
@@ -83,7 +81,7 @@ import {
   DEFAULT_FILTER_STATE,
 } from "../features/transactions/filters/index.js";
 import { SavedViewsCards } from "../features/transactions/filters/savedViews/SavedViewsCards.jsx";
-import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
+import { viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
 import { listAccounts } from "../../api/accounts";
 import { listCreditCards } from "../../api/creditCards";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
@@ -108,7 +106,6 @@ import { detailLabelPtForTag } from "../data/categoryLabels.js";
 import { saveBlob } from "../features/export/saveBlob.js";
 import {
   CAT_COLORS,
-  catBg,
   catColor,
   fmtBRL,
   fmtValorDaLinha,
@@ -405,17 +402,12 @@ const DetailPanel = ({
   transactionsData,
   setMockTxList,
   onTransactionsInvalidate,
-  deletingId,
   onRowLeave,
   onDuplicateTx,
   onFilterByCategory,
   isMobileDetail = false,
-  onSettled,
-  setDeletingId,
   settlingId,
-  setSettlingId,
   settleError,
-  setSettleError,
   /* Contas ATIVAS da organização — o detalhe mostra a «Conta» com 2 ou mais (#267). */
   accounts = [],
   /* Pedido de confirmação in-place (toque): `{ kind, tx }` ou `null`. No
@@ -638,47 +630,7 @@ const DetailPanel = ({
               /* No toque a pergunta é in-place, aqui mesmo. Liquidar mexe no
                  saldo — a mesma classe de consequência da exclusão —, e a única
                  diferença entre as duas superfícies é ONDE se pergunta. */
-              if (setConfirmInline) {
-                setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
-                return;
-              }
-              const next = !tx.settled;
-              // Demo/mock não tem backend: sem este ramo o botão fica clicável e
-              // não faz nada, que é pior que não existir.
-              if (!shouldUseRealData) {
-                setMockTxList((prev) =>
-                  prev.map((item) => (item.id === tx.id ? { ...item, settled: next } : item)),
-                );
-                setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, settled: next } : cur));
-                onSettled?.(tx.id, next);
-                return;
-              }
-              setSettlingId(tx.id);
-              setSettleError("");
-              try {
-                const updated = await transactionsData.setTransactionSettled(tx.id, next);
-                // O painel renderiza a partir de `selected`, que é um snapshot — sem
-                // isto ele continuaria mostrando o estado antigo até fechar.
-                if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
-                // O pulso verde estava só na ação rápida da linha. No mobile
-                // ela não existe (o caminho é swipe ou sanfona), então marcar
-                // como pago não mostrava efeito NENHUM — a linha só mudava de
-                // cor num canto.
-                /* Quem decide o que acontece depois é a PÁGINA, não a
-                   sanfona: só lá se sabe se o recorte atual ainda comporta esta
-                   linha. Ela é que escolhe entre pulsar (fica) e colapsar com
-                   explicação (sai) — e é ela que revalida, no momento certo de
-                   cada caso. Revalidar aqui derrubava a linha antes de qualquer
-                   animação, e no toque a sanfona é o caminho PRINCIPAL de
-                   liquidar: quase todo mundo caía justamente por aqui. */
-                onSettled?.(tx.id, next);
-              } catch (err) {
-                // Mensagem local, ao lado da ação: `transactionsData.error` renderiza
-                // no topo da página, e no mobile a faixa fica coberta pelo sheet.
-                setSettleError(err?.message || "Não foi possível atualizar o pagamento.");
-              } finally {
-                setSettlingId(null);
-              }
+              setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
             }}>
             {settlingId === tx.id ? "…" : tx.settled ? settlementCopy(tx.type).undoButton : settlementCopy(tx.type).markButton}
           </AccButton>
@@ -705,56 +657,15 @@ const DetailPanel = ({
             ⧉ Duplicar
           </AccButton>
         )}
-        {deletingId === tx.id ? (
-          <AccButton
-            tone="red"
-            onClick={async (e) => {
-              e.stopPropagation();
-              if (shouldUseRealData) {
-                marcarExcluindo?.(tx.id);
-                try {
-                  await transactionsData.removeTransaction(tx.id);
-                } catch (_) {
-                  marcarExcluindo?.(null);
-                  return;
-                }
-                marcarExcluindo?.(null);
-              } else {
-                setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
-              }
-              setSelected(null);
-              setDeletingId(null);
-              // A linha colapsa ANTES do refetch. Sem isso a lista se
-              // reorganizaria de um quadro para o outro e o olho perderia onde
-              // estava; `onRowLeave` roda a saída e só então revalida.
-              onRowLeave?.(tx.id);
-            }}>
-            {/* Rótulo CURTO: "Confirmar exclusão" estourava a célula da grade
-                2×2 do mobile e empurrava o botão vizinho. O que a pessoa
-                precisa ler é que este clique é o definitivo. */}
-            🗑 Confirmar
-          </AccButton>
-        ) : (
-          <AccButton tone="red" onClick={(e) => {
-            e.stopPropagation();
-            if (pedirConfirmacao?.("delete", tx)) return;
-            /* No toque a pergunta é in-place. `setDeletingId` continua sendo o
-               caminho para quem não passa o setter (testes, mocks). */
-            if (setConfirmInline) { setConfirmInline({ kind: "delete", tx }); return; }
-            setDeletingId(tx.id);
-          }}>
-            🗑 Excluir
-          </AccButton>
-        )}
-        {/* Sem CANCELAR, "Excluir" era uma porta sem saída: a linha ficava
-            armada para sempre, e o único jeito de sair era confirmar ou
-            recarregar. Ocupa a célula da dica, que só existe no desktop. */}
-        {deletingId === tx.id ? (
-          <AccButton onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}>
-            Cancelar
-          </AccButton>
-        ) : null}
-        {inline && !isMobileDetail && deletingId !== tx.id && (
+        <AccButton tone="red" onClick={(e) => {
+          e.stopPropagation();
+          if (pedirConfirmacao?.("delete", tx)) return;
+          // No toque a pergunta é in-place, aqui mesmo na sanfona.
+          setConfirmInline({ kind: "delete", tx });
+        }}>
+          🗑 Excluir
+        </AccButton>
+        {inline && !isMobileDetail && (
           <span style={{ ...G, marginLeft:"auto", fontSize:MICRO_PX, color:T.inkLight }}>
             Enter expande · E edita · Del exclui
           </span>
@@ -993,7 +904,7 @@ function TransacoesPageBody({
   const editandoDeRef = useRef(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
   /* QUAL linha está sendo excluída no servidor. `deletingBusy` sozinho não
-     serve: ele vive no caminho do modal, onde `deletingId` é sempre null, e o
+     serve: ele vive no caminho do modal, e o
      caminho da sanfona não tinha sinal nenhum — a linha ficava parada durante
      a chamada, que é o convite para tocar de novo. */
   const [excluindoId, setExcluindoId] = useState(null);
@@ -1102,14 +1013,8 @@ function TransacoesPageBody({
     setSelected((cur) => {
       const next = cur?.id === tx.id ? null : tx;
       // O erro de liquidação é de UMA transação; sem isto ele reapareceria
-      // colado na próxima que fosse aberta. A confirmação de exclusão segue a
-      // mesma regra: fechar a sanfona ou abrir outra linha DESARMA o "tem
-      // certeza?" — deixá-lo armado faria a próxima abertura já nascer a um
-      // clique de apagar.
-      if (cur?.id !== next?.id) {
-        setSettleError("");
-        setDeletingId(null);
-      }
+      // colado na próxima que fosse aberta.
+      if (cur?.id !== next?.id) setSettleError("");
       return next;
     });
   }, []);
@@ -1154,7 +1059,6 @@ function TransacoesPageBody({
     soltarRecargaRef.current = setTimeout(() => { recargaEmVooRef.current = false; }, 8000);
     transactionsDataRef.current?.reload?.();
   }, []);
-  const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
   const [undoToast,   setUndoToast]   = useState(null);
@@ -2572,10 +2476,6 @@ function TransacoesPageBody({
     ],
   );
 
-  const showSavedViewsSection = shouldShowSavedViewsSection(
-    savedViewsProp.items.length,
-    listFiltersActive,
-  );
 
   // Uma única derivação de facets para os dois consumidores: os chips de
   // filtro ativo e o resumo das views salvas. Duas listas construídas em
@@ -3296,36 +3196,6 @@ function TransacoesPageBody({
       setSettleError(e?.message || "Não foi possível desfazer.");
     }
   }, [undoToast, shouldUseRealData, transactionsData, onTransactionsInvalidate, flashSettled]);
-
-  /** Pulso + torrada quando a liquidação vem da sanfona, não da ação rápida. */
-  /* A liquidação vinda da SANFONA. No toque este é o caminho principal — não há
-     ação rápida no mobile —, então o §09 precisa valer aqui igual, ou o recurso
-     existiria só para quem usa mouse. */
-  const handleSettledFromDetail = useCallback(
-    (id, next) => {
-      const tx = txListRef.current.find((t) => t.id === id);
-      const saiuDoFiltro =
-        (next && filter.settlement === "a-pagar") ||
-        (!next && filter.settlement === "pagas");
-      if (saiuDoFiltro) {
-        // Colapsa e revalida ao fim — `startRowLeave` cuida das duas coisas.
-        setSelected((cur) => (cur && cur.id === id ? null : cur));
-        startRowLeave(id);
-      } else {
-        flashSettled(id);
-        if (shouldUseRealData) onTransactionsInvalidate?.();
-      }
-      setUndoToast({
-        id,
-        label: next
-          ? settlementCopy(tx?.type).settledToast(tx?.desc ?? "Transação")
-          : settlementCopy(tx?.type).undoneToast(tx?.desc ?? "transação"),
-        nota: saiuDoFiltro ? `Saiu do filtro "${next ? "A pagar" : "Pagas"}"` : null,
-        revert: next,
-      });
-    },
-    [flashSettled, filter.settlement, startRowLeave, shouldUseRealData, onTransactionsInvalidate],
-  );
 
   const quickActionsRef = useRef(null);
 
@@ -4071,9 +3941,6 @@ function TransacoesPageBody({
                         transactionsData={transactionsData}
                         setMockTxList={setMockTxList}
                         onTransactionsInvalidate={onTransactionsInvalidate}
-                        deletingId={deletingId}
-                        setDeletingId={setDeletingId}
-                        marcarExcluindo={setExcluindoId}
                         confirmInline={confirmInline}
                         setConfirmInline={setConfirmInline}
                         confirmInlineBusy={confirmInlineBusy}
@@ -4082,11 +3949,8 @@ function TransacoesPageBody({
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
                         isMobileDetail={isMobile}
-                        onSettled={handleSettledFromDetail}
                         settlingId={settlingId}
-                        setSettlingId={setSettlingId}
                         settleError={settleError}
-                        setSettleError={setSettleError}
                         accounts={orgAccounts}
                       />
                     </div>
