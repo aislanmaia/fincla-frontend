@@ -5,6 +5,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { M_MONO } from "../moodV4";
 import { CARD_BRAND_OPTIONS } from "../../data/creditCardsAdapter.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 import { ClosingDaySuggestion } from "./ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "./closingDay.js";
 import { APPLY_FROM, CycleChangeOptions, ScheduledCycleNotice, cycleDaysChanged } from "./CycleChangeOptions.jsx";
@@ -75,6 +76,10 @@ export function CardFormSheet({
   onUpdate,
   onCancel,
   cycleChange = null,
+  /** Moeda do limite (#315): a do cartão na edição; na criação, a base da organização
+   *  (o cartão nasce na conta padrão). `null` = não se sabe — o campo fica sem símbolo
+   *  em vez de afirmar "R$". */
+  currency = null,
 }) {
   const panelRef = useRef(null);
   const latest = useRef({ onCancel, saving });
@@ -173,7 +178,9 @@ export function CardFormSheet({
           <div style={{ display: "flex", alignItems: "center", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface }}
             onFocusCapture={(e) => (e.currentTarget.style.borderColor = T.blue)}
             onBlurCapture={(e) => (e.currentTarget.style.borderColor = T.border)}>
-            <span style={{ ...G, fontSize: 13, fontWeight: 700, color: T.inkLight, marginRight: 4 }}>R$</span>
+            {currency ? (
+              <span style={{ ...G, fontSize: 13, fontWeight: 700, color: T.inkLight, marginRight: 4 }}>{currencyInfo(currency).symbol}</span>
+            ) : null}
             <input value={draftLimit} onChange={(e) => setDraftLimit(e.target.value)} placeholder="0,00" type="text" aria-label="Limite total" aria-required="true"
               style={{ ...G, ...NUM, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }} />
           </div>

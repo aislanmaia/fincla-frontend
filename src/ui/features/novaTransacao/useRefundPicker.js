@@ -99,6 +99,7 @@ export function useRefundPicker({
         desc: candidate.desc,
         dateLabel: candidate.date,
         val: Math.abs(Number(candidate.val) || 0),
+        currency: candidate.currency ?? null,
         cat: candidate.cat,
         categoryTagId: candidate.categoryTagId ?? null,
         paymentMethodKey: candidate.paymentMethodKey,

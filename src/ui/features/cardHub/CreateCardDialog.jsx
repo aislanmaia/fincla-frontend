@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { buildCreateCreditCardPayload, formatCreditCardsApiError } from "../../data/creditCardsAdapter.js";
 import { CardFormSheet } from "../creditCards/CardFormSheet.jsx";
+import { useOrganizationBaseCurrency } from "../../money/useOrganizationBaseCurrency.js";
 
 export function CreateCardDialog({ organizationId, isMobile, onCreate, onClose }) {
   const [issuer, setIssuer] = useState("");
@@ -13,6 +14,8 @@ export function CreateCardDialog({ organizationId, isMobile, onCreate, onClose }
   const [closingDay, setClosingDay] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // O cartão nasce na conta padrão: o limite se lê na base da organização (#315).
+  const orgBase = useOrganizationBaseCurrency(organizationId);
 
   async function save() {
     if (saving) return;
@@ -60,6 +63,7 @@ export function CreateCardDialog({ organizationId, isMobile, onCreate, onClose }
       error={error}
       onSave={save}
       onCancel={onClose}
+      currency={orgBase.currency}
     />
   );
 }

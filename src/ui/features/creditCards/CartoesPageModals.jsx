@@ -60,6 +60,7 @@ export function CardsPageModals({
   onUpdateCard,
   onCancelCardForm,
   cycleChange,
+  cardFormCurrency = null,
 }) {
   return (
     <>
@@ -125,6 +126,7 @@ export function CardsPageModals({
         onUpdate={onUpdateCard}
         onCancel={onCancelCardForm}
         cycleChange={cycleChange}
+        currency={cardFormCurrency}
       />
     </>
   );

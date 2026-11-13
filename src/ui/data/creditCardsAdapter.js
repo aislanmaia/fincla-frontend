@@ -686,6 +686,9 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     closingDayEffective: closingDayForInvoiceAnchor(card),
     scheduledCycleChange: scheduledCycleChange(card),
     limite: card.credit_limit || 0,
+    // A moeda do cartão é a da conta que liquida a fatura (`null` = não se sabe): é
+    // nela que limite, faturas e parcelas se escrevem (#315).
+    moeda: card.currency ? String(card.currency).toUpperCase() : null,
     limitUsagePercent: Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null ? Number(card.limit_usage_percent) : null,
     disponivel: card.available_limit ?? Math.max(0, (card.credit_limit || 0) - (card.used_limit || 0)),
     faturas,

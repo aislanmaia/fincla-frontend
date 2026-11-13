@@ -112,5 +112,13 @@ export const previewTransactionImpact = async (
     '/budgets/preview-transaction',
     body
   );
-  return unwrapMoney(response.data);
+  // A moeda em que os valores vieram (a base da organização, #315) — o desembrulho
+  // a apaga, e sem ela a tela não sabe em que moeda escrever o impacto.
+  const raw = response.data as unknown as { category?: Record<string, unknown>; budgets_summary?: Record<string, unknown> };
+  const currency =
+    toCurrency(raw?.category?.spent_after) ??
+    toCurrency(raw?.category?.spent_before) ??
+    toCurrency(raw?.budgets_summary?.total_spent_after) ??
+    null;
+  return { ...unwrapMoney(response.data), currency };
 };

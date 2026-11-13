@@ -50,7 +50,7 @@ import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 import {
   parseApiDecimal,
-  fmtBrl,
+  fmtImpactMoney,
   formatProjectionCardExplain,
 } from "../../data/novaTransacaoImpactUtils.js";
 import {
@@ -1577,11 +1577,13 @@ export const NovaTransacaoModal = ({
   });
   const effectiveTipo = tipo === "despesa" && isRefund ? "estorno" : tipo;
 
-  const saldoAposLancamento = projectedBalanceAfterTx(
-    periodSaldo.periodBalance,
-    effectiveTipo,
-    amountNum,
-  );
+  // O saldo do período é da organização, na moeda do resumo (a base); o lançamento é
+  // na moeda da conta dele. Somar os dois só vale quando são a mesma moeda — senão é
+  // um número de moeda nenhuma, e a linha fica em travessão (#315).
+  const saldoAposLancamento =
+    periodSaldo.currency && periodSaldo.currency === formCurrency
+      ? projectedBalanceAfterTx(periodSaldo.periodBalance, effectiveTipo, amountNum)
+      : null;
 
   const impactPanelOpen = useMemo(() => {
     if (!open) return false;
@@ -1662,7 +1664,7 @@ export const NovaTransacaoModal = ({
     const catIconKeyResolved = catRowForImpact?.iconKey ?? null;
 
     return {
-      afterVal: fmtBrl(after),
+      afterVal: fmtImpactMoney(after, financialImpact.currency),
       afterSub:
         pctAfter != null && Number.isFinite(pctAfter)
           ? `${Math.round(pctAfter)}% do orçamento desta categoria`
@@ -1671,7 +1673,7 @@ export const NovaTransacaoModal = ({
         tipo === "despesa" && projInsufficient
           ? "—"
           : tipo === "despesa" && projEom != null && Number.isFinite(projEom)
-            ? fmtBrl(projEom)
+            ? fmtImpactMoney(projEom, financialImpact.currency)
             : "—",
       projSub:
         tipo === "receita"
@@ -1685,7 +1687,7 @@ export const NovaTransacaoModal = ({
         tipo === "despesa" && projMeta && projMeta.projectionKind !== "insufficient_history"
           ? formatProjectionCardExplain(projMeta)
           : "",
-      marginVal: fmtBrl(margin),
+      marginVal: fmtImpactMoney(margin, financialImpact.currency),
       marginSub:
         margin != null && margin < 0
           ? "Acima do orçamento desta categoria"
@@ -1703,6 +1705,7 @@ export const NovaTransacaoModal = ({
     };
   }, [
     financialImpact.preview,
+    financialImpact.currency,
     financialImpact.categoryProjectionMeta,
     tipo,
     categoryTagId,
@@ -1723,11 +1726,12 @@ export const NovaTransacaoModal = ({
     if (after == null) return "—";
     const pctStr =
       pct != null && Number.isFinite(pct) ? ` · ${Math.round(pct)}%` : "";
-    return `${fmtBrl(after)}${pctStr}`;
+    return `${fmtImpactMoney(after, financialImpact.currency)}${pctStr}`;
   }, [
     financialImpact.impactLive,
     financialImpact.previewLoading,
     financialImpact.preview,
+    financialImpact.currency,
     amountNum,
     isMobile,
     mStep,
@@ -2047,6 +2051,7 @@ export const NovaTransacaoModal = ({
         onQueryChange={refund.setRefundPickerQuery}
         onLink={refund.handleLink}
         onUnlink={refund.handleUnlink}
+        currency={formCurrency}
       />
     );
   };
@@ -2805,7 +2810,7 @@ export const NovaTransacaoModal = ({
                         ) : (
                           <>
                             Resultado do mês:{" "}
-                            <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
+                            <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance, periodSaldo.currency)}</span>
                             {amountNum > 0 && saldoAposLancamento != null ? (
                               <>
                                 {" · "}
@@ -2816,7 +2821,7 @@ export const NovaTransacaoModal = ({
                                     fontWeight: 600,
                                   }}
                                 >
-                                  {fmtSaldoLine(saldoAposLancamento)}
+                                  {fmtSaldoLine(saldoAposLancamento, periodSaldo.currency)}
                                 </span>
                               </>
                             ) : null}
@@ -3593,7 +3598,7 @@ export const NovaTransacaoModal = ({
                 </div>
               )}
               {modalityChoice === "parcelado" && (
-                <ParcelaHybrid installments={installments} amountNum={amountNum}/>
+                <ParcelaHybrid installments={installments} amountNum={amountNum} currency={formCurrency}/>
               )}
             </div>
             </div>
@@ -3790,7 +3795,7 @@ export const NovaTransacaoModal = ({
                       ) : (
                         <>
                           Resultado do mês:{" "}
-                          <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
+                          <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance, periodSaldo.currency)}</span>
                           {amountNum > 0 && saldoAposLancamento != null ? (
                             <>
                               {" · "}
@@ -3801,7 +3806,7 @@ export const NovaTransacaoModal = ({
                                   fontWeight: 600,
                                 }}
                               >
-                                {fmtSaldoLine(saldoAposLancamento)}
+                                {fmtSaldoLine(saldoAposLancamento, periodSaldo.currency)}
                               </span>
                             </>
                           ) : null}

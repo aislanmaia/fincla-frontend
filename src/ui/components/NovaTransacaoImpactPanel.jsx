@@ -13,6 +13,7 @@ import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { ProgBar } from "./primitives";
 import { CategoryLucideIcon } from "./CategoryLucideIcon.jsx";
+import { fmtImpactMoney } from "../data/novaTransacaoImpactUtils.js";
 
 const TOOLTIP_SHORT = {
   real: "Salvo (mês)",
@@ -23,7 +24,7 @@ const TOOLTIP_SHORT = {
  * Tooltip compacto: o padrão do Recharts com nomes longos nas séries estica a caixa
  * e cobre o gráfico inteiro; aqui limitamos largura e usamos rótulos curtos.
  */
-function ImpactLineChartTooltip({ active, payload, label }) {
+function ImpactLineChartTooltip({ active, payload, label, currency }) {
   if (!active || !payload?.length) return null;
   const rows = payload.filter(
     (p) => p.value != null && typeof p.value === "number",
@@ -93,10 +94,7 @@ function ImpactLineChartTooltip({ active, payload, label }) {
               {short}
             </span>
             <span style={{ ...G, ...NUM, fontWeight: 700, color: T.ink }}>
-              {`R$ ${p.value.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`}
+              {fmtImpactMoney(p.value, currency)}
             </span>
           </div>
         );
@@ -219,7 +217,7 @@ export function NovaTransacaoImpactPanel({
                   strokeWidth: 1,
                   strokeDasharray: "4 3",
                 }}
-                content={ImpactLineChartTooltip}
+                content={<ImpactLineChartTooltip currency={financialImpact.currency} />}
               />
               {refLineDay != null &&
                 chartData.some((r) => r.day >= refLineDay) && (
@@ -379,7 +377,7 @@ export function NovaTransacaoImpactPanel({
                   principal (antes→depois) caía abaixo da legenda "limite"
                   logo abaixo — hierarquia invertida. */}
               <span style={{ ...G, ...NUM, fontSize: Math.max(11, categoryNumSize), color: T.inkLight }}>
-                {fmtCat(impactKpis.catBefore)} →{" "}
+                {fmtImpactMoney(impactKpis.catBefore, financialImpact.currency)} →{" "}
               </span>
               <span
                 style={{
@@ -390,11 +388,11 @@ export function NovaTransacaoImpactPanel({
                   color: impactKpis.catOverBudget ? T.red : T.ink,
                 }}
               >
-                {fmtCat(impactKpis.catAfter)}
+                {fmtImpactMoney(impactKpis.catAfter, financialImpact.currency)}
               </span>
               <div style={{ ...G, fontSize: Math.max(11, categoryNumSize - 1), color: T.inkMid }}>
                 {impactKpis.catLimit != null
-                  ? `limite ${fmtCat(impactKpis.catLimit)}`
+                  ? `limite ${fmtImpactMoney(impactKpis.catLimit, financialImpact.currency)}`
                   : ""}
               </div>
             </div>
@@ -403,9 +401,4 @@ export function NovaTransacaoImpactPanel({
       </div>
     </>
   );
-}
-
-function fmtCat(n) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
