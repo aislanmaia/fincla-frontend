@@ -46,6 +46,20 @@ describe("quoteDisplay", () => {
   it("is null without a quote", () => {
     expect(quoteDisplay(impactPreview({ quote: null }))).toBeNull();
   });
+  it("going back to BRL still shows '1 <foreign> = R$ x' (#311), never 'R$ 1 = US$ x'", () => {
+    // API quote is old base → new base: USD → BRL, already in the displayed direction.
+    const p = impactPreview({ from_currency: "USD", to_currency: "BRL",
+      quote: { base: "USD", quote: "BRL", rate: "5.6436000000", quoted_on: "2026-11-12" } });
+    expect(quoteDisplay(p)).toEqual({ pair: "US$ 1 = R$ 5,6436", date: "12/11" });
+  });
+  it("without a BRL side, shows '1 <old base> = <new base> x' as the API sends it", () => {
+    const eurToUsd = impactPreview({ from_currency: "EUR", to_currency: "USD",
+      quote: { base: "EUR", quote: "USD", rate: "1.0832000000", quoted_on: "2026-11-12" } });
+    expect(quoteDisplay(eurToUsd)).toEqual({ pair: "€ 1 = US$ 1,0832", date: "12/11" });
+    const usdToEur = impactPreview({ from_currency: "USD", to_currency: "EUR",
+      quote: { base: "USD", quote: "EUR", rate: "0.9259000000", quoted_on: "2026-11-12" } });
+    expect(quoteDisplay(usdToEur)).toEqual({ pair: "US$ 1 = € 0,9259", date: "12/11" });
+  });
 });
 
 describe("precedence item > group > global", () => {
