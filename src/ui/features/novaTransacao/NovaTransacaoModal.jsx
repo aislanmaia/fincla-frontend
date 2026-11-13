@@ -24,6 +24,7 @@ import {
   fmtSaldoLine,
   clearNovaTransacaoSummaryCache,
 } from "./useNovaTransacaoPeriodSaldo.js";
+import { useDraftAmountInBase } from "./useDraftAmountInBase.js";
 import { ParcelaHybrid } from "./ParcelaHybrid.jsx";
 import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
 import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
@@ -1577,13 +1578,22 @@ export const NovaTransacaoModal = ({
   });
   const effectiveTipo = tipo === "despesa" && isRefund ? "estorno" : tipo;
 
-  // O saldo do período é da organização, na moeda do resumo (a base); o lançamento é
-  // na moeda da conta dele. Somar os dois só vale quando são a mesma moeda — senão é
-  // um número de moeda nenhuma, e a linha fica em travessão (#315).
+  // O saldo do período é da organização, na moeda do resumo (a base, já convertida
+  // pelo backend); o lançamento é na moeda da conta dele. Noutra moeda, o valor entra
+  // CONVERTIDO pela cotação do par (#503) — antes US$ 100 eram somados como R$ 100.
+  // Sem cotação não há "Após": a linha diz que falta a cotação, nunca um número errado.
+  const draftInBase = useDraftAmountInBase({
+    enabled: periodSaldo.live && amountNum > 0,
+    organizationId,
+    amount: amountNum,
+    from: formCurrency,
+    base: periodSaldo.currency,
+  });
   const saldoAposLancamento =
-    periodSaldo.currency && periodSaldo.currency === formCurrency
-      ? projectedBalanceAfterTx(periodSaldo.periodBalance, effectiveTipo, amountNum)
+    draftInBase.value != null
+      ? projectedBalanceAfterTx(periodSaldo.periodBalance, effectiveTipo, draftInBase.value)
       : null;
+  const aposSemCotacao = draftInBase.status === "unavailable";
 
   const impactPanelOpen = useMemo(() => {
     if (!open) return false;
@@ -1610,6 +1620,7 @@ export const NovaTransacaoModal = ({
     modalidade: modalityChoice,
     parcelas: installments,
     cartao: cardId,
+    accountId: effectiveAccountId,
   });
 
   const impactKpis = useMemo(() => {
@@ -2824,6 +2835,8 @@ export const NovaTransacaoModal = ({
                                   {fmtSaldoLine(saldoAposLancamento, periodSaldo.currency)}
                                 </span>
                               </>
+                            ) : amountNum > 0 && aposSemCotacao ? (
+                              <>{" · "}Após: sem cotação {currencyInfo(formCurrency).symbol} → {currencyInfo(periodSaldo.currency).symbol}</>
                             ) : null}
                           </>
                         )}
@@ -3809,6 +3822,8 @@ export const NovaTransacaoModal = ({
                                 {fmtSaldoLine(saldoAposLancamento, periodSaldo.currency)}
                               </span>
                             </>
+                          ) : amountNum > 0 && aposSemCotacao ? (
+                            <>{" · "}Após: sem cotação {currencyInfo(formCurrency).symbol} → {currencyInfo(periodSaldo.currency).symbol}</>
                           ) : null}
                         </>
                       )}

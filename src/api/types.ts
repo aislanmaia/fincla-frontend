@@ -1510,6 +1510,8 @@ export interface PreviewTransactionRequest {
   payment_method?: string | null;
   installments_count?: number | null;
   card_id?: number | null;
+  /** Conta do rascunho: é dela a moeda de `value` (fincla-api#503). */
+  account_id?: string | null;
 }
 
 export interface PreviewTransactionCategoryBlock {
@@ -1545,6 +1547,11 @@ export interface PreviewTransactionResponse {
   /** Carimbada pelo cliente (`previewTransactionImpact`): a moeda dos valores — a base
    *  da organização. `null` quando a resposta não a declara. */
   currency?: string | null;
+  /** O rascunho na moeda DELE (fincla-api#503), desembrulhado. */
+  draft_amount?: number | string | null;
+  /** Carimbada pelo cliente: a moeda de `draft_amount`. Diferente de `currency` = o
+   *  rascunho NÃO entrou no consumo (o orçamento só conta a moeda dele). */
+  draft_currency?: string | null;
 }
 
 /** GET /v1/analytics/spending-by-day */
