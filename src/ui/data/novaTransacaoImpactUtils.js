@@ -1,3 +1,5 @@
+import { currencyInfo } from "../money/currencyRegistry.js";
+
 /** @param {string|number|null|undefined} v */
 export function parseApiDecimal(v) {
   if (v == null || v === "") return null;
@@ -178,9 +180,17 @@ export function categoryRunRateProjectedEndOfMonth(
   return meta?.projectedEom ?? null;
 }
 
-export function fmtBrl(n) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/**
+ * Valor do painel de impacto na moeda em que a API o devolveu (a base da organização),
+ * com o espaço comum e o sinal de sempre. Era `fmtBrl`, com "R$" chapado (#315). Sem valor ou sem
+ * moeda conhecida, travessão.
+ */
+export function fmtImpactMoney(n, currency) {
+  if (n == null || !Number.isFinite(n) || !currency) return "—";
+  // Símbolo + número com sinal, como sempre ("R$ -12,00" na margem estourada): só o
+  // símbolo e as casas passam a vir da moeda.
+  const { symbol, decimalPlaces } = currencyInfo(currency);
+  return `${symbol} ${n.toLocaleString("pt-BR", { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces })}`;
 }
 
 /**

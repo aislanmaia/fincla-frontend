@@ -27,6 +27,10 @@ import {
 } from "../features/creditCards/cardKpis.js";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
+import { formatMoneyAbs } from "../money/formatMoney.js";
+import { MOEDA_PADRAO } from "../money/currencyRegistry.js";
+import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
+import { UNKNOWN_MONEY } from "../money/useBaseCurrencyMoney.js";
 import { buildInvoiceCsv, downloadCsv } from "../features/creditCards/invoiceCsv.js";
 import {
   CARTOES_DATA,
@@ -279,7 +283,21 @@ export const CartoesPage = ({
     ? Math.round((((invoice?.val||0)||0) - previousInvoice.val) / previousInvoice.val * 100)
     : 0;
 
-  const formatBRL = v => "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+  /* Tudo nesta tela é dinheiro DO CARTÃO, na moeda dele (a da conta que liquida a
+     fatura) — não em real chapado (#315). A demonstração é em real de propósito;
+     com dados reais e moeda desconhecida, travessão. O nome `formatBRL` ficou na
+     prop que desce para as abas (o Hub já passa por ela um formatador na moeda do
+     cartão); o que mudou é o que ela escreve. Mesmo espaço de antes (U+00A0). */
+  const cardCurrency = card?.moeda ?? (shouldUseRealData ? null : MOEDA_PADRAO);
+  /* Moeda do limite no formulário: a do cartão em edição; na criação, a base da
+     organização (o cartão nasce na conta padrão, que é a da base na organização de
+     moeda única). Só busca a base com o formulário de criação aberto. */
+  const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData && addCardSheet });
+  const editingCard = editingCardId != null ? CARDS.find((c) => c.cardId === editingCardId) : null;
+  const cardFormCurrency = editCardSheet
+    ? (editingCard?.moeda ?? (shouldUseRealData ? null : MOEDA_PADRAO))
+    : (shouldUseRealData ? orgBase.currency : MOEDA_PADRAO);
+  const formatBRL = (v) => (cardCurrency ? formatMoneyAbs(Number(v) || 0, cardCurrency) ?? UNKNOWN_MONEY : UNKNOWN_MONEY);
   const formatK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
 
   const switchSeqRef = useRef(0);
@@ -576,6 +594,7 @@ export const CartoesPage = ({
           onSave={handleSaveCard}
           onUpdate={handleUpdateCard}
           onCancel={clearCardFormState}
+          currency={cardFormCurrency}
         />
       </>
     );
@@ -705,6 +724,7 @@ export const CartoesPage = ({
       onSaveCard={handleSaveCard}
       onUpdateCard={handleUpdateCard}
       onCancelCardForm={clearCardFormState}
+      cardFormCurrency={cardFormCurrency}
       cycleChange={{
         original: originalDays,
         scheduled: card?.scheduledCycleChange ?? null,
@@ -749,9 +769,9 @@ export const CartoesPage = ({
       {tab === "invoice"      && invoiceTabBundle(isMobile ? "mobile" : "desktop")}
       {tab === "recurring"    && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund} />}
       {tab === "installments" && <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal} />}
-      {tab === "analytics"    && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK} />}
+      {tab === "analytics"    && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK} currency={cardCurrency} />}
       {tab === "history"      && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL} />}
-      {tab === "planning"     && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} />}
+      {tab === "planning"     && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} currency={cardCurrency} />}
     </div>
   );
 

@@ -316,6 +316,9 @@ export function useNovaTransacaoFinancialImpact({
 
   return {
     impactLive: live,
+    /** A moeda dos números do impacto (orçamento, ritmo): a base da organização, como
+     *  a API a declara — e não a do lançamento (#315). `null` = ainda não se sabe. */
+    currency: preview?.currency ?? spending?.currency ?? null,
     preview,
     previewLoading,
     previewError,

@@ -15,6 +15,8 @@ import { safePctOrFallback as safe } from "../../data/creditCardsAdapter.js";
 import { computeCardKpis } from "./cardKpis.js";
 import { CardHeuristicTiles } from "./CardHeuristicTiles.jsx";
 import { TxRow } from "./CardFaturaList.jsx";
+import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 /* ── RecurringTab ─────────────────────────────────────────── */
 export function RecurringTab({
@@ -126,7 +128,8 @@ export function HistoryTab({ cardInvoices, isMobile, formatBRL }) {
 }
 
 /* ── PlanningTab ───────────────────────────────────────────── */
-export function PlanningTab({ card, cardInstallments, isMobile, formatBRL }) {
+/** `currency`: a moeda do cartão (#315) — `null` = não se sabe, e nada sai em "R$". */
+export function PlanningTab({ card, cardInstallments, isMobile, formatBRL, currency = null }) {
   const planningMonths = card?.planejamento?.length ? card.planejamento : null;
   const months = planningMonths ? planningMonths.map((item) => item.mes) : ["Abr'26", "Mai'26", "Jun'26", "Jul'26", "Ago'26", "Set'26"];
   return (
@@ -152,7 +155,7 @@ export function PlanningTab({ card, cardInstallments, isMobile, formatBRL }) {
               </div>
               <div style={{ ...G, fontSize: 11, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 4 }}>Total previsto</div>
               <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
-                {total > 0 ? formatBRL(total) : "R$ 0,00"}
+                {total > 0 ? formatBRL(total) : (currency ? formatMoneyPlainSpace(0, currency) : "—")}
               </div>
               {activeInstallments.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -346,8 +349,10 @@ export function InstallmentsTab({
 export function AnalyticsTab({
   cardInvoices, cardTrend, invoice, card, usagePercent, totalInstallments, totalRefunds,
   hasRefundedInstallments, categoryAlerts, averageValue, projection, cardInstallments,
-  isMobile, formatBRL, formatK,
+  isMobile, formatBRL, formatK, currency = null,
 }) {
+  // Símbolo da moeda do cartão para eixo, tooltip e média (#315); sem moeda, nada de "R$".
+  const sym = currency ? currencyInfo(currency).symbol : null;
   const hasData = cardInvoices.length > 0 || cardTrend.length > 0;
   if (!hasData) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", gap: 12, textAlign: "center" }}>
@@ -395,7 +400,7 @@ export function AnalyticsTab({
             <ReBarChart data={cardTrend} margin={{ top: 4, right: 4, left: -22, bottom: 0 }} barCategoryGap="32%">
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
               <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
+              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => (sym ? sym + formatK(v) : "")} />
               <Tooltip content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
                 return (
@@ -405,7 +410,7 @@ export function AnalyticsTab({
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                         <div style={{ width: 6, height: 6, borderRadius: 2, background: p.fill }} />
                         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }}>{p.dataKey}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginLeft: "auto" }}>R$ {formatK(p.value)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginLeft: "auto" }}>{sym ? `${sym} ${formatK(p.value)}` : "—"}</span>
                       </div>
                     ))}
                   </div>
@@ -434,7 +439,7 @@ export function AnalyticsTab({
           <ReBarChart data={cardInvoices} margin={{ top: 4, right: 4, left: -22, bottom: 0 }} barCategoryGap="38%">
             <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
             <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
+            <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => (sym ? sym + formatK(v) : "")} />
             <Tooltip content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
@@ -449,7 +454,7 @@ export function AnalyticsTab({
               );
             }} />
             <ReferenceLine y={averageValue} stroke={T.blue} strokeDasharray="4 3"
-              label={{ value: `Média R$ ${formatK(averageValue)}`, position: "right", fontSize: 11, fill: T.blue, fontFamily: "Geist,sans-serif" }} />
+              label={{ value: sym ? `Média ${sym} ${formatK(averageValue)}` : "Média —", position: "right", fontSize: 11, fill: T.blue, fontFamily: "Geist,sans-serif" }} />
             <Bar dataKey="val" maxBarSize={26} radius={[4, 4, 0, 0]}>
               {cardInvoices.map((f, i) => (
                 <Cell key={i} fill={f.atual ? (card.corChip || T.blue) : f.pago ? T.green : T.inkGhost} fillOpacity={f.atual ? 0.9 : 0.65} />

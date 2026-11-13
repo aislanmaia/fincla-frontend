@@ -1,10 +1,13 @@
 import React from "react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
 /* ─── PARCELA HYBRID (A+B+C) ───────────────────────────────────── */
-export const ParcelaHybrid = ({ parcelas, valorNum }) => {
+/** `currency`: a moeda do lançamento (a da conta dele) — não "R$" chapado (#315). */
+export const ParcelaHybrid = ({ parcelas, valorNum, currency = null }) => {
   if (!parcelas || !valorNum || parcelas < 2) return null;
+  const fmt = (v) => (currency ? formatMoneyPlainSpace(v, currency) ?? "—" : "—");
   const parcelaVal = valorNum / parcelas;
   const MON = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
   const startM = 3, startY = 2026;
@@ -44,7 +47,7 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
           <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
             textTransform:"uppercase", letterSpacing:".07em", opacity:.7, marginBottom:2 }}>Por mês</div>
           <div style={{ ...G, ...NUM, fontSize:16, fontWeight:800, color:T.ink, letterSpacing:"-.02em" }}>
-            R$ {parcelaVal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+            {fmt(parcelaVal)}
           </div>
           <div style={{ ...G, fontSize: 11, color:T.inkGhost, marginTop:1 }}>{parcelas} parcelas</div>
         </div>
@@ -52,7 +55,7 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
           <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
             textTransform:"uppercase", letterSpacing:".07em", opacity:.7, marginBottom:2 }}>Total</div>
           <div style={{ ...G, ...NUM, fontSize:16, fontWeight:800, color:T.blue, letterSpacing:"-.02em" }}>
-            R$ {valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+            {fmt(valorNum)}
           </div>
           <div style={{ ...G, fontSize: 11, color:T.inkGhost, marginTop:1 }}>
             abr/26{parcelas > 1 ? ` → ${endLabel}` : ""}

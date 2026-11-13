@@ -1,13 +1,14 @@
 import { RotateCcw, Search, X } from "lucide-react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { formatMoneyPlainSpace } from "../../money/formatMoney.js";
 
-const fmtBrl = (v) =>
-  "R$ " +
-  Math.abs(Number(v) || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+/** Valor de uma compra na moeda DELA; sem moeda declarada, a do estorno sendo lançado
+ *  (`fallback`) — nunca "R$" chapado (#315). Sem moeda nenhuma, travessão. */
+const fmtCompra = (v, moeda, fallback) => {
+  const m = moeda || fallback;
+  return m ? formatMoneyPlainSpace(Math.abs(Number(v) || 0), m) ?? "—" : "—";
+};
 
 /**
  * Bloco "🔗 Linkar à compra estornada" — renderizado logo após o toggle
@@ -28,6 +29,8 @@ export function RefundLinkPanel({
   onQueryChange,
   onLink,
   onUnlink,
+  /** A moeda do estorno (a da conta dele): fallback de uma compra sem moeda declarada. */
+  currency = null,
 }) {
   const fsLg = variant === "mobile" ? 13 : 12;
   const fsSm = 11; // piso WCAG de 11px (era 10 no branch desktop)
@@ -48,7 +51,7 @@ export function RefundLinkPanel({
             {refundLinkedTx.desc}
           </div>
           <div style={{ ...G, fontSize: fsSm, color: T.inkMid, marginTop: 2 }}>
-            {refundLinkedTx.dateLabel} · <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>{fmtBrl(refundLinkedTx.val)}</span>
+            {refundLinkedTx.dateLabel} · <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>{fmtCompra(refundLinkedTx.val, refundLinkedTx.currency, currency)}</span>
             {refundLinkedTx.cat ? ` · ${refundLinkedTx.cat}` : ""}
           </div>
         </div>
@@ -103,7 +106,7 @@ export function RefundLinkPanel({
                 </div>
               </div>
               <span style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: fsLg, fontWeight: 700, color: T.ink, flexShrink: 0 }}>
-                {fmtBrl(c.val)}
+                {fmtCompra(c.val, c.currency, currency)}
               </span>
             </button>
           ))}

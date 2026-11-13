@@ -1542,6 +1542,9 @@ export interface PreviewTransactionResponse {
   category: PreviewTransactionCategoryBlock;
   budgets_summary: PreviewTransactionBudgetsSummary;
   month_projection: PreviewTransactionMonthProjection | null;
+  /** Carimbada pelo cliente (`previewTransactionImpact`): a moeda dos valores — a base
+   *  da organização. `null` quando a resposta não a declara. */
+  currency?: string | null;
 }
 
 /** GET /v1/analytics/spending-by-day */

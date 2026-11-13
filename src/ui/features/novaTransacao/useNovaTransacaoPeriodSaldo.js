@@ -2,11 +2,12 @@ import { useEffect, useState, useRef } from "react";
 import { getTransactionsSummary } from "../../../api/transactions";
 import { handleApiError } from "../../../api/client";
 import { monthBoundsFromYmd } from "../../data/novaTransacaoImpactUtils.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 
 const SUMMARY_DEBOUNCE_MS = 450;
 const CACHE_TTL_MS = 45_000;
 
-/** @type {Map<string, { balance: number; at: number }>} */
+/** @type {Map<string, { balance: number; currency: string|null; at: number }>} */
 const summaryCache = new Map();
 
 /** Invalida cache após criar/editar transação (próximo saldo na API). */
@@ -32,6 +33,8 @@ export function useNovaTransacaoPeriodSaldo({
   const live = Boolean(organizationId) && dataMode === "live";
 
   const [periodBalance, setPeriodBalance] = useState(null);
+  /** A moeda do saldo, como o servidor a declara no resumo (a base da organização). */
+  const [currency, setCurrency] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -62,6 +65,7 @@ export function useNovaTransacaoPeriodSaldo({
     const now = Date.now();
     if (cached && now - cached.at < CACHE_TTL_MS) {
       setPeriodBalance(cached.balance);
+      setCurrency(cached.currency);
       setError("");
       setLoading(false);
       return;
@@ -87,10 +91,12 @@ export function useNovaTransacaoPeriodSaldo({
           if (cancelled) return;
           const b = Number(res?.balance);
           const bal = Number.isFinite(b) ? b : null;
+          const moeda = res?.currency ?? null;
           if (bal != null) {
-            summaryCache.set(key, { balance: bal, at: Date.now() });
+            summaryCache.set(key, { balance: bal, currency: moeda, at: Date.now() });
           }
           setPeriodBalance(bal);
+          setCurrency(moeda);
           setError("");
         })
         .catch((e) => {
@@ -112,7 +118,7 @@ export function useNovaTransacaoPeriodSaldo({
     };
   }, [open, live, organizationId, txDateYmd]);
 
-  return { periodBalance, loading, error, live };
+  return { periodBalance, currency, loading, error, live };
 }
 
 /**
@@ -127,12 +133,17 @@ export function projectedBalanceAfterTx(periodBalance, tipo, valorNum) {
   return periodBalance + delta;
 }
 
-export function fmtSaldoLine(value) {
-  if (value == null || !Number.isFinite(value)) return "—";
+/**
+ * Linha de saldo na moeda do resumo (a base da organização) — era "R$" chapado (#315).
+ * Sem valor ou sem moeda conhecida, travessão.
+ */
+export function fmtSaldoLine(value, currency) {
+  if (value == null || !Number.isFinite(value) || !currency) return "—";
   const abs = Math.abs(value);
   const sign = value < 0 ? "−" : "";
-  return `${sign}R$ ${abs.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const { symbol, decimalPlaces } = currencyInfo(currency);
+  return `${sign}${symbol} ${abs.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
   })}`;
 }

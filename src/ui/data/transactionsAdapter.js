@@ -1240,6 +1240,7 @@ export function buildRefundLinkedTxFromUi(ui) {
     desc: ui.desc,
     dateLabel: ui.date,
     val: Math.abs(Number(ui.val) || 0),
+    currency: ui.currency ?? null,
     cat: ui.cat,
     categoryTagId: ui.categoryTagId ?? null,
     paymentMethodKey: modalPaymentKeyFromTransactionUi(ui),
