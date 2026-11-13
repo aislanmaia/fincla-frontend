@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RefundLinkPanel } from "../RefundLinkPanel.jsx";
@@ -55,13 +55,13 @@ describe("RefundLinkPanel — moeda da compra", () => {
 });
 
 describe("NovaTransacaoImpactPanel — moeda que a API declara (base)", () => {
-  const panel = (currency) => (
+  const panel = (currency, preview = null) => (
     <NovaTransacaoImpactPanel
       impactLive
       valorNum={10}
       modalCategoryChoices={[]}
       cat="Alimentação"
-      financialImpact={{ currency, chartData: [], refLineDay: null, showProjLine: false, previewLoading: false, previewError: "", spendingLoading: false, spendingError: "" }}
+      financialImpact={{ currency, preview, chartData: [], refLineDay: null, showProjLine: false, previewLoading: false, previewError: "", spendingLoading: false, spendingError: "" }}
       impactKpis={{ afterVal: "x", afterSub: "", projVal: "", projSub: "", projExplain: "", marginVal: "", marginSub: "",
         displayCat: "Alimentação", catIconKey: null, catBefore: 90, catAfter: 100, catLimit: 500, catPct: 20, catHasBudget: true, catOverBudget: false }}
     />
@@ -75,5 +75,19 @@ describe("NovaTransacaoImpactPanel — moeda que a API declara (base)", () => {
   it("BRL como antes", () => {
     render(panel("BRL"));
     expect(text()).toContain("R$ 90,00");
+  });
+  it("rascunho em US$ num orçamento em R$: explica que ele não entra no consumo (fincla-api#503)", () => {
+    render(panel("BRL", { draft_currency: "USD" }));
+    expect(screen.getByTestId("impact-draft-other-currency").textContent).toContain(
+      "Este lançamento é em US$: ele não entra no orçamento em R$",
+    );
+  });
+  it("rascunho na moeda do orçamento: nenhuma nota", () => {
+    render(panel("BRL", { draft_currency: "BRL" }));
+    expect(screen.queryByTestId("impact-draft-other-currency")).toBeNull();
+  });
+  it("resposta sem a moeda do rascunho (forma antiga): nenhuma nota inventada", () => {
+    render(panel("BRL", {}));
+    expect(screen.queryByTestId("impact-draft-other-currency")).toBeNull();
   });
 });

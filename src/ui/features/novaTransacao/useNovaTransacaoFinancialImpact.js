@@ -39,6 +39,7 @@ export function useNovaTransacaoFinancialImpact({
   modalidade,
   parcelas,
   cartao,
+  accountId = null,
 }) {
   const live =
     Boolean(organizationId) &&
@@ -136,6 +137,9 @@ export function useNovaTransacaoFinancialImpact({
       payment_method: mapUiPaymentMethodToApi(method),
       installments_count: installmentsCount,
       card_id: cardId,
+      // A moeda do valor é a da conta (fincla-api#503): sem ela o backend somaria
+      // US$ 100 como R$ 100 no orçamento.
+      account_id: accountId || null,
     })
       .then((res) => {
         setPreview(res);
@@ -158,6 +162,7 @@ export function useNovaTransacaoFinancialImpact({
     modalidade,
     parcelas,
     cartao,
+    accountId,
   ]);
 
   useEffect(() => {
@@ -183,6 +188,7 @@ export function useNovaTransacaoFinancialImpact({
       modalidade,
       parcelas,
       cartao,
+      accountId,
       organizationId,
     });
 
@@ -232,6 +238,7 @@ export function useNovaTransacaoFinancialImpact({
       prev.modalidade === snap.modalidade &&
       prev.parcelas === snap.parcelas &&
       prev.cartao === snap.cartao &&
+      prev.accountId === snap.accountId &&
       prev.organizationId === snap.organizationId;
 
     const onlyValorChanged =
@@ -272,6 +279,7 @@ export function useNovaTransacaoFinancialImpact({
     modalidade,
     parcelas,
     cartao,
+    accountId,
   ]);
 
   /** Metadados + valor da projeção fim de mês (categoria), para gráfico e texto explicativo no card. */

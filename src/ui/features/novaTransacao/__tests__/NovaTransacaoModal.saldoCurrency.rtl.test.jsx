@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * #315 — o "Resultado do mês" do formulário escrevia "R$" chapado. Ele vem do resumo
  * da organização (`GET /transactions/summary`), na moeda que o servidor declara — a
- * base. O "Após" soma o lançamento a esse resultado, e isso só é um número quando o
- * lançamento é na MESMA moeda; noutra, a soma seria de moeda nenhuma e sai do ar.
+ * base. O "Após" soma o lançamento a esse resultado. Noutra moeda, o valor entra
+ * CONVERTIDO pela cotação do par (#503) — antes US$ 10 eram somados como R$ 10 — e,
+ * sem cotação, o "Após" diz que falta a cotação em vez de mostrar um número errado.
  *
  * Mock só no limite HTTP (`apiClient`): `useNovaTransacaoPeriodSaldo` roda de verdade.
  */
@@ -34,6 +35,7 @@ vi.mock("../useNovaTransacaoFinancialImpact.js", () => ({
 import apiClient from "../../../../api/client";
 import { NovaTransacaoModal } from "../NovaTransacaoModal.jsx";
 import { clearNovaTransacaoSummaryCache } from "../useNovaTransacaoPeriodSaldo.js";
+import { clearDraftQuoteCache } from "../useDraftAmountInBase.js";
 
 const ORG = "org-saldo";
 const ACC_BRL = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -43,10 +45,13 @@ const balanceRow = (account_id, name, currency) => ({
   balance: { amount: "1000.00", currency }, initial_balance: { amount: "0", currency },
 });
 let summaryCurrency;
+let quoteResponse;
 
 beforeEach(() => {
   clearNovaTransacaoSummaryCache();
+  clearDraftQuoteCache();
   summaryCurrency = "BRL";
+  quoteResponse = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.0000", quoted_on: "2026-11-13" } });
   apiClient.get.mockImplementation((url) => {
     if (url === "/balances") {
       return Promise.resolve({ data: { as_of: "2026-11-04T09:00:00", total: null, consolidation: null,
@@ -56,6 +61,7 @@ beforeEach(() => {
       const m = (amount) => ({ amount, currency: summaryCurrency });
       return Promise.resolve({ data: { total_income: m("0.00"), total_expenses: m("201.34"), total_refunds: m("0.00"), balance: m("-201.34"), total_transactions: 1 } });
     }
+    if (url === "/quotations/USD/BRL") return quoteResponse();
     if (url === `/organizations/${ORG}`) return Promise.resolve({ data: { id: ORG, base_currency: summaryCurrency } });
     return Promise.resolve({ data: [] });
   });
@@ -79,14 +85,30 @@ describe("NovaTransacaoModal — 'Resultado do mês' na moeda do resumo (#315)",
     expect(container.textContent).not.toMatch(/Resultado do mês: −R\$/);
   });
 
-  it("base em R$ e lançamento numa conta em US$: o resultado segue em R$ e o 'Após' sai do ar", async () => {
+  it("base em R$ e lançamento de US$ 10 numa conta em US$: o 'Após' soma R$ 50 pela cotação (#503)", async () => {
     const { container } = renderModal(ACC_USD);
-    await waitFor(() => expect(container.textContent).toContain("Resultado do mês: −R$ 201,34"));
-    expect(container.textContent).not.toContain("Após:");
+    // −201,34 − (10 × 5) = −251,34. Somar sem converter daria −211,34.
+    await waitFor(() => expect(container.textContent).toContain("Resultado do mês: −R$ 201,34 · Após: −R$ 251,34"));
+    expect(container.textContent).not.toContain("−R$ 211,34");
+    expect(apiClient.get).toHaveBeenCalledWith("/quotations/USD/BRL", expect.anything());
   });
 
-  it("tudo em R$: continua como antes", async () => {
+  it("sem cotação: o 'Após' diz que falta a cotação — nenhum número, nem taxa 1", async () => {
+    quoteResponse = () => Promise.reject(new Error("503"));
+    const { container } = renderModal(ACC_USD);
+    await waitFor(() => expect(container.textContent).toContain("Resultado do mês: −R$ 201,34 · Após: sem cotação US$ → R$"));
+    expect(container.textContent).not.toContain("−R$ 211,34");
+  });
+
+  it("cotação inutilizável (taxa zero) também é 'sem cotação'", async () => {
+    quoteResponse = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "0", quoted_on: "2026-11-13" } });
+    const { container } = renderModal(ACC_USD);
+    await waitFor(() => expect(container.textContent).toContain("Após: sem cotação US$ → R$"));
+  });
+
+  it("tudo em R$: continua como antes, e nenhuma cotação é pedida", async () => {
     const { container } = renderModal(ACC_BRL);
     await waitFor(() => expect(container.textContent).toContain("Resultado do mês: −R$ 201,34 · Após: −R$ 211,34"));
+    expect(apiClient.get.mock.calls.some(([url]) => String(url).startsWith("/quotations"))).toBe(false);
   });
 });

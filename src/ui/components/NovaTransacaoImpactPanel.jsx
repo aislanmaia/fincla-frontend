@@ -14,6 +14,7 @@ import { G, NUM } from "../typography";
 import { ProgBar } from "./primitives";
 import { CategoryLucideIcon } from "./CategoryLucideIcon.jsx";
 import { fmtImpactMoney } from "../data/novaTransacaoImpactUtils.js";
+import { currencyInfo } from "../money/currencyRegistry.js";
 
 const TOOLTIP_SHORT = {
   real: "Salvo (mês)",
@@ -158,6 +159,13 @@ export function NovaTransacaoImpactPanel({
   };
 
   const loadKpi = previewLoading && valorNum > 0;
+  /* O rascunho noutra moeda que a do orçamento não entra no consumo (fincla-api#503):
+     o orçamento só conta a moeda dele. Sem esta linha, "antes → depois" iguais pareceriam
+     um preview quebrado. */
+  const draftCurrency = financialImpact.preview?.draft_currency ?? null;
+  const budgetCurrency = financialImpact.currency ?? null;
+  const draftOutsideBudget =
+    !loadKpi && valorNum > 0 && !!draftCurrency && !!budgetCurrency && draftCurrency !== budgetCurrency;
   const kpis = [
     {
       label: "APÓS LANÇAMENTO",
@@ -271,6 +279,16 @@ export function NovaTransacaoImpactPanel({
       ) : null}
       {previewError ? (
         <div style={{ ...G, fontSize: 11, color: T.red, marginBottom: 8 }}>{previewError}</div>
+      ) : null}
+      {draftOutsideBudget ? (
+        <div
+          data-testid="impact-draft-other-currency"
+          style={{ ...G, fontSize: 11, color: T.inkMid, marginBottom: 8, lineHeight: 1.45 }}
+        >
+          Este lançamento é em {currencyInfo(draftCurrency).symbol}: ele não entra no orçamento em{" "}
+          {currencyInfo(budgetCurrency).symbol}, que conta só gastos em {currencyInfo(budgetCurrency).symbol}.
+          Depois de salvo, aparece como gasto em outra moeda.
+        </div>
       ) : null}
       {!(valorNum > 0) && !previewLoading ? (
         <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 8 }}>
