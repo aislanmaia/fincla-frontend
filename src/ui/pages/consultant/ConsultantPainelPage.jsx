@@ -21,6 +21,7 @@ import { useConsultantHealthIndex } from "../../features/consultant/useConsultan
 import { useConsultantClientsAtRisk } from "../../features/consultant/useConsultantClientsAtRisk";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { totalPatrimonio } from "../../features/consultant/consultantClientsView";
+import { portfolioCurrency } from "../../features/consultant/consultantCurrency.js";
 
 /** Kicker (sobre-título) do header — pequeno, uppercase, fiel à referência. */
 function Kicker({ children }) {
@@ -189,6 +190,7 @@ export function ConsultantPainelPage() {
           open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
+          currency={evaluation.target.currency}
           onClose={evaluation.close}
         />
       )}
@@ -199,6 +201,7 @@ export function ConsultantPainelPage() {
           onClose={closeBaseSummary}
           onOpenClient={openClient}
           onAddClient={openAddClient}
+          currency={wallet.loadedOk ? portfolioCurrency(wallet.clients) : null}
         />
       )}
     </div>

@@ -57,7 +57,7 @@ export function ConsultantClientCard({ client, onOpenClient, onRelease, onRegene
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 0", borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
-        <MiniStat label="Patrimônio" value={fmtMoney(client.patrimonio)} />
+        <MiniStat label="Patrimônio" value={fmtMoney(client.patrimonio, client.currency ?? null)} />
         <MiniStat label="Poupança" value={fmtPct(savings)} color={savingsColor(savings)} />
         <MiniStat label="Comprom." value={fmtPct(debt)} color={debtColor(debt)} />
         <div title={`Tendência: ${client.trend}`} style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>

@@ -35,7 +35,7 @@ describe("buildConsultantKpis", () => {
     const kpis = buildConsultantKpis({
       healthIndex: { organizations_count: 10, index: 92 },
       hasLoaded: true,
-      patrimonio: 384210,
+      patrimonio: [{ currency: "BRL", amount: 384210 }],
       patrimonioLoaded: true,
       attention: 1,
       attentionLoaded: true,
@@ -47,11 +47,28 @@ describe("buildConsultantKpis", () => {
     expect(byId.attention.sub).toBe("de 10 clientes");
   });
 
+  it("patrimônio de uma carteira em dólar sai em dólar; mista sai como a quebra (#314)", () => {
+    const usd = buildConsultantKpis({ hasLoaded: true, patrimonio: [{ currency: "USD", amount: 12500 }], patrimonioLoaded: true });
+    expect(usd.find((k) => k.id === "patrimonio").value).toBe("US$ 12.500");
+    const mista = buildConsultantKpis({
+      hasLoaded: true, patrimonioLoaded: true,
+      patrimonio: [{ currency: "BRL", amount: 82500 }, { currency: "USD", amount: 12500 }],
+    });
+    expect(mista.find((k) => k.id === "patrimonio").value).toBe("R$ 82.500 + US$ 12.500");
+  });
+
+  it("carteira vazia: zero na moeda de leitura; sem ela, '—'", () => {
+    const comLeitura = buildConsultantKpis({ healthIndex: { currency: "EUR" }, hasLoaded: true, patrimonio: [], patrimonioLoaded: true });
+    expect(comLeitura.find((k) => k.id === "patrimonio").value).toBe("€ 0");
+    const semLeitura = buildConsultantKpis({ hasLoaded: true, patrimonio: [], patrimonioLoaded: true });
+    expect(semLeitura.find((k) => k.id === "patrimonio").value).toBe("—");
+  });
+
   it("shows real zero (not a dash) once loaded — R$ 0 and 0 em atenção", () => {
     const kpis = buildConsultantKpis({
       healthIndex: { organizations_count: 3, index: 88 },
       hasLoaded: true,
-      patrimonio: 0,
+      patrimonio: [{ currency: "BRL", amount: 0 }],
       patrimonioLoaded: true,
       attention: 0,
       attentionLoaded: true,

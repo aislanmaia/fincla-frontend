@@ -16,7 +16,7 @@ const health = {
   goals_on_track: 3, goals_total: 5, goal_progress_avg: 42,
   cash_flow_risk: "low", score: 72,
 };
-const client = { balance: "1200.00", patrimonio: "50000.00" };
+const client = { balance: "1200.00", patrimonio: "50000.00", currency: "BRL" };
 
 describe("cashFlowRiskLabel", () => {
   it("mapeia faixas (default médio)", () => {
@@ -37,7 +37,7 @@ describe("overviewKpis", () => {
   });
 
   it("tom vermelho para saldo negativo", () => {
-    const kpis = overviewKpis({ client: { balance: -50 }, health });
+    const kpis = overviewKpis({ client: { balance: -50, currency: "BRL" }, health });
     expect(kpis[0].tone).toBe("red");
   });
 

@@ -20,7 +20,7 @@ describe("ConsultantKpiCards", () => {
       <ConsultantKpiCards
         healthIndex={{ organizations_count: 10, index: 92 }}
         hasLoaded
-        patrimonio={384210}
+        patrimonio={[{ currency: "BRL", amount: 384210 }]}
         patrimonioLoaded
         attention={1}
         attentionLoaded
@@ -37,7 +37,7 @@ describe("ConsultantKpiCards", () => {
       <ConsultantKpiCards
         healthIndex={{ organizations_count: 8, index: 72 }}
         hasLoaded
-        patrimonio={1000}
+        patrimonio={[{ currency: "BRL", amount: 1000 }]}
         patrimonioLoaded
         attention={0}
         attentionLoaded

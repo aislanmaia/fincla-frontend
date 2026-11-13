@@ -19,6 +19,7 @@ function client(over = {}) {
     health: over.health ?? 80,
     patrimonio: over.patrimonio ?? "1000.00",
     balance: over.balance ?? "0.00",
+    currency: "BRL",
     ...over,
   };
 }
@@ -136,10 +137,10 @@ describe("countClientsByBand", () => {
 describe("totalPatrimonio", () => {
   it("soma o patrimônio (parse de string)", () => {
     // 50000 + (−2000) + 12000 = 60000
-    expect(totalPatrimonio(all)).toBe(60000);
+    expect(totalPatrimonio(all)).toEqual([{ currency: "BRL", amount: 60000 }]);
   });
   it("tolera entrada ausente", () => {
-    expect(totalPatrimonio(undefined)).toBe(0);
+    expect(totalPatrimonio(undefined)).toEqual([]);
   });
 });
 

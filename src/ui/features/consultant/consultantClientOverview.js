@@ -12,7 +12,7 @@
  * `emergency_fund_months` em meses; `score` 0..100.
  */
 
-import { fmtBRL0, fmtPct } from "./consultantFormat";
+import { fmtMoney0, fmtPct } from "./consultantFormat";
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -28,15 +28,19 @@ export function cashFlowRiskLabel(risk) {
  * Os 4 KPIs do topo do Overview (Saldo atual, Renda mensal, Taxa de poupança,
  * Comprometimento). `client` = item da carteira (saldo); `health` = payload de
  * saúde. `tone` é semântico ("ink"|"green"|"amber"|"red") — o componente mapeia.
+ *
+ * Saldo e renda saem na moeda base do cliente (`client.currency`): a carteira a
+ * rotula, e `/financial-health/score` calcula a renda nessa mesma base (#314).
  */
 export function overviewKpis({ client, health } = {}) {
   const balance = Number(client?.balance) || 0;
   const income = Number(health?.avg_income) || 0;
   const savingsPct = (Number(health?.savings_rate) || 0) * 100;
   const commitmentPct = (Number(health?.income_commitment) || 0) * 100;
+  const currency = client?.currency ?? null;
   return [
-    { key: "balance", label: "Saldo atual", value: fmtBRL0(balance), tone: balance >= 0 ? "ink" : "red", sub: balance < 0 ? "negativo no mês" : "disponível" },
-    { key: "income", label: "Renda mensal", value: fmtBRL0(income), tone: "ink", sub: "média mensal" },
+    { key: "balance", label: "Saldo atual", value: fmtMoney0(balance, currency), tone: balance >= 0 ? "ink" : "red", sub: balance < 0 ? "negativo no mês" : "disponível" },
+    { key: "income", label: "Renda mensal", value: fmtMoney0(income, currency), tone: "ink", sub: "média mensal" },
     { key: "savings", label: "Taxa de poupança", value: fmtPct(savingsPct), tone: savingsPct >= 15 ? "green" : savingsPct >= 0 ? "amber" : "red", sub: "da renda líquida" },
     { key: "commitment", label: "Comprometimento", value: fmtPct(commitmentPct), tone: commitmentPct <= 30 ? "green" : commitmentPct <= 50 ? "amber" : "red", sub: "da renda com dívidas" },
   ];

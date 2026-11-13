@@ -32,7 +32,7 @@ afterEach(() => cleanup());
 
 describe("ConsultantClientCardsTab", () => {
   it("mostra o visual do cartão, uso do limite e itens da fatura", () => {
-    render(<ConsultantClientCardsTab cards={state()} clientName="Mariana Costa" />);
+    render(<ConsultantClientCardsTab cards={state()} clientName="Mariana Costa" currency="BRL" />);
     expect(screen.getByText("Nubank Roxinho")).toBeInTheDocument();
     expect(screen.getByText("•••• 1234")).toBeInTheDocument();
     expect(screen.getByText("Limite usado")).toBeInTheDocument();

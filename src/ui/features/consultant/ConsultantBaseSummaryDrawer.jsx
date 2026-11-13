@@ -262,7 +262,9 @@ function SoonButton({ icon, children }) {
   );
 }
 
-export function ConsultantBaseSummaryDrawer({ open, onClose, onOpenClient, onAddClient }) {
+// `currency`: a moeda da carteira, quando ela inteira está numa só
+// (`portfolioCurrency`); senão `null` e os gráficos da IA não afirmam unidade (#314).
+export function ConsultantBaseSummaryDrawer({ open, onClose, onOpenClient, onAddClient, currency = null }) {
   const { loading, error, errorCode, result, correlationId, computedAt, run, refresh, reset } =
     usePortfolioSummary();
 
@@ -340,7 +342,7 @@ export function ConsultantBaseSummaryDrawer({ open, onClose, onOpenClient, onAdd
 
               <PortfolioReadCard read={result.portfolio_read} />
 
-              {result.charts?.map((spec, i) => <AiChart key={i} spec={spec} />)}
+              {result.charts?.map((spec, i) => <AiChart key={i} spec={spec} currency={currency} />)}
 
               <PriorityList items={result.priorities} onOpenClient={openClient} />
 

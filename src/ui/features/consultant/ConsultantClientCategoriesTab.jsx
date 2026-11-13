@@ -4,7 +4,7 @@ import { Card, ProgBar } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { getCategoryLucideIcon } from "../../data/categoryLucideIcons.js";
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtMoney0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
 import { selectClientCategories } from "./consultantClientCategories";
 
@@ -23,7 +23,7 @@ function IconBox({ row }) {
 }
 
 // ── Linha de categoria (responsiva) ─────────────────────────────
-function CategoryRow({ row, max, narrow }) {
+function CategoryRow({ row, max, narrow, currency }) {
   const barPct = max > 0 ? (row.value / max) * 100 : 0;
   const label = (
     <div style={{ minWidth: 0 }}>
@@ -32,7 +32,7 @@ function CategoryRow({ row, max, narrow }) {
     </div>
   );
   const value = (
-    <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: T.ink, textAlign: "right", whiteSpace: "nowrap" }}>{fmtBRL0(row.value)}</div>
+    <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: T.ink, textAlign: "right", whiteSpace: "nowrap" }}>{fmtMoney0(row.value, currency)}</div>
   );
 
   // Estreito: ícone | (label + pct·tx + barra) | valor.
@@ -74,8 +74,11 @@ function CategoryRow({ row, max, narrow }) {
  * do donut da Visão geral) via `useClientCategories`. **Gaps honestos:** orçamento
  * (não vem no endpoint) → mostra `N transações`; tendência MoM (single-period) →
  * omitida. Recebe o estado do hook via prop.
+ *
+ * `currency` é a moeda base do cliente: `/analytics/by-category` converte os gastos
+ * dele para ela (#314).
  */
-export function ConsultantClientCategoriesTab({ categories }) {
+export function ConsultantClientCategoriesTab({ categories, currency }) {
   const narrow = useIsNarrow(760);
   const { rows, max } = selectClientCategories(categories.categories || []);
 
@@ -89,7 +92,7 @@ export function ConsultantClientCategoriesTab({ categories }) {
     if (rows.length === 0) {
       return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Nenhum gasto por categoria no período.</div>;
     }
-    return rows.map((row) => <CategoryRow key={row.id} row={row} max={max} narrow={narrow} />);
+    return rows.map((row) => <CategoryRow key={row.id} row={row} max={max} narrow={narrow} currency={currency ?? null} />);
   };
 
   return (

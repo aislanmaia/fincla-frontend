@@ -18,7 +18,7 @@ afterEach(() => cleanup());
 
 describe("ConsultantClientTransactionsTab", () => {
   it("mostra resumo (receitas/despesas/resultado) e a lista", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     expect(screen.getByText("Receitas no período")).toBeInTheDocument();
     expect(screen.getByText("Despesas no período")).toBeInTheDocument();
     expect(screen.getByText("Resultado")).toBeInTheDocument();
@@ -30,28 +30,28 @@ describe("ConsultantClientTransactionsTab", () => {
   });
 
   it("filtra por 'Despesas'", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     fireEvent.click(screen.getByRole("button", { name: "Despesas" }));
     expect(screen.queryByText("Salário")).not.toBeInTheDocument();
     expect(screen.getByText("Aluguel")).toBeInTheDocument();
   });
 
   it("filtra por 'No cartão'", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     fireEvent.click(screen.getByRole("button", { name: "No cartão" }));
     expect(screen.getByText("Mercado")).toBeInTheDocument();
     expect(screen.queryByText("Aluguel")).not.toBeInTheDocument();
   });
 
   it("busca por descrição", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     fireEvent.change(screen.getByLabelText("Buscar transação"), { target: { value: "merc" } });
     expect(screen.getByText("Mercado")).toBeInTheDocument();
     expect(screen.queryByText("Salário")).not.toBeInTheDocument();
   });
 
   it("'Nova transação' é stub 'em breve' (desabilitado)", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     expect(screen.getByRole("button", { name: /Nova transação/ })).toBeDisabled();
   });
 
@@ -69,7 +69,7 @@ describe("ConsultantClientTransactionsTab", () => {
   });
 
   it("shows no truncation warning for a short list", () => {
-    render(<ConsultantClientTransactionsTab transactions={state()} />);
+    render(<ConsultantClientTransactionsTab transactions={state()} currency="BRL" />);
     expect(screen.queryByText(/mais recentes do período/)).not.toBeInTheDocument();
   });
 });

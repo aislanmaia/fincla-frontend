@@ -4,9 +4,9 @@ import { Badge, Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { getCategoryLucideIcon } from "../../data/categoryLucideIcons.js";
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtMoney0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
-import { TRANSACTIONS_LIMIT, TX_FILTERS, filterTransactions, summarizeTransactions } from "./consultantClientTransactions";
+import { TRANSACTIONS_LIMIT, TX_FILTERS, filterTransactions, summarizeTransactionsByCurrency } from "./consultantClientTransactions";
 
 const CAT_COLORS = ["#0F0F0D", "#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626", "#9CA3AF"];
 
@@ -35,12 +35,12 @@ function SummaryCard({ label, value, color }) {
 }
 
 // ── Linha de transação (responsiva) ─────────────────────────────
-function TxRow({ tx, narrow }) {
+function TxRow({ tx, narrow, currency }) {
   const color = catColor(tx.categoryIconKey || tx.cat);
   const isPos = (Number(tx.val) || 0) >= 0;
   const parcela = tx.parcela && tx.parcela.total > 1 ? ` · ${tx.parcela.atual}/${tx.parcela.total}x` : "";
   const value = (
-    <span style={{ ...G, ...NUM, fontSize: 13.5, fontWeight: 800, color: isPos ? T.green : T.ink, textAlign: "right", whiteSpace: "nowrap" }}>{isPos ? "+" : ""}{fmtBRL0(tx.val)}</span>
+    <span style={{ ...G, ...NUM, fontSize: 13.5, fontWeight: 800, color: isPos ? T.green : T.ink, textAlign: "right", whiteSpace: "nowrap" }}>{isPos ? "+" : ""}{fmtMoney0(tx.val, tx.currency ?? currency ?? null)}</span>
   );
   const nameRow = (
     <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
@@ -95,29 +95,36 @@ const FILTER_BTN = (active) => ({
  * com ícone de categoria, recorrência, método, data e valor. A lista é **read-only**
  * (o lançamento/edição em nome do cliente é Trilha B → "Nova transação" fica stub).
  * Recebe o estado do hook `useClientTransactions` via prop.
+ *
+ * `currency` é a moeda base do cliente: a de uma linha que não declarou a sua, e a
+ * do resumo quando não há linha nenhuma (#314).
  */
-export function ConsultantClientTransactionsTab({ transactions }) {
+export function ConsultantClientTransactionsTab({ transactions, currency }) {
   const [filter, setFilter] = React.useState("todos");
   const [q, setQ] = React.useState("");
   const narrow = useIsNarrow(760);
 
   const all = transactions.transactions || [];
-  const { income, expense, result } = summarizeTransactions(all);
+  // Uma entrada por moeda; com uma só (o caso comum), o resumo é o de sempre.
+  const resumos = summarizeTransactionsByCurrency(all, currency);
+  const porMoeda = (escreve) =>
+    (resumos.length ? resumos : [{ currency: currency ?? null, income: 0, expense: 0, result: 0 }]).map(escreve).join(" + ");
+  const resultadoPositivo = resumos.every((r) => r.result >= 0);
   const list = filterTransactions(all, { filter, query: q });
 
   const body = () => {
     if (transactions.loading && !transactions.hasLoaded) return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Carregando transações…</div>;
     if (transactions.error && all.length === 0) return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Não foi possível carregar as transações.</div>;
     if (list.length === 0) return <div style={{ ...G, padding: 40, textAlign: "center", color: T.inkLight, fontSize: 13 }}>Nenhuma transação encontrada.</div>;
-    return list.map((tx) => <TxRow key={tx.id} tx={tx} narrow={narrow} />);
+    return list.map((tx) => <TxRow key={tx.id} tx={tx} narrow={narrow} currency={currency} />);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 12 }}>
-        <SummaryCard label="Receitas no período" value={`+${fmtBRL0(income)}`} color={T.green} />
-        <SummaryCard label="Despesas no período" value={`−${fmtBRL0(expense)}`} color={T.ink} />
-        <SummaryCard label="Resultado" value={`${result >= 0 ? "+" : ""}${fmtBRL0(result)}`} color={result >= 0 ? T.green : T.red} />
+        <SummaryCard label="Receitas no período" value={porMoeda((r) => `+${fmtMoney0(r.income, r.currency)}`)} color={T.green} />
+        <SummaryCard label="Despesas no período" value={porMoeda((r) => `−${fmtMoney0(r.expense, r.currency)}`)} color={T.ink} />
+        <SummaryCard label="Resultado" value={porMoeda((r) => `${r.result >= 0 ? "+" : ""}${fmtMoney0(r.result, r.currency)}`)} color={resultadoPositivo ? T.green : T.red} />
       </div>
       {all.length >= TRANSACTIONS_LIMIT && <div role="note" style={{ ...G, fontSize: 12, color: T.inkLight }}>Mostrando as {TRANSACTIONS_LIMIT} transações mais recentes do período. Os totais acima consideram só essas.</div>}
 

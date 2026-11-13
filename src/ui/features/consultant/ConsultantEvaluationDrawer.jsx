@@ -267,7 +267,9 @@ function SoonButton({ icon, children }) {
   );
 }
 
-export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
+// `currency`: a moeda base do cliente avaliado — a spec dos gráficos da IA não diz
+// moeda, e os números dela são do cliente (#314).
+export function ConsultantEvaluationDrawer({ open, organizationId, clientName, currency = null, onClose }) {
   const { loading, error, errorCode, result, correlationId, computedAt, run, refresh, reset } =
     useClientEvaluation(organizationId);
 
@@ -348,7 +350,7 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
 
               <p style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.65, margin: 0 }}>{result.summary}</p>
 
-              {result.charts?.map((spec, i) => <AiChart key={i} spec={spec} />)}
+              {result.charts?.map((spec, i) => <AiChart key={i} spec={spec} currency={currency} />)}
 
               <WatchPointList title="Pontos de atenção" items={result.watch_points} />
 

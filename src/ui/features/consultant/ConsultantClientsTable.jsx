@@ -45,7 +45,7 @@ function Row({ client, onOpenClient, onRelease, onRegenerate, onEvaluate, onReco
           <RiskBadge health={client.health} />
         </div>
       </td>
-      <td style={{ ...TD, ...NUM, fontWeight: 700 }}>{fmtMoney(client.patrimonio)}</td>
+      <td style={{ ...TD, ...NUM, fontWeight: 700 }}>{fmtMoney(client.patrimonio, client.currency ?? null)}</td>
       <td style={TD}>
         <span style={{ ...G, ...NUM, fontSize: 12.5, fontWeight: 700, color: debtColor(debt) }}>{fmtPct(debt)}</span>
       </td>

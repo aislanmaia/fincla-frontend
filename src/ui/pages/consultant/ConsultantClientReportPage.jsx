@@ -157,9 +157,11 @@ export function ConsultantClientReportPage() {
           {tab === "overview" && (
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} profile={profile} />
           )}
-          {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} />}
-          {tab === "cards" && <ConsultantClientCardsTab cards={cards} clientName={client?.client_name} />}
-          {tab === "categories" && <ConsultantClientCategoriesTab categories={categories} />}
+          {/* A moeda base do cliente (rotulada pela carteira) vai a cada aba: um cliente em
+              dólar se lê em dólar (#314). */}
+          {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} currency={client?.currency ?? null} />}
+          {tab === "cards" && <ConsultantClientCardsTab cards={cards} clientName={client?.client_name} currency={client?.currency ?? null} />}
+          {tab === "categories" && <ConsultantClientCategoriesTab categories={categories} currency={client?.currency ?? null} />}
         </>
       )}
 
@@ -184,6 +186,7 @@ export function ConsultantClientReportPage() {
           open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
+          currency={evaluation.target.currency}
           onClose={evaluation.close}
         />
       )}

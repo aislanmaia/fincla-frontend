@@ -14,7 +14,7 @@ import {
 import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtMoney0 } from "./consultantFormat";
 
 /** Cabeçalho compartilhado dos cards de gráfico do Insights. */
 function ChartHeader({ title, subtitle }) {
@@ -30,21 +30,23 @@ function EmptyChart({ text }) {
   return <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "12px 0" }}>{text}</div>;
 }
 
-function CashFlowTooltip({ active, payload, label }) {
+function CashFlowTooltip({ active, payload, label, currency }) {
   if (!active || !payload || !payload.length) return null;
   const row = (name, value, color) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 14 }}>
       <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{name}</span>
-      <span style={{ ...G, ...NUM, fontSize: 11.5, fontWeight: 700, color }}>{fmtBRL0(value)}</span>
+      <span style={{ ...G, ...NUM, fontSize: 11.5, fontWeight: 700, color }}>{fmtMoney0(value, currency)}</span>
     </div>
   );
   const byKey = Object.fromEntries(payload.map((p) => [p.dataKey, p.value]));
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 11px", boxShadow: "0 8px 24px rgba(15,23,35,0.12)" }}>
       <div style={{ ...G, fontSize: 11, fontWeight: 800, color: T.ink, marginBottom: 6 }}>{label}</div>
-      {row("Receita", byKey.income ?? 0, T.green)}
-      {row("Despesa", byKey.expenses ?? 0, T.red)}
-      {row("Saldo", byKey.balance ?? 0, byKey.balance >= 0 ? T.ink : T.red)}
+      {/* Mês sem valor (ex.: sem cotação) sai "—", não "R$ 0": zero afirmaria que
+          não houve receita nem gasto. */}
+      {row("Receita", byKey.income, T.green)}
+      {row("Despesa", byKey.expenses, T.red)}
+      {row("Saldo", byKey.balance, byKey.balance >= 0 ? T.ink : T.red)}
     </div>
   );
 }
@@ -53,8 +55,13 @@ function CashFlowTooltip({ active, payload, label }) {
  * "Fluxo da base" — receita (barra verde) × despesa (barra vermelha) + saldo
  * (linha) mês a mês de toda a carteira. Consome a série pura de
  * `selectCashFlowSeries` (`/consultant/cash-flow`). Recharts (mesma lib do app).
+ *
+ * `currency` é obrigatória e é de quem chama dizer qual (#314): a do cliente na
+ * evolução do relatório dele; o rótulo confiável da carteira no "Fluxo da base".
+ * `null` = moeda desconhecida → valores "—" e eixo sem rótulo (um eixo cheio de
+ * travessões é ruído).
  */
-export function CashFlowChart({ data, loading, title = "Fluxo da base", subtitle = "Receita × despesa e saldo, mês a mês (toda a carteira)", emptyText = "Sem fluxo agregado no período." }) {
+export function CashFlowChart({ data, loading, currency, title = "Fluxo da base", subtitle = "Receita × despesa e saldo, mês a mês (toda a carteira)", emptyText = "Sem fluxo agregado no período." }) {
   return (
     <Card style={{ padding: 18 }}>
       <ChartHeader title={title} subtitle={subtitle} />
@@ -64,8 +71,8 @@ export function CashFlowChart({ data, loading, title = "Fluxo da base", subtitle
             <ComposedChart data={data} margin={{ top: 6, right: 6, left: -8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
               <XAxis dataKey="month" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} width={54} tickFormatter={(v) => fmtBRL0(v)} />
-              <Tooltip content={<CashFlowTooltip />} cursor={{ fill: `${T.ink}08` }} />
+              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} width={54} tickFormatter={(v) => (currency ? fmtMoney0(v, currency) : "")} />
+              <Tooltip content={<CashFlowTooltip currency={currency ?? null} />} cursor={{ fill: `${T.ink}08` }} />
               <Bar dataKey="income" name="Receita" fill={T.green} radius={[3, 3, 0, 0]} maxBarSize={22} />
               <Bar dataKey="expenses" name="Despesa" fill={T.red} radius={[3, 3, 0, 0]} maxBarSize={22} />
               <Line dataKey="balance" name="Saldo" type="monotone" stroke={T.ink} strokeWidth={2} dot={false} />

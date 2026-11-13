@@ -8,6 +8,7 @@ import { useFinclaPages } from "../../routing/finclaPageContext.jsx";
 import { getDisplayName, getInitials } from "../../features/auth/userDisplay.js";
 import { Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
+import { fmtTotals } from "../../features/consultant/consultantCurrency.js";
 import { totalPatrimonio } from "../../features/consultant/consultantClientsView";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 
@@ -98,7 +99,7 @@ export function ConsultantProfilePage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <StatCard label="Clientes" value={clients.length} icon="users" />
-        <StatCard label="Patrimônio sob gestão" value={fmtMoney(patrimonio)} icon="wallet" />
+        <StatCard label="Patrimônio sob gestão" value={fmtTotals(patrimonio, fmtMoney)} icon="wallet" />
       </div>
 
       {user?.subscription?.checkout_selection?.persona === "consultant" && <ConsultantSubscriptionPanel />}

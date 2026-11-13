@@ -1998,13 +1998,20 @@ export interface ConsultantSummaryQuery {
 }
 
 export interface ConsultantSummaryResponse {
-  total_income: number;
-  total_expenses: number;
-  balance: number;
+  /** `null` quando faltou cotação para converter a carteira (fincla-api#170). */
+  total_income: number | null;
+  total_expenses: number | null;
+  balance: number | null;
   total_transactions: number;
   organizations_count: number;
   period_start: string | null;
   period_end: string | null;
+  /**
+   * A moeda de LEITURA do consultor, para a qual os totais acima foram CONVERTIDOS.
+   * Vem do rótulo dos totais ou, se eles vieram `null`, de
+   * `consolidation.target_currency` (fincla-frontend#314).
+   */
+  currency: string | null;
 }
 
 // Alias for naming consistency
@@ -2054,6 +2061,12 @@ export interface ConsultantClient {
   patrimonio: number | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
+  /**
+   * A moeda base DESTE cliente — a de `balance` e `patrimonio`. Extraída do rótulo
+   * antes de `unwrapMoney` (fincla-frontend#314): sem ela, um cliente em dólar era
+   * desenhado em real. `null` quando a resposta não trouxe rótulo (forma antiga).
+   */
+  currency: string | null;
 }
 
 export interface ConsultantClientsResponse {
@@ -2131,6 +2144,12 @@ export interface FinancialHealthIndexResponse {
   period_start: string;
   period_end: string;
   formula_info: string;
+  /**
+   * A moeda de LEITURA do consultor em que estes totais estão — extraída do rótulo
+   * `{amount, currency}` antes de desembrulhar (fincla-frontend#314). `null` quando
+   * nada veio rotulado.
+   */
+  currency: string | null;
 }
 
 export interface ActiveGoalsCountResponse {
@@ -2140,9 +2159,16 @@ export interface ActiveGoalsCountResponse {
 }
 
 export interface TotalCreditCardDebtResponse {
-  total_debt: number;
+  /** `null` quando o backend não soube somar (nunca vire zero). */
+  total_debt: number | null;
   organizations_count: number;
   as_of_date: string;
+  /**
+   * O RÓTULO que o backend pôs na soma — a moeda de leitura do consultor. A soma
+   * NÃO é convertida (fincla-api#170): só vale nessa moeda se todos os clientes
+   * estão nela. Ver `consultantCurrency.js`.
+   */
+  currency: string | null;
 }
 
 export interface MonthlyCashFlowItem {
@@ -2158,6 +2184,8 @@ export interface CashFlowResponse {
   monthly_data: MonthlyCashFlowItem[];
   period_start: string;
   period_end: string;
+  /** Rótulo das somas mensais (não convertidas) — ver `TotalCreditCardDebtResponse.currency`. */
+  currency: string | null;
 }
 
 export interface CategoryExpenseItem {
@@ -2171,6 +2199,8 @@ export interface ExpensesByCategoryResponse {
   total_expenses: number;
   period_start: string;
   period_end: string;
+  /** Rótulo das somas (não convertidas) — ver `TotalCreditCardDebtResponse.currency`. */
+  currency: string | null;
 }
 
 export interface MonthlyIncomeCommitmentItem {
@@ -2208,6 +2238,8 @@ export interface ClientAtRiskItem {
   current_balance: number;
   last_invoice_status: string;
   risk_score: number;
+  /** A moeda base DESTE cliente — a de `current_balance` (fincla-frontend#314). */
+  currency: string | null;
 }
 
 export interface ClientsAtRiskResponse {
