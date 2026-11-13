@@ -41,6 +41,16 @@ import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 const COMPOSITION_DEMO_INSIGHT_MOBILE = `<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes de gastar — fixo e recorrências. Margem discricionária real: <strong>R$\u00a01.081</strong> em Março.`;
 const COMPOSITION_DEMO_INSIGHT = `<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes do primeiro gasto — fixo e recorrências. Margem discricionária real em Março: <strong>R$\u00a01.081</strong>.`;
 
+/*
+ * Demais insights de DEMONSTRAÇÃO (#320): categorias, meses e percentuais inventados
+ * para os dados de exemplo. Com dados reais a página mostra só o que calculou a
+ * partir dos mesmos números dos gráficos — ou nada. Nunca estas frases.
+ */
+const VELOCITY_DEMO_INSIGHT = `Gasto <strong>35% mais rápido que o ideal</strong> nos primeiros 5 dias. Distribuir compras grandes ao longo do mês pode economizar pressão no orçamento.`;
+const CASCADE_DEMO_INSIGHT = `Moradia + Alimentação = <strong>${Math.round((1500 + 1046) / 8600 * 100)}% da receita</strong> de Março. Lazer e Outros são as maiores alavancas de economia potencial.`;
+const DRIFT_DEMO_INSIGHT_MOBILE = "Lazer e Outros foram os principais drivers de variação no período.";
+const DRIFT_DEMO_INSIGHT = "Lazer e Outros variaram +134% em Nov–Dez vs set.";
+
 /* ─── RELATÓRIOS DATA — 12 meses ────────────────────────── */
 const REL_MONTHLY = [
   { mes:"Abr'25", receita:7800, gasto:6200, budget:6000, score:72, fixo:3100, disc:3100 },
@@ -483,8 +493,10 @@ export function RelatoriosPage({
     };
   }, [waterfallRows]);
 
+  /** Com dados reais: o cálculo, ou `null` (sem insight). Nunca a cópia de demonstração. */
   const velocityInsightHtml = useMemo(() => {
-    if (shouldUseRealData && velocityInsightPct != null) {
+    if (!shouldUseRealData) return VELOCITY_DEMO_INSIGHT;
+    if (velocityInsightPct != null) {
       const abs = Math.abs(velocityInsightPct);
       const cmp =
         velocityInsightPct > 0
@@ -494,14 +506,16 @@ export function RelatoriosPage({
             : "alinhado ao ritmo ideal";
       return `Nos primeiros dias do mês, o gasto acumulado ficou <strong>${cmp}</strong> em relação a um ritmo linear até o total de despesas do mês. Distribuir compras ao longo do período ajuda na aderência ao orçamento.`;
     }
-    return `Gasto <strong>35% mais rápido que o ideal</strong> nos primeiros 5 dias. Distribuir compras grandes ao longo do mês pode economizar pressão no orçamento.`;
+    return null;
   }, [shouldUseRealData, velocityInsightPct]);
 
+  /** Com dados reais: o cálculo, ou `null` (sem insight). Nunca a cópia de demonstração. */
   const cascadeInsightHtml = useMemo(() => {
-    if (shouldUseRealData && cascadeTopShare) {
+    if (!shouldUseRealData) return CASCADE_DEMO_INSIGHT;
+    if (cascadeTopShare) {
       return `<strong>${cascadeTopShare.names}</strong> ≈ <strong>${cascadeTopShare.pct}% da receita</strong> no mês de referência. Ajuste categorias com maior peso para melhorar o saldo final.`;
     }
-    return `Moradia + Alimentação = <strong>${Math.round((1500 + 1046) / 8600 * 100)}% da receita</strong> de Março. Lazer e Outros são as maiores alavancas de economia potencial.`;
+    return null;
   }, [shouldUseRealData, cascadeTopShare]);
 
   const rec0 = extraRecs && extraRecs[0];
@@ -960,7 +974,7 @@ export function RelatoriosPage({
 
           {/* FLUXO */}
           {relTab==="fluxo" && (<>
-            <InsightChip color={T.red} icon="⚡" text={velocityInsightHtml} />
+            {velocityInsightHtml && <InsightChip color={T.red} icon="⚡" text={velocityInsightHtml} />}
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:3 }}>
                 Velocidade de gasto{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
@@ -977,7 +991,7 @@ export function RelatoriosPage({
               color={T.purple} icon="📊"
               text={isolatedCat
                 ? `<strong>${isolatedCat}</strong> em destaque. Toque novamente para ver todas.`
-                : `Lazer e Outros foram os principais drivers de variação no período. Toque em uma categoria para isolar.`}
+                : `${shouldUseRealData ? "" : `${DRIFT_DEMO_INSIGHT_MOBILE} `}Toque em uma categoria para isolar.`}
             />
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:12 }}>Evolução por categoria</div>
@@ -1111,7 +1125,7 @@ export function RelatoriosPage({
 
         {/* col2 row1 — auto em ambos os modos */}
         <Section title="Cascata de" serifWord="caixa"
-          insight={{ color:T.green, icon:"🔍", text: cascadeInsightHtml }}>
+          insight={cascadeInsightHtml ? { color:T.green, icon:"🔍", text: cascadeInsightHtml } : undefined}>
           <div style={{ flex:1, minHeight:0, width:"100%", overflow:"hidden", display:"flex", flexDirection:"column" }}>
             <div style={{ flex:1, minHeight:0, width:"100%" }}>
               <WaterfallChart plotHeight={desktopChartH} rows={waterfallRows} fmtK={fmtK} />
@@ -1148,7 +1162,7 @@ export function RelatoriosPage({
         <Section title="Evolução por" serifWord="categoria"
           style={desktopCols===3 ? { gridColumn:"1 / span 2", gridRow:2 } : undefined}
           insight={{ color:T.purple, icon:"📊",
-            text:`Clique nas categorias abaixo para isolar. ${isolatedCat ? `<strong>${isolatedCat}</strong> em destaque.` : "Lazer e Outros variaram +134% em Nov–Dez vs set."}`}}>
+            text:`Clique nas categorias abaixo para isolar. ${isolatedCat ? `<strong>${isolatedCat}</strong> em destaque.` : (shouldUseRealData ? "" : DRIFT_DEMO_INSIGHT)}`.trim()}}>
           <div style={{ marginBottom:10, flexShrink:0 }}><CatLegend /></div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", minHeight:0 }}>
             <DriftChart height={desktopChartH} />
@@ -1170,7 +1184,7 @@ export function RelatoriosPage({
         {/* 3-col: span 3 row3 | 2-col: full-width (span 2) */}
         <Section title="Velocidade de" serifWord="gasto"
           style={{ gridColumn: desktopCols===3 ? "1 / span 3" : "1 / -1", gridRow: desktopCols===3 ? 3 : undefined }}
-          insight={{ color:T.red, icon:"⚡", text: velocityInsightHtml }}>
+          insight={velocityInsightHtml ? { color:T.red, icon:"⚡", text: velocityInsightHtml } : undefined}>
           <VelocidadeChart height={desktopChartH} data={velocityDaily} />
           <div style={{ marginTop:8 }}><VelocLegend /></div>
         </Section>
