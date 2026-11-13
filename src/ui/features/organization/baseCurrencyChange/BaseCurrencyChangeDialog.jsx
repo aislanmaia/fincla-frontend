@@ -7,11 +7,12 @@ import { G, NUM } from "../../../typography";
 import { BottomSheet } from "../../../components/BottomSheet.jsx";
 import { ModalShell } from "../../accounts/ModalShell.jsx";
 import { applyBaseCurrencyChange, previewBaseCurrencyChange } from "../../../../api/baseCurrencyChange";
+import { getOrganization } from "../../../../api/organizations";
 import { getApiErrorCode, handleApiError } from "../../../../api/client";
-import { currencyInfo } from "../../../money/currencyRegistry.js";
+import { currencyInfo, currencyRegistryLoaded, offeredCurrencies } from "../../../money/currencyRegistry.js";
 import { formatMoney } from "../../../money/formatMoney.js";
 import { reformatMoneyInputOnBlur } from "../../../money/moneyInput.js";
-import { useCurrencyOptions } from "../../../money/useCurrencyRegistry.js";
+import { ensureCurrencyRegistry } from "../../../money/useCurrencyRegistry.js";
 import {
   buildApplyRequest,
   effectiveMode,
@@ -55,14 +56,31 @@ const selectStyle = {
 };
 
 function CurrencyPicker({ currentCurrency, onPick }) {
-  const { carregado, moedas } = useCurrencyOptions(currentCurrency);
-  const options = moedas.filter((m) => m.code !== currentCurrency);
-  if (options.length === 0) {
+  // O registro de moedas é a lista do que se pode escolher: sem ele não há o que
+  // oferecer, e a falha precisa de saída ("Tentar de novo"), não de um "carregando" eterno.
+  const [registry, setRegistry] = useState(() => (currencyRegistryLoaded() ? "ready" : "loading"));
+  useEffect(() => {
+    if (registry !== "loading") return undefined;
+    let alive = true;
+    ensureCurrencyRegistry().then((ok) => {
+      if (alive) setRegistry(ok ? "ready" : "failed");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [registry]);
+  if (registry === "failed") {
     return (
-      <div role="status" style={{ ...G, fontSize: 13, color: T.inkMid, padding: "8px 0" }}>
-        {carregado ? "Não há outra moeda disponível." : "Carregando as moedas…"}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+        <div role="alert" style={{ ...G, fontSize: 13, color: T.red }}>Não foi possível carregar as moedas.</div>
+        <button type="button" style={{ ...btn(false, false), flex: "none" }} onClick={() => setRegistry("loading")}>Tentar de novo</button>
       </div>
     );
+  }
+  if (registry === "loading") return <div role="status" style={{ ...G, fontSize: 13, color: T.inkMid, padding: "8px 0" }}>Carregando as moedas…</div>;
+  const options = offeredCurrencies().filter((m) => m.code !== currentCurrency).map((m) => ({ code: m.code, label: m.name, symbol: m.symbol }));
+  if (options.length === 0) {
+    return <div role="status" style={{ ...G, fontSize: 13, color: T.inkMid, padding: "8px 0" }}>Não há outra moeda disponível.</div>;
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -283,8 +301,11 @@ function DoneBody({ result }) {
   const changed = (result?.items ?? []).filter((i) => i.mode !== "skip").length;
   return (
     <div role="status" style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: T.ink }}>
-      <div style={{ fontWeight: 800, color: T.green }}>Moeda base trocada para {sym(result.to_currency)}.</div>
+      <div style={{ fontWeight: 800, color: T.green }}>
+        {result.alreadyChanged ? `A moeda base já foi trocada para ${sym(result.to_currency)}.` : `Moeda base trocada para ${sym(result.to_currency)}.`}
+      </div>
       <div style={{ color: T.inkMid, fontSize: 12.5 }}>
+        {result.alreadyChanged ? "A troca foi feita em outra janela ou por outra pessoa; nada foi alterado agora. " : ""}
         {changed > 0 ? `${changed} ${changed === 1 ? "valor atualizado" : "valores atualizados"}. ` : ""}
         Saldos, resumos e painéis já aparecem em {sym(result.to_currency)}.
       </div>
@@ -340,6 +361,16 @@ export function BaseCurrencyChangeDialog({ isMobile = false, organizationId, cur
     } catch (e) {
       const status = e?.response?.status;
       if (status === 409 || getApiErrorCode(e) === "conflict") {
+        // Outra aba já trocou para esta moeda? Então não há o que confirmar: a troca
+        // está feita, a tela diz isso e o app recarrega o que depende da base.
+        const org = await getOrganization(organizationId).catch(() => null);
+        if (org && String(org.base_currency ?? "").toUpperCase() === preview.to_currency) {
+          const already = { organization: org, from_currency: preview.from_currency, to_currency: preview.to_currency, quote: null, items: [], alreadyChanged: true };
+          setResult(already);
+          setState("done");
+          onChanged?.(already);
+          return;
+        }
         // A prévia envelheceu (a cotação ou os dados mudaram). Refaz e mostra de novo;
         // as escolhas ficam — os números novos aparecem, e a pessoa confirma outra vez.
         const fresh = await loadPreview(preview.to_currency);

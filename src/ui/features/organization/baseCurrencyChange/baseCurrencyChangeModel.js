@@ -167,7 +167,9 @@ export function setItemMode(choices, preview, group, item, mode) {
     if (thisMode === "skip" && sibMode !== "skip") items[sib.key] = { ...(items[sib.key] ?? {}), mode: "skip" };
     else if (thisMode !== "skip" && sibMode === "skip") {
       delete items[sib.key];
-      if (effectiveMode(sib, group, { ...next, items }) === "skip") items[sib.key] = { mode: thisMode ?? next.mode ?? "keep" };
+      // "Digitar valor" é por campo: o irmão não ganha um campo vazio que a pessoa não pediu.
+      const sibFallback = thisMode === "value" ? (next.mode ?? "keep") : (thisMode ?? next.mode ?? "keep");
+      if (effectiveMode(sib, group, { ...next, items }) === "skip") items[sib.key] = { mode: sibFallback };
     }
   }
   return { ...next, items };

@@ -118,6 +118,21 @@ describe("records change currency together", () => {
     expect(effectiveMode(aporte, "goals", c)).not.toBe("skip");
     expect(summarize(p, c).errors).toEqual([]);
   });
+  it("typing a value on one field of a skipped goal does not force an empty typed value on its sibling", () => {
+    let c = setGroupMode(choose({ mode: "convert" }), "goals", "skip");
+    c = setItemMode(c, p, "goals", alvo, "value");
+    expect(effectiveMode(aporte, "goals", c)).toBe("convert");
+    expect(c.items[aporte.key]).toEqual({ mode: "convert" });
+    c = setItemText(c, alvo.key, "1,000.00");
+    const s = summarize(p, c);
+    expect(s.errors).toEqual([]);
+    expect(s.canApply).toBe(true);
+  });
+  it("with no global choice yet, the sibling of a typed field falls back to keep", () => {
+    let c = setGroupMode(choose(), "goals", "skip");
+    c = setItemMode(c, p, "goals", alvo, "value");
+    expect(c.items[aporte.key]).toEqual({ mode: "keep" });
+  });
   it("a split record is flagged before the server refuses it", () => {
     const c = choose({ mode: "convert", items: { [alvo.key]: { mode: "skip" } } });
     expect(summarize(p, c).errors.map((e) => e.message)).toContain("Os valores do mesmo registro mudam de moeda juntos");

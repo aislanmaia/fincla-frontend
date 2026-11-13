@@ -22,11 +22,15 @@ afterEach(() => {
 });
 
 /** Rotas reais do cliente (`src/api/baseCurrencyChange.ts`); devolve o que foi pedido. */
-function backend({ previews = [impactPreview()], apply = null } = {}) {
-  const calls = { previews: [], applies: [] };
+function backend({ previews = [impactPreview()], apply = null, orgBase = "BRL", currencies = () => HttpResponse.json({ currencies: CURRENCIES }) } = {}) {
+  const calls = { previews: [], applies: [], currencies: 0 };
   let n = 0;
   server.use(
-    http.get("*/v1/currencies", () => HttpResponse.json({ currencies: CURRENCIES })),
+    http.get("*/v1/currencies", () => {
+      calls.currencies += 1;
+      return currencies(calls.currencies);
+    }),
+    http.get(`*/v1/organizations/${ORG}`, () => HttpResponse.json({ id: ORG, name: "Casa", base_currency: orgBase, monthly_income: { amount: "5000.00", currency: orgBase } })),
     http.get(`*/v1/organizations/${ORG}/base-currency-change/preview`, ({ request }) => {
       calls.previews.push(new URL(request.url).searchParams.get("to"));
       const p = previews[Math.min(n, previews.length - 1)];
@@ -67,6 +71,17 @@ describe("currency picker", () => {
     await within(group).findByRole("button", { name: /Dólar americano/ });
     expect(within(group).queryByRole("button", { name: /Real brasileiro/ })).toBeNull();
     expect(within(group).queryByRole("button", { name: /Euro/ })).toBeNull();
+  });
+
+  it("a failed currency registry offers a retry instead of loading forever", async () => {
+    const calls = backend({ currencies: (n) => (n === 1 ? HttpResponse.json({ detail: "down" }, { status: 503 }) : HttpResponse.json({ currencies: CURRENCIES })) });
+    const user = userEvent.setup();
+    renderDialog();
+    expect(await screen.findByText("Não foi possível carregar as moedas.")).toBeInTheDocument();
+    expect(screen.queryByText("Carregando as moedas…")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByRole("button", { name: /Dólar americano/ })).toBeInTheDocument();
+    expect(calls.currencies).toBe(2);
   });
 });
 
@@ -206,6 +221,25 @@ describe("impact screen", () => {
     expect(calls.previews).toEqual(["USD", "USD"]);
     expect(calls.applies[1].fingerprint).toBe("fp-2");
     expect(calls.applies[1].quote).toEqual({ rate: "0.1800000000", quoted_on: "2026-11-06" });
+  });
+
+  it("409 because another tab already switched to this currency: says so, refreshes, nothing left to confirm", async () => {
+    const calls = backend({
+      orgBase: "USD",
+      apply: () => HttpResponse.json({ detail: { code: "conflict", message: "Os dados mudaram desde a prévia." } }, { status: 409 }),
+    });
+    const user = userEvent.setup();
+    const { onChanged } = renderDialog();
+    await pickDollar(user);
+    await user.click(await screen.findByRole("radio", { name: /Manter os números/ }));
+    await user.click(screen.getByRole("button", { name: "Trocar para US$" }));
+    expect(await screen.findByText("A moeda base já foi trocada para US$.")).toBeInTheDocument();
+    expect(calls.previews).toEqual(["USD"]);
+    expect(calls.applies).toHaveLength(1);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(onChanged.mock.calls[0][0].organization.base_currency).toBe("USD");
+    expect(screen.queryByRole("button", { name: "Trocar para US$" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Fechar" }).length).toBeGreaterThan(0);
   });
 
   it("422: shows the server message and stays on the impact screen", async () => {

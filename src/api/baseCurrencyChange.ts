@@ -39,6 +39,8 @@ export interface BaseCurrencyChangeItem {
   converted: CanonicalMoney | null;
   can_skip: boolean;
   locked_reason: 'has_contributions' | string | null;
+  /** Aviso sobre o item (ex.: meta cujos aportes futuros precisam vir de conta na moeda nova). */
+  warning?: 'contributions_currency' | string | null;
 }
 
 export interface BaseCurrencyChangeGroup {
