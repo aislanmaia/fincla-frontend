@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { fmtAbs } from "../formatters";
+import { baseMoneyFormatters } from "../money/useBaseCurrencyMoney.js";
 
 export const M_MONO = { fontFamily: "'Geist Mono', monospace" };
 
@@ -254,7 +254,9 @@ export const PERIODS_V4 = [
 
 const LINE_LABELS = { proj: "Projeção", real: "Real", committed: "Comprometido" };
 
-export function RhythmTooltipV4({ active, payload, label }) {
+/** `currency`: a moeda dos valores do gráfico (a base da organização, #310). */
+export function RhythmTooltipV4({ active, payload, label, currency }) {
+  const { fmtAbs } = baseMoneyFormatters(currency);
   if (!active || !payload?.length) return null;
   // Quando Comprometido coincide com Real (no ponto de "hoje" eles se encontram pra dar
   // continuidade visual à linha), mostra só Real para evitar duplicidade no tooltip.

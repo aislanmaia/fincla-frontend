@@ -19,7 +19,8 @@ import {
 } from "recharts";
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
-import { fmtAbs, fmtK, fmtSgn } from "../formatters";
+import { formatMoney } from "../money/formatMoney.js";
+import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
   AnimNum,
   Badge,
@@ -86,6 +87,14 @@ export function DashboardPage({
 }) {
   const { mounted, isMobile } = stateCtrl;
   const apiDataEnabled = Boolean(organizationId);
+  /**
+   * Todo valor desta tela é um agregado que a API já devolve na moeda BASE da
+   * organização — então é nela que ele se escreve, e não em real chapado (#310).
+   * Enquanto a moeda não chega, travessão: "R$" num valor em dólar é o número certo
+   * com a unidade errada.
+   */
+  const money = useBaseCurrencyMoney(organizationId, { live: apiDataEnabled });
+  const { fmtAbs, fmtSgn, fmtK } = money;
 
   /** Primeira pintura já alinhada ao localStorage (evita useEffect gravar "este mês" antes da hidratação). */
   const periodBootstrapRef = useRef(null);
@@ -542,6 +551,7 @@ export function DashboardPage({
     mood.bar,
     projectedToCome.known,
     periodEnded,
+    fmtAbs,
   ]);
 
   const daysLeftInRange = useMemo(() => {
@@ -650,7 +660,7 @@ export function DashboardPage({
       notePrefix: total < 0 ? "conta negativa · " : "dinheiro disponível hoje · ",
       accountCount,
     };
-  }, [dashboardData.balanceSummary, reserve]);
+  }, [dashboardData.balanceSummary, reserve, fmtAbs, fmtSgn]);
 
   const { Icon: MoodIcon, InsightIcon } = mood;
   /**
@@ -832,6 +842,8 @@ export function DashboardPage({
     spendPct,
     timePct,
     txCount,
+    fmtAbs,
+    fmtSgn,
   ]);
 
   const anim = (d = 0) => ({
@@ -850,8 +862,8 @@ export function DashboardPage({
     const rec = extraRecs && extraRecs[0];
     const orgLabel = onboardingData?.orgNome || "Organização";
     const recValNum = rec ? rec.val : 0;
-    const fmtR = (v) =>
-      "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+    const fmtR = (v) => (money.currency ? formatMoney(Math.abs(v), money.currency) : UNKNOWN_MONEY);
+    const zeroLabel = money.symbol ? `${money.symbol} 0` : UNKNOWN_MONEY;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -934,17 +946,20 @@ export function DashboardPage({
                   marginBottom: 5,
                 }}
               >
-                <AnimNum
-                  value={recValNum}
-                  style={{
-                    ...G,
-                    ...NUM,
-                    fontSize: isMobile ? 24 : 30,
-                    fontWeight: 800,
-                    color: "#86EFAC",
-                    letterSpacing: "-0.02em",
-                  }}
-                />
+                {money.symbol ? (
+                  <AnimNum
+                    value={recValNum}
+                    prefix={`${money.symbol}\u00a0`}
+                    style={{
+                      ...G,
+                      ...NUM,
+                      fontSize: isMobile ? 24 : 30,
+                      fontWeight: 800,
+                      color: "#86EFAC",
+                      letterSpacing: "-0.02em",
+                    }}
+                  />
+                ) : UNKNOWN_MONEY}
               </div>
               <div style={{ ...G, fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
                 {rec.desc} · todo dia {rec.dia}
@@ -978,7 +993,7 @@ export function DashboardPage({
                   },
                   {
                     label: "Comprometido fixo",
-                    val: "R$ 0",
+                    val: zeroLabel,
                     sub: "sem recorrências",
                     color: "rgba(255,255,255,0.45)",
                   },
@@ -1029,7 +1044,7 @@ export function DashboardPage({
                   Gastos
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.inkGhost, marginBottom: 5 }}>
-                  R$ 0
+                  {zeroLabel}
                 </div>
                 <button onClick={onNewTx} style={{ ...G, background: T.redLight, color: T.red, border: "none", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                   + Registrar
@@ -1778,8 +1793,8 @@ export function DashboardPage({
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: mood.bar, transition: "background 0.18s", flexShrink: 0 }} />
                 <span style={{ ...G, fontSize: 12, color: mood.kicker, fontWeight: 700, transition: "color 0.18s" }}>
                   {spendPct <= timePct
-                    ? `R$ ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente do ritmo`
-                    : `R$ ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima do ritmo`}
+                    ? `${money.symbol ?? UNKNOWN_MONEY} ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente do ritmo`
+                    : `${money.symbol ?? UNKNOWN_MONEY} ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima do ritmo`}
                 </span>
                 <span style={{ ...G, fontSize: 11, color: T.inkMid, marginLeft: "auto" }}>
                   {progressSuffix || `dia ${day}/${dim} · ${timePct}%`}
@@ -1791,7 +1806,7 @@ export function DashboardPage({
                   <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
                   <XAxis dataKey="dia" tick={{ ...G, fontSize: 11, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
                   <YAxis tick={{ ...G, ...NUM, fontSize: 11, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={fmtK} />
-                  <Tooltip content={<RhythmTooltipV4 />} />
+                  <Tooltip content={<RhythmTooltipV4 currency={money.currency} />} />
                   {showTodayMarker ? (
                     <ReferenceLine
                       x={day}
