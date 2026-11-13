@@ -3,7 +3,7 @@ import { T } from "../../tokens";
 import { G, S } from "../../typography";
 
 /** Overlay + card centrado (modal no desktop, quase full-width no mobile). */
-export function ModalShell({ titleSans, titleSerif, onClose, children, footer, onBackdropClick = onClose }) {
+export function ModalShell({ titleSans, titleSerif, onClose, children, footer, onBackdropClick = onClose, maxWidth = 460 }) {
   return (
     <div
       onClick={onBackdropClick}
@@ -14,7 +14,7 @@ export function ModalShell({ titleSans, titleSerif, onClose, children, footer, o
         display: "grid",
         // The column is capped at the card width and may shrink to 0: with an
         // `auto` column, long unwrapped content widened the card past a phone screen.
-        gridTemplateColumns: "minmax(0, 460px)",
+        gridTemplateColumns: `minmax(0, ${maxWidth}px)`,
         justifyContent: "center",
         placeItems: "center",
         padding: 16,

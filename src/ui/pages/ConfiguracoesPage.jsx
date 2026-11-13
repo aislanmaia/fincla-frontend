@@ -35,6 +35,7 @@ import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
 import { ConsultantSubscriptionPanel } from "../features/consultant/ConsultantSubscriptionPanel.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
+import { BaseCurrencySetting } from "../features/organization/baseCurrencyChange/BaseCurrencySetting.jsx";
 import {
   PROFILE_TAB_INTERNAL_TO_SLUG,
   PROFILE_TAB_SLUG_TO_INTERNAL,
@@ -110,6 +111,8 @@ export function ConfiguracoesPage({
   dataMode = "mock",
   organizationId = null,
   currentUser = null,
+  membershipRole = null,
+  onBaseCurrencyChanged = null,
 }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -467,6 +470,14 @@ export function ConfiguracoesPage({
           <SectionHeader icon={<Building2 size={16} color={T.blue}/>} title="Organização" sub="Gerencie seu espaço de trabalho"/>
           <FieldRow label="Nome" value={nome} action={<BtnGhost onClick={()=>{}}>Editar</BtnGhost>}/>
           <FieldRow label="Tipo" value={formatOrgTipoLabelForSettings(tipo)} action={null}/>
+          {liveEnabled ? (
+            <BaseCurrencySetting organizationId={orgId} baseCurrency={orgData?.base_currency ?? null} membershipRole={membershipRole} isMobile={isMobile}
+              onGoToTransactions={() => onNav?.("transactions")}
+              onChanged={(applied) => {
+                if (applied?.organization) setOrgData(applied.organization);
+                onBaseCurrencyChanged?.(applied);
+              }} />
+          ) : null}
           <FieldRow label="ID da organização" value={<span style={{ ...G, fontFamily:"'Geist Mono', monospace", fontSize:12, color:T.inkLight }}>{orgId ?? "—"}</span>} action={null}/>
           <div style={{ padding:"13px 24px" }}>
             <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>Status</div>
