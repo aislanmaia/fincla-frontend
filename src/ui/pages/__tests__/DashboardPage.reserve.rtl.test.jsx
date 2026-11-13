@@ -12,6 +12,13 @@ vi.mock("../../features/goals/useReservedSummary.js", () => ({
 
 let mockDashboardData;
 
+// Moeda base em real, já resolvida: estes testes falam do que a tela CALCULA. O que
+// ela ESCREVE com outra base (#310) está em DashboardPage.currency.rtl.test.jsx,
+// pela rede, sem dublê do hook.
+vi.mock("../../money/useOrganizationBaseCurrency.js", () => ({
+  useOrganizationBaseCurrency: () => ({ status: "ready", currency: "BRL" }),
+}));
+
 vi.mock("../../features/dashboard/useDashboardData.js", () => ({
   useDashboardData: () => mockDashboardData,
 }));
