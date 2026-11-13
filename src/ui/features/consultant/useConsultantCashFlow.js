@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { getCashFlow } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
-// `currency`: o RÓTULO das somas mensais — não convertidas (fincla-api#170); ver
-// `trustedPortfolioLabel` antes de escrevê-lo (#314).
-const EMPTY = { loading: false, error: "", monthly: [], currency: null, hasLoaded: false };
+// `currency` + `converted`: convertido pelo backend (fincla-api#505) ou só rótulo de
+// uma soma não convertida (API anterior) — ver `aggregateCurrency` (#314).
+const EMPTY = { loading: false, error: "", monthly: [], currency: null, converted: false, hasLoaded: false };
 
 /**
  * Carrega `GET /v1/consultant/cash-flow` (receita/despesa/saldo mês a mês de toda
@@ -25,7 +25,7 @@ export function useConsultantCashFlow({ enabled = true } = {}) {
     getCashFlow()
       .then((data) => {
         if (cancelled) return;
-        setState({ loading: false, error: "", monthly: data.monthly_data ?? [], currency: data.currency ?? null, hasLoaded: true });
+        setState({ loading: false, error: "", monthly: data.monthly_data ?? [], currency: data.currency ?? null, converted: Boolean(data.converted), hasLoaded: true });
       })
       .catch((err) => {
         if (!cancelled) setState({ ...EMPTY, error: handleApiError(err), hasLoaded: true });

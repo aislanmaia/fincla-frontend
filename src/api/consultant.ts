@@ -9,14 +9,16 @@
 // - a de LEITURA do consultor (`/summary`, `/financial-health-index`,
 //   `/total-credit-card-debt`, `/cash-flow`, `/expenses-by-category`): o rótulo que o
 //   backend põe nos agregados da carteira (`resolve_consultant_reading_currency`).
-//   `/summary` e `/financial-health-index` CONVERTEM para ela; os outros três só
-//   ROTULAM uma soma não convertida (fincla-api#170) — quem desenha decide se o
-//   rótulo merece confiança (`consultantCurrency.js`).
+//   `/summary` e `/financial-health-index` CONVERTEM para ela. Os outros três
+//   convertem desde a fincla-api#505 e mandam o recibo `consolidation`; antes só
+//   ROTULAVAM uma soma não convertida. `converted` diz qual das duas a resposta é,
+//   e quem desenha decide se o rótulo merece confiança (`consultantCurrency.js`).
 import apiClient from './client';
 import { API_CONFIG } from './config';
 import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
 import type { WireMoney } from './money';
 import type {
+  Consolidation,
   ClientHealthResponse,
   ConsultantSummaryQuery,
   ConsultantSummaryResponse,
@@ -276,6 +278,27 @@ export const getActiveGoalsCount = async (
   return unwrapMoney(response.data);
 };
 
+/**
+ * A moeda e a natureza de um dos três agregados que a #505 passou a converter.
+ *
+ * `converted` vem da PRESENÇA do recibo, não de uma versão: uma API anterior à
+ * fincla-api#505 não manda `consolidation`, e aí a soma é só rotulada. Sem cotação a
+ * API nova manda os valores `null` e o recibo com o alvo — a moeda continua
+ * conhecida, o número não.
+ */
+const comoAgregado = (
+  bruto: unknown,
+  ...valores: unknown[]
+): { currency: string | null; converted: boolean; consolidation: Consolidation | null } => {
+  const recibo = (bruto as { consolidation?: Consolidation | null } | null)?.consolidation ?? null;
+  const convertido = Boolean(recibo && typeof recibo.target_currency === 'string');
+  return {
+    currency: moedaDe(...valores) ?? (convertido ? recibo!.target_currency : null),
+    converted: convertido,
+    consolidation: convertido ? recibo : null,
+  };
+};
+
 export const getTotalCreditCardDebt = async (
   params?: TotalCreditCardDebtQuery
 ): Promise<TotalCreditCardDebtResponse> => {
@@ -284,7 +307,7 @@ export const getTotalCreditCardDebt = async (
     { params }
   );
   const bruto = response.data;
-  return { ...unwrapMoney(bruto), currency: moedaDe(bruto?.total_debt) };
+  return { ...unwrapMoney(bruto), ...comoAgregado(bruto, bruto?.total_debt) };
 };
 
 export const getCashFlow = async (
@@ -298,7 +321,7 @@ export const getCashFlow = async (
   const meses = bruto?.monthly_data ?? [];
   return {
     ...unwrapMoney(bruto),
-    currency: moedaDe(...meses.flatMap((m) => [m?.total_income, m?.total_expenses, m?.balance])),
+    ...comoAgregado(bruto, ...meses.flatMap((m) => [m?.total_income, m?.total_expenses, m?.balance])),
   };
 };
 
@@ -312,7 +335,7 @@ export const getExpensesByCategory = async (
   const bruto = response.data;
   return {
     ...unwrapMoney(bruto),
-    currency: moedaDe(bruto?.total_expenses, ...(bruto?.categories ?? []).map((c) => c?.total)),
+    ...comoAgregado(bruto, bruto?.total_expenses, ...(bruto?.categories ?? []).map((c) => c?.total)),
   };
 };
 

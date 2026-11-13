@@ -25,6 +25,12 @@ describe("selectExpenseRows", () => {
     expect(selectExpenseRows(null)).toEqual({ rows: [], max: 0 });
   });
 
+  it("categoria sem total (faltou cotação, fincla-api#505) fica ausente, não zero", () => {
+    const { rows, max } = selectExpenseRows([{ name: "Moradia", total: null, percentage: null }]);
+    expect(rows[0]).toMatchObject({ label: "Moradia", value: null, pct: null });
+    expect(max).toBe(0);
+  });
+
   it("traduz o nome cru do seed vindo de GET /consultant/expenses-by-category (regressão #77)", () => {
     // Payload como a API realmente entrega: `name` em inglês (seed canônico,
     // fincla-api/seed_default_tags.py), não "Alimentação" já traduzido.
@@ -67,6 +73,13 @@ describe("selectCashFlowSeries", () => {
     ]);
     expect(selectCashFlowSeries(monthly, 1)).toHaveLength(1);
     expect(selectCashFlowSeries(null)).toEqual([]);
+  });
+
+  it("mês sem cotação (fincla-api#505) fica ausente, não zero", () => {
+    const series = selectCashFlowSeries([
+      { month_number: 6, year: 2026, total_income: null, total_expenses: null, balance: null },
+    ]);
+    expect(series).toEqual([{ month: "jun/26", income: null, expenses: null, balance: null }]);
   });
 });
 

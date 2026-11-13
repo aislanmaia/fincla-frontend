@@ -98,6 +98,48 @@ describe('fronteira do consultor preserva a moeda (#314)', () => {
     expect(resumo).toMatchObject({ currency: 'BRL', total_income: 45000, balance: 6800 });
   });
 
+  it('fincla-api#505: dívida, fluxo e categorias com recibo são `converted`, com a taxa', async () => {
+    responde(consultantFamily.total_credit_card_debt);
+    const divida = await getTotalCreditCardDebt();
+    expect(divida).toMatchObject({ total_debt: 7350, currency: 'BRL', converted: true });
+    expect(divida.consolidation?.rates).toEqual([
+      { base: 'EUR', quote: 'BRL', rate: '6.1234000000', quoted_on: '2026-06-30' },
+    ]);
+
+    responde(consultantFamily.cash_flow);
+    expect(await getCashFlow()).toMatchObject({ currency: 'BRL', converted: true });
+
+    responde(consultantFamily.expenses_by_category);
+    expect(await getExpensesByCategory()).toMatchObject({ currency: 'BRL', converted: true });
+  });
+
+  it('fincla-api#505 sem cotação: valores null, convertido, moeda do recibo', async () => {
+    const recibo = { target_currency: 'BRL', rates: [], unavailable: 'USD/BRL: sem cotação' };
+    responde({ total_debt: null, organizations_count: 2, as_of_date: '2026-06-30', consolidation: recibo });
+    expect(await getTotalCreditCardDebt()).toMatchObject({ total_debt: null, currency: 'BRL', converted: true });
+
+    responde({
+      monthly_data: [{ month: '2026-06', year: 2026, month_number: 6, total_income: null, total_expenses: null, balance: null }],
+      period_start: '2026-06-01', period_end: '2026-06-30', consolidation: recibo,
+    });
+    const fluxo = await getCashFlow();
+    expect(fluxo).toMatchObject({ currency: 'BRL', converted: true });
+    expect(fluxo.monthly_data[0].total_income).toBeNull();
+
+    responde({
+      categories: [{ name: 'Moradia', total: null, percentage: null }], total_expenses: null,
+      period_start: '2026-01-01', period_end: '2026-06-30', consolidation: recibo,
+    });
+    const gastos = await getExpensesByCategory();
+    expect(gastos).toMatchObject({ total_expenses: null, currency: 'BRL', converted: true });
+    expect(gastos.categories[0]).toMatchObject({ total: null, percentage: null });
+  });
+
+  it('API anterior à #505 (sem recibo): só rótulo, `converted: false`', async () => {
+    responde({ total_debt: money('7350.00', 'BRL'), organizations_count: 2, as_of_date: '2026-06-30' });
+    expect(await getTotalCreditCardDebt()).toMatchObject({ currency: 'BRL', converted: false, consolidation: null });
+  });
+
   it('/summary sem cotação: totais null, e a moeda vem do recibo da consolidação', async () => {
     responde({
       ...consultantFamily.consultant_summary,

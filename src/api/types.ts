@@ -2158,49 +2158,62 @@ export interface ActiveGoalsCountResponse {
   as_of_date: string;
 }
 
-export interface TotalCreditCardDebtResponse {
-  /** `null` quando o backend não soube somar (nunca vire zero). */
+/**
+ * Os três agregados da carteira que, até a fincla-api#505, só ROTULAVAM uma soma não
+ * convertida. Desde a #505 o backend converte para a moeda de leitura e manda o
+ * recibo `consolidation`; a fronteira expõe isso como `converted`.
+ */
+export interface PortfolioAggregateCurrency {
+  /**
+   * A moeda de leitura do consultor: o rótulo dos valores ou, se eles vieram `null`
+   * (faltou cotação), `consolidation.target_currency`.
+   */
+  currency: string | null;
+  /**
+   * `true` quando a resposta trouxe o recibo `consolidation` — o backend CONVERTEU,
+   * e `currency` vale para a carteira inteira. `false` numa API anterior à #505: a
+   * soma é só rotulada, e `trustedPortfolioLabel` decide se o rótulo vale.
+   */
+  converted: boolean;
+  /** O recibo da conversão (taxas e o que faltou), ou `null` numa API anterior à #505. */
+  consolidation: Consolidation | null;
+}
+
+export interface TotalCreditCardDebtResponse extends PortfolioAggregateCurrency {
+  /** `null` quando o backend não soube somar ou converter (nunca vire zero). */
   total_debt: number | null;
   organizations_count: number;
   as_of_date: string;
-  /**
-   * O RÓTULO que o backend pôs na soma — a moeda de leitura do consultor. A soma
-   * NÃO é convertida (fincla-api#170): só vale nessa moeda se todos os clientes
-   * estão nela. Ver `consultantCurrency.js`.
-   */
-  currency: string | null;
 }
 
 export interface MonthlyCashFlowItem {
   month: string;
   year: number;
   month_number: number;
-  total_income: number;
-  total_expenses: number;
-  balance: number;
+  /** `null` quando faltou cotação (fincla-api#505): todo mês da série some junto. */
+  total_income: number | null;
+  total_expenses: number | null;
+  balance: number | null;
 }
 
-export interface CashFlowResponse {
+export interface CashFlowResponse extends PortfolioAggregateCurrency {
   monthly_data: MonthlyCashFlowItem[];
   period_start: string;
   period_end: string;
-  /** Rótulo das somas mensais (não convertidas) — ver `TotalCreditCardDebtResponse.currency`. */
-  currency: string | null;
 }
 
 export interface CategoryExpenseItem {
   name: string;
-  total: number;
-  percentage: number;
+  /** `null` (junto com `percentage`) quando faltou cotação (fincla-api#505). */
+  total: number | null;
+  percentage: number | null;
 }
 
-export interface ExpensesByCategoryResponse {
+export interface ExpensesByCategoryResponse extends PortfolioAggregateCurrency {
   categories: CategoryExpenseItem[];
-  total_expenses: number;
+  total_expenses: number | null;
   period_start: string;
   period_end: string;
-  /** Rótulo das somas (não convertidas) — ver `TotalCreditCardDebtResponse.currency`. */
-  currency: string | null;
 }
 
 export interface MonthlyIncomeCommitmentItem {

@@ -95,8 +95,9 @@ export function ConsultantReportDoc({ data }) {
     risk = 0,
     totalClients = 0,
     cardDebt = null,
-    // As moedas CONFIÁVEIS das somas não convertidas (`trustedPortfolioLabel`):
-    // `null` = carteira mista → "—", nunca um símbolo sobre moedas misturadas.
+    // A moeda em que escrever cada agregado (`aggregateCurrency`): a de leitura quando
+    // o backend converteu (fincla-api#505); numa API anterior, só o rótulo confiável.
+    // `null` → "—", nunca um símbolo sobre moedas misturadas.
     cardDebtCurrency = null,
     cashFlow = [],
     cashFlowCurrency = null,

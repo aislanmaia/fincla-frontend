@@ -80,6 +80,16 @@ let clients;
 let readingCurrency;
 let atRisk;
 let copilotoBlocks;
+// fincla-api#505: `null` = API anterior (sem recibo, soma só rotulada); "converted" =
+// convertido com cotação; "unavailable" = convertido, mas faltou cotação.
+let aggregates;
+
+const receipt = () => (aggregates === "converted"
+  ? { consolidation: { target_currency: readingCurrency, rates: [{ base: "USD", quote: readingCurrency, rate: "5.2500000000", quoted_on: "2026-06-30" }], unavailable: null } }
+  : aggregates === "unavailable"
+    ? { consolidation: { target_currency: readingCurrency, rates: [], unavailable: `USD/${readingCurrency}: sem cotação` } }
+    : {});
+const aggregateAmount = (value) => (aggregates === "unavailable" ? null : money(value, readingCurrency));
 
 const server = setupServer(
   http.get("*/v1/consultant/clients", () =>
@@ -94,19 +104,19 @@ const server = setupServer(
     organizations_count: clients.length, period_start: "2026-01-01", period_end: "2026-06-30", formula_info: "",
   })),
   http.get("*/v1/consultant/total-credit-card-debt", () => HttpResponse.json({
-    total_debt: money("7350.00", readingCurrency), organizations_count: clients.length, as_of_date: "2026-06-30",
+    total_debt: aggregateAmount("7350.00"), organizations_count: clients.length, as_of_date: "2026-06-30", ...receipt(),
   })),
   http.get("*/v1/consultant/expenses-by-category", () => HttpResponse.json({
-    categories: [{ name: "Moradia", total: money("12000.00", readingCurrency), percentage: 100 }],
-    total_expenses: money("12000.00", readingCurrency), period_start: "2026-01-01", period_end: "2026-06-30",
+    categories: [{ name: "Moradia", total: aggregateAmount("12000.00"), percentage: aggregates === "unavailable" ? null : 100 }],
+    total_expenses: aggregateAmount("12000.00"), period_start: "2026-01-01", period_end: "2026-06-30", ...receipt(),
   })),
   http.get("*/v1/consultant/cash-flow", () => HttpResponse.json({
     monthly_data: [{
       month: "2026-06", year: 2026, month_number: 6,
-      total_income: money("7800.00", readingCurrency), total_expenses: money("7350.00", readingCurrency),
-      balance: money("450.00", readingCurrency),
+      total_income: aggregateAmount("7800.00"), total_expenses: aggregateAmount("7350.00"),
+      balance: aggregateAmount("450.00"),
     }],
-    period_start: "2026-06-01", period_end: "2026-06-30",
+    period_start: "2026-06-01", period_end: "2026-06-30", ...receipt(),
   })),
   http.get("*/v1/consultant/income-commitment", () => HttpResponse.json({ monthly_data: [], period_start: "2026-06-01", period_end: "2026-06-30" })),
   http.get("*/v1/consultant/goals-progress-by-type", () => HttpResponse.json({ by_type: [], organizations_count: 0, as_of_date: "2026-06-30" })),
@@ -195,6 +205,7 @@ beforeEach(() => {
   readingCurrency = "USD";
   atRisk = [];
   copilotoBlocks = [];
+  aggregates = null;
   routeParams = { id: "org-usd" };
   __resetStore();
 });
@@ -355,6 +366,39 @@ describe("Insights (#314)", () => {
   });
 });
 
+describe("Insights com agregados convertidos (fincla-api#505)", () => {
+  it("carteira mista convertida: dívida, gastos e fluxo saem na moeda de leitura", async () => {
+    clients = [BRL_CLIENT, USD_CLIENT];
+    readingCurrency = "BRL";
+    aggregates = "converted";
+    render(<ConsultantInsightsPage />);
+    await waitFor(() => expect(text()).toContain("R$ 7.350,00"));
+    await waitFor(() => expect(text()).toContain("R$ 12.000,00"));
+    expect(screen.getAllByTestId("y-tick")[0].textContent).toBe("R$ 2.000");
+    // O patrimônio continua sendo a quebra por moeda: ele não é um desses agregados.
+    expect(text()).toContain("R$ 82.500,00 + US$ 12.500,00");
+  });
+
+  it("clientes em dólar, leitura em real, convertido: sai em real (é a conversão, não um rótulo)", async () => {
+    readingCurrency = "BRL";
+    aggregates = "converted";
+    render(<ConsultantInsightsPage />);
+    await waitFor(() => expect(text()).toContain("R$ 7.350,00"));
+  });
+
+  it("sem cotação: os totais saem ausentes, nunca zero", async () => {
+    clients = [BRL_CLIENT, USD_CLIENT];
+    readingCurrency = "BRL";
+    aggregates = "unavailable";
+    render(<ConsultantInsightsPage />);
+    await waitFor(() => expect(text()).toContain("R$ 82.500,00 + US$ 12.500,00"));
+    await waitFor(() => expect(text()).toContain("Moradia"));
+    expect(text()).not.toMatch(/R\$ 0(,00)?\b/);
+    expect(text()).not.toContain("7.350");
+    expect(text()).not.toContain("12.000");
+  });
+});
+
 describe("Perfil do consultor (#314)", () => {
   it("patrimônio sob gestão na moeda dos clientes", async () => {
     render(<ConsultantProfilePage />);
@@ -364,6 +408,22 @@ describe("Perfil do consultor (#314)", () => {
 });
 
 describe("Copiloto (#314)", () => {
+  it("bloco de categorias que declara a moeda é escrito nela (fincla-api#505)", async () => {
+    const user = userEvent.setup();
+    // O cliente na carteira é em dólar, mas o bloco diz euro: vale o que o bloco diz,
+    // porque ele vem do resultado da tool que somou aqueles números.
+    copilotoBlocks = [{
+      type: "client_categories", organization_id: "org-usd", client_name: "Rui Teixeira", total: 1000,
+      currency: "EUR", period_start: "2026-01-01", period_end: "2026-06-30",
+      categories: [{ name: "Moradia", total: 600, pct: 60 }],
+    }];
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "onde gastam?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+    await waitFor(() => expect(text()).toContain("€ 1.000"));
+    expect(text()).not.toContain("US$ 1.000");
+  });
+
   it("distribuição de gastos de um cliente em dólar sai em dólar", async () => {
     const user = userEvent.setup();
     copilotoBlocks = [{
