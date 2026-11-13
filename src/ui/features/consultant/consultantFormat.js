@@ -2,7 +2,7 @@ import { T } from "../../tokens";
 import { fmtAbs } from "../../formatters";
 import { HEALTH_BAND_NONE, clientHealthBand } from "./consultantClientsView";
 import { formatMoney } from "../../money/formatMoney.js";
-import { currencyInfo } from "../../money/currencyRegistry.js";
+import { MOEDA_PADRAO, currencyInfo } from "../../money/currencyRegistry.js";
 
 export const DASH = "—";
 const LOADING = "…";
@@ -47,7 +47,9 @@ export function fmtMoney(value) {
   if (value === null || value === undefined || value === "") return "—";
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  return (n < 0 ? "−" : "") + fmtAbs(n);
+  // Real EXPLÍCITO, por ora: a moeda do cliente ainda se perde na fronteira da API do
+  // consultor — ver fincla-frontend#314. Não é o padrão silencioso de antes (#310).
+  return (n < 0 ? "−" : "") + fmtAbs(n, MOEDA_PADRAO);
 }
 
 /** Dinheiro pt-BR sem centavos (R$ 1.234), sinal só quando negativo. Espelha o

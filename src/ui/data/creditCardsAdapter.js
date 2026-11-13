@@ -799,6 +799,8 @@ export function mapCreditCardToModalPickerRow(card) {
     nome: desc || (last4 ? `${brand || "Cartão"} •• ${last4}` : brand || "Cartão"),
     dig: last4,
     disp,
+    // A moeda do cartão é a da conta que liquida a fatura (`null` = não se sabe).
+    moeda: card.currency ? String(card.currency).toUpperCase() : null,
     novo: false,
   };
 }

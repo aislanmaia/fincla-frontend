@@ -152,7 +152,8 @@ export function deriveImpactsFromResponse(response, items) {
     });
 }
 
-export function deriveRecsFromResponse(response, items) {
+/** `fmtCurrency`: formata na moeda base da organização (#310). */
+export function deriveRecsFromResponse(response, items, fmtCurrency) {
   const recs = [];
   const verdict = response.global_verdict;
 
@@ -175,10 +176,10 @@ export function deriveRecsFromResponse(response, items) {
   if (verdict !== "viable" && parcelados.length > 0) {
     const p = parcelados[0];
     if (p.parcelas < 18) {
-      const novaParcela = (Math.abs(p.total) / 18).toFixed(2);
+      const novaParcela = fmtCurrency(Math.abs(p.total) / 18);
       recs.push({
         emoji: "📦",
-        txt: `Parcelar **${p.nome}** em **18×** reduz o impacto mensal para R$ ${novaParcela}.`,
+        txt: `Parcelar **${p.nome}** em **18×** reduz o impacto mensal para ${novaParcela}.`,
       });
     }
   }

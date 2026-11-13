@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { fmtAbs, fmtK } from "../../formatters";
+import { baseMoneyFormatters } from "../../money/useBaseCurrencyMoney.js";
 import { M_MONO } from "../moodV4";
 import { toAmount, toFiniteNumber } from "../../../api/money";
 
@@ -22,7 +22,9 @@ import { toAmount, toFiniteNumber } from "../../../api/money";
  * DashboardPage, CartoesTabs): CartesianGrid tracejado só horizontal,
  * eixos sem linha, tooltip escuro próprio, ReferenceLine para a média.
  */
-export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData }) {
+/** `currency`: a moeda base da organização — o histórico é agregado nela (#310). */
+export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData, currency }) {
+  const { fmtAbs, fmtK } = baseMoneyFormatters(currency);
   const hasData = historyData.length > 0;
 
   if (!hasData) {
@@ -81,7 +83,7 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
               tickLine={false}
               tickFormatter={fmtK}
             />
-            <Tooltip content={<HistoryTooltip />} />
+            <Tooltip content={<HistoryTooltip currency={currency} />} />
             <ReferenceLine
               y={avgSpent}
               stroke={`${T.blue}66`}
@@ -145,7 +147,8 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
   );
 }
 
-function HistoryTooltip({ active, payload, label }) {
+function HistoryTooltip({ active, payload, label, currency }) {
+  const { fmtAbs } = baseMoneyFormatters(currency);
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   if (!d) return null;

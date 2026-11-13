@@ -18,7 +18,7 @@ import { useBudgetsData } from "../features/budgets/useBudgetsData.js";
 import { BudgetHistoryChart } from "../features/budgets/BudgetHistoryChart.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { formatMoney, formatMoneyAbs } from "../money/formatMoney.js";
-import { currencyInfo } from "../money/currencyRegistry.js";
+import { MOEDA_PADRAO, currencyInfo } from "../money/currencyRegistry.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
 import { moneyInputStatus } from "../money/moneyInput.js";
 
@@ -88,6 +88,11 @@ export function OrcamentosPage({
   const orgBase = useOrganizationBaseCurrency(organizationId, { enabled: shouldUseRealData });
   // Enquanto a base não chega, um limite novo seria lido em R$ por engano ("1,500" = 1,5).
   const baseLoading = shouldUseRealData && orgBase.status === "loading";
+  /** A moeda base escrita na tela (#310): a da organização; real só no modo demo. */
+  const baseCurrency = shouldUseRealData ? orgBase.currency : MOEDA_PADRAO;
+  /** O símbolo à esquerda do campo de limite — um limite em dólar não se digita ao lado de "R$". */
+  const limitPrefix = (moeda) => (moeda ? currencyInfo(moeda).symbol : "");
+  const limitPadding = (moeda) => (limitPrefix(moeda).length > 2 ? "12px 14px 12px 46px" : "12px 14px 12px 36px");
   const budgetsData = useBudgetsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -343,7 +348,7 @@ export function OrcamentosPage({
         </div>
         <CollapsibleSection open={histOpen}>
           <div style={{ padding:"18px 20px 20px", borderTop:`1px solid ${T.border}` }}>
-            <BudgetHistoryChart historyData={historyData} isMobile={isMobile} shouldUseRealData={shouldUseRealData} />
+            <BudgetHistoryChart historyData={historyData} isMobile={isMobile} shouldUseRealData={shouldUseRealData} currency={baseCurrency} />
           </div>
         </CollapsibleSection>
       </div>
@@ -565,10 +570,10 @@ export function OrcamentosPage({
                     Limite mensal — {selCat.nome}
                   </div>
                   <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
-                    <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
+                    <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>{limitPrefix(baseCurrency)}</span>
                     <input value={addLimStr} onChange={e => setAddLimStr(e.target.value)}
                       placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
-                      style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
+                      style={{ ...G, ...NUM, width:"100%", padding:limitPadding(baseCurrency), fontSize:15,
                         color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                       onKeyDown={e => { if (e.key==="Enter") void handleSave(); }}/>
                   </div>
@@ -653,7 +658,7 @@ export function OrcamentosPage({
                 <div style={{ minWidth:0 }}>
                   <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Categoria</div>
                   <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{editCat.nome}</div>
-                  <div style={{ ...G, fontSize:11, color:T.inkMid, marginTop:4 }}>{shouldUseRealData ? `Gasto até hoje ${fmtBRL(editCat.gasto)}` : "Ajuste o limite neste cenário demo."}</div>
+                  <div style={{ ...G, fontSize:11, color:T.inkMid, marginTop:4 }}>{shouldUseRealData ? `Gasto até hoje ${fmtBRL(editCat.gasto, editCat.moeda ?? baseCurrency)}` : "Ajuste o limite neste cenário demo."}</div>
                 </div>
               </div>
               <div style={{ marginBottom:20, flexShrink:0 }}>
@@ -661,10 +666,10 @@ export function OrcamentosPage({
                   Limite mensal
                 </div>
                 <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
-                  <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
+                  <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>{limitPrefix(editCat.moeda ?? baseCurrency)}</span>
                   <input value={editLimStr} onChange={e => setEditLimStr(e.target.value)}
                     placeholder="0,00" type="text" inputMode="decimal" autoFocus aria-label="Limite mensal"
-                    style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
+                    style={{ ...G, ...NUM, width:"100%", padding:limitPadding(editCat.moeda ?? baseCurrency), fontSize:15,
                       color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
                     onKeyDown={e => { if (e.key === "Enter") void handleEditSave(); }}/>
                 </div>

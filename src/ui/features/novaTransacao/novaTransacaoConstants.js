@@ -2,9 +2,9 @@
 
 /** Cartões "fallback" exibidos no picker quando ainda não há cards carregados da API. */
 export const MOCK_CARTOES_MODAL = [
-  { id: "nubank", banco: "NUBANK", nome: "Nu Roxinho", dig: "1177", disp: 2400, novo: false },
-  { id: "itau", banco: "ITAÚ", nome: "Personnalité", dig: "0034", disp: 8000, novo: false },
-  { id: "inter", banco: "INTER", nome: "Mastercard", dig: "5521", disp: 1200, novo: false },
+  { id: "nubank", banco: "NUBANK", nome: "Nu Roxinho", dig: "1177", disp: 2400, moeda: "BRL", novo: false },
+  { id: "itau", banco: "ITAÚ", nome: "Personnalité", dig: "0034", disp: 8000, moeda: "BRL", novo: false },
+  { id: "inter", banco: "INTER", nome: "Mastercard", dig: "5521", disp: 1200, moeda: "BRL", novo: false },
   { id: "novo", banco: "", nome: "+ Novo cartão", dig: "", disp: 0, novo: true },
 ];
 
