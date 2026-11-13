@@ -11,7 +11,8 @@ import { useCanUseCopilotoAi } from "../../features/consultant/consultantAiAcces
 import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
 import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
 import { PortfolioExpenseDistribution } from "../../features/consultant/PortfolioExpenseDistribution.jsx";
-import { fmtBRL0 } from "../../features/consultant/consultantFormat";
+import { fmtMoney0 } from "../../features/consultant/consultantFormat";
+import { portfolioCurrency } from "../../features/consultant/consultantCurrency.js";
 import "./consultant-copiloto.css";
 
 /**
@@ -253,7 +254,9 @@ function ClientRefChip({ block, onOpenClient }) {
   );
 }
 
-function ClientCategoriesCard({ block, onOpenClient }) {
+// `currency`: a moeda base do cliente do bloco — o bloco traz só números, e a tool
+// lê os gastos dele já convertidos para a base dele (#314).
+function ClientCategoriesCard({ block, onOpenClient, currency }) {
   const [expanded, setExpanded] = useState(false);
   const categories = [...(block.categories || [])].sort((a, b) => Number(b.total) - Number(a.total));
   const visible = expanded ? categories : categories.slice(0, 5);
@@ -272,7 +275,7 @@ function ClientCategoriesCard({ block, onOpenClient }) {
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ ...G, fontSize: 11, color: T.inkLight }}>Total no período</div>
-          <strong style={{ ...G, fontSize: 14, color: T.ink }}>{fmtBRL0(block.total)}</strong>
+          <strong style={{ ...G, fontSize: 14, color: T.ink }}>{fmtMoney0(block.total, currency)}</strong>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -280,7 +283,7 @@ function ClientCategoriesCard({ block, onOpenClient }) {
           <div key={category.name}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
               <span style={{ ...G, fontSize: 11.5, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{category.name}</span>
-              <span style={{ ...G, fontSize: 11, fontWeight: 650, color: T.ink, whiteSpace: "nowrap" }}>{fmtBRL0(category.total)} <span style={{ color: T.inkLight, fontWeight: 500 }}>· {Number(category.pct).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 650, color: T.ink, whiteSpace: "nowrap" }}>{fmtMoney0(category.total, currency)} <span style={{ color: T.inkLight, fontWeight: 500 }}>· {Number(category.pct).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></span>
             </div>
             <div style={{ height: 5, borderRadius: 99, background: T.bg, overflow: "hidden" }}>
               <div style={{ width: `${Math.max(0, Math.min(100, Number(category.pct) || 0))}%`, height: "100%", background: T.purple, borderRadius: 99 }} />
@@ -354,13 +357,17 @@ function AnswerRenderer({ output, onOpenClient, onEvaluate, onFollowUp, clients 
             <span style={{ ...G, fontSize: 11, color: T.inkLight }}>Valores e período dos dados consultados</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))", gap: 10 }}>
-            {clientCategories.map((block) => <ClientCategoriesCard key={block.organization_id} block={block} onOpenClient={onOpenClient} />)}
+            {clientCategories.map((block) => (
+              <ClientCategoriesCard key={block.organization_id} block={block} onOpenClient={onOpenClient}
+                currency={(clients || []).find((c) => c.organization_id === block.organization_id)?.currency ?? null} />
+            ))}
           </div>
         </div>
       )}
 
       {charts.map((block, i) => (
-        <AiChart key={`chart${i}`} spec={block.spec} />
+        // A spec não diz moeda: só a carteira inteira numa moeda dá uma (#314).
+        <AiChart key={`chart${i}`} spec={block.spec} currency={portfolioCurrency(clients)} />
       ))}
 
       {clientRefs.length > 0 && (
@@ -481,7 +488,7 @@ export function ConsultantCopilotoPage() {
   // saudando "Avaliar". O `organization_id` é sempre a fonte de verdade.
   const openClientEval = (organizationId, fallbackName) => {
     const clientName = clientById[organizationId]?.client_name || fallbackName || "Cliente";
-    evaluation.openFor({ organization_id: organizationId, client_name: clientName });
+    evaluation.openFor({ organization_id: organizationId, client_name: clientName, currency: clientById[organizationId]?.currency ?? null });
   };
 
   const empty = messages.length === 0;
@@ -647,6 +654,7 @@ export function ConsultantCopilotoPage() {
           open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
+          currency={evaluation.target.currency}
           onClose={evaluation.close}
         />
       )}

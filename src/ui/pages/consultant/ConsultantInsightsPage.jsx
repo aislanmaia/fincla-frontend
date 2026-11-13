@@ -6,6 +6,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Avatar, Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
+import { fmtTotals, trustedPortfolioLabel } from "../../features/consultant/consultantCurrency.js";
 import { countClientsByBand, totalPatrimonio } from "../../features/consultant/consultantClientsView";
 import {
   buildConsolidatedCsv,
@@ -171,6 +172,14 @@ export function ConsultantInsightsPage() {
   const clients = wallet.clients;
   const counts = countClientsByBand(clients);
   const patrimonio = totalPatrimonio(clients);
+  // Dívida de cartão, gastos por categoria e fluxo vêm SOMADOS sem conversão e
+  // rotulados com a moeda de leitura do consultor (fincla-api#170). O rótulo só vale
+  // quando a carteira inteira está nele; senão o valor sai "—" — uma soma de real com
+  // dólar escrita com um símbolo só é a unidade errada (#314).
+  const cardDebtCurrency = trustedPortfolioLabel(cardDebt.currency, clients, wallet.loadedOk);
+  const expensesCurrency = trustedPortfolioLabel(expenses.currency, clients, wallet.loadedOk);
+  const cashFlowCurrency = trustedPortfolioLabel(cashFlow.currency, clients, wallet.loadedOk);
+  const fmtExpense = React.useCallback((v) => fmtMoney(v, expensesCurrency), [expensesCurrency]);
   const { rows: expenseRows, max: expenseMax } = selectExpenseRows(expenses.categories);
   const { gainers, decliners } = selectMovers(clients);
   const cashFlowSeries = selectCashFlowSeries(cashFlow.monthly);
@@ -199,12 +208,16 @@ export function ConsultantInsightsPage() {
   reportRef.current = {
     consultantName: getDisplayName(pages?.user) || "",
     patrimonio,
+    readingCurrency: healthIndex?.currency ?? null,
     health: healthIndex?.index ?? null,
     risk: counts.risk,
     totalClients: counts.all,
     cardDebt: cardDebt.totalDebt,
+    cardDebtCurrency,
     cashFlow: cashFlowSeries,
+    cashFlowCurrency,
     expenses: expenseRows,
+    expensesCurrency,
     goals: goalsRows,
     commitment: commitmentSeries,
   };
@@ -249,20 +262,20 @@ export function ConsultantInsightsPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-        <KpiCard label="Patrimônio total" value={fmtMoney(patrimonio)} sub="sob acompanhamento" />
+        <KpiCard label="Patrimônio total" value={fmtTotals(patrimonio, fmtMoney, wallet.loadedOk ? healthIndex?.currency ?? null : null)} sub="sob acompanhamento" />
         <KpiCard label="Saúde média" value={healthIndex?.index != null ? `${Math.round(healthIndex.index)}/100` : "—"} sub="da base" color={T.green} />
         <KpiCard label="Clientes em risco" value={counts.risk} sub={`de ${counts.all} na carteira`} color={T.red} />
-        <KpiCard label="Dívida de cartão" value={cardDebt.totalDebt != null ? fmtMoney(cardDebt.totalDebt) : "—"} sub="faturas em aberto" color={T.red} />
+        <KpiCard label="Dívida de cartão" value={fmtMoney(cardDebt.totalDebt, cardDebtCurrency)} sub="faturas em aberto" color={T.red} />
       </div>
 
-      <CashFlowChart data={cashFlowSeries} loading={cashFlow.loading && !cashFlow.hasLoaded} />
+      <CashFlowChart data={cashFlowSeries} loading={cashFlow.loading && !cashFlow.hasLoaded} currency={cashFlowCurrency} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
         <Card style={{ padding: 18 }}>
           <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink, marginBottom: 4 }}>Onde a base gasta</div>
           <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 16 }}>Categorias somadas de todos os clientes</div>
           {expenseRows.length ? (
-            <HBars rows={expenseRows} max={expenseMax} fmt={fmtMoney} />
+            <HBars rows={expenseRows} max={expenseMax} fmt={fmtExpense} />
           ) : (
             <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "12px 0" }}>
               {expenses.loading && !expenses.hasLoaded ? "Carregando gastos…" : "Sem gastos agregados no período."}

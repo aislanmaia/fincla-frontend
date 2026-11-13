@@ -2,7 +2,7 @@ import { T } from "../../tokens";
 import { fmtAbs } from "../../formatters";
 import { HEALTH_BAND_NONE, clientHealthBand } from "./consultantClientsView";
 import { formatMoney } from "../../money/formatMoney.js";
-import { MOEDA_PADRAO, currencyInfo } from "../../money/currencyRegistry.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 
 export const DASH = "—";
 const LOADING = "…";
@@ -35,6 +35,32 @@ export function healthTone(health) {
   return { color: T.red, bg: T.redLight, label: "Frágil" };
 }
 
+/**
+ * `true` quando a chamada ESQUECEU a moeda — não confundir com `null` explícito,
+ * que é "não sabemos a moeda" e vira travessão.
+ *
+ * Mesmo contrato de `formatters.js` (#310): estes formatadores tinham "BRL" como
+ * padrão, e foi por ele que um cliente em dólar aparecia em real na área do
+ * consultor (#314). No teste a omissão LANÇA, para a suíte pegar; fora dele, loga
+ * e escreve travessão — nunca "R$".
+ */
+function moedaEsquecida(nome, args) {
+  const moeda = args[1];
+  const esquecida = args.length < 2 || (moeda != null && typeof moeda !== "string");
+  if (!esquecida) return false;
+  const msg = `${nome}: moeda ausente — passe a moeda dos valores (ver #314)`;
+  if (import.meta.env?.MODE === "test") throw new Error(msg);
+  console.error(msg);
+  return true;
+}
+
+/** O número de `value`, ou `null` quando não há valor (ausência nunca vira zero). */
+function numeroOuNulo(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Dinheiro (patrimônio/saldo cru) com sinal só quando negativo. `fmtSgn` força "+".
  *
  * Ausência vira "—", nunca "R$ 0". O backend devolve `patrimonio: null` quando o
@@ -42,20 +68,25 @@ export function healthTone(health) {
  * se recusa a mostrar total parcial justamente para o consultor não decidir sobre
  * um número incompleto. Coagir para zero aqui desfaria a garantia no último metro,
  * e "R$ 0" é pior que "—": afirma que o cliente não tem patrimônio.
+ *
+ * A moeda é OBRIGATÓRIA: a do cliente (`client.currency`) para um valor dele, a
+ * de leitura para um agregado da carteira (#314). `null` = não sabemos → "—".
  */
-export function fmtMoney(value) {
-  if (value === null || value === undefined || value === "") return "—";
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
-  // Real EXPLÍCITO, por ora: a moeda do cliente ainda se perde na fronteira da API do
-  // consultor — ver fincla-frontend#314. Não é o padrão silencioso de antes (#310).
-  return (n < 0 ? "−" : "") + fmtAbs(n, MOEDA_PADRAO);
+export function fmtMoney(value, currency) {
+  if (moedaEsquecida("fmtMoney", arguments)) return DASH;
+  const n = numeroOuNulo(value);
+  if (n === null || !currency) return DASH;
+  return (n < 0 ? "−" : "") + fmtAbs(n, currency);
 }
 
 /** Dinheiro pt-BR sem centavos (R$ 1.234), sinal só quando negativo. Espelha o
- * `fmtBRL0` da referência de design do consultor. */
-export function fmtBRL0(value, currency = "BRL") {
-  const n = Math.round(Number(value) || 0);
+ * `fmtBRL0` da referência de design do consultor — o nome mudou porque a moeda
+ * deixou de ser sempre real (#314). Ausência de valor ou de moeda vira "—". */
+export function fmtMoney0(value, currency) {
+  if (moedaEsquecida("fmtMoney0", arguments)) return DASH;
+  const bruto = numeroOuNulo(value);
+  if (bruto === null || !currency) return DASH;
+  const n = Math.round(bruto);
   const { symbol } = currencyInfo(currency);
   return (n < 0 ? "−" : "") + symbol + " " + Math.abs(n).toLocaleString("pt-BR");
 }
@@ -63,26 +94,21 @@ export function fmtBRL0(value, currency = "BRL") {
 /**
  * Dinheiro NA MOEDA que veio com ele, ou "—" quando não veio valor.
  *
- * `fmtMoney`/`fmtBRL0` carimbam "R$" no que recebem, e para os agregados da
- * carteira isso está certo: o backend já os consolida na base do cliente e a
- * tela do consultor é pt-BR. A renda estimada do perfil é outra coisa — ela sai
- * do backend rotulada com a base da organização DO CLIENTE, e o consultor que
- * assessora alguém em euro precisa ler "€ 8.000,00". Formatar isso como
- * "R$ 8.000,00" é número certo com unidade errada, que engana mais do que não
- * mostrar nada.
+ * A renda estimada do perfil e os valores do relatório de gastos da carteira saem
+ * do backend rotulados `{amount, currency}`; esta é a forma de desenhá-los com o
+ * rótulo que trouxeram, no espaçamento do `Intl` (U+00A0).
  *
  * Ausência vira "—", nunca "R$ 0,00": o backend devolve `null` tanto quando não
  * há renda cadastrada quanto quando não deu para ler a moeda base do cliente
  * (aí ele omite o valor em vez de inventar a unidade). Zero afirmaria que a
- * pessoa não ganha nada.
- *
- * Sem moeda MAS com valor, cai em "BRL" — mesmo último recurso de
- * `normalizeAccountBalance`: é o que cobre um backend ainda na forma antiga
- * (string nua, quando "R$" era a unidade implícita de toda a UI). Não é padrão
- * para valor rotulado, porque para esse a moeda sempre vem junto.
+ * pessoa não ganha nada. Sem moeda, também "—" — o último recurso "BRL" que havia
+ * aqui era o mesmo chute de moeda que a #314 removeu: quem chama passa a moeda do
+ * cliente quando o rótulo não veio.
  */
 export function fmtMoneyIn(value, currency) {
-  return formatMoney(value, currency || "BRL") ?? DASH;
+  if (moedaEsquecida("fmtMoneyIn", arguments)) return DASH;
+  if (!currency) return DASH;
+  return formatMoney(value, currency) ?? DASH;
 }
 
 /** Percentual com 1 casa, robusto a valor ausente/não-finito. */

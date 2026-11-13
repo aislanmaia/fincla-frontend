@@ -1,7 +1,8 @@
 import React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtMoney0 } from "./consultantFormat";
+import { fmtTotals } from "./consultantCurrency.js";
 
 /**
  * Documento PDF do consolidado da carteira (relatório apresentável ao cliente).
@@ -87,18 +88,28 @@ export function ConsultantReportDoc({ data }) {
     // `null` quando não deu para consolidar (fincla-api#144). Um default de 0 num
     // PDF é pior que na tela: o relatório é levado para a reunião e não tem como
     // ser conferido depois.
+    // Por moeda (`totalPatrimonio`); carteira mista sai como a quebra (#314).
     patrimonio = null,
+    readingCurrency = null,
     health = null,
     risk = 0,
     totalClients = 0,
     cardDebt = null,
+    // As moedas CONFIÁVEIS das somas não convertidas (`trustedPortfolioLabel`):
+    // `null` = carteira mista → "—", nunca um símbolo sobre moedas misturadas.
+    cardDebtCurrency = null,
     cashFlow = [],
+    cashFlowCurrency = null,
     expenses = [],
+    expensesCurrency = null,
     goals = [],
     commitment = [],
   } = data || {};
 
   const lastCommitment = commitment.length ? commitment[commitment.length - 1] : null;
+  // `/reports/consolidated` CONVERTE para a moeda de leitura e diz qual é; um total
+  // sem cotação vem `null` e sai "—", não "R$ 0" (#314).
+  const summaryCurrency = summary?.currency ?? null;
 
   return (
     <Document title="Fincla — Consolidado da carteira" author="Fincla">
@@ -113,17 +124,17 @@ export function ConsultantReportDoc({ data }) {
         <View style={st.headerRule} />
 
         <View style={st.kpiRow}>
-          <Kpi label="Patrimônio" value={patrimonio == null ? "—" : fmtBRL0(patrimonio)} />
+          <Kpi label="Patrimônio" value={fmtTotals(patrimonio, fmtMoney0, readingCurrency)} />
           <Kpi label="Saúde média" value={health != null ? `${Math.round(health)}/100` : "—"} color={C.green} />
           <Kpi label="Clientes em risco" value={`${risk} de ${totalClients}`} color={C.red} />
-          <Kpi label="Dívida de cartão" value={cardDebt != null ? fmtBRL0(cardDebt) : "—"} color={C.red} />
+          <Kpi label="Dívida de cartão" value={fmtMoney0(cardDebt, cardDebtCurrency)} color={C.red} />
         </View>
 
         <Section title="Consolidado do período">
           <Row header widths={["70%", "30%"]} cells={[cell("Métrica"), cell("Valor")]} />
-          <Row widths={["70%", "30%"]} cells={[cell("Receita total"), cell(fmtBRL0(summary.total_income || 0), C.green)]} />
-          <Row widths={["70%", "30%"]} cells={[cell("Despesa total"), cell(fmtBRL0(summary.total_expenses || 0), C.red)]} />
-          <Row widths={["70%", "30%"]} cells={[cell("Saldo"), cell(fmtBRL0(summary.balance || 0))]} />
+          <Row widths={["70%", "30%"]} cells={[cell("Receita total"), cell(fmtMoney0(summary.total_income, summaryCurrency), C.green)]} />
+          <Row widths={["70%", "30%"]} cells={[cell("Despesa total"), cell(fmtMoney0(summary.total_expenses, summaryCurrency), C.red)]} />
+          <Row widths={["70%", "30%"]} cells={[cell("Saldo"), cell(fmtMoney0(summary.balance, summaryCurrency))]} />
           <Row widths={["70%", "30%"]} cells={[cell("Transações"), cell(String(summary.total_transactions ?? 0))]} />
           <Row widths={["70%", "30%"]} cells={[cell("Organizações (clientes)"), cell(String(summary.organizations_count ?? 0))]} />
         </Section>
@@ -134,9 +145,9 @@ export function ConsultantReportDoc({ data }) {
             cashFlow.map((m, i) => (
               <Row key={i} widths={["28%", "24%", "24%", "24%"]} cells={[
                 cell(m.month),
-                cell(fmtBRL0(m.income), C.green),
-                cell(fmtBRL0(m.expenses), C.red),
-                cell(fmtBRL0(m.balance)),
+                cell(fmtMoney0(m.income, cashFlowCurrency), C.green),
+                cell(fmtMoney0(m.expenses, cashFlowCurrency), C.red),
+                cell(fmtMoney0(m.balance, cashFlowCurrency)),
               ]} />
             ))
           ) : (
@@ -147,7 +158,7 @@ export function ConsultantReportDoc({ data }) {
         <Section title="Onde a base gasta">
           {expenses.length ? (
             expenses.map((e, i) => (
-              <Row key={i} widths={["70%", "30%"]} cells={[cell(e.label), cell(fmtBRL0(e.value))]} />
+              <Row key={i} widths={["70%", "30%"]} cells={[cell(e.label), cell(fmtMoney0(e.value, expensesCurrency))]} />
             ))
           ) : (
             <Text style={st.empty}>Sem gastos agregados no período.</Text>

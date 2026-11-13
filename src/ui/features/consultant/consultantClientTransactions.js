@@ -27,6 +27,26 @@ export function summarizeTransactions(txs) {
   return { income, expense, result: income - expense };
 }
 
+/**
+ * O mesmo resumo, POR MOEDA: `[{ currency, income, expense, result }]` em ordem de
+ * código. Cada linha está na moeda da conta em que caiu (`t.currency`; `null` = a
+ * base do cliente, `baseCurrency`). Somar uma receita em dólar com outra em real
+ * sob o símbolo do cliente era escrever a unidade errada (#314) — com uma moeda só
+ * o resultado é uma entrada, igual ao `summarizeTransactions`.
+ */
+export function summarizeTransactionsByCurrency(txs, baseCurrency) {
+  const list = Array.isArray(txs) ? txs : [];
+  const grupos = new Map();
+  for (const t of list) {
+    const moeda = t.currency ?? baseCurrency ?? null;
+    if (!grupos.has(moeda)) grupos.set(moeda, []);
+    grupos.get(moeda).push(t);
+  }
+  return [...grupos.keys()]
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((currency) => ({ currency, ...summarizeTransactions(grupos.get(currency)) }));
+}
+
 /** Normaliza para busca: minúsculas e sem acentos. */
 function normalize(text) {
   return String(text ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");

@@ -17,7 +17,8 @@ export function useEvaluationDrawer() {
 
   const openFor = useCallback((client) => {
     if (!client?.organization_id) return;
-    setTarget({ organizationId: client.organization_id, clientName: client.client_name });
+    // A moeda base do cliente vai junto: os gráficos da avaliação são dele (#314).
+    setTarget({ organizationId: client.organization_id, clientName: client.client_name, currency: client.currency ?? null });
   }, []);
 
   const close = useCallback(() => setTarget(null), []);

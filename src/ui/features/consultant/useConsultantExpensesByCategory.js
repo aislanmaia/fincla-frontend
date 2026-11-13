@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { getExpensesByCategory } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
-const EMPTY = { loading: false, error: "", categories: [], total: 0, hasLoaded: false };
+// `currency`: o RÓTULO das somas — não convertidas (fincla-api#170); ver
+// `trustedPortfolioLabel` antes de escrevê-lo (#314).
+const EMPTY = { loading: false, error: "", categories: [], total: 0, currency: null, hasLoaded: false };
 
 /**
  * Carrega `GET /v1/consultant/expenses-by-category` (gasto agregado por categoria
@@ -23,7 +25,7 @@ export function useConsultantExpensesByCategory({ enabled = true } = {}) {
     getExpensesByCategory()
       .then((data) => {
         if (cancelled) return;
-        setState({ loading: false, error: "", categories: data.categories ?? [], total: Number(data.total_expenses) || 0, hasLoaded: true });
+        setState({ loading: false, error: "", categories: data.categories ?? [], total: Number(data.total_expenses) || 0, currency: data.currency ?? null, hasLoaded: true });
       })
       .catch((err) => {
         if (!cancelled) setState({ ...EMPTY, error: handleApiError(err), hasLoaded: true });

@@ -3,13 +3,15 @@ import { useEffect, useState } from "react";
 import { getTotalCreditCardDebt } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
-const EMPTY = { loading: false, error: "", totalDebt: null, hasLoaded: false };
+const EMPTY = { loading: false, error: "", totalDebt: null, currency: null, hasLoaded: false };
 
 /**
  * Carrega `GET /v1/consultant/total-credit-card-debt` (dívida de cartão em aberto
  * somada de toda a carteira) para o KPI "Dívida de cartão" do Insights. Mesmo
  * padrão dos hooks do consultor. `totalDebt` fica `null` até carregar (distingue
- * "buscando" de "R$ 0 real").
+ * "buscando" de "R$ 0 real") — e continua `null` quando o backend não soube somar:
+ * ausência nunca vira zero. `currency` é o RÓTULO da soma, que não é convertida
+ * (fincla-api#170): só vale quando a carteira inteira está nela (`trustedPortfolioLabel`, #314).
  */
 export function useConsultantTotalCardDebt({ enabled = true } = {}) {
   const [state, setState] = useState(EMPTY);
@@ -24,7 +26,13 @@ export function useConsultantTotalCardDebt({ enabled = true } = {}) {
     getTotalCreditCardDebt()
       .then((data) => {
         if (cancelled) return;
-        setState({ loading: false, error: "", totalDebt: Number(data.total_debt) || 0, hasLoaded: true });
+        setState({
+          loading: false,
+          error: "",
+          totalDebt: data.total_debt == null || !Number.isFinite(Number(data.total_debt)) ? null : Number(data.total_debt),
+          currency: data.currency ?? null,
+          hasLoaded: true,
+        });
       })
       .catch((err) => {
         if (!cancelled) setState({ ...EMPTY, error: handleApiError(err), hasLoaded: true });

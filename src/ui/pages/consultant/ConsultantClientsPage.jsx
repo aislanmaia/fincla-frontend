@@ -19,6 +19,7 @@ import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDraw
 import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
+import { fmtTotals } from "../../features/consultant/consultantCurrency.js";
 import { buildClientsCsv, countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
 
 function EmptyState({ title, text }) {
@@ -169,7 +170,7 @@ export function ConsultantClientsPage() {
         <div>
           <Kicker>
             {loadedOk
-              ? `${limit != null ? `${total} de ${limit}` : total} ${total === 1 && limit == null ? "cliente" : "clientes"} · ${fmtMoney(patrimonio)} sob acompanhamento`
+              ? `${limit != null ? `${total} de ${limit}` : total} ${total === 1 && limit == null ? "cliente" : "clientes"} · ${fmtTotals(patrimonio, fmtMoney)} sob acompanhamento`
               : "Sua carteira de clientes"}
           </Kicker>
           <PageTitle sans="Carteira" serif="de clientes" />
@@ -246,6 +247,7 @@ export function ConsultantClientsPage() {
           open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
+          currency={evaluation.target.currency}
           onClose={closeEvaluation}
         />
       )}

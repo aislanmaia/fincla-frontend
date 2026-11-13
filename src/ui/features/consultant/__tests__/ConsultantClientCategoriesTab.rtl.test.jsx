@@ -16,7 +16,7 @@ afterEach(() => cleanup());
 
 describe("ConsultantClientCategoriesTab", () => {
   it("lista as categorias ordenadas com % do total, valor e nº de transações", () => {
-    render(<ConsultantClientCategoriesTab categories={state()} />);
+    render(<ConsultantClientCategoriesTab categories={state()} currency="BRL" />);
     expect(screen.getByText("Gasto por categoria · no período")).toBeInTheDocument();
     expect(screen.getByText("2 categorias ativas")).toBeInTheDocument();
     expect(screen.getByText("Alimentação")).toBeInTheDocument();

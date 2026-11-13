@@ -5,6 +5,7 @@ import {
   aggregateValue,
   fmtLastActive,
   fmtMoney,
+  fmtMoney0,
   fmtMoneyIn,
   fmtPct,
   healthTone,
@@ -43,20 +44,56 @@ describe("fmtPct — robusto a valor ausente/não-finito", () => {
 
 describe("fmtMoney — sinal só quando negativo", () => {
   it("aceita string decimal e número", () => {
-    expect(fmtMoney("18280.00")).toBe("R$ 18.280,00");
-    expect(fmtMoney("-3340.00")).toBe("−R$ 3.340,00");
-    expect(fmtMoney(0)).toBe("R$ 0,00");
+    expect(fmtMoney("18280.00", "BRL")).toBe("R$ 18.280,00");
+    expect(fmtMoney("-3340.00", "BRL")).toBe("−R$ 3.340,00");
+    expect(fmtMoney(0, "BRL")).toBe("R$ 0,00");
+  });
+
+  it("escreve na moeda que recebe — um cliente em dólar não vira real (#314)", () => {
+    expect(fmtMoney("12500.00", "USD")).toBe("US$ 12.500,00");
+    expect(fmtMoney("-1450.00", "EUR")).toBe("−€ 1.450,00");
+  });
+
+  it("moeda desconhecida (null) vira '—', nunca 'R$'", () => {
+    expect(fmtMoney("12500.00", null)).toBe("—");
+  });
+
+  it("moeda ESQUECIDA é defeito de quem chama: no teste, lança", () => {
+    expect(() => fmtMoney("12500.00")).toThrow(/moeda ausente/);
   });
   it("valor ausente vira '—', não R$ 0,00", () => {
     // Este caso afirmava o contrário até o backend passar a devolver
     // `patrimonio: null` quando não dá para consolidar (fincla-api#144). "R$ 0,00"
     // afirma que o cliente não tem patrimônio; "—" diz que nós é que não sabemos.
-    expect(fmtMoney(null)).toBe("—");
+    expect(fmtMoney(null, "BRL")).toBe("—");
   });
 
   it("mas zero de verdade continua R$ 0,00", () => {
     // Distinguir "não sei" de "é zero" é o ponto inteiro da mudança.
-    expect(fmtMoney(0)).toBe("R$ 0,00");
+    expect(fmtMoney(0, "BRL")).toBe("R$ 0,00");
+  });
+});
+
+describe("fmtMoney0 — sem centavos, na moeda recebida (#314)", () => {
+  it("real sai byte a byte como o antigo fmtBRL0", () => {
+    expect(fmtMoney0(1234.4, "BRL")).toBe("R$ 1.234");
+    expect(fmtMoney0(-1234.6, "BRL")).toBe("−R$ 1.235");
+    expect(fmtMoney0(0, "BRL")).toBe("R$ 0");
+  });
+
+  it("dólar sai em dólar", () => {
+    expect(fmtMoney0(7000, "USD")).toBe("US$ 7.000");
+  });
+
+  it("ausência de valor ou de moeda vira '—', nunca 'R$ 0'", () => {
+    expect(fmtMoney0(null, "BRL")).toBe("—");
+    expect(fmtMoney0(undefined, "BRL")).toBe("—");
+    expect(fmtMoney0("abc", "BRL")).toBe("—");
+    expect(fmtMoney0(1000, null)).toBe("—");
+  });
+
+  it("moeda esquecida lança no teste", () => {
+    expect(() => fmtMoney0(1000)).toThrow(/moeda ausente/);
   });
 });
 
@@ -95,10 +132,11 @@ describe("fmtMoneyIn — a moeda do valor, não a da tela", () => {
     expect(semEspacos(fmtMoneyIn(0, "BRL"))).toBe("R$ 0,00");
   });
 
-  it("sem moeda cai em BRL — cobre o backend na forma antiga", () => {
-    // Mesmo último recurso de `normalizeAccountBalance`: string nua era a forma
-    // pré-#178, em que "R$" era a unidade implícita de toda a UI.
-    expect(semEspacos(fmtMoneyIn(8000, null))).toBe("R$ 8.000,00");
+  it("sem moeda é travessão, não real (#314)", () => {
+    // O último recurso "BRL" que havia aqui era um chute de moeda: quem chama passa
+    // a moeda do cliente quando o rótulo não veio.
+    expect(fmtMoneyIn(8000, null)).toBe(DASH);
+    expect(() => fmtMoneyIn(8000)).toThrow(/moeda ausente/);
   });
 });
 

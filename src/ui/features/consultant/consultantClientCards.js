@@ -16,8 +16,14 @@ export function installmentsLabel(parcela) {
   return ` · ${parcela.n}/${parcela.t}x`;
 }
 
-/** Projeta um cartão do adapter para a view da aba (visual + limite + itens). */
-export function toCardView(card) {
+/**
+ * Projeta um cartão do adapter para a view da aba (visual + limite + itens).
+ *
+ * `currency`: a moeda do cartão (`moeda`, a da conta que liquida a fatura) — é nela
+ * que limite, fatura e itens se escrevem. Sem ela, `fallbackCurrency` (a base do
+ * cliente); sem nenhuma, `null` e a tela escreve "—" (#314).
+ */
+export function toCardView(card, fallbackCurrency = null) {
   const limit = Number(card.limite) || 0;
   const available = Number(card.disponivel) || 0;
   const used = Math.max(0, limit - available);
@@ -30,6 +36,7 @@ export function toCardView(card) {
     dueDay: card.vencimento,
     closingDay: card.fechamento,
     gradient: [card.cor1, card.cor2],
+    currency: card.moeda ?? fallbackCurrency ?? null,
     invoiceTotal: Number(invoice?.total_amount) || 0,
     usagePct: safePctOrFallback(used, limit),
     available,
@@ -48,6 +55,6 @@ export function toCardView(card) {
 }
 
 /** Mapeia a lista de cartões do adapter para as views da aba. */
-export function selectClientCards(cards) {
-  return (Array.isArray(cards) ? cards : []).map(toCardView);
+export function selectClientCards(cards, fallbackCurrency = null) {
+  return (Array.isArray(cards) ? cards : []).map((card) => toCardView(card, fallbackCurrency));
 }

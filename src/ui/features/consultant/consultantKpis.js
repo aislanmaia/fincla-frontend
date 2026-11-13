@@ -1,5 +1,6 @@
 import { T } from "../../tokens";
-import { aggregateValue, fmtBRL0 } from "./consultantFormat";
+import { aggregateValue, fmtMoney0 } from "./consultantFormat";
+import { fmtTotals } from "./consultantCurrency.js";
 
 /**
  * Modelo puro dos KPIs do Painel da base do consultor — 4 cards reais, na ordem
@@ -7,7 +8,9 @@ import { aggregateValue, fmtBRL0 } from "./consultantFormat";
  *   - `/consultant/financial-health-index` → `organizations_count` (clientes) e
  *     `index` (saúde média);
  *   - `/consultant/clients` → soma de `patrimonio` (patrimônio líquido agregado
- *     da base), computada na página via `totalPatrimonio` e passada aqui;
+ *     da base) POR MOEDA, computada na página via `totalPatrimonio` e passada
+ *     aqui — carteira mista sai como a quebra, nunca como uma soma sob um símbolo
+ *     só (#314). Carteira vazia: zero na moeda de leitura do `healthIndex`;
  *   - `/consultant/clients-at-risk` → `total` de clientes que precisam de atenção.
  *
  * Cada valor tem seu par `*Loaded` para distinguir "ainda buscando" ("…") de
@@ -16,7 +19,7 @@ import { aggregateValue, fmtBRL0 } from "./consultantFormat";
  *
  * @param {{
  *   healthIndex?: object|null, hasLoaded?: boolean,
- *   patrimonio?: number|null, patrimonioLoaded?: boolean,
+ *   patrimonio?: Array<{currency:string,amount:number}>|null, patrimonioLoaded?: boolean,
  *   attention?: number|null, attentionLoaded?: boolean,
  * }} input
  * @returns {Array<{ id, label, value, sub, accent, soon }>}
@@ -44,7 +47,7 @@ export function buildConsultantKpis({
     {
       id: "patrimonio",
       label: "Patrimônio acompanhado",
-      value: aggregateValue(patrimonio, patrimonioLoaded, fmtBRL0),
+      value: aggregateValue(patrimonio, patrimonioLoaded, (totals) => fmtTotals(totals, fmtMoney0, healthIndex?.currency ?? null)),
       sub: "sob gestão",
       accent: T.purple,
       soon: false,

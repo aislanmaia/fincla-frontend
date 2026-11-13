@@ -3,7 +3,7 @@ import React from "react";
 import { Card, ProgBar } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtMoney0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
 import { selectClientCards } from "./consultantClientCards";
 
@@ -34,7 +34,7 @@ function CreditCardVisual({ card }) {
       </div>
       <div>
         <div style={{ ...G, fontSize: 11, opacity: 0.85, marginBottom: 2 }}>Fatura atual</div>
-        <div style={{ ...G, ...NUM, fontSize: 21, fontWeight: 800 }}>{fmtBRL0(card.invoiceTotal)}</div>
+        <div style={{ ...G, ...NUM, fontSize: 21, fontWeight: 800 }}>{fmtMoney0(card.invoiceTotal, card.currency)}</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, gap: 8 }}>
           <span style={{ ...G, fontSize: 11, opacity: 0.85 }}>{card.brand}</span>
           <span style={{ ...G, fontSize: 11, opacity: 0.85 }}>vence dia {card.dueDay}</span>
@@ -56,8 +56,8 @@ function LimitCard({ card }) {
       </div>
       <ProgBar pct={card.usagePct} color={barColor} h={7} />
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
-        <div><div style={LIMIT_LABEL}>Disponível</div><div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.green }}>{fmtBRL0(card.available)}</div></div>
-        <div style={{ textAlign: "right" }}><div style={LIMIT_LABEL}>Limite</div><div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.ink }}>{fmtBRL0(card.limit)}</div></div>
+        <div><div style={LIMIT_LABEL}>Disponível</div><div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.green }}>{fmtMoney0(card.available, card.currency)}</div></div>
+        <div style={{ textAlign: "right" }}><div style={LIMIT_LABEL}>Limite</div><div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.ink }}>{fmtMoney0(card.limit, card.currency)}</div></div>
       </div>
     </Card>
   );
@@ -70,7 +70,7 @@ function iconTint(color) {
 }
 
 // ── Linha de item da fatura ─────────────────────────────────────
-function InvoiceItemRow({ item }) {
+function InvoiceItemRow({ item, currency }) {
   const color = item.color || T.inkMid;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 17px", borderBottom: `1px solid ${T.border}` }}>
@@ -79,7 +79,7 @@ function InvoiceItemRow({ item }) {
         <div style={{ ...G, fontSize: 12.5, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.desc}</div>
         <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.dateLabel}{item.installments}</div>
       </div>
-      <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: "nowrap" }}>{fmtBRL0(item.value)}</span>
+      <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: "nowrap" }}>{fmtMoney0(item.value, currency)}</span>
     </div>
   );
 }
@@ -99,9 +99,10 @@ function CenteredCard({ children }) {
  * é stub "em breve" (escrita cross-org = Trilha B). Recebe o estado do hook
  * `useClientCreditCards` via prop. Responsivo: colapsa o grid no mobile.
  */
-export function ConsultantClientCardsTab({ cards: state, clientName }) {
+export function ConsultantClientCardsTab({ cards: state, clientName, currency }) {
   const narrow = useIsNarrow(760);
-  const cards = selectClientCards(state.cards || []);
+  // Cada cartão na moeda da conta que liquida a fatura; sem ela, a base do cliente (#314).
+  const cards = selectClientCards(state.cards || [], currency ?? null);
 
   if (state.loading && !state.hasLoaded) return <CenteredCard>Carregando cartões…</CenteredCard>;
   if (state.error && cards.length === 0) return <CenteredCard>Não foi possível carregar os cartões.</CenteredCard>;
@@ -139,7 +140,7 @@ export function ConsultantClientCardsTab({ cards: state, clientName }) {
               <span style={{ ...G, fontSize: 11, color: T.inkLight, whiteSpace: "nowrap", flexShrink: 0 }}>fecha dia {card.closingDay}</span>
             </div>
             {card.items.length
-              ? card.items.map((item) => <InvoiceItemRow key={item.id} item={item} />)
+              ? card.items.map((item) => <InvoiceItemRow key={item.id} item={item} currency={card.currency} />)
               : <div style={{ ...G, padding: 28, textAlign: "center", color: T.inkLight, fontSize: 12.5 }}>Sem itens na fatura atual.</div>}
           </Card>
         </div>

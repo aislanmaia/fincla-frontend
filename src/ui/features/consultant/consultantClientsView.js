@@ -1,3 +1,5 @@
+import { sumByCurrency } from "./consultantCurrency.js";
+
 /**
  * Modelo puro da carteira de clientes do consultor (A2.2): busca + filtro por
  * faixa de risco + ordenação. Sem React — a `ConsultantClientsPage` liga o hook
@@ -65,22 +67,21 @@ export function countClientsByBand(clients) {
   return counts;
 }
 
-/** Soma o patrimônio de todos os clientes (kicker "… sob acompanhamento").
+/** Soma o patrimônio de todos os clientes, POR MOEDA (kicker "… sob acompanhamento").
+ *
+ * Devolve `[{ currency, amount }]` — uma entrada por moeda base de cliente. Somar
+ * um patrimônio em dólar com outro em real sob o mesmo símbolo era o defeito da
+ * #314; aqui não há cotação para converter, então a carteira mista sai como a
+ * quebra por moeda (`fmtTotals`), e a de moeda única como um valor só.
  *
  * `null` quando QUALQUER cliente não consolidou: um total parcial é pior que
  * ausência, porque o consultor decide sobre ele sem saber que falta gente dentro.
  * É a mesma regra que o backend aplica em `consolidate_portfolio`, e mantê-la aqui
  * é o que impede a tela de reconstruir o número que o servidor se recusou a dar.
+ * Um cliente sem moeda conhecida entra na mesma regra: não há pilha onde pô-lo.
  */
 export function totalPatrimonio(clients) {
-  const list = Array.isArray(clients) ? clients : [];
-  let soma = 0;
-  for (const c of list) {
-    const valor = Number.parseFloat(c?.patrimonio);
-    if (!Number.isFinite(valor)) return null;
-    soma += valor;
-  }
-  return soma;
+  return sumByCurrency(clients, (c) => c?.patrimonio, (c) => c?.currency);
 }
 
 /** Normaliza para busca: minúsculas e sem acentos. */

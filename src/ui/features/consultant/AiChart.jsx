@@ -18,7 +18,7 @@ import {
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { fmtBRL0, fmtPct } from "./consultantFormat";
+import { fmtMoney0, fmtPct } from "./consultantFormat";
 
 /**
  * Renderiza um `ChartSpec` produzido pela IA (Consultor IA — A1).
@@ -35,6 +35,12 @@ import { fmtBRL0, fmtPct } from "./consultantFormat";
  *   series[]     { key, name, kind, color }      (`kind` só importa em `composed`)
  *   color        token do design system, nunca hex
  *   value_format brl0 | pct | int                (o FE é quem formata)
+ *
+ * `brl0` é "dinheiro sem centavos" — o nome é do contrato, de quando tudo era real.
+ * A spec NÃO diz a moeda, então quem desenha passa `currency` (#314): a do cliente
+ * na avaliação dele; a da carteira, quando ela inteira está numa moeda só
+ * (`portfolioCurrency`). `null` = não sabemos → valores "—" e eixo sem rótulo,
+ * nunca "R$" sobre um número que pode estar em outra moeda.
  *
  * Spec malformada não derruba o drawer: cai num aviso discreto.
  */
@@ -55,12 +61,14 @@ const DONUT_PALETTE = [T.purple, T.blue, T.green, T.amber, T.red, T.purpleBar];
 const colorOf = (series) => COLOR_TOKENS[series?.color] ?? T.purple;
 
 const FORMATTERS = {
-  brl0: (v) => fmtBRL0(v),
-  pct: (v) => fmtPct(v),
-  int: (v) => (typeof v === "number" ? v.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) : String(v)),
+  // Eixo sem moeda conhecida fica sem rótulo: um eixo cheio de travessões é ruído.
+  brl0: (currency, { axis = false } = {}) => (v) => (axis && !currency ? "" : fmtMoney0(v, currency)),
+  pct: () => (v) => fmtPct(v),
+  int: () => (v) => (typeof v === "number" ? v.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) : String(v)),
 };
 
-const formatterFor = (valueFormat) => FORMATTERS[valueFormat] ?? FORMATTERS.int;
+const formatterFor = (valueFormat, currency, options) =>
+  (FORMATTERS[valueFormat] ?? FORMATTERS.int)(currency ?? null, options);
 
 const AXIS_TICK = { ...G, fontSize: 11, fill: T.inkLight };
 const MARGIN = { top: 6, right: 6, left: -8, bottom: 0 };
@@ -105,9 +113,9 @@ export function trendYDomain(series, data) {
   return [lo < 0 && min >= 0 ? 0 : lo, max + pad];
 }
 
-function AiTooltip({ active, payload, label, format }) {
+function AiTooltip({ active, payload, label, format, currency }) {
   if (!active || !payload?.length) return null;
-  const fmt = formatterFor(format);
+  const fmt = formatterFor(format, currency);
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 11px", boxShadow: "0 8px 24px rgba(15,23,35,0.12)" }}>
       {label !== undefined && (
@@ -134,7 +142,7 @@ const isValidSpec = (spec) =>
   Array.isArray(spec.data) &&
   spec.data.length > 0;
 
-export function AiChart({ spec, height = 220 }) {
+export function AiChart({ spec, height = 220, currency = null }) {
   if (!isValidSpec(spec)) {
     return (
       <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "12px 0" }}>Gráfico indisponível.</div>
@@ -142,8 +150,8 @@ export function AiChart({ spec, height = 220 }) {
   }
 
   const { type, title, x, series, data, value_format: valueFormat } = spec;
-  const fmt = formatterFor(valueFormat);
-  const tooltip = <Tooltip content={<AiTooltip format={valueFormat} />} cursor={{ fill: `${T.ink}08` }} />;
+  const fmt = formatterFor(valueFormat, currency, { axis: true });
+  const tooltip = <Tooltip content={<AiTooltip format={valueFormat} currency={currency} />} cursor={{ fill: `${T.ink}08` }} />;
   const legend = <Legend wrapperStyle={{ ...G, fontSize: 11 }} iconType="circle" iconSize={7} />;
 
   // Só gráficos de tendência ganham janela [min,max]; barra/composed-com-barra
@@ -183,7 +191,7 @@ export function AiChart({ spec, height = 220 }) {
     const valueKey = series[0].key;
     chart = (
       <PieChart margin={MARGIN}>
-        <Tooltip content={<AiTooltip format={valueFormat} />} />
+        <Tooltip content={<AiTooltip format={valueFormat} currency={currency} />} />
         <Pie data={data} dataKey={valueKey} nameKey={x.key} innerRadius="55%" outerRadius="80%" paddingAngle={2}>
           {data.map((row, i) => (
             <Cell key={row[x.key] ?? i} fill={DONUT_PALETTE[i % DONUT_PALETTE.length]} />

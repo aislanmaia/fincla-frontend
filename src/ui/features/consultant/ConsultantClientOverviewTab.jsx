@@ -4,12 +4,8 @@ import { Card, ProgBar } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtK } from "../../formatters";
-import { MOEDA_PADRAO } from "../../money/currencyRegistry.js";
-
-// Real EXPLÍCITO, por ora: a moeda do cliente ainda se perde na fronteira da API do
-// consultor — ver fincla-frontend#314. Não é o padrão silencioso de antes (#310).
 import { Donut, Icon, useIsNarrow } from "./consultantUi";
-import { fmtBRL0, fmtMoneyIn } from "./consultantFormat";
+import { fmtMoney0, fmtMoneyIn } from "./consultantFormat";
 import { CashFlowChart } from "./ConsultantInsightsCharts.jsx";
 import {
   categorySegments,
@@ -82,7 +78,7 @@ const GOAL_LABELS = { montar_reserva: "Montar reserva", quitar_dividas: "Quitar 
 const LEVEL_LABELS = { iniciante: "Iniciante", intermediario: "Intermediário", avancado: "Avançado" };
 const humanize = (map, v) => (v ? map[v] || (String(v).charAt(0).toUpperCase() + String(v).slice(1)) : null);
 
-function NotesCard({ profile }) {
+function NotesCard({ profile, currency }) {
   const p = profile?.profile;
   const loading = Boolean(profile?.loading) && !profile?.hasLoaded;
   const hasProfile = Boolean(p?.has_profile);
@@ -92,9 +88,10 @@ function NotesCard({ profile }) {
   // "não cadastrou renda" quanto de "não deu para ler a moeda base do cliente",
   // e nos dois casos o rótulo não deve aparecer: um campo vazio convida a ler
   // ausência como zero. Ver `ConsultantClientProfile.estimated_income`.
+  // Sem rótulo (backend anterior à fincla-api#178), a renda está na base do cliente.
   const renda = p?.estimated_income == null
     ? null
-    : fmtMoneyIn(p.estimated_income, p.estimated_income_currency);
+    : fmtMoneyIn(p.estimated_income, p.estimated_income_currency ?? currency ?? null);
   return (
     <Card style={{ padding: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -142,7 +139,8 @@ function NotesCard({ profile }) {
 }
 
 // ── Donut "para onde vai o dinheiro" ────────────────────────────
-function SpendingDonutCard({ categories }) {
+// `/analytics/by-category` converte os gastos do cliente para a base DELE (#314).
+function SpendingDonutCard({ categories, currency }) {
   const { segments, total } = categorySegments(categories.categories);
   const body = () => {
     if (categories.loading && !categories.hasLoaded) return <div style={{ ...G, fontSize: 12.5, color: T.inkLight, padding: "8px 0" }}>Carregando…</div>;
@@ -154,13 +152,13 @@ function SpendingDonutCard({ categories }) {
             (ver Donut em consultantUi.jsx) — subir a legenda "no período" não
             corta, só reduz um pouco a folga visual dentro do círculo. */}
         <Donut segments={segments} size={140} stroke={20}
-          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total, MOEDA_PADRAO)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>no período</span></>} />
+          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total, currency)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>no período</span></>} />
         <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 10 }}>
           {segments.slice(0, 6).map((x) => (
             <div key={x.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ width: 9, height: 9, borderRadius: 3, background: x.color, flexShrink: 0 }} />
               <span style={{ ...G, fontSize: 12.5, color: T.inkMid, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.label}</span>
-              <span style={{ ...G, ...NUM, fontSize: 12.5, fontWeight: 700, color: T.ink }}>{fmtBRL0(x.value)}</span>
+              <span style={{ ...G, ...NUM, fontSize: 12.5, fontWeight: 700, color: T.ink }}>{fmtMoney0(x.value, currency)}</span>
               {/* width:34 é folga, não corte: "100%" em 11px tabular-nums
                   cabe com sobra (sem overflow:hidden no span). */}
               <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkGhost, width: 34, textAlign: "right" }}>{x.pct}%</span>
@@ -172,7 +170,7 @@ function SpendingDonutCard({ categories }) {
   };
   return (
     <Card style={{ padding: 18 }}>
-      <CardHead title="Para onde vai o dinheiro" right={<span style={{ ...G, fontSize: 11, color: T.inkLight }}>despesas · {fmtBRL0(total)}</span>} />
+      <CardHead title="Para onde vai o dinheiro" right={<span style={{ ...G, fontSize: 11, color: T.inkLight }}>despesas · {fmtMoney0(total, currency)}</span>} />
       {body()}
     </Card>
   );
@@ -276,6 +274,9 @@ export function ConsultantClientOverviewTab({ client, health, categories, goals,
   const healthReady = health.hasLoaded && !!health.data;
   const goalsSummary = overviewGoalsSummary(health.data);
   const evolutionSeries = selectClientEvolutionSeries(evolution?.months);
+  // A moeda base do cliente, rotulada pela carteira (#314). `null` = não sabemos →
+  // os valores saem "—", nunca "R$".
+  const currency = client?.currency ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -301,13 +302,14 @@ export function ConsultantClientOverviewTab({ client, health, categories, goals,
       {/* Corpo 2 colunas (minmax(0,…) deixa a coluna 1fr encolher — sem overflow) */}
       <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "minmax(0,1fr) 340px", gap: 16, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-          <SpendingDonutCard categories={categories} />
+          <SpendingDonutCard categories={categories} currency={currency} />
           <CashFlowChart
             data={evolutionSeries}
             loading={Boolean(evolution?.loading) && !evolution?.hasLoaded}
             title="Evolução mensal"
             subtitle="Receita × despesa e saldo, mês a mês"
             emptyText="Sem histórico mensal para este cliente."
+            currency={currency}
           />
           <SpendingPaceStub />
           <GoalsCard goals={goals} />
@@ -326,7 +328,7 @@ export function ConsultantClientOverviewTab({ client, health, categories, goals,
             <div style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, marginTop: 3 }}>progresso médio {goalsSummary.progress}%</div>
           </Card>
           <StubCard title="Alertas ativos" icon="alert" text="Em breve: alertas automáticos de risco (dívida, orçamento estourado, atividade parada)." />
-          <NotesCard profile={profile} />
+          <NotesCard profile={profile} currency={currency} />
           <StubCard title="Próximos passos sugeridos" icon="flag" text="Em breve: um plano de ação priorizado, detalhável com IA." dark />
         </div>
       </div>

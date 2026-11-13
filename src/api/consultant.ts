@@ -1,7 +1,17 @@
 // Saldo e patrimônio de cada cliente chegam na forma canônica `{amount, currency}`
-// (fincla-api#134). `unwrapMoney` desembrulha em qualquer profundidade; a moeda é
-// descartada de propósito, porque estes agregados ainda somam moedas sem converter
-// (fincla-api#170) e um rótulo daria ao número uma autoridade que ele não tem.
+// (fincla-api#134). `unwrapMoney` desembrulha em qualquer profundidade e descarta o
+// rótulo — por isso cada leitura abaixo extrai a moeda ANTES de desembrulhar e a
+// devolve num campo `currency` ao lado dos números (fincla-frontend#314).
+//
+// Duas moedas diferentes viajam por aqui, e não se confundem:
+// - a do CLIENTE (`/clients`, `/clients-at-risk`): a base da organização dele. Um
+//   cliente em dólar se lê em dólar, seja qual for a moeda do consultor;
+// - a de LEITURA do consultor (`/summary`, `/financial-health-index`,
+//   `/total-credit-card-debt`, `/cash-flow`, `/expenses-by-category`): o rótulo que o
+//   backend põe nos agregados da carteira (`resolve_consultant_reading_currency`).
+//   `/summary` e `/financial-health-index` CONVERTEM para ela; os outros três só
+//   ROTULAM uma soma não convertida (fincla-api#170) — quem desenha decide se o
+//   rótulo merece confiança (`consultantCurrency.js`).
 import apiClient from './client';
 import { API_CONFIG } from './config';
 import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
@@ -42,6 +52,22 @@ import type {
   ConsultantPortfolioExpenseNarrativeResponse,
   ConsultantPortfolioCategoryContributorsResponse,
 } from './types';
+
+/**
+ * A moeda do primeiro valor rotulado entre `valores`, ou `null`.
+ *
+ * Os campos de uma mesma resposta vêm todos com o mesmo rótulo; procurar no
+ * primeiro que tiver um cobre o caso em que ele vem `null` (faltou cotação) e o
+ * vizinho não. `null` — nunca `"BRL"` — quando nada declara moeda: chutar a moeda
+ * é o defeito que esta fronteira existe para não cometer.
+ */
+const moedaDe = (...valores: unknown[]): string | null => {
+  for (const valor of valores) {
+    const moeda = toCurrency(valor);
+    if (moeda) return moeda;
+  }
+  return null;
+};
 
 export const getConsultantPortfolioExpenseDistribution = async (
   params: { date_start: string; date_end: string },
@@ -157,6 +183,19 @@ export const previewConsultantCategoryTemplate = async (
   return response.data;
 };
 
+/**
+ * `/summary` e `/reports/consolidated`: os totais CONVERTIDOS para a moeda de
+ * leitura do consultor. Um total some (`null`) quando faltou cotação, e com ele o
+ * rótulo — o recibo `consolidation.target_currency` ainda diz qual era o alvo.
+ */
+const comMoedaDeLeitura = (bruto: ConsultantSummaryResponse): ConsultantSummaryResponse => ({
+  ...unwrapMoney(bruto),
+  currency:
+    moedaDe(bruto?.total_income, bruto?.total_expenses, bruto?.balance) ??
+    (bruto as { consolidation?: { target_currency?: string } | null })?.consolidation?.target_currency ??
+    null,
+});
+
 export const getConsultantSummary = async (
   params?: ConsultantSummaryQuery
 ): Promise<ConsultantSummaryResponse> => {
@@ -164,14 +203,24 @@ export const getConsultantSummary = async (
     '/consultant/summary',
     { params }
   );
-  return unwrapMoney(response.data);
+  return comMoedaDeLeitura(response.data);
 };
 
 export const getConsultantClients = async (): Promise<ConsultantClientsResponse> => {
   const response = await apiClient.get<ConsultantClientsResponse>(
     '/consultant/clients'
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return {
+    ...unwrapMoney(bruto),
+    // A moeda base de CADA cliente: o backend rotula `balance` e `patrimonio` com
+    // ela. `balance` primeiro porque nunca vem `null`; `patrimonio` some quando
+    // faltou cotação, e com ele o rótulo.
+    clients: (bruto?.clients ?? []).map((cliente) => ({
+      ...unwrapMoney(cliente),
+      currency: moedaDe(cliente?.balance, cliente?.patrimonio),
+    })),
+  };
 };
 
 /** Removes only the authenticated consultant's relationship; client data remains. */
@@ -186,7 +235,7 @@ export const getConsultantConsolidatedReport = async (
     '/consultant/reports/consolidated',
     { params }
   );
-  return unwrapMoney(response.data);
+  return comMoedaDeLeitura(response.data);
 };
 
 export const getFinancialHealthIndex = async (
@@ -196,7 +245,11 @@ export const getFinancialHealthIndex = async (
     '/consultant/financial-health-index',
     { params }
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return {
+    ...unwrapMoney(bruto),
+    currency: moedaDe(bruto?.total_income, bruto?.total_expenses, bruto?.balance, bruto?.total_debt),
+  };
 };
 
 /**
@@ -230,7 +283,8 @@ export const getTotalCreditCardDebt = async (
     '/consultant/total-credit-card-debt',
     { params }
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return { ...unwrapMoney(bruto), currency: moedaDe(bruto?.total_debt) };
 };
 
 export const getCashFlow = async (
@@ -240,7 +294,12 @@ export const getCashFlow = async (
     '/consultant/cash-flow',
     { params }
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  const meses = bruto?.monthly_data ?? [];
+  return {
+    ...unwrapMoney(bruto),
+    currency: moedaDe(...meses.flatMap((m) => [m?.total_income, m?.total_expenses, m?.balance])),
+  };
 };
 
 export const getExpensesByCategory = async (
@@ -250,7 +309,11 @@ export const getExpensesByCategory = async (
     '/consultant/expenses-by-category',
     { params }
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return {
+    ...unwrapMoney(bruto),
+    currency: moedaDe(bruto?.total_expenses, ...(bruto?.categories ?? []).map((c) => c?.total)),
+  };
 };
 
 export const getIncomeCommitment = async (
@@ -280,7 +343,15 @@ export const getClientsAtRisk = async (
     '/consultant/clients-at-risk',
     { params }
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return {
+    ...unwrapMoney(bruto),
+    // O saldo de cada cliente vem na base DELE (`org.base_currency`).
+    clients: (bruto?.clients ?? []).map((cliente) => ({
+      ...unwrapMoney(cliente),
+      currency: moedaDe(cliente?.current_balance),
+    })),
+  };
 };
 
 // ── Adicionar cliente (S5) ──────────────────────────────────────

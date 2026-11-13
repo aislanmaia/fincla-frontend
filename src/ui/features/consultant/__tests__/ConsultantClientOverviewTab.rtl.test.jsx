@@ -11,7 +11,7 @@ const HEALTH = {
   cash_flow_risk: "low", score: 72,
 };
 
-const client = { client_name: "Mariana Costa", organization_id: "a", balance: "1200.00" };
+const client = { client_name: "Mariana Costa", organization_id: "a", balance: "1200.00", currency: "BRL" };
 
 function state(over = {}) {
   return { loading: false, error: "", hasLoaded: true, data: null, ...over };
@@ -138,6 +138,20 @@ describe("<ConsultantClientOverviewTab> — renda estimada do perfil (#205)", ()
     renderizar(comRenda({ estimated_income: 0, estimated_income_currency: "BRL" }));
     expect(screen.getByText("Renda estimada")).toBeInTheDocument();
     expect(screen.getByText(/0,00/).textContent).toContain("R$");
+  });
+
+  it("renda sem rótulo (backend antigo) sai na moeda do cliente, não em real (#314)", () => {
+    render(
+      <ConsultantClientOverviewTab
+        client={{ ...client, currency: "USD" }}
+        health={healthState}
+        categories={categoriesState}
+        goals={goalsState}
+        profile={comRenda({ estimated_income: 8000, estimated_income_currency: null })}
+      />,
+    );
+    const valor = screen.getByText(/8\.000,00/);
+    expect(valor.textContent).toContain("US$");
   });
 
   it("nem [object Object] nem NaN chegam à tela", () => {
