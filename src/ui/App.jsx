@@ -212,6 +212,20 @@ export default function App() {
       )?.organization ?? null,
     [session.activeOrgId, session.organizations],
   );
+  const activeMembershipRole = useMemo(
+    () =>
+      session.organizations.find(
+        (item) => item.organization.id === session.activeOrgId,
+      )?.membership?.role ?? null,
+    [session.activeOrgId, session.organizations],
+  );
+  // Trocar a moeda base muda tudo que é lido nela: a organização da sessão (renda
+  // declarada, moeda) e todo saldo/resumo/painel que refaz a busca pelo token.
+  const refreshSessionAccess = session.refreshAccess;
+  const onBaseCurrencyChanged = useCallback(() => {
+    void refreshSessionAccess();
+    bumpTransactionsList();
+  }, [refreshSessionAccess, bumpTransactionsList]);
   const dataMode = resolveDataMode(requestedDataMode, mockDataEnabled);
 
   const firstStepsLive = useFirstStepsLiveStatus({
@@ -453,7 +467,8 @@ export default function App() {
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onOpenAccountTransactions={(accountId) => navTo("transactions", { accountId })} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,
-    profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
+    profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user}
+      membershipRole={activeMembershipRole} onBaseCurrencyChanged={onBaseCurrencyChanged} />,
     reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
   };
