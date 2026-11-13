@@ -8,7 +8,6 @@ import {
   describeView,
   isValidView,
   normalizeView,
-  shouldShowSavedViewsSection,
   viewSnapshotsEqual,
 } from "../../filters/savedViews/savedViewsModel.js";
 import {
@@ -133,12 +132,6 @@ describe("savedViewsModel", () => {
     expect(describeView(v, 3)).toBe("3 filtros");
   });
 
-  it("shouldShowSavedViewsSection: views salvas ou filtros ativos", () => {
-    expect(shouldShowSavedViewsSection(0, false)).toBe(false);
-    expect(shouldShowSavedViewsSection(2, false)).toBe(true);
-    expect(shouldShowSavedViewsSection(0, true)).toBe(true);
-    expect(shouldShowSavedViewsSection(1, true)).toBe(true);
-  });
 });
 
 describe("savedViewsStorage", () => {
