@@ -4,6 +4,10 @@ import { Badge, Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { fmtSgn } from "../../formatters";
+import { MOEDA_PADRAO } from "../../money/currencyRegistry.js";
+
+// Real EXPLÍCITO, por ora: a moeda do cliente ainda se perde na fronteira da API do
+// consultor — ver fincla-frontend#314. Não é o padrão silencioso de antes (#310).
 import { HealthRing, Icon } from "./consultantUi";
 
 /**
@@ -37,7 +41,7 @@ function AttentionItem({ client, health, onOpenClient, onEvaluate, evaluateLocke
             </span>
           )}
           {client.current_balance != null && client.current_balance < 0 && (
-            <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{fmtSgn(client.current_balance)}</span>
+            <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{fmtSgn(client.current_balance, MOEDA_PADRAO)}</span>
           )}
         </div>
       </div>

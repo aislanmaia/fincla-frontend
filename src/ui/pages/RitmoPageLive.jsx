@@ -19,7 +19,7 @@ import {
 } from "recharts";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { fmtAbs, fmtK } from "../formatters";
+import { useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import { Breadcrumb, Btn, Card, PageTitle } from "../components/primitives";
 import { M_MONO } from "../features/moodV4";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
@@ -48,6 +48,8 @@ export function RitmoPageLive({
   /** Sobe a cada transação salva no app (#272): o ritmo é feito delas. */
   transactionsRefreshToken = 0,
 }) {
+  // O ritmo é agregado pela API na moeda base da organização (#310).
+  const { fmtAbs, fmtK } = useBaseCurrencyMoney(organizationId, { live: Boolean(organizationId) });
   const bounds = useMemo(() => monthNavBounds(), []);
   const [year, setYear] = useState(bounds.currentYear);
   const [month, setMonth] = useState(bounds.currentMonth);

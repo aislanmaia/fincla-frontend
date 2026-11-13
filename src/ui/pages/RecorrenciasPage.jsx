@@ -14,7 +14,8 @@ import {
 import { BarChart as ReBarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { fmtAbs, fmtSgn } from "../formatters";
+import { fmtAbs as fmtAbsIn } from "../formatters";
+import { baseMoneyFormatters, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
   Badge,
   Breadcrumb,
@@ -236,7 +237,8 @@ function RecEmptyState({ onNovaRec }) {
   );
 }
 
-function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile }) {
+/** `money`: a recorrência simulada não tem moeda própria — é lida na base (#310). */
+function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile, money = baseMoneyFormatters(null) }) {
   const isReceita = !!item.isReceita;
   const valColor = isReceita ? T.green : T.purple;
   const sign = isReceita ? "+" : "−";
@@ -265,7 +267,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
 
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: isMuted ? T.inkGhost : valColor }}>
-            {sign} R$ {Math.abs(item.valParcela).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {sign} {money.fmtAbs(item.valParcela)}
           </div>
           <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 1 }}>por mês</div>
         </div>
@@ -438,6 +440,9 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
   const [mutedItems, setMuted] = useState(new Set());
   const [calendarDay, setCalendarDay] = useState(null);
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  // As simuladas (cenários) não têm moeda própria: são lidas na base da organização (#310).
+  const money = useBaseCurrencyMoney(organizationId, { live: shouldUseRealData });
+  const { fmtAbs } = money;
   const recurringData = useRecurringTransactionsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -562,6 +567,11 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
     const simVal = visibleSim.filter((it) => !it.isReceita).reduce((s, it) => s + it.valParcela, 0);
     return MON.map((mes) => ({ mes, desp: resumo.totalDesp, rec: resumo.totalRec, sim: simVal }));
   }, [baseList, visibleSim]);
+  // O gráfico só existe com UMA moeda nas recorrências — é nela que o tooltip escreve.
+  const fluxoMoeda = useMemo(
+    () => resumirRecorrenciasLocalmente(baseList).moeda ?? money.currency,
+    [baseList, money.currency],
+  );
 
   const isEmpty = !isLoading && baseList.length === 0 && simRecorrencias.length === 0;
 
@@ -652,7 +662,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
             <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ ...G, fontSize: 11, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}
-              formatter={(v, n) => [fmtAbs(v), n === "rec" ? "Receitas" : n === "desp" ? "Despesas" : "Simulado"]}
+              formatter={(v, n) => [fmtAbsIn(v, fluxoMoeda), n === "rec" ? "Receitas" : n === "desp" ? "Despesas" : "Simulado"]}
             />
             <Bar dataKey="desp" stackId="a" fill={T.redBar} radius={[0, 0, 0, 0]} />
             <Bar dataKey="sim" stackId="a" fill={T.purpleBar} radius={[3, 3, 0, 0]} />
@@ -903,6 +913,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
                       onToggle={() => setExp(expanded === item.uid ? null : item.uid)}
                       isMuted={mutedItems.has(item.uid)}
                       onToggleMute={() => toggleMute(item.uid)}
+                      money={money}
                       onNav={onNav}
                       isMobile={isMobile}
                     />

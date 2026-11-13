@@ -123,6 +123,10 @@ import {
 } from "./novaTransacaoConstants.js";
 
 /** Valor da parcela nas células do seletor: número pt-BR (vírgula), sem símbolo, para caber no botão. */
+/** Limite disponível do cartão, na moeda DELE (a da conta que liquida a fatura). Sem
+ *  moeda conhecida, travessão — nunca "R$" chapado (#310). */
+const fmtCardAvailable = (c) =>
+  c.moeda ? `${currencyInfo(c.moeda).symbol} ${Number(c.disp).toLocaleString("pt-BR")}` : "—";
 const fmtInstallmentCell = v => !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
@@ -2581,7 +2585,7 @@ export const NovaTransacaoModal = ({
               { label:"ENCERRAMENTO", val: ENC_LABELS[recurrenceEndKind] || recurrenceEndKind },
               { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
-              { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de ${fmtAbs(amountNum/installments)}`)) : "—" },
+              { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de ${fmtAbs(amountNum/installments, formCurrency)}`)) : "—" },
               // Cartão: o cartão escolhido. Fora dele, a conta onde o lançamento cai (#266).
               method === "credito"
                 ? { label:"CARTÃO", val: cards.find(c=>c.id===cardId)?.nome || "—" }
@@ -2789,7 +2793,7 @@ export const NovaTransacaoModal = ({
                       <span style={{ ...G, ...NUM, display:"inline-flex", alignItems:"center",
                         fontSize:13, fontWeight:700, color:T.blue,
                         background:T.blueLight, padding:"3px 10px", borderRadius:99 }}>
-                        {installments}× R$ {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        {installments}× {currencyInfo(formCurrency).symbol} {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
                       </span>
                     )}
                     {periodSaldo.live ? (
@@ -3086,7 +3090,7 @@ export const NovaTransacaoModal = ({
                           <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>···· {c.dig}</div>
                         </div>
                         <div style={{ textAlign:"right" }}>
-                          <div style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:cardId===c.id?"#86efac":T.green }}>R$ {c.disp.toLocaleString("pt-BR")}</div>
+                          <div style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:cardId===c.id?"#86efac":T.green }}>{fmtCardAvailable(c)}</div>
                           <div style={{ ...G, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.4)":T.inkLight }}>disponível</div>
                         </div>
                         {cardId===c.id && <div style={{ width:16, height:16, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={10} color={T.ink} /></div>}
@@ -3130,7 +3134,7 @@ export const NovaTransacaoModal = ({
                       {PARCELA_PRESETS.map(p => (
                         <button key={p} onClick={() => setInstallments(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
                           <div style={{ ...G, fontSize:13, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                          <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `${currencyInfo(formCurrency).symbol}${(amountNum/p).toFixed(0)}` : "—"}</div>
                         </button>
                       ))}
                     </div>
@@ -3386,7 +3390,7 @@ export const NovaTransacaoModal = ({
                           <div style={{ ...G, fontSize: 11, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.6)":T.inkLight, letterSpacing:"0.08em" }}>{c.banco}</div>
                           <div style={{ ...G, fontSize:12, fontWeight:700, color:cardId===c.id?"#fff":T.ink }}>{c.nome}</div>
                           <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight }}>···· {c.dig}</div>
-                          <div style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>R$ {c.disp.toLocaleString("pt-BR")} disp.</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>{fmtCardAvailable(c)} disp.</div>
                           {cardId===c.id && <div style={{ position:"absolute", top:7, right:7, width:14, height:14, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center" }}><Check size={9} color={T.ink} /></div>}
                         </>
                       )}
@@ -3461,7 +3465,7 @@ export const NovaTransacaoModal = ({
                       onBlur={e=>e.target.style.borderColor=T.border}/>
                     <ClosingDaySuggestion dueDay={quickAddCardDueDay} closingDay={quickAddCardClosingDay} onUse={setQuickAddCardClosingDay} />
                     <div style={{ ...G, fontSize: 11, color:T.inkLight, lineHeight:1.5 }}>
-                      Limite fica em R$ 0,00 por enquanto — edite em Cartões quando quiser definir o valor.
+                      Limite fica zerado por enquanto — edite em Cartões quando quiser definir o valor.
                     </div>
                     {quickAddCardError && (
                       <div style={{ ...G, fontSize:11, fontWeight:600, color:T.red }}>{quickAddCardError}</div>
@@ -3529,7 +3533,7 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
-                    <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>{fmtAbs(amountNum)} total</span>
+                    <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>{fmtAbs(amountNum, formCurrency)} total</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
                     {PARCELA_PRESETS.map(p => (
@@ -3565,7 +3569,7 @@ export const NovaTransacaoModal = ({
                         <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)" }}>
                           {installmentsInput && amountNum > 0
                             ? fmtInstallmentCell(amountNum/parseInt(installmentsInput||1))
-                            : "R$/parc"}
+                            : `${currencyInfo(formCurrency).symbol}/parc`}
                         </div>
                       </div>
                     ) : (
@@ -3672,7 +3676,7 @@ export const NovaTransacaoModal = ({
                       <span style={{ ...G, fontSize:11, color:T.inkGhost, fontWeight:400 }}>em</span>
                       <span style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:T.inkMid }}>{installments}×</span>
                       <span style={{ ...G, ...NUM, fontSize:13, fontWeight:600, color:T.blue, opacity:.8 }}>
-                        R$ {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        {currencyInfo(formCurrency).symbol} {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
                       </span>
                     </div>
                   )}
@@ -3689,7 +3693,7 @@ export const NovaTransacaoModal = ({
                       {/* Row: parcela input × N selector */}
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"baseline", gap:5, flex:"0 0 auto" }}>
-                          <span style={{ ...G, fontSize:13, fontWeight:700, color:T.purple, flexShrink:0 }}>R$</span>
+                          <span style={{ ...G, fontSize:13, fontWeight:700, color:T.purple, flexShrink:0 }}>{currencyInfo(formCurrency).symbol}</span>
                           <input
                             value={calcCents===0 ? "" : (calcCents/100).toLocaleString("pt-BR",{minimumFractionDigits:2})}
                             onChange={() => {}}
@@ -3756,7 +3760,7 @@ export const NovaTransacaoModal = ({
                           {calcCents > 0 ? (
                             <div style={{ ...G, fontSize:13, color:T.inkMid }}>
                               Total: <strong style={{ color:T.ink, ...NUM, fontSize:14 }}>
-                                R${((calcCents*calcCount)/100).toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                                {currencyInfo(formCurrency).symbol}{((calcCents*calcCount)/100).toLocaleString("pt-BR",{minimumFractionDigits:2})}
                               </strong>
                             </div>
                           ) : (

@@ -19,7 +19,8 @@ import {
 } from "recharts";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { fmtAbs, fmtK } from "../formatters";
+import { baseMoneyFormatters } from "../money/useBaseCurrencyMoney.js";
+import { MOEDA_PADRAO } from "../money/currencyRegistry.js";
 import { Breadcrumb, Btn, Card, PageTitle } from "../components/primitives";
 import { M_MONO } from "../features/moodV4";
 import {
@@ -63,6 +64,9 @@ const PERIODOS_RITMO = [
   { key: "mar26", label: "mar/26", isClosed: false },
   { key: "fev26", label: "fev/26", isClosed: true },
 ];
+
+// Os dados de demonstração abaixo são em real — por escolha, não por omissão (#310).
+const { fmtAbs, fmtK } = baseMoneyFormatters(MOEDA_PADRAO);
 
 function RitmoPageMock({ onNav, isMobile = false }) {
   const [periodoKey, setPeriodoKey] = useState("mar26");

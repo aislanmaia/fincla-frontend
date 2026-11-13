@@ -4,6 +4,10 @@ import { Card, ProgBar } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtK } from "../../formatters";
+import { MOEDA_PADRAO } from "../../money/currencyRegistry.js";
+
+// Real EXPLÍCITO, por ora: a moeda do cliente ainda se perde na fronteira da API do
+// consultor — ver fincla-frontend#314. Não é o padrão silencioso de antes (#310).
 import { Donut, Icon, useIsNarrow } from "./consultantUi";
 import { fmtBRL0, fmtMoneyIn } from "./consultantFormat";
 import { CashFlowChart } from "./ConsultantInsightsCharts.jsx";
@@ -150,7 +154,7 @@ function SpendingDonutCard({ categories }) {
             (ver Donut em consultantUi.jsx) — subir a legenda "no período" não
             corta, só reduz um pouco a folga visual dentro do círculo. */}
         <Donut segments={segments} size={140} stroke={20}
-          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>no período</span></>} />
+          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total, MOEDA_PADRAO)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>no período</span></>} />
         <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 10 }}>
           {segments.slice(0, 6).map((x) => (
             <div key={x.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>

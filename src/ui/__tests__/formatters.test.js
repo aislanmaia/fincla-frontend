@@ -1,38 +1,50 @@
 import { describe, it, expect } from "vitest";
-import { fmtK } from "../formatters.js";
+import { fmtAbs, fmtK, fmtSgn } from "../formatters.js";
 
 describe("fmtK", () => {
   it("corta em 'k' com uma casa decimal a partir de 1000", () => {
-    expect(fmtK(7380.166666)).toBe("R$7.4k");
-    expect(fmtK(1000)).toBe("R$1.0k");
+    expect(fmtK(7380.166666, "BRL")).toBe("R$7.4k");
+    expect(fmtK(1000, "BRL")).toBe("R$1.0k");
   });
 
   it("arredonda valores fracionários abaixo de 1000 (sem ponto decimal en-US)", () => {
     // Caso real: média de 2800/6 = 466.6666666666667 — sem Math.round vazava
     // o float bruto pt-BR afora ("R$466.6666666666667").
-    expect(fmtK(2800 / 6)).toBe("R$467");
-    expect(fmtK(0)).toBe("R$0");
-    expect(fmtK(999.4)).toBe("R$999");
+    expect(fmtK(2800 / 6, "BRL")).toBe("R$467");
+    expect(fmtK(0, "BRL")).toBe("R$0");
+    expect(fmtK(999.4, "BRL")).toBe("R$999");
+  });
+
+  it("escreve na moeda passada", () => {
+    expect(fmtK(2000, "USD")).toBe("US$2.0k");
   });
 });
 
-describe("fmtK como tickFormatter do recharts", () => {
-  // O recharts chama tickFormatter(valor, índice). Passado direto
-  // (`tickFormatter={fmtK}`), o índice caía no parâmetro da moeda e virava o
-  // "símbolo": o eixo do Ritmo de Gastos mostrava 0/2k/4k/6k/8k como
-  // "00 / 12.0k / 24.0k / 36.0k / 48.0k".
-  it("ignora o índice numérico do tick e escreve em real", () => {
-    expect([0, 2000, 4000, 6000, 8000].map((v, i) => fmtK(v, i))).toEqual([
-      "R$0",
-      "R$2.0k",
-      "R$4.0k",
-      "R$6.0k",
-      "R$8.0k",
-    ]);
+/**
+ * #310 — o padrão silencioso "sem moeda, real" fazia a Visão Geral de uma organização
+ * em dólar escrever "R$". Agora a moeda é obrigatória.
+ */
+describe("moeda obrigatória (#310)", () => {
+  it("chamada sem moeda é defeito de quem chama: no teste, lança", () => {
+    expect(() => fmtAbs(10)).toThrow(/moeda ausente/);
+    expect(() => fmtSgn(10)).toThrow(/moeda ausente/);
+    expect(() => fmtK(10)).toThrow(/moeda ausente/);
   });
 
-  it("continua respeitando a moeda quando ela é passada de verdade", () => {
-    expect(fmtK(2000, "BRL")).toBe("R$2.0k");
-    expect(fmtK(2000, "USD")).not.toBe("R$2.0k");
+  // O recharts chama tickFormatter(valor, índice). Passado direto
+  // (`tickFormatter={fmtK}`), o índice cai no lugar da moeda — e antes virava real.
+  it("o índice do recharts no lugar da moeda também é moeda esquecida", () => {
+    expect(() => fmtK(2000, 1)).toThrow(/moeda ausente/);
+  });
+
+  it("moeda null explícita = não sabemos a moeda → travessão, nunca R$", () => {
+    expect(fmtAbs(10, null)).toBe("—");
+    expect(fmtSgn(10, null)).toBe("—");
+    expect(fmtK(10, null)).toBe("");
+  });
+
+  it("BRL continua byte a byte (espaço comum)", () => {
+    expect(fmtAbs(-1234.5, "BRL")).toBe("R$ 1.234,50");
+    expect(fmtSgn(-1234.5, "BRL")).toBe("−R$ 1.234,50");
   });
 });

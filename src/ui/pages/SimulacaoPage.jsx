@@ -27,7 +27,7 @@ import {
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 import { M_MONO } from "../features/moodV4";
-import { fmtAbs, fmtK } from "../formatters";
+import { UNKNOWN_MONEY, baseMoneyFormatters, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
   Badge,
   Breadcrumb,
@@ -99,7 +99,10 @@ const INSIGHTS_RESPONSIVE_CSS = `
 @media(max-width:899px){.fincla-sim-insights-grid{grid-template-columns:1fr}}
 `;
 /* ── Modal Novo Cenário ────────────────────────────────── */
-const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
+/** `money`: formatadores na moeda base da organização (#310). */
+const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null, money = baseMoneyFormatters(null) }) => {
+  const { fmtAbs } = money;
+  const sym = money.symbol ?? UNKNOWN_MONEY;
   const [nome,       setNome]       = useState("");
   const [budgetEdit, setBudgetEdit] = useState(false);
   const [budgetVal,  setBudgetVal]  = useState(String(BUDGET_FALLBACK));
@@ -134,7 +137,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
   // Formatação BR para o display readonly do orçamento (antes mostrava
   // sempre o hardcoded "R$ 4.200,00", ignorando o valor digitado pelo
   // usuário).
-  const budgetDisplay = `R$ ${budgetNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const budgetDisplay = `${sym} ${budgetNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const totalItems = items.reduce((s,i) => s + i.total, 0);
   const totalMes   = items.reduce((s,i) => s + i.valParcela, 0);
 
@@ -205,7 +208,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               <div style={{ border: `1.5px solid ${overridden && budgetNum > BUDGET_FALLBACK ? T.purple : T.border}`, borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 13px", background: overridden ? T.purpleLight : T.grayLight }}>
                   <span style={{ fontSize: 13 }}>💰</span>
-                  {overridden && <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>R$ 4.200</span>}
+                  {overridden && <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{sym} 4.200</span>}
                   {overridden && <span style={{ fontSize: 11, color: T.inkLight }}>→</span>}
                   <input style={{ ...G, fontFamily: "'Geist Mono', monospace", fontSize: 14, fontWeight: 800, color: overridden ? T.purple : T.ink, background: "none", border: "none", outline: "none", flex: 1, fontVariantNumeric: "tabular-nums" }}
                     value={budgetVal}
@@ -268,7 +271,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>{tipo.startsWith("ajuste") ? "Valor do ajuste" : "Valor total"}</label>
-                  <input style={{ ...inputStyle, fontFamily: "'Geist Mono', monospace" }} placeholder="R$ 0,00" value={iValor} onChange={e => setIValor(e.target.value)} />
+                  <input style={{ ...inputStyle, fontFamily: "'Geist Mono', monospace" }} placeholder={`${money.symbol ?? ""} 0,00`.trim()} value={iValor} onChange={e => setIValor(e.target.value)} />
                 </div>
               </div>
 
@@ -286,7 +289,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Parcelas</label>
                     <select style={selectStyle} value={iParcelas} onChange={e => setIParcelas(e.target.value)}>
-                      {[1,2,3,4,5,6,7,8,9,10,11,12,18,24].map(n => <option key={n} value={n}>{n === 1 ? "à vista" : `${n}× (R$ ${iValor ? (parseFloat(iValor.replace(/[^\d.,]/g,"").replace(",","."))/n).toFixed(2) : "—"})`}</option>)}
+                      {[1,2,3,4,5,6,7,8,9,10,11,12,18,24].map(n => <option key={n} value={n}>{n === 1 ? "à vista" : `${n}× (${sym} ${iValor ? (parseFloat(iValor.replace(/[^\d.,]/g,"").replace(",","."))/n).toFixed(2) : "—"})`}</option>)}
                     </select>
                   </div>
                 </div>
@@ -333,7 +336,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Tipo de valor</label>
-                    <select style={selectStyle}><option>Valor fixo (R$)</option><option>Percentual (%)</option></select>
+                    <select style={selectStyle}><option>{money.symbol ? `Valor fixo (${money.symbol})` : "Valor fixo"}</option><option>Percentual (%)</option></select>
                   </div>
                 </div>
               )}
@@ -413,6 +416,10 @@ const SimOnboarding = ({ onNovo }) => {
 export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, isMobile = false, organizationId = null, dataMode = "live" }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
+  // O simulador projeta na moeda base da organização; é nela que tudo se escreve (#310).
+  const money = useBaseCurrencyMoney(organizationId, { live: Boolean(organizationId) });
+  const { fmtAbs, fmtK } = money;
+  const sym = money.symbol ?? UNKNOWN_MONEY;
   const [showModal,   setShowModal]  = useState(false);
   const [modalTipo,   setModalTipo]  = useState(null);
 
@@ -531,7 +538,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   // Analysis: derived from API or fallbacks
   const riscos   = simUsavel ? deriveRisksFromResponse(simUsavel, fmtAbs) : [];
   const impactos = simUsavel ? deriveImpactsFromResponse(simUsavel, items) : [];
-  const recs     = simUsavel ? deriveRecsFromResponse(simUsavel, items) : [];
+  const recs     = simUsavel ? deriveRecsFromResponse(simUsavel, items, fmtAbs) : [];
 
   const criarCenario = ({ nome, budgetOverride: bo, items: its }) => {
     const novoId = Date.now();
@@ -630,7 +637,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
         <div style={{ border: `1.5px solid ${projFimOkPreview ? T.green : T.purple}`, borderRadius: 10, overflow: "hidden", boxShadow: `0 0 0 3px ${projFimOkPreview ? T.green : T.purple}11`, transition: "border 0.2s, box-shadow 0.2s" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 13px", background: projFimOkPreview ? T.greenLight : T.purpleLight, transition: "background 0.2s" }}>
             <span style={{ fontSize: 13 }}>💰</span>
-            <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>R$ {apiBudgetBase.toLocaleString("pt-BR")}</span>
+            <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{sym} {apiBudgetBase.toLocaleString("pt-BR")}</span>
             <span style={{ fontSize: 11, color: T.inkLight }}>→</span>
             <input autoFocus
               style={{ ...G, fontFamily: "'Geist Mono', monospace", fontSize: 15, fontWeight: 800, color: projFimOkPreview ? T.green : T.purple, background: "none", border: "none", outline: "none", flex: 1, fontVariantNumeric: "tabular-nums" }}
@@ -652,9 +659,9 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
       ) : budgetOverride ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: T.purpleLight, border: `1.5px solid ${T.purple}44`, borderRadius: 10, cursor: "pointer" }} onClick={startBudgetEdit}>
           <span style={{ fontSize: 13 }}>💰</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>R$ {apiBudgetBase.toLocaleString("pt-BR")}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{sym} {apiBudgetBase.toLocaleString("pt-BR")}</span>
           <span style={{ fontSize: 11, color: T.inkLight }}>→</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.purple, flex: 1 }}>R$ {budgetOverride.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.purple, flex: 1 }}>{sym} {budgetOverride.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
           <div style={{ width: 7, height: 7, borderRadius: 99, background: T.purple, flexShrink: 0 }} />
           <button onClick={e => { e.stopPropagation(); restoreBudget(); }} style={{ ...G, background: "none", border: "none", fontSize: 11, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>
         </div>
@@ -664,7 +671,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
           onMouseEnter={e => e.currentTarget.style.borderColor = T.borderHov}
           onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
           <span style={{ fontSize: 13 }}>💰</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.ink, flex: 1 }}>R$ {apiBudgetBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.ink, flex: 1 }}>{sym} {apiBudgetBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
           <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ Ajustar para este cenário</span>
         </div>
       )}
@@ -790,7 +797,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
 
   return (
     <>
-    <ModalNovoCenario open={showModal} onClose={() => { setShowModal(false); setModalTipo(null); }} onCriar={criarCenario} initialTipo={modalTipo} />
+    <ModalNovoCenario open={showModal} onClose={() => { setShowModal(false); setModalTipo(null); }} onCriar={criarCenario} initialTipo={modalTipo} money={money} />
 
     {/* ══════════════════════════════════════════
         MOBILE LAYOUT — Tabbed experience

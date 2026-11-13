@@ -63,35 +63,35 @@ const EXPECTED_AVG = HISTORY_WIRE_6M.reduce((s, h) => s + toAmount(h.spent), 0) 
 
 describe("BudgetHistoryChart (RTL)", () => {
   it("renderiza o gráfico sem cair", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     expect(screen.getByTestId("bar-chart")).toBeInTheDocument();
   });
 
   it("mostra os 6 meses do histórico no gráfico", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     const labels = screen.getAllByTestId("month-label").map((el) => el.textContent);
     expect(labels).toEqual(["Out", "Nov", "Dez", "Jan", "Fev", "Mar"]);
   });
 
   it("converte spent/budget vindos como string e soma numericamente (não concatena) na média", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     // Se a soma concatenasse string em vez de somar número, isto não bateria
     // com nenhum texto renderizado (e teria "NaN" em algum lugar da tela).
-    expect(screen.getByText(fmtAbs(EXPECTED_AVG))).toBeInTheDocument();
+    expect(screen.getByText(fmtAbs(EXPECTED_AVG, "BRL"))).toBeInTheDocument();
     expect(screen.queryByText(/NaN/i)).not.toBeInTheDocument();
   });
 
   it("identifica o MAIOR gasto por valor numérico, não por comparação de string", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     // Nov = 12000 é o maior; "9500.00" > "12000.00" como string enganaria uma
     // comparação ingênua e apontaria Out.
-    expect(screen.getByText(fmtAbs(12000))).toBeInTheDocument();
+    expect(screen.getByText(fmtAbs(12000, "BRL"))).toBeInTheDocument();
     expect(screen.getByText("Nov", { selector: "div" })).toBeInTheDocument();
-    expect(screen.queryByText(fmtAbs(9500))).not.toBeInTheDocument();
+    expect(screen.queryByText(fmtAbs(9500, "BRL"))).not.toBeInTheDocument();
   });
 
   it("colore as barras por valor numérico: mês atual em azul, acima do limite em vermelho, demais em ink", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     const cells = screen.getAllByTestId("cell");
     expect(cells).toHaveLength(6);
     const fills = cells.map((c) => c.dataset.fill);
@@ -110,26 +110,26 @@ describe("BudgetHistoryChart (RTL)", () => {
       { m: "Fev", spent: "450.00" },
       { m: "Mar", spent: "550.00", current: true },
     ];
-    render(<BudgetHistoryChart historyData={lowValueHistory} isMobile={false} shouldUseRealData />);
+    render(<BudgetHistoryChart historyData={lowValueHistory} isMobile={false} shouldUseRealData currency="BRL" />);
     const avg = lowValueHistory.reduce((s, h) => s + toAmount(h.spent), 0) / lowValueHistory.length; // 466.666...
-    expect(screen.getByTestId("reference-line-label")).toHaveTextContent(`Média ${fmtK(avg)}`);
+    expect(screen.getByTestId("reference-line-label")).toHaveTextContent(`Média ${fmtK(avg, "BRL")}`);
     expect(screen.getByTestId("reference-line-label").textContent).not.toMatch(/\./);
   });
 
   it("dá margem direita suficiente para o rótulo da média não ser cortado pelo SVG (desktop)", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     const marginRight = Number(screen.getByTestId("bar-chart").dataset.marginRight);
     expect(marginRight).toBeGreaterThanOrEqual(40);
   });
 
   it("tooltip mostra o valor cheio em BRL e o status dentro/acima do limite do mês", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
-    expect(screen.getByText(fmtAbs(TOOLTIP_SAMPLE.spent))).toBeInTheDocument();
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
+    expect(screen.getByText(fmtAbs(TOOLTIP_SAMPLE.spent, "BRL"))).toBeInTheDocument();
     expect(screen.getByText(/dentro do limite/i)).toBeInTheDocument();
   });
 
   it("mostra a legenda completa (Limite, Gasto, Mês atual, Acima do limite)", () => {
-    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} />);
+    render(<BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData={false} currency="BRL" />);
     expect(screen.getByText("Limite")).toBeInTheDocument();
     expect(screen.getByText("Gasto")).toBeInTheDocument();
     expect(screen.getAllByText("Mês atual").length).toBeGreaterThanOrEqual(1);
@@ -137,13 +137,32 @@ describe("BudgetHistoryChart (RTL)", () => {
   });
 
   it("indica quando não há histórico suficiente", () => {
-    render(<BudgetHistoryChart historyData={[]} isMobile={false} shouldUseRealData />);
+    render(<BudgetHistoryChart historyData={[]} isMobile={false} shouldUseRealData currency="BRL" />);
     expect(screen.getByText(/não há histórico suficiente/i)).toBeInTheDocument();
   });
 
   it("mostra o aviso de limite indisponível apenas com dados reais (backend não expõe limite histórico)", () => {
     const realHistory = HISTORY_WIRE_6M.map(({ m, spent, current }) => ({ m, spent, current }));
-    render(<BudgetHistoryChart historyData={realHistory} isMobile={false} shouldUseRealData />);
+    render(<BudgetHistoryChart historyData={realHistory} isMobile={false} shouldUseRealData currency="BRL" />);
     expect(screen.getByText(/backend ainda não expõe o limite histórico/i)).toBeInTheDocument();
+  });
+});
+
+/** #310 — o histórico é agregado na moeda base: numa organização em dólar, US$. */
+describe("BudgetHistoryChart — moeda base (#310)", () => {
+  it("base USD: chips, eixo, média e tooltip em US$, nenhum R$", () => {
+    const { container } = render(
+      <BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData currency="USD" />,
+    );
+    expect(screen.getByText(fmtAbs(TOOLTIP_SAMPLE.spent, "USD"))).toBeInTheDocument();
+    expect(container.textContent).toContain("US$");
+    expect(container.textContent).not.toMatch(/R\$/);
+  });
+
+  it("moeda ainda desconhecida: travessão, nunca R$", () => {
+    const { container } = render(
+      <BudgetHistoryChart historyData={HISTORY_WIRE_6M} isMobile={false} shouldUseRealData currency={null} />,
+    );
+    expect(container.textContent).not.toMatch(/R\$/);
   });
 });

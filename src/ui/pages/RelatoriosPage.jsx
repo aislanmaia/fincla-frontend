@@ -29,6 +29,7 @@ import { M_MONO } from "../features/moodV4";
 import { useReportsData } from "../features/reports/useReportsData.js";
 import { EmptyState } from "../features/shellExtras";
 import { formatMoney } from "../features/accounts/accountMeta.js";
+import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import { listRecurringSeries } from "../../api/recurringSeries";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 
@@ -278,7 +279,7 @@ function WaterfallChart({ compact = false, plotHeight, rows, fmtK }) {
 }
 
 /** Hover do donut isolado aqui — evita re-render da página inteira ao passar o mouse. */
-function ComposicaoDonutSection({ compositionData, compact = false, fmtBRL, desktopPieSize }) {
+function ComposicaoDonutSection({ compositionData, compact = false, fmtBase, desktopPieSize }) {
   const [activeIdx, setActive] = useState(null);
   const size = compact ? 110 : (desktopPieSize ?? 150);
   const ir = compact ? 30 : Math.round(42 * (size / 150));
@@ -306,7 +307,7 @@ function ComposicaoDonutSection({ compositionData, compact = false, fmtBRL, desk
               borderRadius:8, background:activeIdx===i?T.bg:"transparent", transition:"background 0.12s", cursor:"default" }}>
             <div style={{ width:7, height:7, borderRadius:2, background:c.color, flexShrink:0 }} />
             <span style={{ ...G, fontSize: 11, color:T.inkMid, flex:1 }}>{c.name}</span>
-            <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBRL(c.value)}</span>
+            <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBase(c.value)}</span>
             <span style={{ ...G, fontSize: 11, color:T.inkMid, minWidth:26, textAlign:"right" }}>
               {totalComp > 0 ? Math.round((Number(c.value) || 0)/totalComp*100) : 0}%
             </span>
@@ -339,6 +340,8 @@ export function RelatoriosPage({
   const PERIODO_N = { "3m":3, "6m":6, "12m":12 };
   const mockScoreData = useMemo(() => REL_MONTHLY.slice(-PERIODO_N[periodo]), [periodo]);
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  // Os relatórios são agregados pela API na moeda base da organização (#310).
+  const money = useBaseCurrencyMoney(organizationId, { live: shouldUseRealData });
   const reportsData = useReportsData({
     organizationId,
     periodo,
@@ -495,7 +498,7 @@ export function RelatoriosPage({
 
   const rec0 = extraRecs && extraRecs[0];
   if (dataMode === "empty") {
-    const fmtR = v => "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+    const fmtR = (v) => (money.currency ? formatMoney(Math.abs(v), money.currency) : UNKNOWN_MONEY);
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
         <PageTitle sans="Relatórios &" serif="Análises"/>
@@ -505,7 +508,7 @@ export function RelatoriosPage({
             <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)", gap:12, marginBottom:20 }}>
               {[
                 { label:"Receita projetada", val:fmtR(rec0.val), color:T.green, sub:`Todo dia ${rec0.dia} · ${rec0.valorTipo==="estimado"?"≈ estimado":"valor fixo"}` },
-                { label:"Despesas",          val:"R$ 0,00",       color:T.inkLight, sub:"Nenhuma registrada" },
+                { label:"Despesas",          val:money.fmtAbs(0), color:T.inkLight, sub:"Nenhuma registrada" },
                 { label:"Saldo projetado",   val:fmtR(rec0.val), color:T.green,   sub:"Sem despesas lançadas" },
               ].map((k,i)=>(
                 <div key={i} style={{ background:T.bg, borderRadius:12, padding:"14px 16px" }}>
@@ -598,10 +601,11 @@ export function RelatoriosPage({
     );
   }
 
-  const fmtBRL = (v) => {
+  const fmtBase = (v) => {
+    if (!money.symbol) return UNKNOWN_MONEY;
     const n = Number(v);
-    if (!Number.isFinite(n)) return "R$\u00a0—";
-    return "R$\u00a0" + Math.abs(n).toLocaleString("pt-BR",{minimumFractionDigits:0});
+    if (!Number.isFinite(n)) return `${money.symbol}\u00a0—`;
+    return `${money.symbol}\u00a0` + Math.abs(n).toLocaleString("pt-BR",{minimumFractionDigits:0});
   };
   const fmtK = (v) => {
     const n = Number(v);
@@ -619,7 +623,7 @@ export function RelatoriosPage({
   };
 
   /* ── Reusable UI atoms ───────────────────────────────────── */
-  const CustomTip = ({ active, payload, label, fmt=fmtBRL }) => {
+  const CustomTip = ({ active, payload, label, fmt=fmtBase }) => {
     if (!active||!payload?.length) return null;
     return (
       <div style={{ ...G, background:T.ink, borderRadius:10, padding:"8px 12px", boxShadow:T.dark }}>
@@ -814,8 +818,8 @@ export function RelatoriosPage({
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
           {[
             { label:"Score",    val:scoreDetail.score+"/100", color:sColor },
-            { label:"Receita",  val:fmtBRL(scoreDetail.receita), color:T.green },
-            { label:"Gasto",    val:fmtBRL(scoreDetail.gasto),   color:T.red },
+            { label:"Receita",  val:fmtBase(scoreDetail.receita), color:T.green },
+            { label:"Gasto",    val:fmtBase(scoreDetail.gasto),   color:T.red },
             { label:"Poupança", val:taxa+"%",                     color:T.blue },
           ].map((k,i) => (
             <div key={i}>
@@ -879,7 +883,7 @@ export function RelatoriosPage({
             <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
               <span style={{ ...M_MONO, ...NUM, fontSize:26, fontWeight:800, letterSpacing:"-0.02em",
                 color: saldoPositivo ? "#86EFAC" : "#FCA5A5" }}>
-                {saldoPositivo?"+":"−"}{fmtBRL(kpis.saldo)}
+                {saldoPositivo?"+":"−"}{fmtBase(kpis.saldo)}
               </span>
               <span style={{ ...G, fontSize:12, color:T.darkMuted }}>
                 {kpis.taxa}% guardado
@@ -889,8 +893,8 @@ export function RelatoriosPage({
           {/* Mini KPI row */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", borderTop:"1px solid rgba(255,255,255,0.07)", paddingTop:12 }}>
             {[
-              { label:"Receita",    val:fmtBRL(kpis.totalR), color:"#86EFAC" },
-              { label:"Gasto",      val:fmtBRL(kpis.totalG), color:"#FCA5A5" },
+              { label:"Receita",    val:fmtBase(kpis.totalR), color:"#86EFAC" },
+              { label:"Gasto",      val:fmtBase(kpis.totalG), color:"#FCA5A5" },
               { label:"Score médio",val:`${kpis.avgScore}/100`,
                 color:kpis.avgScore>=80?"#86EFAC":kpis.avgScore>=65?"#FCD34D":"#FCA5A5" },
             ].map((k,i) => (
@@ -923,7 +927,7 @@ export function RelatoriosPage({
           {relTab==="resumo" && (<>
             <InsightChip
               color={saldoPositivo?T.green:T.red} icon="💡"
-              text={`Último mês (<strong>${kpiRefLabel}</strong>): ${saldoPositivo?"saldo positivo":"saldo negativo"} <strong>${fmtBRL(Math.abs(kpis.saldo))}</strong> (${kpis.taxa}% da receita). Acumulado em <strong>${periodo}</strong>: <strong>${fmtBRL(Math.abs(kpis.periodSaldo))}</strong> (${kpis.periodTaxa}% da receita do período). Score médio: <strong>${kpis.avgScore}/100</strong>.`}
+              text={`Último mês (<strong>${kpiRefLabel}</strong>): ${saldoPositivo?"saldo positivo":"saldo negativo"} <strong>${fmtBase(Math.abs(kpis.saldo))}</strong> (${kpis.taxa}% da receita). Acumulado em <strong>${periodo}</strong>: <strong>${fmtBase(Math.abs(kpis.periodSaldo))}</strong> (${kpis.periodTaxa}% da receita do período). Score médio: <strong>${kpis.avgScore}/100</strong>.`}
             />
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:12 }}>Receita vs Gasto</div>
@@ -1014,7 +1018,7 @@ export function RelatoriosPage({
                 Composição{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
               </div>
               <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
-              <ComposicaoDonutSection compact compositionData={compositionData} fmtBRL={fmtBRL} />
+              <ComposicaoDonutSection compact compositionData={compositionData} fmtBase={fmtBase} />
             </div>
           </>)}
 
@@ -1055,11 +1059,11 @@ export function RelatoriosPage({
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
         {[
-          { label:`Receita · ${kpiRefLabel}`, val:fmtBRL(kpis.totalR),
+          { label:`Receita · ${kpiRefLabel}`, val:fmtBase(kpis.totalR),
             sub: kpis.tendR>=0 ? `↑ ${kpis.tendR}% vs mês ant.` : `↓ ${Math.abs(kpis.tendR)}% vs mês ant.`, color:T.green },
-          { label:`Gasto · ${kpiRefLabel}`,   val:fmtBRL(kpis.totalG),
+          { label:`Gasto · ${kpiRefLabel}`,   val:fmtBase(kpis.totalG),
             sub:`${expensePctOfIncome}% da receita do mês`,                                                    color:T.red   },
-          { label:`Saldo · ${kpiRefLabel}`,   val:fmtBRL(kpis.saldo),
+          { label:`Saldo · ${kpiRefLabel}`,   val:fmtBase(kpis.saldo),
             sub:kpis.saldo>=0?"superávit no mês":"déficit no mês",
             color:kpis.saldo>=0?T.blue:T.red },
           { label:`Taxa · ${kpiRefLabel}`,    val:`${kpis.taxa}%`,
@@ -1079,7 +1083,7 @@ export function RelatoriosPage({
         {/* col1 row1 — auto em ambos os modos */}
         <Section title="Receita vs" serifWord="Gasto"
           insight={{ color:kpis.saldo>=0?T.green:T.red, icon:"💡",
-            text:`Último mês (<strong>${kpiRefLabel}</strong>): saldo <strong>${fmtBRL(kpis.saldo)}</strong> (${kpis.taxa}% da receita). Acumulado em <strong>${periodo}</strong>: <strong>${fmtBRL(kpis.periodSaldo)}</strong> (${kpis.periodTaxa}% da receita). ${kpis.tendR>0?`Receita subiu ${kpis.tendR}% vs o mês anterior.`:`Receita caiu ${Math.abs(kpis.tendR)}% vs o mês anterior.`}` }}>
+            text:`Último mês (<strong>${kpiRefLabel}</strong>): saldo <strong>${fmtBase(kpis.saldo)}</strong> (${kpis.taxa}% da receita). Acumulado em <strong>${periodo}</strong>: <strong>${fmtBase(kpis.periodSaldo)}</strong> (${kpis.periodTaxa}% da receita). ${kpis.tendR>0?`Receita subiu ${kpis.tendR}% vs o mês anterior.`:`Receita caiu ${Math.abs(kpis.tendR)}% vs o mês anterior.`}` }}>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", minHeight:0 }}>
             <ReceitaGastoChart height={desktopChartH} />
           </div>
@@ -1147,7 +1151,7 @@ export function RelatoriosPage({
           <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
           <ComposicaoDonutSection
             compositionData={compositionData}
-            fmtBRL={fmtBRL}
+            fmtBase={fmtBase}
             desktopPieSize={Math.min(210, Math.max(150, Math.round(desktopChartH * 0.78)))}
           />
         </Section>
@@ -1166,7 +1170,7 @@ export function RelatoriosPage({
           insight={{ color:T.purple, icon:"🔁",
             text: compromissosFixos.activeCount === 0
               ? `Nenhuma recorrência ativa. Cadastre despesas fixas para acompanhar quanto do seu orçamento já está comprometido.`
-              : `<strong>${fmtBRL(compromissosFixos.totalMonthly)}/mês</strong> em ${compromissosFixos.activeCount} ${compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}${compromissosFixos.shareOfAvgExpense != null ? ` — equivalente a <strong>${compromissosFixos.shareOfAvgExpense.toFixed(0)}%</strong> do gasto médio mensal em ${periodo}.` : "."}` }}>
+              : `<strong>${fmtBase(compromissosFixos.totalMonthly)}/mês</strong> em ${compromissosFixos.activeCount} ${compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}${compromissosFixos.shareOfAvgExpense != null ? ` — equivalente a <strong>${compromissosFixos.shareOfAvgExpense.toFixed(0)}%</strong> do gasto médio mensal em ${periodo}.` : "."}` }}>
           {compromissosFixos.activeCount === 0 ? (
             <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "16px 0", textAlign: "center" }}>
               Sem dados de recorrências para o relatório.
@@ -1175,7 +1179,7 @@ export function RelatoriosPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, flex: 1 }}>
               <div>
                 <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Total comprometido / mês</div>
-                <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, color: T.purple, letterSpacing: "-0.01em", marginBottom: 6 }}>{fmtBRL(compromissosFixos.totalMonthly)}</div>
+                <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, color: T.purple, letterSpacing: "-0.01em", marginBottom: 6 }}>{fmtBase(compromissosFixos.totalMonthly)}</div>
                 <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
                   {compromissosFixos.activeCount} {compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}
                 </div>
@@ -1190,7 +1194,7 @@ export function RelatoriosPage({
                         <div style={{ width: `${Math.max(2, Math.min(100, c.pct))}%`, height: "100%", background: T.purple, borderRadius: 99 }} />
                       </div>
                       <div style={{ minWidth: 84, textAlign: "right", ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>
-                        {fmtBRL(c.val)}
+                        {fmtBase(c.val)}
                       </div>
                     </div>
                   ))}

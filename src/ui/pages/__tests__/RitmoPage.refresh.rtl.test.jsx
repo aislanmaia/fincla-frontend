@@ -26,6 +26,12 @@ vi.mock("recharts", () => {
   };
 });
 
+// Base em real, já resolvida: aqui o assunto é a recarga. A moeda (#310) está em
+// RitmoPage.currency.rtl.test.jsx, pela rede.
+vi.mock("../../money/useOrganizationBaseCurrency.js", () => ({
+  useOrganizationBaseCurrency: () => ({ status: "ready", currency: "BRL" }),
+}));
+
 const fetchTxMock = vi.fn();
 vi.mock("../../data/dashboardAdapter.js", async (importOriginal) => ({
   ...(await importOriginal()),
