@@ -3,7 +3,6 @@ import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ParcelaHybrid } from "../ParcelaHybrid.jsx";
 import { RefundLinkPanel } from "../RefundLinkPanel.jsx";
 import { NovaTransacaoImpactPanel } from "../../../components/NovaTransacaoImpactPanel.jsx";
 import { fmtImpactMoney } from "../../../data/novaTransacaoImpactUtils.js";
@@ -11,7 +10,7 @@ import { fmtSaldoLine } from "../useNovaTransacaoPeriodSaldo.js";
 
 /**
  * #315 — os painéis laterais da Nova transação escreviam "R$" chapado. O que é do
- * LANÇAMENTO (parcelas, compra estornada) sai na moeda dele; o que é da ORGANIZAÇÃO
+ * LANÇAMENTO (compra estornada) sai na moeda dele; o que é da ORGANIZAÇÃO
  * (orçamento, ritmo, resultado do mês) sai na moeda que a API declara — a base.
  */
 afterEach(cleanup);
@@ -28,19 +27,6 @@ describe("formatadores do impacto e do resultado do mês", () => {
     expect(fmtSaldoLine(10, "USD")).toBe("US$ 10,00");
     expect(fmtImpactMoney(10, null)).toBe("—");
     expect(fmtSaldoLine(10, null)).toBe("—");
-  });
-});
-
-describe("ParcelaHybrid — moeda do lançamento", () => {
-  it("US$ por mês e no total; nenhum R$", () => {
-    render(<ParcelaHybrid parcelas={3} valorNum={300} currency="USD" />);
-    expect(text()).toContain("US$ 100,00");
-    expect(text()).toContain("US$ 300,00");
-    expect(text()).not.toMatch(/R\$/);
-  });
-  it("BRL como antes", () => {
-    render(<ParcelaHybrid parcelas={3} valorNum={300} currency="BRL" />);
-    expect(text()).toContain("R$ 100,00");
   });
 });
 
