@@ -13,6 +13,30 @@ export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_tra
 export type ConcludeBlockerCode = 'unanswered' | 'missing_description';
 /** Os 8 passos da revisão guiada, na ordem (fincla-api#507). */
 export type ReconciliationStep = 'suggested' | 'doubt' | 'invoice' | 'yield' | 'new' | 'outside' | 'balance' | 'summary';
+/** Como o arquivo foi lido (fincla-api#515): OFX, XLS (BIFF), XLSX ou CSV. */
+export type StatementFileFormat = 'ofx' | 'xls' | 'xlsx' | 'csv';
+/**
+ * O arquivo é desta conta? (fincla-api#515) Só avisa e sugere; nunca bloqueia.
+ * `other_account` → aviso "parece ser de outra conta", com a conta certa quando o Fincla sabe qual é.
+ */
+export type AccountCheckStatus = 'not_identified' | 'first_time' | 'same_account' | 'other_account';
+export interface AccountCheck {
+  status: AccountCheckStatus;
+  suggested_account: { id: string; name: string } | null;
+}
+/** Colunas (a partir de 0, as da prévia) com a data, a descrição e o valor de uma planilha. */
+export interface ColumnMapping {
+  date: number;
+  description: number;
+  amount: number;
+}
+/** Primeiras linhas de uma planilha que o Fincla não reconheceu, para a pessoa indicar as colunas. */
+export interface SheetPreview {
+  rows: string[][];
+  column_count: number;
+  /** Mapeamento lembrado na conta para outro formato, para pré-selecionar; `null` se nenhum. */
+  suggested_mapping: ColumnMapping | null;
+}
 /** Rascunho descartado ou expirado é apagado: não há status `discarded` (fincla-api#518). */
 export type StatementImportStatus = 'draft' | 'concluded' | 'undone';
 export interface StatementImportSummary {
@@ -52,7 +76,7 @@ export interface StatementImport {
   id: string;
   account_id: string;
   status: StatementImportStatus;
-  file_format: 'ofx';
+  file_format: StatementFileFormat;
   period: { start: string | null; end: string | null };
   bank_balances: { date: string; balance: number; currency: string | null }[];
   entries: StatementEntry[];
@@ -71,6 +95,7 @@ export interface StatementImport {
   current_step: ReconciliationStep | null;
   /** Passos pelos quais a pessoa já passou, na ordem dos passos. */
   reviewed_steps: ReconciliationStep[];
+  account_check: AccountCheck;
 }
 
 /** Uma linha de "Extratos importados" (fincla-api#518): a importação sem os lançamentos. */
@@ -78,7 +103,7 @@ export interface StatementImportListItem {
   id: string;
   account_id: string;
   status: StatementImportStatus;
-  file_format: 'ofx';
+  file_format: StatementFileFormat;
   period: { start: string | null; end: string | null };
   summary: StatementImportSummary;
   /** Diferença registrada ao concluir. `null` = não registrada: nunca vira zero. */
@@ -134,20 +159,34 @@ export const normalizeStatementImportListItem = ({ final_difference, ...raw }: R
 
 const base = (accountId: string) => `/accounts/${accountId}/statement-imports`;
 
-/** Envia o extrato (OFX) e cria o rascunho. Nada muda no Fincla até concluir. */
+/**
+ * Envia o extrato (OFX, XLS, XLSX ou CSV) e cria o rascunho. Nada muda no Fincla até concluir.
+ * Planilha não reconhecida: falha com 422 e a prévia (ver `columnMappingPreviewOf`); reenvie o mesmo
+ * arquivo com `columnMapping`.
+ */
 export const uploadStatement = async (
   accountId: string,
   organizationId: string,
   file: File,
+  columnMapping: ColumnMapping | null = null,
 ): Promise<StatementImport> => {
   const form = new FormData();
   form.append('file', file);
+  if (columnMapping) form.append('column_mapping', JSON.stringify(columnMapping));
   const response = await apiClient.post<RawImport>(base(accountId), form, {
     params: { organization_id: organizationId },
     // O cliente nasce com `application/json`: sem trocar, o axios serializa o FormData em JSON.
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return normalizeStatementImport(response.data);
+};
+
+/** A prévia de "indique as colunas" quando o envio falhou por planilha não reconhecida; senão `null`. */
+export const columnMappingPreviewOf = (error: unknown): SheetPreview | null => {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+  const detail = response?.data?.detail as { reason?: string; preview?: SheetPreview } | undefined;
+  if (response?.status !== 422 || detail?.reason !== 'column_mapping_required' || !detail.preview) return null;
+  return detail.preview;
 };
 
 export const getStatementImport = async (

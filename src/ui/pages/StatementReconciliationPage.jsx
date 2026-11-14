@@ -17,6 +17,7 @@ import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
 import { listTags } from "../../api/tags";
 import {
+  columnMappingPreviewOf,
   concludeStatementImport,
   getStatementImport,
   listStatementImports,
@@ -32,6 +33,7 @@ import {
   stepStatus,
 } from "../features/statementImport/reconciliationSteps.js";
 import { StatementEntryCard, bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { statementImportUndoPath } from "../routing/statementImportRoute.js";
 import {
   DiscardDraftControl,
@@ -92,23 +94,35 @@ function ErrorNote({ children }) {
 // Enviar o extrato
 // --------------------------------------------------------------------------------------------
 
+const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
+
 function UploadView({ organizationId, accountId, accountName, beforeUpload = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  // A planilha que o Fincla não reconheceu: a pessoa indica as colunas e o mesmo arquivo é reenviado.
+  const [preview, setPreview] = useState(null);
 
-  const send = async () => {
+  const send = async (columnMapping = null) => {
     if (!file) return;
     setSending(true);
     setError("");
     try {
-      const draft = await uploadStatement(accountId, organizationId, file);
+      const draft = await uploadStatement(accountId, organizationId, file, columnMapping);
       navigate({ to: `/accounts/${accountId}/reconcile/${draft.id}` });
     } catch (err) {
-      setError(handleApiError(err));
+      const asked = columnMappingPreviewOf(err);
+      if (asked && !columnMapping) setPreview(asked);
+      else setError(handleApiError(err));
       setSending(false);
     }
+  };
+
+  const pick = (chosen) => {
+    setFile(chosen);
+    setError("");
+    setPreview(null);
   };
 
   return (
@@ -116,32 +130,71 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
       <PageTitle sans="Importar" serif="extrato" />
       <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
         {accountName ? <>Conta <b>{accountName}</b>. </> : null}
-        Envie o extrato da conta corrente em OFX, exportado pelo banco. O Fincla lê os lançamentos e você
-        confere cada um antes de qualquer coisa entrar.
+        Envie o extrato da conta corrente exportado pelo banco: OFX, planilha (XLS ou XLSX) ou CSV. O Fincla lê
+        os lançamentos e você confere cada um antes de qualquer coisa entrar.
       </p>
       {beforeUpload}
-      <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        <label htmlFor="statement-file" style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>
-          Arquivo do extrato (OFX, até 5 MB)
-        </label>
-        <input
-          id="statement-file"
-          type="file"
-          accept=".ofx,application/x-ofx"
-          onChange={(e) => { setFile(e.target.files?.[0] ?? null); setError(""); }}
-          style={{ ...G, fontSize: 13 }}
+      {preview && file ? (
+        <ColumnMappingCard
+          key={file.name}
+          preview={preview}
+          fileName={file.name}
+          sending={sending}
+          error={error}
+          onSubmit={(mapping) => send(mapping)}
+          onCancel={() => pick(null)}
         />
-        <ErrorNote>{error}</ErrorNote>
-        <div>
-          <Btn variant="dark" onClick={send} disabled={!file || sending}>
-            <FileUp size={14} aria-hidden="true" style={{ marginRight: 6 }} />
-            {sending ? "Enviando…" : "Enviar extrato"}
-          </Btn>
-        </div>
-      </Card>
+      ) : (
+        <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <label htmlFor="statement-file" style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>
+            Arquivo do extrato (OFX, XLS, XLSX ou CSV, até 5 MB)
+          </label>
+          <input
+            id="statement-file"
+            type="file"
+            accept={ACCEPTED_FILES}
+            onChange={(e) => pick(e.target.files?.[0] ?? null)}
+            style={{ ...G, fontSize: 13 }}
+          />
+          <ErrorNote>{error}</ErrorNote>
+          <div>
+            <Btn variant="dark" onClick={() => send()} disabled={!file || sending}>
+              <FileUp size={14} aria-hidden="true" style={{ marginRight: 6 }} />
+              {sending ? "Enviando…" : "Enviar extrato"}
+            </Btn>
+          </div>
+        </Card>
+      )}
       <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0 }}>
         {NOTHING_CHANGES} O arquivo não fica guardado: só os lançamentos lidos.
       </p>
+    </div>
+  );
+}
+
+/** "Parece ser de outra conta" (fincla-api#515): só avisa, nunca bloqueia a conciliação. */
+function OtherAccountNotice({ accountCheck, accountName }) {
+  const navigate = useNavigate();
+  if (accountCheck?.status !== "other_account") return null;
+  const suggested = accountCheck.suggested_account;
+  return (
+    <div data-testid="other-account-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <span>
+        <b>Este extrato parece ser de outra conta.</b>{" "}
+        {suggested ? (
+          <>Pelo arquivo, ele é da conta <b>{suggested.name}</b>, onde você já conciliou um extrato deste banco.</>
+        ) : (
+          <>A última conciliação {accountName ? <>de <b>{accountName}</b></> : "desta conta"} foi feita com o extrato de outra conta do banco.</>
+        )}{" "}
+        Se o arquivo é mesmo desta conta, pode seguir: nada impede a conciliação.
+      </span>
+      {suggested ? (
+        <div>
+          <Btn variant="outGray" small onClick={() => navigate({ to: `/accounts/${suggested.id}/reconcile` })}>
+            Conciliar na conta {suggested.name}
+          </Btn>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -490,6 +543,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           />
         </div>
       </div>
+      <OtherAccountNotice accountCheck={statementImport.account_check} accountName={accountName} />
       <ProgressPanel statementImport={statementImport} passed={passed} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
