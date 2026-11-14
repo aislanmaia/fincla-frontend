@@ -15,3 +15,11 @@ import "@testing-library/jest-dom/vitest";
  * bastante para um seletor de fato errado ainda falhar rápido — que é o valor
  * de um `findBy` sobre um `getBy`. */
 configure({ asyncUtilTimeout: 5_000 });
+
+/* jsdom não implementa `Element.prototype.scrollIntoView`. Telas que rolam até
+ * uma confirmação dentro de um `requestAnimationFrame` (ex.: a sanfona mobile de
+ * Transações) lançavam "scrollIntoView is not a function" depois do teste,
+ * como erro não tratado que derruba o código de saída do Vitest. */
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
