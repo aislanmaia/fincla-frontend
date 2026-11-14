@@ -154,6 +154,17 @@ const cardCommitmentsRoute = createRoute({
   },
 });
 
+/** Conciliar extrato da conta: envio (`/accounts/:id/reconcile`) e rascunho (`…/reconcile/:importId`). */
+const statementReconciliationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "accounts/$accountId/reconcile/{-$importId}",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function StatementReconciliationRoute() {
+    return <AuthenticatedPageOutlet segment="statementReconciliation" />;
+  },
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "profile",
@@ -318,6 +329,7 @@ const routeTree = rootRoute.addChildren([
   cardTransactionsRoute,
   cardAllTransactionsRoute,
   cardCommitmentsRoute,
+  statementReconciliationRoute,
   profileRoute,
   planningRoute,
   consultantRoute,

@@ -1,0 +1,75 @@
+{
+  "draft": {
+    "id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
+    "account_id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+    "status": "draft",
+    "file_format": "ofx",
+    "period": {"start": "2026-10-01", "end": "2026-10-31"},
+    "bank_balances": [
+      {"date": "2026-10-31", "balance": {"amount": "1834.10", "currency": "BRL"}}
+    ],
+    "entries": [
+      {
+        "id": "0e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+        "position": 0,
+        "date": "2026-10-02",
+        "bank_description": "PIX QRS PADARIA 02 10",
+        "amount": {"amount": "-45.90", "currency": "BRL"},
+        "fitid": "20261002001",
+        "classification": "new",
+        "answer": "create",
+        "description": "Padaria do bairro",
+        "transaction_type": "expense",
+        "category_tag_id": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+        "created_transaction_id": null
+      },
+      {
+        "id": "1f2a3b4c-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
+        "position": 1,
+        "date": "2026-10-05",
+        "bank_description": "REMUNERACAO SALARIO",
+        "amount": {"amount": "3000.00", "currency": "BRL"},
+        "fitid": "20261005001",
+        "classification": "new",
+        "answer": "create",
+        "description": "REMUNERACAO SALARIO",
+        "transaction_type": "income",
+        "category_tag_id": null,
+        "created_transaction_id": null
+      },
+      {
+        "id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+        "position": 2,
+        "date": "2026-10-07",
+        "bank_description": "PAG BOLETO ENERGIA",
+        "amount": {"amount": "-120.00", "currency": "BRL"},
+        "fitid": null,
+        "classification": "new",
+        "answer": "create",
+        "description": "",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "created_transaction_id": null
+      }
+    ],
+    "summary": {"total": 3, "to_create": 3, "missing_description": 1, "unanswered": 0},
+    "can_conclude": false,
+    "blockers": [{"code": "missing_description", "count": 1}],
+    "created_at": "2026-11-14T10:20:00",
+    "concluded_at": null
+  },
+  "entry": {
+    "id": "0e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+    "position": 0,
+    "date": "2026-10-02",
+    "bank_description": "PIX QRS PADARIA 02 10",
+    "amount": {"amount": "-45.90", "currency": "BRL"},
+    "fitid": "20261002001",
+    "classification": "new",
+    "answer": "create",
+    "description": "Padaria do bairro",
+    "transaction_type": "expense",
+    "category_tag_id": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+    "created_transaction_id": null
+  }
+}

@@ -39,6 +39,8 @@ export function AccountsPage({
   transactionsRefreshToken = 0,
   /** Toque numa conta → Transações filtradas nela (#268). */
   onOpenAccountTransactions = null,
+  /** "Importar extrato" no menu da conta (Conciliar extrato, fincla-api#508); `null` esconde. */
+  onImportStatement = null,
 }) {
   const enabled = !!organizationId && dataMode === "live";
   // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
@@ -362,6 +364,9 @@ export function AccountsPage({
                   >
                     <button style={menuItemStyle} onClick={() => { setMenu(null); setEditAccount(acc); }}>Editar</button>
                     <button style={menuItemStyle} onClick={() => { setMenu(null); setAdjustTargetId(acc.id); }}>Ajustar saldo</button>
+                    {onImportStatement ? (
+                      <button style={menuItemStyle} onClick={() => { setMenu(null); onImportStatement(acc.id); }}>Importar extrato</button>
+                    ) : null}
                     <div style={{ height: 1, background: T.border }} />
                     <button style={{ ...menuItemStyle, color: T.red }} onClick={() => { setMenu(null); setDeactivateTarget(acc); }}>Desativar</button>
                   </div>
