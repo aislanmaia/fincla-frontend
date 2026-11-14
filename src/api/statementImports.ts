@@ -50,6 +50,8 @@ export interface StatementImport {
   blockers: { code: ConcludeBlockerCode; count: number }[];
   created_at: string;
   concluded_at: string | null;
+  /** Quando a importação foi desfeita (`status: 'undone'`, fincla-api#509). */
+  undone_at: string | null;
 }
 
 export interface UpdateStatementEntryRequest {
@@ -131,6 +133,82 @@ export const concludeStatementImport = async (
   importId: string,
 ): Promise<StatementImport> => {
   const response = await apiClient.post<RawImport>(`${base(accountId)}/${importId}/conclude`, null, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementImport(response.data);
+};
+
+// --------------------------------------------------------------------------------------------
+// Desfazer importação (fincla-api#509)
+// --------------------------------------------------------------------------------------------
+
+export type UndoRefusalCode = 'not_concluded' | 'already_undone' | 'not_latest' | 'linked_to_goal' | 'unsupported_change';
+export type UndoChangedField =
+  | 'description' | 'value' | 'type' | 'date' | 'status' | 'paid_at' | 'account' | 'payment_method' | 'tags' | 'credit_card';
+
+export interface UndoDeletedTransaction {
+  transaction_id: number;
+  /** Como está hoje (com as edições feitas depois da conclusão). */
+  description: string;
+  date: string;
+  type: StatementTransactionType;
+  /** Valor de hoje, sem sinal. */
+  amount: number;
+  currency: string | null;
+  edited_after: boolean;
+  changed_fields: UndoChangedField[];
+}
+
+export interface UndoRestoredEntity {
+  entity_type: 'transaction';
+  entity_id: string;
+  action: 'updated' | 'deleted';
+  description: string;
+}
+
+export interface StatementUndoPreview {
+  import_id: string;
+  can_undo: boolean;
+  /** Por que não dá para desfazer agora (mensagem PT-BR pronta); `null` quando dá. */
+  refusal: { code: UndoRefusalCode; message: string } | null;
+  summary: { to_delete: number; edited_after: number; already_deleted: number; to_restore: number };
+  transactions_to_delete: UndoDeletedTransaction[];
+  to_restore: UndoRestoredEntity[];
+}
+
+type RawUndoPreview = Omit<StatementUndoPreview, 'transactions_to_delete'> & {
+  transactions_to_delete: (Omit<UndoDeletedTransaction, 'amount' | 'currency'> & { amount: WireMoney })[];
+};
+
+export const normalizeStatementUndoPreview = (raw: RawUndoPreview): StatementUndoPreview => ({
+  ...raw,
+  transactions_to_delete: (raw.transactions_to_delete ?? []).map((t) => ({
+    ...t,
+    amount: toAmount(t.amount),
+    currency: toCurrency(t.amount),
+  })),
+  to_restore: raw.to_restore ?? [],
+});
+
+/** O que desfazer a importação vai fazer agora (e o motivo, se não der). Não muda nada. */
+export const previewStatementImportUndo = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+): Promise<StatementUndoPreview> => {
+  const response = await apiClient.get<RawUndoPreview>(`${base(accountId)}/${importId}/undo-preview`, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementUndoPreview(response.data);
+};
+
+/** Desfaz a importação concluída mais recente da conta (tudo ou nada). */
+export const undoStatementImport = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+): Promise<StatementImport> => {
+  const response = await apiClient.post<RawImport>(`${base(accountId)}/${importId}/undo`, null, {
     params: { organization_id: organizationId },
   });
   return normalizeStatementImport(response.data);

@@ -1,0 +1,190 @@
+/** @vitest-environment jsdom */
+// Desfazer importação (fincla-api#509). A página é alimentada pela fixture canônica do backend
+// (`undo_preview` / `undo_refused` de `statement_import.example.json`). Que o desfazer devolve o
+// Fincla ao estado anterior é garantido pelos testes de API; aqui conferimos o que a pessoa vê
+// antes de decidir, que nada é desfeito sem confirmar NA PÁGINA, e o que a tela manda.
+import React from "react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+
+import contract from "../../../api/__fixtures__/statement_import.example.json";
+
+const navigate = vi.fn();
+let params = {};
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, useParams: () => params }));
+import { StatementImportUndoPage } from "../StatementImportUndoPage.jsx";
+
+const ORG = "org";
+const ACCOUNT = contract.draft.account_id;
+const IMPORT = contract.draft.id;
+const BASE = `*/v1/accounts/${ACCOUNT}/statement-imports/${IMPORT}`;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const calls = [];
+let preview = clone(contract.undo_preview);
+let undoResponse = null;
+const server = setupServer(
+  http.get("*/v1/accounts", () =>
+    HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
+  ),
+  http.get(`${BASE}/undo-preview`, () => {
+    calls.push({ preview: IMPORT });
+    return HttpResponse.json(preview);
+  }),
+  http.post(`${BASE}/undo`, () => {
+    calls.push({ undo: IMPORT });
+    if (undoResponse) return undoResponse();
+    const undone = clone(contract.draft);
+    undone.status = "undone";
+    undone.undone_at = "2026-11-15T09:00:00";
+    return HttpResponse.json(undone);
+  }),
+);
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+afterEach(() => {
+  cleanup();
+  calls.length = 0;
+  preview = clone(contract.undo_preview);
+  undoResponse = null;
+  server.resetHandlers();
+  navigate.mockReset();
+});
+
+const open = async (props = {}) => {
+  params = { accountId: ACCOUNT, importId: IMPORT };
+  render(<StatementImportUndoPage organizationId={ORG} {...props} />);
+  await screen.findByText("Se você desfizer esta importação:");
+};
+
+describe("prévia", () => {
+  it("diz quantas transações serão apagadas e quais foram editadas depois, com o que mudou", async () => {
+    await open();
+
+    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent(
+      "2 transações adicionadas serão apagadas (1 editada depois da conciliação — essa também some)",
+    );
+    expect(screen.getByTestId("undo-already-deleted")).toHaveTextContent("1 transação adicionada já foi excluída por você");
+    const rows = screen.getAllByTestId("undo-transaction");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining("02/10/2026 · Padaria"),
+      expect.stringContaining("07/10/2026 · PAG BOLETO ENERGIA"),
+    ]);
+    expect(within(rows[0]).getByText("Editada depois: descrição, categoria ou etiquetas")).toBeInTheDocument();
+    expect(within(rows[1]).queryByText(/Editada depois/)).not.toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent(/−R\$\s120,00/);
+    expect(calls).toEqual([{ preview: IMPORT }]);
+  });
+
+  it("sem edições depois, não fala de editadas", async () => {
+    preview.summary = { to_delete: 1, edited_after: 0, already_deleted: 0, to_restore: 0 };
+    preview.transactions_to_delete = [contract.undo_preview.transactions_to_delete[1]];
+    await open();
+
+    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent(/^1 transação adicionada será apagada$/);
+    expect(screen.queryByTestId("undo-already-deleted")).not.toBeInTheDocument();
+  });
+});
+
+describe("confirmar na página", () => {
+  it("nada é desfeito no primeiro clique: a confirmação aparece na própria página", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    await open();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+
+    const box = screen.getByRole("group", { name: "Confirmar desfazer importação" });
+    expect(box).toHaveTextContent("As 2 transações adicionadas serão apagadas, inclusive as editadas depois.");
+    expect(calls.some((c) => c.undo)).toBe(false);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("cancelar volta à prévia sem desfazer nada", async () => {
+    await open();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(screen.queryByRole("group", { name: "Confirmar desfazer importação" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Desfazer importação" })).toBeInTheDocument();
+    expect(calls.some((c) => c.undo)).toBe(false);
+  });
+
+  it("confirmado, desfaz, avisa a lista de transações e diz o que aconteceu", async () => {
+    const onUndone = vi.fn();
+    const onOpen = vi.fn();
+    await open({ onUndone, onOpenAccountTransactions: onOpen });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+
+    expect(await screen.findByRole("heading", { name: "Importação desfeita" })).toBeInTheDocument();
+    expect(screen.getByText(/2 transações adicionadas foram apagadas/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.undo)).toEqual([{ undo: IMPORT }]);
+    expect(onUndone).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Ver transações da conta" }));
+    expect(onOpen).toHaveBeenCalledWith(ACCOUNT);
+  });
+
+  it("se o backend recusar na hora, mostra o motivo e a prévia volta a valer", async () => {
+    undoResponse = () => HttpResponse.json(
+      { detail: { code: "business_rule", message: contract.undo_refused.refusal.message } },
+      { status: 422 },
+    );
+    await open();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    preview = clone(contract.undo_refused);
+
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(contract.undo_refused.refusal.message);
+    expect(await screen.findByTestId("undo-refusal")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Importação desfeita" })).not.toBeInTheDocument();
+  });
+});
+
+describe("quando não dá para desfazer", () => {
+  it("importação que não é a mais recente: mostra o motivo e o que ela fez, sem botão", async () => {
+    preview = clone(contract.undo_refused);
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementImportUndoPage organizationId={ORG} />);
+
+    const refusal = await screen.findByTestId("undo-refusal");
+    expect(refusal).toHaveTextContent(contract.undo_refused.refusal.message);
+    expect(screen.getByText("O que esta importação fez:")).toBeInTheDocument();
+    expect(screen.getAllByTestId("undo-transaction")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
+  });
+
+  it("importação já desfeita: diz que já foi desfeita", async () => {
+    preview = {
+      ...clone(contract.undo_refused),
+      refusal: { code: "already_undone", message: "Esta importação já foi desfeita." },
+      summary: { to_delete: 0, edited_after: 0, already_deleted: 0, to_restore: 0 },
+      transactions_to_delete: [],
+    };
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementImportUndoPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("heading", { name: "Importação desfeita" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
+  });
+
+  it("importação de outra organização: mostra o erro da API", async () => {
+    server.use(http.get(`${BASE}/undo-preview`, () =>
+      HttpResponse.json({ detail: { code: "not_found", message: "Conciliação não encontrada nesta conta." } }, { status: 404 })));
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementImportUndoPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Conciliação não encontrada nesta conta.");
+  });
+});

@@ -51,6 +51,7 @@ import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
 import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { CardCommitmentsPage } from "./pages/CardCommitmentsPage.jsx";
 import { StatementReconciliationPage } from "./pages/StatementReconciliationPage.jsx";
+import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { CardAllTransactionsPage } from "./pages/CardAllTransactionsPage.jsx";
@@ -471,6 +472,9 @@ export default function App() {
       onImportStatement={activeMembershipRole === "owner" ? (accountId) => navigate({ to: `/accounts/${accountId}/reconcile` }) : null} />,
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
       onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
+    statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}
+      onUndone={bumpTransactionsList}
+      onOpenAccountTransactions={(accountId) => { bumpTransactionsList(); navTo("transactions", { accountId }); }} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user}
       membershipRole={activeMembershipRole} onBaseCurrencyChanged={onBaseCurrencyChanged} />,

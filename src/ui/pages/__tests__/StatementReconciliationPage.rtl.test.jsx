@@ -307,3 +307,30 @@ describe("revisar e concluir", () => {
     expect(onOpen).toHaveBeenCalledWith(ACCOUNT, { from: contract.draft.period.start, to: contract.draft.period.end });
   });
 });
+
+describe("desfazer a importação (fincla-api#509)", () => {
+  it("a conciliação concluída leva à tela de desfazer da importação", async () => {
+    draft.status = "concluded";
+    draft.concluded_at = "2026-11-14T10:30:00";
+    const user = userEvent.setup();
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    await user.click(await screen.findByRole("button", { name: "Desfazer importação" }));
+
+    expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${IMPORT}/undo` });
+  });
+
+  it("uma importação desfeita diz isso, sem reabrir os passos", async () => {
+    draft.status = "undone";
+    draft.concluded_at = "2026-11-14T10:30:00";
+    draft.undone_at = "2026-11-15T09:00:00";
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("heading", { name: "Importação desfeita" })).toBeInTheDocument();
+    expect(screen.getByText("15/11/2026")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Passos da conciliação" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
+  });
+});

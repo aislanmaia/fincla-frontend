@@ -28,6 +28,7 @@ import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.j
 import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
 import { isTransactionEditPathId } from "./transactionPathId.js";
 import { CARD_ALL_TRANSACTIONS_ROUTE_PATTERN, CARD_TRANSACTIONS_ROUTE_PATTERN, INVOICE_ROUTE_PATTERN, isValidInvoiceParams, isValidPublicCardId } from "./invoiceRoute.js";
+import { STATEMENT_IMPORT_UNDO_ROUTE_PATTERN } from "./statementImportRoute.js";
 
 const rootRoute = createRootRoute({
   validateSearch: zodValidator(finclaRootSearchSchema),
@@ -162,6 +163,17 @@ const statementReconciliationRoute = createRoute({
   errorComponent: FinclaAuthenticatedRouteError,
   component: function StatementReconciliationRoute() {
     return <AuthenticatedPageOutlet segment="statementReconciliation" />;
+  },
+});
+
+/** Desfazer uma importação concluída (fincla-api#509): prévia e confirmação na própria página. */
+const statementImportUndoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: STATEMENT_IMPORT_UNDO_ROUTE_PATTERN,
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function StatementImportUndoRoute() {
+    return <AuthenticatedPageOutlet segment="statementImportUndo" />;
   },
 });
 
@@ -330,6 +342,7 @@ const routeTree = rootRoute.addChildren([
   cardAllTransactionsRoute,
   cardCommitmentsRoute,
   statementReconciliationRoute,
+  statementImportUndoRoute,
   profileRoute,
   planningRoute,
   consultantRoute,
