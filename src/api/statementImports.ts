@@ -8,6 +8,8 @@ import { toAmount, type WireMoney } from './money';
 
 export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment';
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
+/** Só o que passa por conta corrente: compra no cartão de crédito sai na fatura, não no extrato. */
+export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_transfer' | 'cash';
 export type ConcludeBlockerCode = 'unanswered' | 'missing_description';
 
 export interface StatementEntry {
@@ -26,6 +28,8 @@ export interface StatementEntry {
   answer: StatementEntryAnswer | null;
   description: string | null;
   transaction_type: StatementTransactionType | null;
+  /** Sugerida pelo prefixo do texto do banco (`PIX …`, `PAG BOLETO …`, `RSHOP …`); editável. */
+  payment_method: StatementPaymentMethod | null;
   /** `null` = vai para Não classificado ao concluir. */
   category_tag_id: string | null;
   created_transaction_id: number | null;
@@ -49,6 +53,7 @@ export interface StatementImport {
 export interface UpdateStatementEntryRequest {
   description?: string;
   transaction_type?: StatementTransactionType;
+  payment_method?: StatementPaymentMethod;
   category_tag_id?: string | null;
 }
 

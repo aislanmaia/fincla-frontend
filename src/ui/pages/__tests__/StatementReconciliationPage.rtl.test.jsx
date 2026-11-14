@@ -190,6 +190,25 @@ describe("rascunho", () => {
     });
   });
 
+  it("a forma de pagamento vem sugerida pelo texto do banco e pode ser trocada", async () => {
+    await openDraft();
+    const user = userEvent.setup();
+    const [bakery, salary, energy] = screen.getAllByTestId("statement-entry");
+
+    expect(within(bakery).getByLabelText("Forma de pagamento")).toHaveValue("pix");
+    expect(within(energy).getByLabelText("Forma de pagamento")).toHaveValue("boleto");
+    expect(within(bakery).getByText("Sugerida pelo texto do banco")).toBeInTheDocument();
+    // Extrato de conta não tem compra no cartão de crédito: ela sai na fatura.
+    const options = within(within(salary).getByLabelText("Forma de pagamento")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["Pix", "Boleto", "Cartão de débito", "Transferência", "Dinheiro"]);
+
+    await user.selectOptions(within(salary).getByLabelText("Forma de pagamento"), "Pix");
+
+    await waitFor(() =>
+      expect(calls).toContainEqual({ patch: contract.draft.entries[1].id, body: { payment_method: "pix" } }),
+    );
+  });
+
   it("um passo só fica conferido depois que a pessoa passa por ele", async () => {
     await openDraft();
     const user = userEvent.setup();

@@ -21,6 +21,15 @@ const LOCKED = { ...G, ...NUM, display: "flex", alignItems: "center", gap: 6, fo
 
 const TYPE_LABEL = { income: "Receita", refund: "Estorno", expense: "Despesa" };
 
+/** Só o que passa por conta corrente (o backend recusa o resto); compra no crédito sai na fatura. */
+export const STATEMENT_PAYMENT_METHODS = [
+  { value: "pix", label: "Pix" },
+  { value: "boleto", label: "Boleto" },
+  { value: "debit_card", label: "Cartão de débito" },
+  { value: "bank_transfer", label: "Transferência" },
+  { value: "cash", label: "Dinheiro" },
+];
+
 /** Categorias que aceitam o tipo. Estorno devolve um gasto: aceita as de despesa também (regra do backend). */
 export function categoriesForType(categories, type) {
   return categories.filter((c) => {
@@ -40,8 +49,8 @@ function LockedValue({ children, testId, title }) {
 
 /**
  * Um lançamento novo: à esquerda o que o banco registrou, à direita a transação que ele vai
- * virar ao concluir. Data e valor vêm do banco e ficam travados; descrição, tipo e categoria
- * são da pessoa. A descrição é gravada ao sair do campo.
+ * virar ao concluir. Data e valor vêm do banco e ficam travados; descrição, tipo, forma de
+ * pagamento (sugerida pelo texto do banco) e categoria são da pessoa. A descrição é gravada ao sair do campo.
  */
 export function StatementEntryCard({ entry, categories, fallbackLabel, isMobile, onChange }) {
   const [description, setDescription] = useState(entry.description ?? "");
@@ -123,6 +132,18 @@ export function StatementEntryCard({ entry, categories, fallbackLabel, isMobile,
             )}
           </div>
           <div>
+            <label htmlFor={fieldId("payment")} style={FIELD_LABEL}>Forma de pagamento</label>
+            <Select
+              id={fieldId("payment")}
+              value={entry.payment_method ?? "bank_transfer"}
+              onChange={(e) => onChange(entry.id, { payment_method: e.target.value })}
+              style={{ width: "100%" }}
+            >
+              {STATEMENT_PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </Select>
+            <span style={HELP}>Sugerida pelo texto do banco</span>
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label htmlFor={fieldId("category")} style={FIELD_LABEL}>Categoria</label>
             <Select
               id={fieldId("category")}

@@ -20,6 +20,7 @@
         "answer": "create",
         "description": "Padaria do bairro",
         "transaction_type": "expense",
+        "payment_method": "pix",
         "category_tag_id": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
         "created_transaction_id": null
       },
@@ -34,6 +35,7 @@
         "answer": "create",
         "description": "REMUNERACAO SALARIO",
         "transaction_type": "income",
+        "payment_method": "bank_transfer",
         "category_tag_id": null,
         "created_transaction_id": null
       },
@@ -48,6 +50,7 @@
         "answer": "create",
         "description": "",
         "transaction_type": "expense",
+        "payment_method": "boleto",
         "category_tag_id": null,
         "created_transaction_id": null
       }
@@ -69,6 +72,7 @@
     "answer": "create",
     "description": "Padaria do bairro",
     "transaction_type": "expense",
+    "payment_method": "pix",
     "category_tag_id": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
     "created_transaction_id": null
   }
