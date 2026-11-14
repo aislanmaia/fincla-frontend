@@ -30,6 +30,7 @@ import {
   stepStatus,
 } from "../features/statementImport/reconciliationSteps.js";
 import { StatementEntryCard, bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { statementImportUndoPath } from "../routing/statementImportRoute.js";
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação.";
 
@@ -294,6 +295,38 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
           ) : null}
           <Btn variant="outGray" onClick={() => navigate({ to: "/accounts" })}>Voltar para Contas</Btn>
         </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate({ to: statementImportUndoPath(statementImport.account_id, statementImport.id) })}
+            style={{ ...G, fontSize: 13, color: T.red, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+          >
+            Desfazer importação
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function UndoneView({ statementImport, onOpenAccountTransactions }) {
+  const navigate = useNavigate();
+  const undoneOn = statementImport.undone_at ? bankDateLabel(statementImport.undone_at.slice(0, 10)) : "";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <PageTitle sans="Conciliar" serif="extrato" />
+      <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+        <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.ink, margin: 0 }}>Importação desfeita</h2>
+        <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
+          Esta importação foi desfeita{undoneOn ? <> em <b style={NUM}>{undoneOn}</b></> : null}: as transações que ela adicionou
+          foram apagadas. Para conciliar este extrato de novo, importe o arquivo outra vez.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {onOpenAccountTransactions ? (
+            <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))}>Ver transações da conta</Btn>
+          ) : null}
+          <Btn variant="outGray" onClick={() => navigate({ to: "/accounts" })}>Voltar para Contas</Btn>
+        </div>
       </Card>
     </div>
   );
@@ -362,6 +395,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   if (!statementImport || !current) return <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando a conciliação…</p>;
   if (statementImport.status === "concluded") {
     return <DoneView statementImport={statementImport} accountName={accountName} onOpenAccountTransactions={onOpenAccountTransactions} />;
+  }
+  if (statementImport.status === "undone") {
+    return <UndoneView statementImport={statementImport} onOpenAccountTransactions={onOpenAccountTransactions} />;
   }
 
   const step = STEPS.find((s) => s.key === current);

@@ -59,7 +59,8 @@
     "can_conclude": false,
     "blockers": [{"code": "missing_description", "count": 1}],
     "created_at": "2026-11-14T10:20:00",
-    "concluded_at": null
+    "concluded_at": null,
+    "undone_at": null
   },
   "entry": {
     "id": "0e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
@@ -75,5 +76,53 @@
     "payment_method": "pix",
     "category_tag_id": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
     "created_transaction_id": null
+  },
+  "undo_preview": {
+    "import_id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
+    "can_undo": true,
+    "refusal": null,
+    "summary": {"to_delete": 2, "edited_after": 1, "already_deleted": 1, "to_restore": 0},
+    "transactions_to_delete": [
+      {
+        "transaction_id": 101,
+        "description": "Padaria",
+        "date": "2026-10-02",
+        "type": "expense",
+        "amount": {"amount": "45.90", "currency": "BRL"},
+        "edited_after": true,
+        "changed_fields": ["description", "tags"]
+      },
+      {
+        "transaction_id": 103,
+        "description": "PAG BOLETO ENERGIA",
+        "date": "2026-10-07",
+        "type": "expense",
+        "amount": {"amount": "120.00", "currency": "BRL"},
+        "edited_after": false,
+        "changed_fields": []
+      }
+    ],
+    "to_restore": []
+  },
+  "undo_refused": {
+    "import_id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
+    "can_undo": false,
+    "refusal": {
+      "code": "not_latest",
+      "message": "Só a importação concluída mais recente desta conta pode ser desfeita. Desfaça antes as importações concluídas depois desta."
+    },
+    "summary": {"to_delete": 1, "edited_after": 0, "already_deleted": 0, "to_restore": 0},
+    "transactions_to_delete": [
+      {
+        "transaction_id": 102,
+        "description": "REMUNERACAO SALARIO",
+        "date": "2026-10-05",
+        "type": "income",
+        "amount": {"amount": "3000.00", "currency": "BRL"},
+        "edited_after": false,
+        "changed_fields": []
+      }
+    ],
+    "to_restore": []
   }
 }
