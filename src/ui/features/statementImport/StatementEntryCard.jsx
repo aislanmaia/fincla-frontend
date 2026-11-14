@@ -13,7 +13,7 @@ export function bankDateLabel(ymd) {
 }
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
-const BOX_LABEL = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
+const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
 const FIELD_LABEL = { ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, display: "block", marginBottom: 4 };
 const HELP = { ...G, fontSize: 11, color: T.inkLight, marginTop: 4, display: "block" };
 const INPUT = { ...G, width: "100%", boxSizing: "border-box", fontSize: 13, color: T.ink, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 10px" };

@@ -159,7 +159,7 @@ function StepRail({ statementImport, current, passed, onOpen }) {
               boxShadow: active ? T.sm : "none", borderRadius: 10, padding: "8px 10px",
             }}
           >
-            <span aria-hidden="true" style={{ ...NUM, flexShrink: 0, width: 20, height: 20, borderRadius: 9999, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", background: tone.dot, marginTop: 1 }}>
+            <span aria-hidden="true" style={{ ...NUM, flexShrink: 0, width: 20, height: 20, borderRadius: 9999, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", background: tone.dot, marginTop: 1 }}>
               {status.tone === "done" ? <Check size={11} /> : index + 1}
             </span>
             <span style={{ minWidth: 0 }}>
