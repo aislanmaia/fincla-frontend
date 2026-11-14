@@ -4,7 +4,7 @@
 // é o rascunho guiado pelos 8 passos. Nada muda no Fincla até "Concluir conciliação": cada
 // resposta é gravada no rascunho, e as contagens e os bloqueios vêm do backend (a tela não
 // recalcula nada).
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Check, FileUp } from "lucide-react";
 
@@ -34,7 +34,8 @@ import {
 } from "../features/statementImport/reconciliationSteps.js";
 import { StatementEntryCard, bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
-import { statementImportUndoPath } from "../routing/statementImportRoute.js";
+import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
+import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
   DiscardDraftControl,
   DraftInProgressCard,
@@ -81,15 +82,6 @@ function useCategories(organizationId) {
   return { categories, error };
 }
 
-function ErrorNote({ children }) {
-  if (!children) return null;
-  return (
-    <div role="alert" style={{ ...G, fontSize: 13, color: T.red, background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px" }}>
-      {children}
-    </div>
-  );
-}
-
 // --------------------------------------------------------------------------------------------
 // Enviar o extrato
 // --------------------------------------------------------------------------------------------
@@ -110,7 +102,7 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
     setError("");
     try {
       const draft = await uploadStatement(accountId, organizationId, file, columnMapping);
-      navigate({ to: `/accounts/${accountId}/reconcile/${draft.id}` });
+      navigate({ to: statementReconciliationPath(accountId, draft.id) });
     } catch (err) {
       const asked = columnMappingPreviewOf(err);
       if (asked && !columnMapping) setPreview(asked);
@@ -190,7 +182,7 @@ function OtherAccountNotice({ accountCheck, accountName }) {
       </span>
       {suggested ? (
         <div>
-          <Btn variant="outGray" small onClick={() => navigate({ to: `/accounts/${suggested.id}/reconcile` })}>
+          <Btn variant="outGray" small onClick={() => navigate({ to: statementReconciliationPath(suggested.id) })}>
             Conciliar na conta {suggested.name}
           </Btn>
         </div>
@@ -217,7 +209,7 @@ function AccountStatementsView({ organizationId, accountId, accountName }) {
   );
   useEffect(() => { load(); }, [load]);
 
-  const openImport = (item) => navigate({ to: `/accounts/${accountId}/reconcile/${item.id}` });
+  const openImport = (item) => navigate({ to: statementReconciliationPath(accountId, item.id) });
   const drafts = (items ?? []).filter((i) => i.status === "draft");
   const onDiscarded = () => {
     setNotice("Rascunho descartado. Nada mudou nas suas transações.");
@@ -405,15 +397,18 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
           ) : null}
           <Btn variant="outGray" onClick={() => navigate({ to: "/accounts" })}>Voltar para Contas</Btn>
         </div>
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate({ to: statementImportUndoPath(statementImport.account_id, statementImport.id) })}
-            style={{ ...G, fontSize: 13, color: T.red, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
-          >
-            Desfazer importação
-          </button>
-        </div>
+        {/* Só a concluída mais recente da conta pode ser desfeita: as outras não ganham o caminho. */}
+        {statementImport.latest_concluded ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => navigate({ to: statementImportUndoPath(statementImport.account_id, statementImport.id) })}
+              style={{ ...LINK, color: T.red }}
+            >
+              Desfazer importação
+            </button>
+          </div>
+        ) : null}
       </Card>
     </div>
   );
@@ -422,22 +417,16 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
 function UndoneView({ statementImport, onOpenAccountTransactions }) {
   const navigate = useNavigate();
   const undoneOn = statementImport.undone_at ? bankDateLabel(statementImport.undone_at.slice(0, 10)) : "";
+  const openTransactions = onOpenAccountTransactions
+    ? () => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))
+    : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageTitle sans="Conciliar" serif="extrato" />
-      <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-        <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.ink, margin: 0 }}>Importação desfeita</h2>
-        <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
-          Esta importação foi desfeita{undoneOn ? <> em <b style={NUM}>{undoneOn}</b></> : null}: as transações que ela adicionou
-          foram apagadas. Para conciliar este extrato de novo, importe o arquivo outra vez.
-        </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {onOpenAccountTransactions ? (
-            <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))}>Ver transações da conta</Btn>
-          ) : null}
-          <Btn variant="outGray" onClick={() => navigate({ to: "/accounts" })}>Voltar para Contas</Btn>
-        </div>
-      </Card>
+      <ImportUndoneCard onOpenTransactions={openTransactions} onBack={() => navigate({ to: "/accounts" })}>
+        Esta importação foi desfeita{undoneOn ? <> em <b style={NUM}>{undoneOn}</b></> : null}: as transações que ela adicionou
+        foram apagadas. Para conciliar este extrato de novo, importe o arquivo outra vez.
+      </ImportUndoneCard>
     </div>
   );
 }
@@ -451,6 +440,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   const [current, setCurrent] = useState(null);
   const [passed, setPassed] = useState(() => new Set());
   const [concluding, setConcluding] = useState(false);
+  // Os PATCH de progresso saem em fila: o próximo só parte quando o anterior respondeu, então o
+  // servidor fica sempre com o último passo aberto (fincla-api#518).
+  const progressQueue = useRef(Promise.resolve());
 
   const reload = useCallback(
     () => getStatementImport(accountId, organizationId, importId).then(setStatementImport),
@@ -482,10 +474,13 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setPassed(reviewed);
     setCurrent(stepKey);
     // Grava onde a revisão está, para fechar a aba e voltar aqui (fincla-api#518).
-    updateStatementImportProgress(accountId, organizationId, importId, {
+    const progress = {
       current_step: stepKey,
       reviewed_steps: STEPS.map((s) => s.key).filter((key) => reviewed.has(key)),
-    }).catch((err) => setActionError(handleApiError(err)));
+    };
+    progressQueue.current = progressQueue.current
+      .then(() => updateStatementImportProgress(accountId, organizationId, importId, progress))
+      .catch((err) => setActionError(handleApiError(err)));
   };
 
   const changeEntry = async (entryId, body) => {
@@ -539,7 +534,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
             organizationId={organizationId}
             accountId={accountId}
             importId={importId}
-            onDiscarded={() => navigate({ to: `/accounts/${accountId}/reconcile` })}
+            onDiscarded={() => navigate({ to: statementReconciliationPath(accountId) })}
           />
         </div>
       </div>

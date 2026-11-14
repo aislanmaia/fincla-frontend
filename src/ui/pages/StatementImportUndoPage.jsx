@@ -4,9 +4,9 @@
 // acontecer (a prévia vem pronta do backend: a tela não recalcula nada) e só desfaz depois de
 // a pessoa confirmar AQUI, na página (nunca `window.confirm`). Quando não dá para desfazer, o
 // backend diz o motivo e a tela mostra o motivo no lugar do botão.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { AlertTriangle, Check, Undo2 } from "lucide-react";
+import { AlertTriangle, Undo2 } from "lucide-react";
 
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -17,6 +17,8 @@ import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
 import { previewStatementImportUndo, undoStatementImport } from "../../api/statementImports";
 import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
+import { statementReconciliationPath } from "../routing/statementImportRoute.js";
 
 /** Como a tela chama cada campo que mudou depois da conclusão (`changed_fields` da API). */
 export const CHANGED_FIELD_LABEL = {
@@ -33,15 +35,6 @@ export const CHANGED_FIELD_LABEL = {
 };
 
 const TEXT = { ...G, fontSize: 13, color: T.inkMid, margin: 0 };
-
-function ErrorNote({ children }) {
-  if (!children) return null;
-  return (
-    <div role="alert" style={{ ...G, fontSize: 13, color: T.red, background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px" }}>
-      {children}
-    </div>
-  );
-}
 
 function useAccountName(organizationId, accountId) {
   const [name, setName] = useState("");
@@ -123,21 +116,12 @@ function ConfirmBox({ preview, undoing, onConfirm, onCancel }) {
 
 function UndoneView({ deleted, accountName, onOpenTransactions, onBack }) {
   return (
-    <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-      <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.green, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-        <Check size={18} aria-hidden="true" /> Importação desfeita
-      </h2>
-      <p style={TEXT}>
-        {deleted == null
-          ? "As transações que esta importação adicionou foram apagadas."
-          : <>{plural(deleted, "transação adicionada foi apagada", "transações adicionadas foram apagadas")}.</>}
-        {accountName ? <> A conta <b>{accountName}</b> voltou ao que era antes da conciliação.</> : null}
-      </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {onOpenTransactions ? <Btn variant="dark" onClick={onOpenTransactions}>Ver transações da conta</Btn> : null}
-        <Btn variant="outGray" onClick={onBack}>Voltar para Contas</Btn>
-      </div>
-    </Card>
+    <ImportUndoneCard onOpenTransactions={onOpenTransactions} onBack={onBack}>
+      {deleted == null
+        ? "As transações que esta importação adicionou foram apagadas."
+        : <>{plural(deleted, "transação adicionada foi apagada", "transações adicionadas foram apagadas")}.</>}
+      {accountName ? <> A conta <b>{accountName}</b> voltou ao que era antes da conciliação.</> : null}
+    </ImportUndoneCard>
   );
 }
 
@@ -151,6 +135,12 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState("");
   const [undone, setUndone] = useState(null);
+  // A nova busca da prévia depois de uma recusa pode voltar com a tela já fechada.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!organizationId || !accountId || !importId) return undefined;
@@ -170,16 +160,21 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
     setUndoing(true);
     setUndoError("");
     try {
-      await undoStatementImport(accountId, organizationId, importId);
-      setUndone({ deleted: preview.summary.to_delete });
+      const result = await undoStatementImport(accountId, organizationId, importId);
+      if (!mounted.current) return;
+      // O número que o backend apagou de fato, não o da prévia (que pode ter ficado velha).
+      setUndone({ deleted: result.deleted_transactions });
       onUndone?.();
     } catch (err) {
+      if (!mounted.current) return;
       setUndoError(handleApiError(err));
       setConfirming(false);
       // O estado pode ter mudado (outra importação concluída, outra aba): a prévia volta a valer.
-      previewStatementImportUndo(accountId, organizationId, importId).then(setPreview).catch(() => {});
+      previewStatementImportUndo(accountId, organizationId, importId)
+        .then((data) => { if (mounted.current) setPreview(data); })
+        .catch(() => {});
     } finally {
-      setUndoing(false);
+      if (mounted.current) setUndoing(false);
     }
   };
 
@@ -226,7 +221,7 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
               Desfazer importação
             </Btn>
           ) : null}
-          <Btn variant="ghost" onClick={() => navigate({ to: `/accounts/${accountId}/reconcile/${importId}` })}>Voltar para a conciliação</Btn>
+          <Btn variant="ghost" onClick={() => navigate({ to: statementReconciliationPath(accountId, importId) })}>Voltar para a conciliação</Btn>
         </div>
       </div>
     );

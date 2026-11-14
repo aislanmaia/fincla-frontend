@@ -58,7 +58,8 @@ export function ColumnMappingCard({ preview, fileName, sending, error, onSubmit,
         <h2 style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink, margin: 0 }}>Indique as colunas</h2>
         <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "6px 0 0" }}>
           O Fincla não reconheceu as colunas de <b>{fileName}</b>. Diga onde estão a data, a descrição e o valor
-          de cada lançamento. Linhas sem data ou sem valor (títulos, totais, saldos) ficam de fora.
+          de cada lançamento. Linhas sem data ou sem valor (títulos, totais) ficam de fora, e as linhas de saldo
+          do banco (como “Saldo anterior” e “Saldo do dia”) nunca viram lançamento.
         </p>
       </div>
 
