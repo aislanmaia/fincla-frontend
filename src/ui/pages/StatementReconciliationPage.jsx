@@ -268,6 +268,14 @@ function SummaryStep({ statementImport, concluding, error, onConclude }) {
   );
 }
 
+/** O período que o extrato cobre: o declarado no arquivo, senão o das datas dos lançamentos. */
+function statementPeriod({ period, entries }) {
+  const dates = entries.map((e) => e.date).sort();
+  const from = period.start ?? dates[0];
+  const to = period.end ?? dates[dates.length - 1];
+  return from && to ? { from, to } : null;
+}
+
 function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
   const navigate = useNavigate();
   const created = statementImport.entries.filter((e) => e.created_transaction_id != null).length;
@@ -282,7 +290,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onOpenAccountTransactions ? (
-            <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id)}>Ver transações da conta</Btn>
+            <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))}>Ver transações da conta</Btn>
           ) : null}
           <Btn variant="outGray" onClick={() => navigate({ to: "/accounts" })}>Voltar para Contas</Btn>
         </div>

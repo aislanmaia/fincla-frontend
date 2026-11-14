@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { FC, FC_MODAL, editTransactionSearch, isRealYmd, mergeNavSearch, simulationTipoFromUrl, simulationTipoToUrl } from "../searchContract.js";
 
 describe("searchContract", () => {
+  it("mergeNavSearch abre /transactions num período e conta (conciliação concluída, fincla-api#508)", () => {
+    const next = mergeNavSearch({}, "transactions", { accountId: "acc-1", txFrom: "2026-09-01", txTo: "2026-09-24" });
+    expect(next).toEqual({ [FC.TX_ACCOUNT]: "acc-1", [FC.TX_FROM]: "2026-09-01", [FC.TX_TO]: "2026-09-24" });
+  });
+
+  it("mergeNavSearch ignora período pela metade ou invertido", () => {
+    expect(mergeNavSearch({}, "transactions", { txFrom: "2026-09-01" })).toEqual({});
+    expect(mergeNavSearch({}, "transactions", { txFrom: "2026-09-24", txTo: "2026-09-01" })).toEqual({});
+  });
+
   it("editTransactionSearch abre o painel de edição e preserva o resto da URL", () => {
     expect(editTransactionSearch({ fc_inv: "2026-10", [FC.TX]: "1" }, 42)).toEqual({ fc_inv: "2026-10", [FC.TX]: "42", [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION });
   });

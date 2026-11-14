@@ -470,7 +470,7 @@ export default function App() {
       // Conciliar extrato reescreve os livros da organização: só o dono opera (a API recusa os demais).
       onImportStatement={activeMembershipRole === "owner" ? (accountId) => navigate({ to: `/accounts/${accountId}/reconcile` }) : null} />,
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
-      onOpenAccountTransactions={(accountId) => { bumpTransactionsList(); navTo("transactions", { accountId }); }} />,
+      onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user}
       membershipRole={activeMembershipRole} onBaseCurrencyChanged={onBaseCurrencyChanged} />,

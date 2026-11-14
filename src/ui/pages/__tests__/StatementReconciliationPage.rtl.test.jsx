@@ -287,4 +287,23 @@ describe("revisar e concluir", () => {
     expect(screen.getByText(/3 transações adicionadas/)).toBeInTheDocument();
     expect(calls).toContainEqual({ conclude: IMPORT });
   });
+
+  it("depois de concluir, abre as transações da conta no período do extrato", async () => {
+    draft.entries[2].description = "Conta de luz";
+    draft.summary.missing_description = 0;
+    draft.blockers = [];
+    draft.can_conclude = true;
+    const onOpen = vi.fn();
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} onOpenAccountTransactions={onOpen} />);
+    await screen.findAllByText("PIX QRS PADARIA 02 10");
+    const user = userEvent.setup();
+    const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
+    await user.click(within(rail).getAllByRole("button")[7]);
+    await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
+
+    await user.click(await screen.findByRole("button", { name: "Ver transações da conta" }));
+
+    expect(onOpen).toHaveBeenCalledWith(ACCOUNT, { from: contract.draft.period.start, to: contract.draft.period.end });
+  });
 });
