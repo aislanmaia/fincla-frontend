@@ -469,7 +469,8 @@ export default function App() {
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onOpenAccountTransactions={(accountId) => navTo("transactions", { accountId })}
       // Conciliar extrato reescreve os livros da organização: só o dono opera (a API recusa os demais).
-      onImportStatement={activeMembershipRole === "owner" ? (accountId) => navigate({ to: `/accounts/${accountId}/reconcile` }) : null} />,
+      onImportStatement={activeMembershipRole === "owner" ? (accountId) => navigate({ to: `/accounts/${accountId}/reconcile` }) : null}
+      onContinueReconciliation={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: `/accounts/${accountId}/reconcile/${importId}` }) : null} />,
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
       onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
     statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}

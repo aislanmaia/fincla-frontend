@@ -13,6 +13,7 @@ import { entriesCoveredBy } from "../features/accounts/balanceAnchors.js";
 import { fetchAllTransactionsPages, mapApiTransactionToUi } from "../data/transactionsAdapter.js";
 import { getAccountBalance } from "../../api/balances";
 import { getQuotation } from "../../api/transfers";
+import { listStatementImportDrafts } from "../../api/statementImports";
 
 const menuItemStyle = {
   ...G,
@@ -41,6 +42,8 @@ export function AccountsPage({
   onOpenAccountTransactions = null,
   /** "Importar extrato" no menu da conta (Conciliar extrato, fincla-api#508); `null` esconde. */
   onImportStatement = null,
+  /** "Continuar conciliação" na conta com rascunho (fincla-api#518); `null` esconde. Recebe (accountId, importId). */
+  onContinueReconciliation = null,
 }) {
   const enabled = !!organizationId && dataMode === "live";
   // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
@@ -71,6 +74,29 @@ export function AccountsPage({
   const [adjustTargetId, setAdjustTargetId] = useState(null);
 
   const accounts = data.accounts || [];
+
+  // Conciliação em andamento por conta (fincla-api#518). O rascunho vive no servidor, então a
+  // conta sabe oferecer "Continuar" sem guardar nada no navegador. Informação acessória: se
+  // falhar, a lista de contas segue igual.
+  const [draftByAccount, setDraftByAccount] = useState({});
+  // Só o "existe ou não": o App cria a função a cada render, e ela não pode refazer a busca.
+  const offersContinue = !!onContinueReconciliation;
+  React.useEffect(() => {
+    if (!enabled || !offersContinue) return undefined;
+    let alive = true;
+    listStatementImportDrafts(organizationId)
+      .then((drafts) => {
+        if (!alive) return;
+        const byAccount = {};
+        // Do mais novo para o mais antigo: a conta oferece o rascunho mais recente.
+        for (const d of drafts) if (!byAccount[d.account_id]) byAccount[d.account_id] = d.id;
+        setDraftByAccount(byAccount);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [enabled, organizationId, offersContinue, transactionsRefreshToken]);
   // Live account object so the modal reflects the latest balance after each reload.
   const adjustTarget = adjustTargetId ? accounts.find((a) => a.id === adjustTargetId) || null : null;
 
@@ -302,6 +328,19 @@ export function AccountsPage({
                       </div>
                       {a.institution ? (
                         <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 2 }}>{a.institution}</div>
+                      ) : null}
+                      {onContinueReconciliation && draftByAccount[a.id] ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            // Continuar a conciliação não é "abrir os lançamentos" da linha.
+                            e.stopPropagation();
+                            onContinueReconciliation(a.id, draftByAccount[a.id]);
+                          }}
+                          style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.blueLight, border: "none", borderRadius: 9999, padding: "3px 10px", marginTop: 6, cursor: "pointer" }}
+                        >
+                          Continuar conciliação
+                        </button>
                       ) : null}
                     </div>
                     <div style={{ ...G, ...NUM, fontWeight: 700, fontSize: 14, color: a.include_in_total ? T.ink : T.inkLight }}>

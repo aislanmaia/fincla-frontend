@@ -19,7 +19,9 @@ import { listTags } from "../../api/tags";
 import {
   concludeStatementImport,
   getStatementImport,
+  listStatementImports,
   updateStatementEntry,
+  updateStatementImportProgress,
   uploadStatement,
 } from "../../api/statementImports";
 import {
@@ -31,6 +33,11 @@ import {
 } from "../features/statementImport/reconciliationSteps.js";
 import { StatementEntryCard, bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { statementImportUndoPath } from "../routing/statementImportRoute.js";
+import {
+  DiscardDraftControl,
+  DraftInProgressCard,
+  ImportedStatementsList,
+} from "../features/statementImport/ImportedStatements.jsx";
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação.";
 
@@ -85,7 +92,7 @@ function ErrorNote({ children }) {
 // Enviar o extrato
 // --------------------------------------------------------------------------------------------
 
-function UploadView({ organizationId, accountId, accountName }) {
+function UploadView({ organizationId, accountId, accountName, beforeUpload = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -112,6 +119,7 @@ function UploadView({ organizationId, accountId, accountName }) {
         Envie o extrato da conta corrente em OFX, exportado pelo banco. O Fincla lê os lançamentos e você
         confere cada um antes de qualquer coisa entrar.
       </p>
+      {beforeUpload}
       <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <label htmlFor="statement-file" style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>
           Arquivo do extrato (OFX, até 5 MB)
@@ -134,6 +142,55 @@ function UploadView({ organizationId, accountId, accountName }) {
       <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0 }}>
         {NOTHING_CHANGES} O arquivo não fica guardado: só os lançamentos lidos.
       </p>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------------------------
+// A conta: conciliação em andamento e Extratos importados (fincla-api#518)
+// --------------------------------------------------------------------------------------------
+
+function AccountStatementsView({ organizationId, accountId, accountName }) {
+  const navigate = useNavigate();
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const load = useCallback(
+    () => listStatementImports(accountId, organizationId)
+      .then((list) => { setItems(list); setError(""); })
+      .catch((err) => setError(handleApiError(err))),
+    [accountId, organizationId],
+  );
+  useEffect(() => { load(); }, [load]);
+
+  const openImport = (item) => navigate({ to: `/accounts/${accountId}/reconcile/${item.id}` });
+  const drafts = (items ?? []).filter((i) => i.status === "draft");
+  const onDiscarded = () => {
+    setNotice("Rascunho descartado. Nada mudou nas suas transações.");
+    load();
+  };
+
+  const inProgress = (
+    <>
+      {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
+      {drafts.map((draft) => (
+        <DraftInProgressCard key={draft.id} organizationId={organizationId} draft={draft} onContinue={openImport} onDiscarded={onDiscarded} />
+      ))}
+    </>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} />
+      {error ? <ErrorNote>{error}</ErrorNote> : null}
+      {items ? (
+        <ImportedStatementsList
+          items={items}
+          onOpen={openImport}
+          onUndo={(item) => navigate({ to: statementImportUndoPath(accountId, item.id) })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -333,6 +390,7 @@ function UndoneView({ statementImport, onOpenAccountTransactions }) {
 }
 
 function DraftView({ organizationId, accountId, importId, accountName, isMobile, onOpenAccountTransactions }) {
+  const navigate = useNavigate();
   const { categories, error: categoriesError } = useCategories(organizationId);
   const [statementImport, setStatementImport] = useState(null);
   const [loadError, setLoadError] = useState("");
@@ -352,7 +410,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       .then((data) => {
         if (!alive) return;
         setStatementImport(data);
-        setCurrent(firstStepWithWork(data.entries));
+        // Retomar (fincla-api#518): o passo e os passos já vistos vêm do servidor.
+        setCurrent(data.current_step ?? firstStepWithWork(data.entries));
+        setPassed(new Set(data.reviewed_steps ?? []));
       })
       .catch((err) => { if (alive) setLoadError(handleApiError(err)); });
     return () => { alive = false; };
@@ -364,8 +424,15 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   );
 
   const open = (stepKey) => {
-    if (current && stepKey !== current) setPassed((prev) => new Set(prev).add(current));
+    if (!current || stepKey === current) return;
+    const reviewed = new Set(passed).add(current);
+    setPassed(reviewed);
     setCurrent(stepKey);
+    // Grava onde a revisão está, para fechar a aba e voltar aqui (fincla-api#518).
+    updateStatementImportProgress(accountId, organizationId, importId, {
+      current_step: stepKey,
+      reviewed_steps: STEPS.map((s) => s.key).filter((key) => reviewed.has(key)),
+    }).catch((err) => setActionError(handleApiError(err)));
   };
 
   const changeEntry = async (entryId, body) => {
@@ -412,8 +479,16 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
         <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "6px 0 0" }}>
           {accountName ? <><b>{accountName}</b> · </> : null}
           {period.start && period.end ? `${bankDateLabel(period.start)} a ${bankDateLabel(period.end)} · ` : null}
-          {NOTHING_CHANGES}
+          {NOTHING_CHANGES} Suas respostas ficam salvas: dá para fechar e continuar depois.
         </p>
+        <div style={{ marginTop: 8 }}>
+          <DiscardDraftControl
+            organizationId={organizationId}
+            accountId={accountId}
+            importId={importId}
+            onDiscarded={() => navigate({ to: `/accounts/${accountId}/reconcile` })}
+          />
+        </div>
       </div>
       <ProgressPanel statementImport={statementImport} passed={passed} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
@@ -474,7 +549,7 @@ export function StatementReconciliationPage({ organizationId, isMobile = false, 
           onOpenAccountTransactions={onOpenAccountTransactions}
         />
       ) : (
-        <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} />
+        <AccountStatementsView organizationId={organizationId} accountId={accountId} accountName={accountName} />
       )}
     </div>
   );
