@@ -4,7 +4,11 @@
 import { describe, expect, it } from "vitest";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
-import { STATEMENT_IMPORT_UNDO_ROUTE_PATTERN, statementImportUndoPath } from "../statementImportRoute.js";
+import {
+  STATEMENT_IMPORT_UNDO_ROUTE_PATTERN,
+  statementImportUndoPath,
+  statementReconciliationPath,
+} from "../statementImportRoute.js";
 
 function routeIdFor(pathname) {
   const rootRoute = createRootRoute();
@@ -29,6 +33,12 @@ describe("rota de desfazer importação", () => {
 
     expect(id).toBe(`/${STATEMENT_IMPORT_UNDO_ROUTE_PATTERN}`);
     expect(params).toMatchObject({ accountId: "acc-1", importId: "imp-2" });
+  });
+
+  it("monta o caminho da conciliação, com ou sem a importação", () => {
+    expect(statementReconciliationPath("acc-1")).toBe("/accounts/acc-1/reconcile");
+    expect(statementReconciliationPath("acc-1", "imp-2")).toBe("/accounts/acc-1/reconcile/imp-2");
+    expect(routeIdFor(statementReconciliationPath("acc-1")).params).toMatchObject({ accountId: "acc-1" });
   });
 
   it("a conciliação continua abrindo a conciliação", () => {

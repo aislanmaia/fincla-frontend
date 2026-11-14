@@ -89,6 +89,9 @@ describe("indique as colunas", () => {
 
     const card = await screen.findByTestId("column-mapping");
     expect(within(card).getByText("Indique as colunas")).toBeInTheDocument();
+    // A promessa da tela bate com o leitor (fincla-api G3-1-01): saldo do banco nunca vira lançamento.
+    expect(card).toHaveTextContent("as linhas de saldo do banco (como “Saldo anterior” e “Saldo do dia”) nunca viram lançamento");
+    expect(card).not.toHaveTextContent("saldos) ficam de fora");
     expect(within(card).getByText(/extrato\.csv/)).toBeInTheDocument();
     const table = within(card).getByRole("table");
     expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["A · Data", "B · Descrição", "C", "D · Valor", "E"]);

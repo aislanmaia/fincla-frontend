@@ -62,6 +62,7 @@ const server = setupServer(
     const concluded = clone(draft);
     concluded.status = "concluded";
     concluded.concluded_at = "2026-11-14T10:30:00";
+    concluded.latest_concluded = true;
     concluded.entries.forEach((e, i) => { e.created_transaction_id = 100 + i; });
     return HttpResponse.json(concluded);
   }),
@@ -326,6 +327,7 @@ describe("desfazer a importação (fincla-api#509)", () => {
   it("a conciliação concluída leva à tela de desfazer da importação", async () => {
     draft.status = "concluded";
     draft.concluded_at = "2026-11-14T10:30:00";
+    draft.latest_concluded = true;
     const user = userEvent.setup();
     params = { accountId: ACCOUNT, importId: IMPORT };
     render(<StatementReconciliationPage organizationId={ORG} />);
@@ -333,6 +335,17 @@ describe("desfazer a importação (fincla-api#509)", () => {
     await user.click(await screen.findByRole("button", { name: "Desfazer importação" }));
 
     expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${IMPORT}/undo` });
+  });
+
+  it("uma concluída que não é a mais recente da conta não oferece desfazer", async () => {
+    draft.status = "concluded";
+    draft.concluded_at = "2026-11-14T10:30:00";
+    draft.latest_concluded = false;
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByText("Conciliação concluída")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
   });
 
   it("uma importação desfeita diz isso, sem reabrir os passos", async () => {
@@ -418,6 +431,34 @@ describe("retomar a conciliação (fincla-api#518)", () => {
         { progress: { current_step: "suggested", reviewed_steps: ["new", "balance"] } },
       ]),
     );
+  });
+
+  it("trocas de passo rápidas gravam em fila: o servidor fica com o último passo aberto", async () => {
+    const started = [];
+    const pending = [];
+    server.use(http.patch(`${BASE}/${IMPORT}`, async ({ request }) => {
+      const body = await request.json();
+      started.push(body.current_step);
+      // A primeira resposta demora: sem fila, a segunda chegaria antes e o servidor ficaria com a primeira.
+      await new Promise((resolve) => pending.push(resolve));
+      Object.assign(draft, body);
+      return HttpResponse.json(draft);
+    }));
+    const user = userEvent.setup();
+    await openDraft();
+    const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
+
+    await user.click(within(rail).getAllByRole("button")[1]);
+    await user.click(within(rail).getAllByRole("button")[6]);
+    await waitFor(() => expect(started).toEqual(["doubt"]));
+    // A segunda só parte quando a primeira respondeu.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(started).toEqual(["doubt"]);
+    pending.shift()();
+    await waitFor(() => expect(started).toEqual(["doubt", "balance"]));
+    pending.shift()();
+
+    await waitFor(() => expect(draft.current_step).toBe("balance"));
   });
 
   it("rascunho expirado: mostra o motivo que a API escreve", async () => {

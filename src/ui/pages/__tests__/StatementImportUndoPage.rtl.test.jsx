@@ -37,10 +37,7 @@ const server = setupServer(
   http.post(`${BASE}/undo`, () => {
     calls.push({ undo: IMPORT });
     if (undoResponse) return undoResponse();
-    const undone = clone(contract.draft);
-    undone.status = "undone";
-    undone.undone_at = "2026-11-15T09:00:00";
-    return HttpResponse.json(undone);
+    return HttpResponse.json({ ...clone(contract.undone), deleted_transactions: 2 });
   }),
 );
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -131,6 +128,47 @@ describe("confirmar na página", () => {
     expect(onUndone).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Ver transações da conta" }));
     expect(onOpen).toHaveBeenCalledWith(ACCOUNT);
+  });
+
+  it("diz quantas o backend apagou de fato, não a contagem da prévia carregada antes", async () => {
+    // A prévia diz 2; outra aba excluiu uma antes de confirmar: o desfazer apagou só 1.
+    undoResponse = () => HttpResponse.json(clone(contract.undone));
+    await open();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+
+    expect(await screen.findByRole("heading", { name: "Importação desfeita" })).toBeInTheDocument();
+    expect(contract.undone.deleted_transactions).toBe(1);
+    expect(screen.getByText(/^1 transação adicionada foi apagada\./)).toBeInTheDocument();
+    expect(screen.queryByText(/2 transações adicionadas foram apagadas/)).not.toBeInTheDocument();
+  });
+
+  it("se a pessoa sair da tela antes da nova prévia voltar, nada é atualizado na tela fechada", async () => {
+    undoResponse = () => HttpResponse.json(
+      { detail: { code: "business_rule", message: contract.undo_refused.refusal.message } },
+      { status: 422 },
+    );
+    let release;
+    await open();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    server.use(http.get(`${BASE}/undo-preview`, async () => {
+      await new Promise((resolve) => { release = resolve; });
+      return HttpResponse.json(clone(contract.undo_refused));
+    }));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+    await screen.findByRole("alert");
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    cleanup();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it("se o backend recusar na hora, mostra o motivo e a prévia volta a valer", async () => {

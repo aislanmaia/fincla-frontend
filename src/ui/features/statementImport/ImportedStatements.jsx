@@ -15,6 +15,7 @@ import { formatMoneySigned } from "../../money/formatMoney.js";
 import { handleApiError } from "../../../api/client";
 import { discardStatementImport } from "../../../api/statementImports";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
+import { LINK } from "./StatementImportNotes.jsx";
 
 const STATUS = {
   draft: { label: "Rascunho", color: T.blue, bg: T.blueLight },
@@ -22,7 +23,6 @@ const STATUS = {
   undone: { label: "Desfeita", color: T.inkMid, bg: T.grayLight },
 };
 
-const LINK = { ...G, fontSize: 13, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" };
 
 /** "2026-11-14T10:20:00" → "14/11/2026". */
 function dayOf(timestamp) {

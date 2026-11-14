@@ -96,6 +96,13 @@ export interface StatementImport {
   /** Passos pelos quais a pessoa já passou, na ordem dos passos. */
   reviewed_steps: ReconciliationStep[];
   account_check: AccountCheck;
+  /** Concluída e a mais recente da conta: a única que pode ser desfeita (fincla-api#509). */
+  latest_concluded: boolean;
+}
+
+/** A resposta do desfazer: a importação desfeita e quantas transações ele de fato apagou. */
+export interface UndoneStatementImport extends StatementImport {
+  deleted_transactions: number;
 }
 
 /** Uma linha de "Extratos importados" (fincla-api#518): a importação sem os lançamentos. */
@@ -230,7 +237,14 @@ export const concludeStatementImport = async (
 // Desfazer importação (fincla-api#509)
 // --------------------------------------------------------------------------------------------
 
-export type UndoRefusalCode = 'not_concluded' | 'already_undone' | 'not_latest' | 'linked_to_goal' | 'unsupported_change';
+export type UndoRefusalCode =
+  | 'not_concluded'
+  | 'already_undone'
+  | 'not_latest'
+  | 'linked_to_goal'
+  | 'on_paid_invoice'
+  | 'in_recurring_series'
+  | 'unsupported_change';
 export type UndoChangedField =
   | 'description' | 'value' | 'type' | 'date' | 'status' | 'paid_at' | 'account' | 'payment_method' | 'tags' | 'credit_card';
 
@@ -295,11 +309,13 @@ export const undoStatementImport = async (
   accountId: string,
   organizationId: string,
   importId: string,
-): Promise<StatementImport> => {
-  const response = await apiClient.post<RawImport>(`${base(accountId)}/${importId}/undo`, null, {
-    params: { organization_id: organizationId },
-  });
-  return normalizeStatementImport(response.data);
+): Promise<UndoneStatementImport> => {
+  const response = await apiClient.post<RawImport & { deleted_transactions: number }>(
+    `${base(accountId)}/${importId}/undo`,
+    null,
+    { params: { organization_id: organizationId } },
+  );
+  return { ...normalizeStatementImport(response.data), deleted_transactions: response.data.deleted_transactions };
 };
 
 // --------------------------------------------------------------------------------------------
