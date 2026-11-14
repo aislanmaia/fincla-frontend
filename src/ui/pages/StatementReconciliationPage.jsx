@@ -55,6 +55,7 @@ function useAccountName(organizationId, accountId) {
 
 function useCategories(organizationId) {
   const [categories, setCategories] = useState([]);
+  const [error, setError] = useState("");
   useEffect(() => {
     if (!organizationId) return undefined;
     let alive = true;
@@ -64,10 +65,10 @@ function useCategories(organizationId) {
         const active = (res.tags ?? []).filter((t) => t.is_active !== false);
         setCategories(active.sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name, "pt-BR")));
       })
-      .catch(() => {});
+      .catch(() => { if (alive) setError("Não foi possível carregar as suas categorias. Recarregue a página para escolher uma."); });
     return () => { alive = false; };
   }, [organizationId]);
-  return categories;
+  return { categories, error };
 }
 
 function ErrorNote({ children }) {
@@ -201,6 +202,22 @@ function EmptyStep({ children }) {
   );
 }
 
+function LeftOutStep({ entries }) {
+  return (
+    <Card style={{ padding: 16 }}>
+      <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "0 0 10px" }}>Estes lançamentos não viram transação:</p>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        {entries.map((e) => (
+          <li key={e.id} data-testid="left-out-entry" style={{ ...G, fontSize: 13, color: T.ink, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <span>{bankDateLabel(e.date)} · {e.bank_description}</span>
+            <span style={{ ...NUM, color: T.inkMid }}>{formatMoney(e.amount, e.currency)} · valor zero</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function BalanceStep({ statementImport }) {
   const last = statementImport.bank_balances[statementImport.bank_balances.length - 1];
   return (
@@ -213,11 +230,10 @@ function BalanceStep({ statementImport }) {
 
 function SummaryStep({ statementImport, concluding, error, onConclude }) {
   const { summary, blockers } = statementImport;
-  const ignored = summary.total - summary.to_create - summary.unanswered;
   const rows = [
     ["Lançamentos no extrato", summary.total, "summary-total"],
     ["Serão adicionados", summary.to_create, "summary-to-create"],
-    ["Não serão registrados", ignored, "summary-ignored"],
+    ["Não serão registrados", summary.ignored, "summary-ignored"],
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -276,7 +292,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
 }
 
 function DraftView({ organizationId, accountId, importId, accountName, isMobile, onOpenAccountTransactions }) {
-  const categories = useCategories(organizationId);
+  const { categories, error: categoriesError } = useCategories(organizationId);
   const [statementImport, setStatementImport] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -366,6 +382,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           </header>
           {current !== "summary" ? <ErrorNote>{actionError}</ErrorNote> : null}
 
+          {current === "new" ? <ErrorNote>{categoriesError}</ErrorNote> : null}
           {current === "new" && stepEntries.map((entry) => (
             <StatementEntryCard
               key={entry.id}
@@ -376,6 +393,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onChange={changeEntry}
             />
           ))}
+          {current === "outside" && stepEntries.length ? <LeftOutStep entries={stepEntries} /> : null}
           {current === "balance" ? <BalanceStep statementImport={statementImport} /> : null}
           {current === "summary" ? (
             <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} />

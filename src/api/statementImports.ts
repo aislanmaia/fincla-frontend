@@ -4,7 +4,7 @@
 // resposta é a de `src/api/__fixtures__/statement_import.example.json`, cópia byte a byte da
 // fixture canônica do backend (presa aos modelos Pydantic por um teste de lá).
 import apiClient from './client';
-import { toAmount, type WireMoney } from './money';
+import { toAmount, toCurrency, type WireMoney } from './money';
 
 export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment';
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
@@ -21,7 +21,8 @@ export interface StatementEntry {
   bank_description: string;
   /** Com sinal: negativo é saída. Travado. */
   amount: number;
-  currency: string;
+  /** `null` se o fio não declarar a moeda: nunca inventamos BRL (ver `toCurrency`). */
+  currency: string | null;
   /** Só informativo (ADR 0009). */
   fitid: string | null;
   classification: 'new';
@@ -41,9 +42,10 @@ export interface StatementImport {
   status: 'draft' | 'concluded' | 'undone' | 'discarded';
   file_format: 'ofx';
   period: { start: string | null; end: string | null };
-  bank_balances: { date: string; balance: number; currency: string }[];
+  bank_balances: { date: string; balance: number; currency: string | null }[];
   entries: StatementEntry[];
-  summary: { total: number; to_create: number; missing_description: number; unanswered: number };
+  /** `ignored`: não viram transação (hoje só lançamentos de valor zero). */
+  summary: { total: number; to_create: number; missing_description: number; unanswered: number; ignored: number };
   can_conclude: boolean;
   blockers: { code: ConcludeBlockerCode; count: number }[];
   created_at: string;
@@ -63,13 +65,10 @@ type RawImport = Omit<StatementImport, 'entries' | 'bank_balances'> & {
   bank_balances: { date: string; balance: WireMoney }[];
 };
 
-const currencyOf = (money: WireMoney): string =>
-  money && typeof money === 'object' && 'currency' in money ? money.currency : 'BRL';
-
 export const normalizeStatementEntry = (raw: RawEntry): StatementEntry => ({
   ...raw,
   amount: toAmount(raw.amount),
-  currency: currencyOf(raw.amount),
+  currency: toCurrency(raw.amount),
 });
 
 export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
@@ -78,7 +77,7 @@ export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
   bank_balances: (raw.bank_balances ?? []).map((b) => ({
     date: b.date,
     balance: toAmount(b.balance),
-    currency: currencyOf(b.balance),
+    currency: toCurrency(b.balance),
   })),
 });
 

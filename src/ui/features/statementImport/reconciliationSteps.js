@@ -51,12 +51,17 @@ export const STEPS = [
 /** Os lançamentos do extrato que pertencem a um passo. */
 export function entriesOfStep(stepKey, entries) {
   if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.answer === "create");
+  // Não somem: o que não vira transação (hoje só valor zero) fica visível aqui.
+  if (stepKey === "outside") return entries.filter((e) => e.answer === "ignore");
   return [];
 }
 
+/** Passos que só mostram, sem nada a responder. */
+const INFO_ONLY = new Set(["outside"]);
+
 /** O primeiro passo com algo a responder; sem nenhum, o resumo. */
 export function firstStepWithWork(entries) {
-  const step = STEPS.find((s) => entriesOfStep(s.key, entries).length > 0);
+  const step = STEPS.find((s) => !INFO_ONLY.has(s.key) && entriesOfStep(s.key, entries).length > 0);
   return step ? step.key : "summary";
 }
 
@@ -69,11 +74,12 @@ export function stepStatus(stepKey, statementImport, passed) {
   if (stepKey === "summary") return { tone: "neutral", text: "Último passo" };
   const entries = entriesOfStep(stepKey, statementImport.entries);
   if (stepKey === "new") {
-    const missing = entries.filter((e) => !(e.description ?? "").trim()).length;
+    const missing = statementImport.summary.missing_description;
     if (missing) return { tone: "warn", text: plural(missing, "lançamento sem descrição", "lançamentos sem descrição") };
   }
   if (passed) return { tone: "done", text: "Conferido" };
   if (!entries.length) return { tone: "neutral", text: "Nada a fazer" };
+  if (INFO_ONLY.has(stepKey)) return { tone: "neutral", text: `Nada a fazer · ${plural(entries.length, "não vira transação", "não viram transação")}` };
   return { tone: "ready", text: `${plural(entries.length, "lançamento", "lançamentos")} · falta você conferir` };
 }
 

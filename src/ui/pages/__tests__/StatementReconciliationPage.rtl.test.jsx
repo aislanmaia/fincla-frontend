@@ -209,6 +209,36 @@ describe("rascunho", () => {
     );
   });
 
+  it("lançamento de valor zero não vira transação, mas continua visível em Ver o que fica de fora", async () => {
+    draft.entries.push({
+      ...clone(draft.entries[0]),
+      id: "zero",
+      position: 3,
+      bank_description: "TARIFA ISENTA",
+      amount: { amount: "0.00", currency: "BRL" },
+      answer: "ignore",
+      description: "TARIFA ISENTA",
+    });
+    draft.summary = { ...draft.summary, total: 4, ignored: 1 };
+    await openDraft();
+    const user = userEvent.setup();
+    const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
+    expect(within(rail).getAllByRole("button")[5]).toHaveTextContent("Nada a fazer · 1 não vira transação");
+
+    await user.click(within(rail).getAllByRole("button")[5]);
+    expect(screen.getByTestId("left-out-entry")).toHaveTextContent("TARIFA ISENTA");
+
+    await user.click(within(rail).getAllByRole("button")[7]);
+    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("1");
+  });
+
+  it("avisa quando as categorias não carregam, em vez de mostrar a lista vazia sem explicação", async () => {
+    server.use(http.get("*/v1/tags", () => HttpResponse.json({ detail: "erro" }, { status: 500 })));
+    await openDraft();
+
+    expect(await screen.findByText(/Não foi possível carregar as suas categorias/)).toBeInTheDocument();
+  });
+
   it("um passo só fica conferido depois que a pessoa passa por ele", async () => {
     await openDraft();
     const user = userEvent.setup();
