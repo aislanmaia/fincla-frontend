@@ -31,12 +31,25 @@ const CATEGORIES = [
 
 const calls = [];
 let draft = clone(contract.draft);
+let imports = [];
 const server = setupServer(
   http.get("*/v1/accounts", () =>
     HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
   ),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: CATEGORIES })),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
+  http.get(BASE, () => HttpResponse.json({ imports })),
+  http.patch(`${BASE}/${IMPORT}`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ progress: body });
+    Object.assign(draft, body);
+    return HttpResponse.json(draft);
+  }),
+  http.delete(`${BASE}/:importId`, ({ params: p }) => {
+    calls.push({ discard: p.importId });
+    imports = imports.filter((i) => i.id !== p.importId);
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
     const body = await request.json();
     calls.push({ patch: p.entryId, body });
@@ -65,6 +78,7 @@ afterEach(() => {
   cleanup();
   calls.length = 0;
   draft = clone(contract.draft);
+  imports = [];
   server.resetHandlers();
   navigate.mockReset();
 });
@@ -332,5 +346,212 @@ describe("desfazer a importação (fincla-api#509)", () => {
     expect(screen.getByText("15/11/2026")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Passos da conciliação" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Desfazer importação" })).not.toBeInTheDocument();
+  });
+});
+
+// --------------------------------------------------------------------------------------------
+// Rascunho e Extratos importados (fincla-api#518)
+// --------------------------------------------------------------------------------------------
+
+const openAccount = async () => {
+  params = { accountId: ACCOUNT };
+  render(<StatementReconciliationPage organizationId={ORG} />);
+  await screen.findByRole("heading", { name: "Extratos importados" });
+};
+
+describe("retomar a conciliação (fincla-api#518)", () => {
+  it("a conta mostra a conciliação em andamento e Continuar abre o rascunho, sem o id na URL", async () => {
+    imports = clone(contract.imports.imports);
+    const user = userEvent.setup();
+    await openAccount();
+
+    const card = screen.getByTestId("draft-in-progress");
+    expect(card).toHaveTextContent("Conciliação em andamento");
+    expect(card).toHaveTextContent("Extrato de 01/10/2026 a 31/10/2026");
+    expect(card).toHaveTextContent("3 lançamentos · 3 a adicionar");
+    expect(card).toHaveTextContent("Última alteração em 14/11/2026");
+    expect(card).toHaveTextContent("descartada em 14/12/2026");
+    await user.click(within(card).getByRole("button", { name: "Continuar conciliação" }));
+
+    expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${IMPORT}` });
+  });
+
+  it("sem rascunho, a conta não oferece continuar", async () => {
+    imports = clone(contract.imports.imports).filter((i) => i.status !== "draft");
+    await openAccount();
+
+    expect(screen.queryByTestId("draft-in-progress")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enviar extrato" })).toBeInTheDocument();
+  });
+
+  it("volta no passo em que parou, com os passos já vistos conferidos e as respostas do servidor", async () => {
+    draft.current_step = "balance";
+    draft.reviewed_steps = ["suggested", "doubt", "invoice", "yield", "new"];
+    draft.entries[0].description = "Padaria do bairro (editada antes de fechar a aba)";
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("heading", { name: "Conferir o saldo" })).toBeInTheDocument();
+    const steps = within(screen.getByRole("navigation", { name: "Passos da conciliação" })).getAllByRole("button");
+    expect(steps[6]).toHaveAttribute("aria-current", "step");
+    for (const seen of [0, 1, 2, 3]) expect(steps[seen]).toHaveTextContent("Conferido");
+    // "Adicionar lançamentos novos" foi visto, mas ainda tem lançamento sem descrição: o aviso vence.
+    expect(steps[4]).toHaveTextContent("1 lançamento sem descrição");
+    expect(steps[5]).toHaveTextContent(/nada a fazer/i);
+
+    await userEvent.setup().click(steps[4]);
+    expect(screen.getByDisplayValue("Padaria do bairro (editada antes de fechar a aba)")).toBeInTheDocument();
+  });
+
+  it("abrir o rascunho não grava nada; cada troca de passo grava o passo e os já vistos, na ordem", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    expect(calls.filter((c) => c.progress)).toEqual([]);
+
+    const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
+    await user.click(within(rail).getAllByRole("button")[6]);
+    await user.click(within(rail).getAllByRole("button")[0]);
+
+    await waitFor(() =>
+      expect(calls.filter((c) => c.progress)).toEqual([
+        { progress: { current_step: "balance", reviewed_steps: ["new"] } },
+        { progress: { current_step: "suggested", reviewed_steps: ["new", "balance"] } },
+      ]),
+    );
+  });
+
+  it("rascunho expirado: mostra o motivo que a API escreve", async () => {
+    const message = "Esta conciliação ficou parada por mais de 30 dias e foi descartada. Para conciliar este extrato, envie o arquivo de novo.";
+    server.use(http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json({ detail: { code: "not_found", message } }, { status: 404 })));
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  });
+});
+
+describe("descartar o rascunho (fincla-api#518)", () => {
+  it("pede confirmação na própria página; Manter rascunho não apaga nada", async () => {
+    imports = clone(contract.imports.imports);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    const ask = screen.getByRole("group", { name: "Confirmar descarte do rascunho" });
+    expect(ask).toHaveTextContent("Descartar esta conciliação? As respostas que você deu serão apagadas");
+    await user.click(within(ask).getByRole("button", { name: "Manter rascunho" }));
+
+    expect(screen.queryByRole("group", { name: "Confirmar descarte do rascunho" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("draft-in-progress")).toBeInTheDocument();
+    expect(calls.some((c) => c.discard)).toBe(false);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("confirmado, descarta, avisa e a lista deixa de mostrar o rascunho", async () => {
+    imports = clone(contract.imports.imports);
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Rascunho descartado. Nada mudou nas suas transações.");
+    await waitFor(() => expect(screen.queryByTestId("draft-in-progress")).not.toBeInTheDocument());
+    expect(calls).toContainEqual({ discard: IMPORT });
+    expect(screen.getAllByTestId("imported-statement").map((r) => within(r).getByTestId("import-status").textContent)).toEqual([
+      "Concluída",
+      "Desfeita",
+      "Concluída",
+    ]);
+  });
+
+  it("descartar de dentro do rascunho volta para a conta", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile` }));
+    expect(calls).toContainEqual({ discard: IMPORT });
+  });
+
+  it("se o descarte falhar, diz o motivo e o rascunho continua", async () => {
+    imports = clone(contract.imports.imports);
+    server.use(
+      http.delete(`${BASE}/:importId`, () =>
+        HttpResponse.json({ detail: { code: "conflict", message: "Esta conciliação já foi concluída: não é mais um rascunho." } }, { status: 409 }),
+      ),
+    );
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Esta conciliação já foi concluída");
+    expect(screen.getByTestId("draft-in-progress")).toBeInTheDocument();
+  });
+});
+
+describe("Extratos importados (fincla-api#518)", () => {
+  it("lista cada importação com período, estado, contagens, datas e a diferença registrada", async () => {
+    imports = clone(contract.imports.imports);
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(rows.map((r) => within(r).getByTestId("import-status").textContent)).toEqual(["Rascunho", "Concluída", "Desfeita", "Concluída"]);
+    expect(rows[0]).toHaveTextContent("01/10/2026 a 31/10/2026");
+    expect(rows[0]).toHaveTextContent("3 lançamentos · 3 a adicionar");
+    expect(within(rows[0]).queryByTestId("import-difference")).not.toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent("41 lançamentos · 38 adicionados · 3 não registrados");
+    expect(rows[1]).toHaveTextContent("Importado em 03/10/2026 · concluída em 03/10/2026");
+    expect(rows[2]).toHaveTextContent("41 adicionados e apagados ao desfazer");
+    expect(rows[2]).toHaveTextContent("desfeita em 02/10/2026");
+  });
+
+  it("diferença não registrada aparece como travessão, nunca como zero", async () => {
+    imports = clone(contract.imports.imports);
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(within(rows[1]).getByTestId("import-difference")).toHaveTextContent("Diferença de saldo registrada: —");
+    expect(within(rows[1]).getByTestId("import-difference")).not.toHaveTextContent(/0,00/);
+    expect(within(rows[3]).getByTestId("import-difference")).toHaveTextContent(/Diferença de saldo registrada: −R\$\s23,06/);
+  });
+
+  it("só a concluída mais recente oferece desfazer, que leva à tela do desfazer", async () => {
+    imports = clone(contract.imports.imports);
+    const user = userEvent.setup();
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(rows.map((r) => within(r).queryByRole("button", { name: "Desfazer importação" }) !== null)).toEqual([false, true, false, false]);
+    await user.click(within(rows[1]).getByRole("button", { name: "Desfazer importação" }));
+
+    expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${imports[1].id}/undo` });
+  });
+
+  it("de cada linha se chega à conciliação: o rascunho para continuar, a concluída para ver", async () => {
+    imports = clone(contract.imports.imports);
+    const user = userEvent.setup();
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    await user.click(within(rows[0]).getByRole("button", { name: "Continuar conciliação" }));
+    await user.click(within(rows[3]).getByRole("button", { name: "Ver conciliação" }));
+
+    expect(navigate.mock.calls.map(([arg]) => arg)).toEqual([
+      { to: `/accounts/${ACCOUNT}/reconcile/${imports[0].id}` },
+      { to: `/accounts/${ACCOUNT}/reconcile/${imports[3].id}` },
+    ]);
+  });
+
+  it("conta sem importações diz isso", async () => {
+    await openAccount();
+
+    expect(screen.getByText("Nenhum extrato importado nesta conta ainda.")).toBeInTheDocument();
   });
 });

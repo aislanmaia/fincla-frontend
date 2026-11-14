@@ -4,13 +4,25 @@
 // resposta é a de `src/api/__fixtures__/statement_import.example.json`, cópia byte a byte da
 // fixture canônica do backend (presa aos modelos Pydantic por um teste de lá).
 import apiClient from './client';
-import { toAmount, toCurrency, type WireMoney } from './money';
+import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
 
 export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment';
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
 /** Só o que passa por conta corrente: compra no cartão de crédito sai na fatura, não no extrato. */
 export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_transfer' | 'cash';
 export type ConcludeBlockerCode = 'unanswered' | 'missing_description';
+/** Os 8 passos da revisão guiada, na ordem (fincla-api#507). */
+export type ReconciliationStep = 'suggested' | 'doubt' | 'invoice' | 'yield' | 'new' | 'outside' | 'balance' | 'summary';
+/** Rascunho descartado ou expirado é apagado: não há status `discarded` (fincla-api#518). */
+export type StatementImportStatus = 'draft' | 'concluded' | 'undone';
+export interface StatementImportSummary {
+  total: number;
+  to_create: number;
+  missing_description: number;
+  unanswered: number;
+  /** Não viram transação (hoje só lançamentos de valor zero). */
+  ignored: number;
+}
 
 export interface StatementEntry {
   id: string;
@@ -39,19 +51,46 @@ export interface StatementEntry {
 export interface StatementImport {
   id: string;
   account_id: string;
-  status: 'draft' | 'concluded' | 'undone' | 'discarded';
+  status: StatementImportStatus;
   file_format: 'ofx';
   period: { start: string | null; end: string | null };
   bank_balances: { date: string; balance: number; currency: string | null }[];
   entries: StatementEntry[];
-  /** `ignored`: não viram transação (hoje só lançamentos de valor zero). */
-  summary: { total: number; to_create: number; missing_description: number; unanswered: number; ignored: number };
+  summary: StatementImportSummary;
   can_conclude: boolean;
   blockers: { code: ConcludeBlockerCode; count: number }[];
   created_at: string;
   concluded_at: string | null;
   /** Quando a importação foi desfeita (`status: 'undone'`, fincla-api#509). */
   undone_at: string | null;
+  /** Última alteração do rascunho (resposta ou passo) — fincla-api#518. */
+  last_activity_at: string;
+  /** Rascunho parado até aqui é apagado (30 dias sem alteração); `null` fora de rascunho. */
+  expires_at: string | null;
+  /** Onde a revisão parou; `null` = nunca gravado. */
+  current_step: ReconciliationStep | null;
+  /** Passos pelos quais a pessoa já passou, na ordem dos passos. */
+  reviewed_steps: ReconciliationStep[];
+}
+
+/** Uma linha de "Extratos importados" (fincla-api#518): a importação sem os lançamentos. */
+export interface StatementImportListItem {
+  id: string;
+  account_id: string;
+  status: StatementImportStatus;
+  file_format: 'ofx';
+  period: { start: string | null; end: string | null };
+  summary: StatementImportSummary;
+  /** Diferença registrada ao concluir. `null` = não registrada: nunca vira zero. */
+  final_difference: number | null;
+  final_difference_currency: string | null;
+  created_at: string;
+  last_activity_at: string;
+  expires_at: string | null;
+  concluded_at: string | null;
+  undone_at: string | null;
+  /** A concluída mais recente da conta: a única que pode ser desfeita. */
+  latest_concluded: boolean;
 }
 
 export interface UpdateStatementEntryRequest {
@@ -81,6 +120,16 @@ export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
     balance: toAmount(b.balance),
     currency: toCurrency(b.balance),
   })),
+});
+
+type RawListItem = Omit<StatementImportListItem, 'final_difference' | 'final_difference_currency'> & {
+  final_difference: WireMoney;
+};
+
+export const normalizeStatementImportListItem = ({ final_difference, ...raw }: RawListItem): StatementImportListItem => ({
+  ...raw,
+  final_difference: final_difference == null ? null : toFiniteNumber(final_difference),
+  final_difference_currency: toCurrency(final_difference),
 });
 
 const base = (accountId: string) => `/accounts/${accountId}/statement-imports`;
@@ -212,4 +261,49 @@ export const undoStatementImport = async (
     params: { organization_id: organizationId },
   });
   return normalizeStatementImport(response.data);
+};
+
+// --------------------------------------------------------------------------------------------
+// Rascunho e histórico (fincla-api#518)
+// --------------------------------------------------------------------------------------------
+
+/** Extratos importados da conta (rascunho, concluída, desfeita), do mais novo para o mais antigo. */
+export const listStatementImports = async (
+  accountId: string,
+  organizationId: string,
+): Promise<StatementImportListItem[]> => {
+  const response = await apiClient.get<{ imports: RawListItem[] }>(base(accountId), {
+    params: { organization_id: organizationId },
+  });
+  return (response.data.imports ?? []).map(normalizeStatementImportListItem);
+};
+
+/** Conciliações em andamento da organização, em todas as contas. */
+export const listStatementImportDrafts = async (organizationId: string): Promise<StatementImportListItem[]> => {
+  const response = await apiClient.get<{ imports: RawListItem[] }>('/statement-imports/drafts', {
+    params: { organization_id: organizationId },
+  });
+  return (response.data.imports ?? []).map(normalizeStatementImportListItem);
+};
+
+/** Grava onde a revisão parou (passo aberto e passos já vistos). Só os campos enviados mudam. */
+export const updateStatementImportProgress = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  body: { current_step?: ReconciliationStep | null; reviewed_steps?: ReconciliationStep[] },
+): Promise<StatementImport> => {
+  const response = await apiClient.patch<RawImport>(`${base(accountId)}/${importId}`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementImport(response.data);
+};
+
+/** Descarta o rascunho e todas as respostas dele. Nada no Fincla muda. */
+export const discardStatementImport = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+): Promise<void> => {
+  await apiClient.delete(`${base(accountId)}/${importId}`, { params: { organization_id: organizationId } });
 };
