@@ -3,7 +3,7 @@
     "id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
     "account_id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
     "status": "draft",
-    "file_format": "ofx",
+    "file_format": "xls",
     "period": {"start": "2026-10-01", "end": "2026-10-31"},
     "bank_balances": [
       {"date": "2026-10-31", "balance": {"amount": "1834.10", "currency": "BRL"}}
@@ -64,7 +64,11 @@
     "last_activity_at": "2026-11-14T10:25:00",
     "expires_at": "2026-12-14T10:25:00",
     "current_step": null,
-    "reviewed_steps": []
+    "reviewed_steps": [],
+    "account_check": {
+      "status": "other_account",
+      "suggested_account": {"id": "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f", "name": "Itaú"}
+    }
   },
   "entry": {
     "id": "0e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
@@ -150,7 +154,7 @@
         "id": "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
         "account_id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
         "status": "concluded",
-        "file_format": "ofx",
+        "file_format": "csv",
         "period": {"start": "2026-09-01", "end": "2026-09-30"},
         "summary": {"total": 41, "to_create": 38, "missing_description": 0, "unanswered": 0, "ignored": 3},
         "final_difference": null,
@@ -192,5 +196,21 @@
         "latest_concluded": false
       }
     ]
+  },
+  "column_mapping_required": {
+    "code": "business_rule",
+    "message": "Não reconhecemos as colunas desta planilha. Indique qual coluna tem a data, a descrição e o valor.",
+    "reason": "column_mapping_required",
+    "preview": {
+      "rows": [
+        ["Extrato de conta - Banco Exemplo", "", "", "", ""],
+        ["Data", "Histórico", "Documento", "Valor", "Saldo"],
+        ["01/10/2026", "Saldo anterior", "", "", "1.500,00"],
+        ["02/10/2026", "Compra cartão débito MERCADO EXEMPLO", "000123", "-45,90", "1.454,10"],
+        ["05/10/2026", "Salário EMPRESA FICTICIA", "", "3.000,00", "4.454,10"]
+      ],
+      "column_count": 5,
+      "suggested_mapping": {"date": 0, "description": 1, "amount": 3}
+    }
   }
 }
