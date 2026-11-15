@@ -36,6 +36,8 @@ export const CHANGED_FIELD_LABEL = {
 
 const TEXT = { ...G, fontSize: 13, color: T.inkMid, margin: 0 };
 
+const fieldList = (fields) => fields.map((f) => CHANGED_FIELD_LABEL[f] ?? f).join(", ");
+
 function useAccountName(organizationId, accountId) {
   const [name, setName] = useState("");
   useEffect(() => {
@@ -50,7 +52,7 @@ function useAccountName(organizationId, accountId) {
 }
 
 function DeletedTransactionRow({ transaction }) {
-  const changed = transaction.changed_fields.map((f) => CHANGED_FIELD_LABEL[f] ?? f).join(", ");
+  const changed = fieldList(transaction.changed_fields);
   return (
     <li data-testid="undo-transaction" style={{ ...G, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -66,6 +68,35 @@ function DeletedTransactionRow({ transaction }) {
       <span style={{ ...NUM, fontSize: 13, fontWeight: 600, color: transaction.type === "expense" ? T.ink : T.green }}>
         {transaction.type === "expense" ? "−" : "+"}{formatMoney(transaction.amount, transaction.currency)}
       </span>
+    </li>
+  );
+}
+
+/**
+ * Uma transação que já estava no Fincla (pareada na conciliação): volta só o que a conciliação
+ * mudou nela. O que a pessoa editou depois fica — aviso, não recusa.
+ */
+function RestoredTransactionRow({ entity }) {
+  return (
+    <li data-testid="undo-restored" style={{ ...G, display: "flex", flexDirection: "column", gap: 4, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
+      <span style={{ fontSize: 13, color: T.ink, overflowWrap: "anywhere" }}>{entity.description}</span>
+      {entity.edited_after ? (
+        <span>
+          <Badge color={T.amber} bg={T.amberLight}>Editada depois: {fieldList(entity.changed_fields)}</Badge>
+        </span>
+      ) : null}
+      <span style={{ fontSize: 12, color: T.inkMid }}>
+        {entity.action === "deleted"
+          ? "Volta a existir como era antes da conciliação."
+          : entity.edited_after
+            ? "Volta só o que a conciliação mudou; o que você editou depois continua como está."
+            : "Volta ao que era antes da conciliação."}
+      </span>
+      {entity.kept_fields?.length ? (
+        <span data-testid="undo-kept" style={{ fontSize: 12, color: T.inkMid }}>
+          Você mudou de novo depois: fica como você deixou ({fieldList(entity.kept_fields)}).
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -91,7 +122,7 @@ function WhatHappens({ preview }) {
       ) : null}
       {summary.already_deleted ? (
         <li data-testid="undo-already-deleted" style={{ color: T.inkMid }}>
-          {plural(summary.already_deleted, "transação adicionada já foi excluída", "transações adicionadas já foram excluídas")} por você: nada a fazer com {summary.already_deleted === 1 ? "ela" : "elas"}
+          {plural(summary.already_deleted, "transação da conciliação já foi excluída", "transações da conciliação já foram excluídas")} por você: nada a fazer com {summary.already_deleted === 1 ? "ela" : "elas"}
         </li>
       ) : null}
     </ul>
@@ -206,6 +237,11 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
             {listed.length ? (
               <ul aria-label="Transações que serão apagadas" style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {listed.map((t) => <DeletedTransactionRow key={t.transaction_id} transaction={t} />)}
+              </ul>
+            ) : null}
+            {preview.to_restore.length ? (
+              <ul aria-label="Transações que voltam ao estado de antes" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {preview.to_restore.map((r) => <RestoredTransactionRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />)}
               </ul>
             ) : null}
           </Card>

@@ -64,7 +64,7 @@ describe("prévia", () => {
     expect(screen.getByTestId("undo-delete-count")).toHaveTextContent(
       "2 transações adicionadas serão apagadas (1 editada depois da conciliação — essa também some)",
     );
-    expect(screen.getByTestId("undo-already-deleted")).toHaveTextContent("1 transação adicionada já foi excluída por você");
+    expect(screen.getByTestId("undo-already-deleted")).toHaveTextContent("1 transação da conciliação já foi excluída por você: nada a fazer com ela");
     const rows = screen.getAllByTestId("undo-transaction");
     expect(rows.map((r) => r.textContent)).toEqual([
       expect.stringContaining("02/10/2026 · Padaria"),
@@ -74,6 +74,27 @@ describe("prévia", () => {
     expect(within(rows[1]).queryByText(/Editada depois/)).not.toBeInTheDocument();
     expect(rows[1]).toHaveTextContent(/−R\$\s120,00/);
     expect(calls).toEqual([{ preview: IMPORT }]);
+  });
+
+  it("a transação pareada que volta mostra o que foi editado depois e o que fica como a pessoa deixou (G3-2-01)", async () => {
+    await open();
+
+    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("1 transação que já estava no Fincla volta ao estado de antes da conciliação");
+    const [restored] = screen.getAllByTestId("undo-restored");
+    expect(restored).toHaveTextContent("Aluguel de outubro");
+    expect(within(restored).getByText("Editada depois: descrição, data de pagamento")).toBeInTheDocument();
+    expect(restored).toHaveTextContent("Volta só o que a conciliação mudou; o que você editou depois continua como está.");
+    expect(within(restored).getByTestId("undo-kept")).toHaveTextContent("Você mudou de novo depois: fica como você deixou (situação, data de pagamento).");
+    // Aviso, não recusa: o botão continua lá.
+    expect(screen.getByRole("button", { name: "Desfazer importação" })).toBeInTheDocument();
+  });
+
+  it("uma pareada sem edição depois só diz que volta ao que era", async () => {
+    preview.to_restore = [{ ...contract.undo_preview.to_restore[0], description: "Aluguel", edited_after: false, changed_fields: [], kept_fields: [] }];
+    await open();
+
+    const [restored] = screen.getAllByTestId("undo-restored");
+    expect(restored.textContent).toBe("AluguelVolta ao que era antes da conciliação.");
   });
 
   it("sem edições depois, não fala de editadas", async () => {

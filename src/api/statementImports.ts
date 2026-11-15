@@ -434,7 +434,13 @@ export interface UndoRestoredEntity {
   entity_type: 'transaction';
   entity_id: string;
   action: 'updated' | 'deleted';
+  /** Como está hoje (`updated`) ou como era antes (`deleted`). */
   description: string;
+  /** A pessoa mudou a transação depois de concluir; as edições dela ficam (aviso, não recusa). */
+  edited_after: boolean;
+  changed_fields: UndoChangedField[];
+  /** Do que a conciliação mudou, o que a pessoa mudou de novo depois: fica o valor dela. */
+  kept_fields: UndoChangedField[];
 }
 
 export interface StatementUndoPreview {
