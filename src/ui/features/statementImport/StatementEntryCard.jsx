@@ -51,8 +51,11 @@ function LockedValue({ children, testId, title }) {
  * Um lançamento novo: à esquerda o que o banco registrou, à direita a transação que ele vai
  * virar ao concluir. Data e valor vêm do banco e ficam travados; descrição, tipo, forma de
  * pagamento (sugerida pelo texto do banco) e categoria são da pessoa. A descrição é gravada ao sair do campo.
+ *
+ * `embedded`: só o lado "No Fincla · nova transação", sem moldura, para o cartão de um par sugerido
+ * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco.
  */
-export function StatementEntryCard({ entry, categories, fallbackLabel, isMobile, onChange }) {
+export function StatementEntryCard({ entry, categories, fallbackLabel, isMobile, onChange, embedded = false }) {
   const [description, setDescription] = useState(entry.description ?? "");
   useEffect(() => setDescription(entry.description ?? ""), [entry.description]);
 
@@ -68,18 +71,18 @@ export function StatementEntryCard({ entry, categories, fallbackLabel, isMobile,
 
   return (
     <article
-      data-testid="statement-entry"
-      aria-label={`Lançamento ${entry.bank_description}`}
-      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: 14, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}
+      data-testid={embedded ? "statement-entry-new-side" : "statement-entry"}
+      aria-label={embedded ? "Nova transação" : `Lançamento ${entry.bank_description}`}
+      style={embedded ? { display: "flex", minWidth: 0 } : { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: 14, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}
     >
-      <section style={{ ...BOX, background: T.bg }}>
+      {embedded ? null : <section style={{ ...BOX, background: T.bg }}>
         <div style={BOX_LABEL}>No extrato do banco</div>
         <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, wordBreak: "break-word" }}>{entry.bank_description}</div>
         <div style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, marginTop: 6 }}>{bankDateLabel(entry.date)}</div>
         <div style={{ ...G, ...NUM, fontSize: 16, fontWeight: 700, marginTop: 6, color: moneyIn ? T.green : T.ink }}>
           {formatMoney(entry.amount, entry.currency)}
         </div>
-      </section>
+      </section>}
 
       <section style={{ ...BOX, borderColor: T.greenBorder }}>
         <div style={BOX_LABEL}>
