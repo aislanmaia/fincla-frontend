@@ -22,7 +22,8 @@ export const STEPS = [
   {
     key: "yield",
     title: "Revisar rendimentos pequenos",
-    todo: "Aqui ficam os rendimentos de centavos, que dá para somar em um lançamento só no mês.",
+    todo: "Rendimentos de centavos. Some todos em um lançamento só no mês, ou deixe adicionar um por um.",
+    then: "Nada é adicionado agora: só quando você concluir a conciliação.",
   },
   {
     key: "new",
@@ -50,9 +51,11 @@ export const STEPS = [
 
 /** Os lançamentos do extrato que pertencem a um passo. */
 export function entriesOfStep(stepKey, entries) {
-  if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.answer === "create");
-  // Não somem: o que não vira transação (hoje só valor zero) fica visível aqui.
-  if (stepKey === "outside") return entries.filter((e) => e.answer === "ignore");
+  // Os respondidos continuam no passo (Não registrar minimizado, somados dentro da soma): nada some.
+  if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.amount !== 0);
+  if (stepKey === "yield") return entries.filter((e) => e.classification === "yield" && e.amount !== 0);
+  // Valor zero não move dinheiro: não vira transação e fica visível aqui.
+  if (stepKey === "outside") return entries.filter((e) => e.amount === 0);
   return [];
 }
 

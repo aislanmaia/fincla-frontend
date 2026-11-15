@@ -19,9 +19,13 @@ import { listTags } from "../../api/tags";
 import {
   columnMappingPreviewOf,
   concludeStatementImport,
+  createStatementGroup,
+  deleteStatementGroup,
   getStatementImport,
   listStatementImports,
+  updateStatementEntries,
   updateStatementEntry,
+  updateStatementGroup,
   updateStatementImportProgress,
   uploadStatement,
 } from "../../api/statementImports";
@@ -32,7 +36,8 @@ import {
   firstStepWithWork,
   stepStatus,
 } from "../features/statementImport/reconciliationSteps.js";
-import { StatementEntryCard, bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
@@ -41,6 +46,9 @@ import {
   DraftInProgressCard,
   ImportedStatementsList,
 } from "../features/statementImport/ImportedStatements.jsx";
+
+/** Passos em que cada lançamento é adicionado, somado ou fica de fora (fincla-api#513). */
+const ENTRY_STEPS = new Set(["yield", "new"]);
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação.";
 
@@ -64,9 +72,13 @@ function useAccountName(organizationId, accountId) {
   return name;
 }
 
+const byLabel = (a, b) => (a.label || a.name).localeCompare(b.label || b.name, "pt-BR");
+
 function useCategories(organizationId) {
   const [categories, setCategories] = useState([]);
+  const [details, setDetails] = useState([]);
   const [error, setError] = useState("");
+  const [detailsError, setDetailsError] = useState("");
   useEffect(() => {
     if (!organizationId) return undefined;
     let alive = true;
@@ -74,12 +86,19 @@ function useCategories(organizationId) {
       .then((res) => {
         if (!alive) return;
         const active = (res.tags ?? []).filter((t) => t.is_active !== false);
-        setCategories(active.sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name, "pt-BR")));
+        setCategories(active.sort(byLabel));
       })
       .catch(() => { if (alive) setError("Não foi possível carregar as suas categorias. Recarregue a página para escolher uma."); });
+    // Etiquetas (fincla-api#513): cada uma pertence a uma categoria (`parent_category_tag_id`).
+    listTags(organizationId, "detalhe")
+      .then((res) => {
+        if (alive) setDetails((res.tags ?? []).filter((t) => t.is_active !== false && t.parent_category_tag_id).sort(byLabel));
+      })
+      .catch(() => { if (alive) setDetailsError("Não foi possível carregar as suas etiquetas. Recarregue a página para escolher uma."); });
     return () => { alive = false; };
   }, [organizationId]);
-  return { categories, error };
+  // Sem categorias não há etiqueta a escolher: o aviso das categorias vem primeiro.
+  return { categories, details, error: error || detailsError };
 }
 
 // --------------------------------------------------------------------------------------------
@@ -306,6 +325,7 @@ function EmptyStep({ children }) {
 }
 
 function LeftOutStep({ entries }) {
+  // Só valor zero chega aqui; "Não registrar" fica minimizado no próprio passo.
   return (
     <Card style={{ padding: 16 }}>
       <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "0 0 10px" }}>Estes lançamentos não viram transação:</p>
@@ -331,31 +351,39 @@ function BalanceStep({ statementImport }) {
   );
 }
 
-function SummaryStep({ statementImport, concluding, error, onConclude }) {
+function SummaryStep({ statementImport, concluding, error, onConclude, onClassify = null }) {
   const { summary, blockers } = statementImport;
   const rows = [
     ["Lançamentos no extrato", summary.total, "summary-total"],
     ["Serão adicionados", summary.to_create, "summary-to-create"],
+    ["Somados em um lançamento", summary.grouped, "summary-grouped", summary.groups ? `em ${plural(summary.groups, "transação", "transações")}` : null],
     ["Não serão registrados", summary.ignored, "summary-ignored"],
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <Card style={{ padding: 16 }}>
         <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "1fr auto", gap: "8px 16px" }}>
-          {rows.map(([label, value, testId]) => (
+          {rows.map(([label, value, testId, note]) => (
             <div key={testId} style={{ display: "contents" }}>
-              <dt style={{ ...G, fontSize: 13, color: T.inkMid }}>{label}</dt>
+              <dt style={{ ...G, fontSize: 13, color: T.inkMid }}>{label}{note ? <span style={{ fontSize: 12, color: T.inkLight }}> · {note}</span> : null}</dt>
               <dd data-testid={testId} style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink, margin: 0, textAlign: "right" }}>{value}</dd>
             </div>
           ))}
         </dl>
-        {summary.to_create ? (
+        {summary.to_create || summary.groups ? (
           <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "12px 0 0" }}>
-            Ao concluir, cada lançamento marcado para adicionar vira uma transação <b>paga na data do banco</b>.
-            Os que estão sem categoria vão para Não classificado.
+            Ao concluir, cada lançamento marcado para adicionar e cada soma vira uma transação <b>paga na data do banco</b>
+            {summary.groups ? " (a soma, na data do último lançamento somado)" : ""}.
           </p>
         ) : null}
       </Card>
+      {summary.unclassified ? (
+        <div data-testid="unclassified-warning" role="note" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "baseline" }}>
+          <b>{plural(summary.unclassified, "transação vai", "transações vão")} para Não classificado.</b>
+          <span>Dá para classificar agora ou depois, em Lançamentos.</span>
+          {onClassify ? <button type="button" onClick={onClassify} style={{ ...LINK, fontSize: 13, color: T.blue }}>Classificar agora</button> : null}
+        </div>
+      ) : null}
       {blockers.length ? (
         <div data-testid="conclude-blocked" style={{ ...G, fontSize: 13, color: T.inkMid, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px" }}>
           Ainda não dá para concluir: {blockers.map(blockerText).join(" ")}
@@ -381,7 +409,8 @@ function statementPeriod({ period, entries }) {
 
 function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
   const navigate = useNavigate();
-  const created = statementImport.entries.filter((e) => e.created_transaction_id != null).length;
+  const created = statementImport.entries.filter((e) => e.created_transaction_id != null).length
+    + (statementImport.groups ?? []).filter((g) => g.created_transaction_id != null).length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageTitle sans="Conciliar" serif="extrato" />
@@ -433,7 +462,7 @@ function UndoneView({ statementImport, onOpenAccountTransactions }) {
 
 function DraftView({ organizationId, accountId, importId, accountName, isMobile, onOpenAccountTransactions }) {
   const navigate = useNavigate();
-  const { categories, error: categoriesError } = useCategories(organizationId);
+  const { categories, details, error: categoriesError } = useCategories(organizationId);
   const [statementImport, setStatementImport] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -493,6 +522,26 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     }
   };
 
+  // Lote e somas respondem com a importação inteira: a tela mostra o que o backend gravou.
+  // Devolve a importação (ou null se falhou), para a barra de desfazer saber o que mudou.
+  const applyWhole = async (work) => {
+    setActionError("");
+    try {
+      const updated = await work();
+      setStatementImport(updated);
+      return updated;
+    } catch (err) {
+      setActionError(handleApiError(err));
+      return null;
+    }
+  };
+  const batch = (entries) => applyWhole(() => updateStatementEntries(accountId, organizationId, importId, entries));
+  const createGroup = (entryIds, description) =>
+    applyWhole(() => createStatementGroup(accountId, organizationId, importId, entryIds, description));
+  const updateGroup = (groupId, body) =>
+    applyWhole(() => updateStatementGroup(accountId, organizationId, importId, groupId, body));
+  const deleteGroup = (groupId) => applyWhole(() => deleteStatementGroup(accountId, organizationId, importId, groupId));
+
   const conclude = async () => {
     setConcluding(true);
     setActionError("");
@@ -550,23 +599,30 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           </header>
           {current !== "summary" ? <ErrorNote>{actionError}</ErrorNote> : null}
 
-          {current === "new" ? <ErrorNote>{categoriesError}</ErrorNote> : null}
-          {current === "new" && stepEntries.map((entry) => (
-            <StatementEntryCard
-              key={entry.id}
-              entry={entry}
+          {ENTRY_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
+          {ENTRY_STEPS.has(current) && stepEntries.length ? (
+            <NewEntriesStep
+              key={current}
+              stepKey={current}
+              entries={stepEntries}
+              groups={statementImport.groups ?? []}
               categories={categories}
+              details={details}
               fallbackLabel={fallbackLabel}
               isMobile={isMobile}
-              onChange={changeEntry}
+              onChangeEntry={changeEntry}
+              onBatch={batch}
+              onCreateGroup={createGroup}
+              onUpdateGroup={updateGroup}
+              onDeleteGroup={deleteGroup}
             />
-          ))}
+          ) : null}
           {current === "outside" && stepEntries.length ? <LeftOutStep entries={stepEntries} /> : null}
           {current === "balance" ? <BalanceStep statementImport={statementImport} /> : null}
           {current === "summary" ? (
-            <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} />
+            <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} onClassify={() => open("new")} />
           ) : null}
-          {!["new", "balance", "summary", "outside"].includes(current) || (current === "new" && !stepEntries.length) ? (
+          {!["new", "yield", "balance", "summary", "outside"].includes(current) || (ENTRY_STEPS.has(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
           ) : null}
 
