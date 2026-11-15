@@ -280,6 +280,12 @@ export interface StatementImport {
   file_check: FileCheck;
   /** Desde quando o extrato conta para o saldo; `null` = nada fica fora por data. */
   left_out: LeftOutFloor | null;
+  /**
+   * Banco − Fincla no último saldo do arquivo, registrado ao concluir (fincla-api#514). `null` =
+   * rascunho, ou o arquivo não informa saldo: nunca vira zero.
+   */
+  final_difference: number | null;
+  final_difference_currency: string | null;
 }
 
 /** A resposta do desfazer: a importação desfeita e quantas transações ele de fato apagou. */
@@ -366,7 +372,8 @@ export const normalizeFinclaMatch = (raw: RawFinclaMatch): FinclaMatch => ({
   taken_by_entry_id: raw.taken_by_entry_id ?? null,
 });
 type RawGroup = Omit<StatementGroup, 'amount' | 'currency'> & { amount: WireMoney };
-type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> & {
+type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups' | 'final_difference' | 'final_difference_currency'> & {
+  final_difference?: WireMoney | null;
   entries: RawEntry[];
   groups?: RawGroup[];
   bank_balances: { date: string; balance: WireMoney }[];
@@ -399,8 +406,10 @@ export const normalizeStatementEntry = ({
     : null,
 });
 
-export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
+export const normalizeStatementImport = ({ final_difference, ...raw }: RawImport): StatementImport => ({
   ...raw,
+  final_difference: final_difference == null ? null : toFiniteNumber(final_difference),
+  final_difference_currency: final_difference == null ? null : toCurrency(final_difference),
   entries: (raw.entries ?? []).map(normalizeStatementEntry),
   groups: (raw.groups ?? []).map((g) => ({ ...g, amount: toAmount(g.amount), currency: toCurrency(g.amount) })),
   bank_balances: (raw.bank_balances ?? []).map((b) => ({
@@ -752,4 +761,173 @@ export const discardStatementImport = async (
   importId: string,
 ): Promise<void> => {
   await apiClient.delete(`${base(accountId)}/${importId}`, { params: { organization_id: organizationId } });
+};
+
+// --------------------------------------------------------------------------------------------
+// Conferir o saldo (fincla-api#514)
+// --------------------------------------------------------------------------------------------
+
+/** Está certa assim (`keep`), Excluir (`delete`), Mudar data (`change_date`). Só valem ao concluir. */
+export type BalanceCheckAction = 'keep' | 'delete' | 'change_date';
+
+/** Um dia em que o banco informa saldo: o do banco, o do Fincla já com as respostas, banco − Fincla. */
+export interface BalancePoint {
+  date: string;
+  bank: number;
+  fincla: number;
+  difference: number;
+  currency: string | null;
+}
+
+/** Transação do Fincla nesta conta, paga no período, que não é nenhum lançamento do extrato. */
+export interface UnmatchedTransaction {
+  transaction_id: number;
+  description: string;
+  type: StatementTransactionType;
+  /** Com sinal: receita/estorno positivos, despesa negativa. */
+  amount: number;
+  currency: string | null;
+  date: string;
+  /** Dia em que o dinheiro mexeu (data de pagamento, senão a data). */
+  day: string;
+  payment_method: string;
+  category_name: string | null;
+  tag_names: string[];
+  recurring: boolean;
+  check: BalanceCheckAction | null;
+  new_date: string | null;
+  /** Quanto pesa no saldo do fim do período depois de concluir. */
+  weight: number;
+  /** "É este lançamento do banco": lançamento marcado para adicionar com o mesmo valor. */
+  hint_entry_id: string | null;
+  /** Por que Excluir não está disponível; `null` = está. */
+  delete_refusal: 'goal' | 'refunded' | null;
+}
+
+export interface LeftOutStatementEntry {
+  entry_id: string;
+  date: string;
+  bank_description: string;
+  amount: number;
+  currency: string | null;
+  kind: 'ignored' | 'brought_back';
+}
+
+export interface PaidInvoiceDifference {
+  entry_id: string;
+  invoice_id: number;
+  card_name: string;
+  year: number;
+  month: number;
+  total: number;
+  paid: number;
+  paid_on: string;
+  /** Total no Fincla − pago (positivo = o banco pagou menos). */
+  difference: number;
+  currency: string | null;
+}
+
+export interface BalanceEffects {
+  value_changes: number;
+  account_moves: number;
+  invoices_paid: number;
+  deletions: number;
+  date_changes: number;
+}
+
+export interface StatementBalanceCheck {
+  import_id: string;
+  points: BalancePoint[];
+  first_divergent_date: string | null;
+  /** Banco − Fincla no último ponto; `null` = o arquivo não informa saldo (nunca zero). */
+  final_difference: number | null;
+  currency: string | null;
+  unmatched_transactions: UnmatchedTransaction[];
+  waiting_transactions: number;
+  unanswered_entries: number;
+  left_out_entries: LeftOutStatementEntry[];
+  paid_invoices: PaidInvoiceDifference[];
+  effects: BalanceEffects;
+}
+
+export interface BalanceCheckChange {
+  transaction_id: number;
+  /** `null` esquece a resposta (Desfazer). */
+  action: BalanceCheckAction | null;
+  new_date?: string | null;
+}
+
+type RawBalanceCheck = {
+  import_id: string;
+  points: { date: string; bank: WireMoney; fincla: WireMoney; difference: WireMoney }[];
+  first_divergent_date: string | null;
+  final_difference: WireMoney | null;
+  unmatched_transactions: (Omit<UnmatchedTransaction, 'amount' | 'weight' | 'currency'> & { amount: WireMoney; weight: WireMoney })[];
+  waiting_transactions: number;
+  unanswered_entries: number;
+  left_out_entries: (Omit<LeftOutStatementEntry, 'amount' | 'currency'> & { amount: WireMoney })[];
+  paid_invoices: (Omit<PaidInvoiceDifference, 'total' | 'paid' | 'difference' | 'currency'> & {
+    total: WireMoney;
+    paid: WireMoney;
+    difference: WireMoney;
+  })[];
+  effects: BalanceEffects;
+};
+
+export const normalizeBalanceCheck = (raw: RawBalanceCheck): StatementBalanceCheck => ({
+  import_id: raw.import_id,
+  points: (raw.points ?? []).map((p) => ({
+    date: p.date,
+    bank: toAmount(p.bank),
+    fincla: toAmount(p.fincla),
+    difference: toAmount(p.difference),
+    currency: toCurrency(p.bank),
+  })),
+  first_divergent_date: raw.first_divergent_date ?? null,
+  final_difference: raw.final_difference == null ? null : toFiniteNumber(raw.final_difference),
+  currency: raw.final_difference == null ? (raw.points?.[0] ? toCurrency(raw.points[0].bank) : null) : toCurrency(raw.final_difference),
+  unmatched_transactions: (raw.unmatched_transactions ?? []).map((u) => ({
+    ...u,
+    amount: toAmount(u.amount),
+    weight: toAmount(u.weight),
+    currency: toCurrency(u.amount),
+  })),
+  waiting_transactions: raw.waiting_transactions ?? 0,
+  unanswered_entries: raw.unanswered_entries ?? 0,
+  left_out_entries: (raw.left_out_entries ?? []).map((e) => ({ ...e, amount: toAmount(e.amount), currency: toCurrency(e.amount) })),
+  paid_invoices: (raw.paid_invoices ?? []).map((i) => ({
+    ...i,
+    total: toAmount(i.total),
+    paid: toAmount(i.paid),
+    difference: toAmount(i.difference),
+    currency: toCurrency(i.total),
+  })),
+  effects: raw.effects,
+});
+
+/** Conferir o saldo: banco × Fincla em cada saldo do arquivo, já com as respostas. Não muda nada. */
+export const getStatementBalanceCheck = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+): Promise<StatementBalanceCheck> => {
+  const response = await apiClient.get<RawBalanceCheck>(`${base(accountId)}/${importId}/balance-check`, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeBalanceCheck(response.data);
+};
+
+/** Está certa assim / Excluir / Mudar data, uma ou várias (tudo ou nada). Excluir e mudar data só valem ao concluir. */
+export const updateStatementBalanceChecks = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  transactions: BalanceCheckChange[],
+): Promise<StatementBalanceCheck> => {
+  const response = await apiClient.patch<RawBalanceCheck>(
+    `${base(accountId)}/${importId}/balance-check/transactions`,
+    { transactions },
+    { params: { organization_id: organizationId } },
+  );
+  return normalizeBalanceCheck(response.data);
 };

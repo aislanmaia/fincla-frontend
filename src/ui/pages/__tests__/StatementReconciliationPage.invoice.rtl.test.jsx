@@ -30,6 +30,8 @@ let draft = clone(contract.invoice_draft);
 let preview = clone(contract.undo_preview);
 
 const server = setupServer(
+  // "Revisar e concluir" mostra a diferença de saldo (fincla-api#514).
+  http.get(`${BASE}/${IMPORT}/balance-check`, () => HttpResponse.json(contract.balance_check)),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
@@ -216,9 +218,10 @@ describe("o resumo", () => {
 
     expect(screen.getByTestId("summary-invoice-payments")).toHaveTextContent("1");
     expect(screen.getByTestId("summary-to-create")).toHaveTextContent("1");
-    expect(screen.getByTestId("summary-invoices-paid")).toHaveTextContent(
-      "Fatura paga: a Fatura Itaú Visa · outubro fica paga em 12/10/2026 (data do banco). Nenhuma transação é criada.",
-    );
+    // O selo FATURA PAGA da lista "Também vai acontecer ao concluir" (fincla-api#514).
+    const paid = screen.getByTestId("summary-invoices-paid");
+    expect(paid).toHaveTextContent("Fatura paga");
+    expect(paid).toHaveTextContent("A Fatura Itaú Visa · outubro fica paga em 12/10/2026 (data do banco). Nenhuma transação é criada.");
   });
 
   it("sem pagamento de fatura, nada sobre fatura aparece", async () => {

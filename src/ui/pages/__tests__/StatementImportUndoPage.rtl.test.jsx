@@ -89,6 +89,14 @@ describe("prévia", () => {
     expect(screen.getByRole("button", { name: "Desfazer importação" })).toBeInTheDocument();
   });
 
+  it("a transação excluída na conferência de saldo volta a existir, contada à parte (fincla-api#514)", async () => {
+    await open();
+
+    expect(screen.getByTestId("undo-recreated-count")).toHaveTextContent("1 transação excluída na conferência de saldo volta a existir");
+    const recreated = screen.getAllByTestId("undo-restored").find((r) => r.textContent.includes("2ª parcela salário"));
+    expect(recreated).toHaveTextContent("Volta a existir como era antes da conciliação.");
+  });
+
   it("uma pareada sem edição depois só diz que volta ao que era", async () => {
     preview.to_restore = [{
       ...contract.undo_preview.to_restore[0], description: "Aluguel", edited_after: false, changed_fields: [], kept_fields: [], value_back: null, account_back: null,
