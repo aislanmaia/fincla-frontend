@@ -485,6 +485,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   const [answerHistory, setAnswerHistory] = useState({});
   const [lastBulk, setLastBulk] = useState(null);
   const [answering, setAnswering] = useState(false);
+  // O par que acabou de minimizar recebe o foco no "Alterar" da linha dele.
+  const [focusedPair, setFocusedPair] = useState(null);
   // Os PATCH de progresso saem em fila: o próximo só parte quando o anterior respondeu, então o
   // servidor fica sempre com o último passo aberto (fincla-api#518).
   const progressQueue = useRef(Promise.resolve());
@@ -577,6 +579,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       }));
       // "Não, adicionar agora" deixa o cartão aberto para conferir a transação nova; as outras minimizam.
       withOpened(entry.id, answer === "create");
+      if (answer !== "create") setFocusedPair(entry.id);
+      // A barra "N confirmados · Desfazer" falava de um estado que esta resposta mudou.
+      setLastBulk(null);
       await reload();
     } catch (err) {
       setActionError(handleApiError(err));
@@ -593,6 +598,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     try {
       await updateStatementEntry(accountId, organizationId, importId, entry.id, previous);
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: prev[entry.id].slice(0, -1) }));
+      setLastBulk(null);
       await reload();
     } catch (err) {
       setActionError(handleApiError(err));
@@ -683,11 +689,12 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               opened={openedPairs}
               history={answerHistory}
               lastBulk={lastBulk}
+              focusId={focusedPair}
               onAnswer={answerPair}
               onChange={changeEntry}
               onUndoChoice={undoPairChoice}
               onOpen={(entry) => withOpened(entry.id, true)}
-              onMinimize={(entry) => withOpened(entry.id, false)}
+              onMinimize={(entry) => { setFocusedPair(entry.id); withOpened(entry.id, false); }}
               onConfirmAll={(ids) => confirmPairs(ids, true)}
               onUndoConfirmAll={() => confirmPairs(lastBulk, false)}
             />

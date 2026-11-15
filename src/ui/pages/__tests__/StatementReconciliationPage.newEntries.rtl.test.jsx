@@ -51,6 +51,7 @@ const GROUP = contract.draft.groups[0].id;
 let draft;
 const calls = [];
 const entry = (id) => draft.entries.find((e) => e.id === id);
+const entryBefore = (id) => contract.draft.entries.find((e) => e.id === id);
 const money = (n) => ({ amount: n.toFixed(2), currency: "BRL" });
 
 function recompute() {
@@ -82,6 +83,7 @@ function applyEntry(target, body) {
   if (body.answer) {
     target.answer = body.answer;
     target.group_id = null;
+    target.confirmed = "confirmed" in body ? body.confirmed : true;
   }
   if ("category_tag_id" in body) {
     target.category_tag_id = body.category_tag_id;
@@ -123,7 +125,13 @@ const server = setupServer(
     calls.push({ group: body });
     const id = `group-${calls.length}`;
     draft.groups.push({ ...clone(contract.draft.groups[0]), id, description: body.description, category_tag_id: null });
-    body.entry_ids.forEach((eid) => { entry(eid).answer = "group"; entry(eid).group_id = id; });
+    // Como o backend: cada somado guarda a resposta (e o "confirmado") de antes.
+    body.entry_ids.forEach((eid) => {
+      const e = entry(eid);
+      e._before = { answer: e.answer, confirmed: e.confirmed };
+      e.answer = "group";
+      e.group_id = id;
+    });
     recompute();
     return HttpResponse.json(draft, { status: 201 });
   }),
@@ -136,7 +144,13 @@ const server = setupServer(
   }),
   http.delete(`${BASE}/${IMPORT}/groups/:groupId`, ({ params: p }) => {
     calls.push({ ungroup: p.groupId });
-    draft.entries.filter((e) => e.group_id === p.groupId).forEach((e) => { e.answer = "create"; e.group_id = null; });
+    // "Desfazer soma" devolve a cada um a resposta de antes (G3-2-03).
+    draft.entries.filter((e) => e.group_id === p.groupId).forEach((e) => {
+      e.answer = e._before?.answer ?? "create";
+      if (e._before) e.confirmed = e._before.confirmed;
+      delete e._before;
+      e.group_id = null;
+    });
     recompute();
     return HttpResponse.json(draft);
   }),
@@ -202,6 +216,53 @@ describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
     await waitFor(() => expect(calls).toContainEqual({ ungroup: GROUP }));
     await waitFor(() => expect(screen.queryByTestId("statement-group")).toBeNull());
     expect(screen.getAllByTestId("statement-entry")).toHaveLength(2);
+  });
+
+  it("Desfazer soma no cartão tem barra de desfazer que refaz a soma com o que ela tinha (G3-2-04)", async () => {
+    const user = await openDraft({ setup: (d) => {
+      Object.assign(d.groups[0], { category_tag_id: "cat-yield", payment_method: "pix", detail_tag_ids: [] });
+    } });
+
+    await user.click(screen.getByRole("button", { name: "Desfazer soma" }));
+
+    await waitFor(() => expect(screen.queryByTestId("statement-group")).toBeNull());
+    const bar = screen.getByTestId("undo-bar");
+    expect(bar).toHaveTextContent("Soma “Rendimentos da conta” desfeita");
+
+    await user.click(within(bar).getByRole("button", { name: "Desfazer" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ group: { entry_ids: [YIELD_A, YIELD_B], description: "Rendimentos da conta" } }));
+    const recreated = calls.find((c) => c.group);
+    const newId = `group-${calls.indexOf(recreated) + 1}`;
+    await waitFor(() => expect(calls).toContainEqual({
+      patchGroup: newId,
+      body: { transaction_type: "income", payment_method: "pix", category_tag_id: "cat-yield", detail_tag_ids: [] },
+    }));
+    const group = await screen.findByTestId("statement-group");
+    expect(within(group).getByLabelText("Descrição")).toHaveValue("Rendimentos da conta");
+    expect(within(group).getByLabelText("Categoria")).toHaveValue("cat-yield");
+    expect(within(group).getByLabelText("Forma de pagamento")).toHaveValue("pix");
+    expect(screen.queryByTestId("undo-bar")).toBeNull();
+  });
+
+  it("Desfazer da barra depois de Somar devolve o Não registrar como Não registrar (G3-2-03)", async () => {
+    const user = await openDraft({ setup: (d) => {
+      d.entries.forEach((e) => { if (e.group_id) { e.answer = "create"; e.group_id = null; } });
+      d.entries.find((e) => e.id === YIELD_A).answer = "ignore";
+    } });
+
+    await user.click(screen.getByRole("button", { name: "Marcar todas (2)" }));
+    await user.click(screen.getByRole("button", { name: /Somar em um só lançamento/ }));
+    await user.type(screen.getByLabelText("Descrição da transação (obrigatória)"), "Rendimentos");
+    await user.click(screen.getByRole("button", { name: "Somar 2 lançamentos" }));
+    await screen.findByTestId("statement-group");
+
+    await user.click(within(screen.getByTestId("undo-bar")).getByRole("button", { name: "Desfazer" }));
+
+    await waitFor(() => expect(screen.queryByTestId("statement-group")).toBeNull());
+    expect(screen.getAllByTestId("ignored-entry").map((r) => r.textContent)).toEqual([expect.stringContaining("06/10/2026")]);
+    expect(within(card("REND PAGO APLIC AUT MAIS")).getByRole("button", { name: /Não, adicionar agora/ })).toHaveAttribute("aria-pressed", "true");
+    expect(entry(YIELD_A).answer).toBe("ignore");
   });
 
   it("somar pede a descrição, manda os marcados e a barra de desfazer desfaz a soma", async () => {
@@ -306,7 +367,37 @@ describe("adicionar lançamentos novos", () => {
 
     await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
     await waitFor(() => expect(screen.queryByTestId("ignored-entry")).toBeNull());
-    expect(card("TARIFA PACOTE")).toBeTruthy();
+    // Voltou aberto, como "Não, adicionar agora" (e não "Não registrar").
+    const back = within(card("TARIFA PACOTE"));
+    expect(back.getByRole("button", { name: /Não, adicionar agora/ })).toHaveAttribute("aria-pressed", "true");
+    expect(back.getByRole("button", { name: /Não registrar/ })).toHaveAttribute("aria-pressed", "false");
+    expect(back.getByTestId("entry-outcome")).toHaveTextContent("Ao concluir");
+  });
+
+  it("a linha Não registrar só responde aos botões, não a um clique solto (G3-2-11)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const fee = screen.getByTestId("ignored-entry");
+
+    await user.click(within(fee).getByText("fica fora do Fincla"));
+
+    expect(screen.getByTestId("ignored-entry")).toBe(fee);
+    expect(card("TARIFA PACOTE")).toBeUndefined();
+    await user.click(markBox("20/10/2026"));
+    expect(markBox("20/10/2026")).toBeChecked();
+    expect(screen.getByTestId("ignored-entry")).toBe(fee);
+  });
+
+  it("Não registrar no cartão leva o foco ao Alterar da linha que fica no lugar (G3-2-10)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Não registrar" }));
+
+    const row = await waitFor(() => {
+      const found = screen.getAllByTestId("ignored-entry").find((r) => within(r).queryByText("PAG BOLETO ENERGIA"));
+      expect(found).toBeTruthy();
+      return found;
+    });
+    await waitFor(() => expect(within(row).getByRole("button", { name: "Alterar" })).toHaveFocus());
   });
 
   it("responder Não registrar no cartão minimiza o lançamento, sem sumir", async () => {
@@ -346,6 +437,28 @@ describe("adicionar lançamentos novos", () => {
     expect(within(card("PIX QRS PADARIA 02 10")).getByText("Sugerida pelo seu histórico")).toBeInTheDocument();
   });
 
+  it("com só Não registrar marcados, a categoria em lote fica desligada e diz por quê (G3-2-07)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(markBox("20/10/2026"));
+
+    expect(screen.getByLabelText("Categoria", { selector: "#bulk-category" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Aplicar aos 0 a adicionar" })).toBeDisabled();
+    expect(screen.getByTestId("bulk-category-note")).toHaveTextContent("Os marcados estão como “Não registrar”: a categoria só vale para lançamentos que vão ser adicionados.");
+    expect(calls.some((c) => c.batch)).toBe(false);
+  });
+
+  it("marcados mistos: a categoria vai só para os que vão ser adicionados", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(markBox("07/10/2026"));
+    await user.click(markBox("20/10/2026"));
+    await user.selectOptions(screen.getByLabelText("Categoria", { selector: "#bulk-category" }), "Casa");
+    await user.click(screen.getByRole("button", { name: "Aplicar aos 1 a adicionar" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: ENERGY, category_tag_id: "cat-home" }] }));
+  });
+
   it("só oferece em lote as categorias que aceitam todos os marcados", async () => {
     const user = await openDraft({ step: "Adicionar lançamentos novos" });
 
@@ -380,7 +493,12 @@ describe("adicionar lançamentos novos", () => {
 
     await user.click(within(bar).getByRole("button", { name: "Desfazer" }));
 
-    await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: SALARY, answer: "create" }, { id: ENERGY, answer: "create" }] }));
+    // Volta a resposta E o "confirmado" que cada um tinha (G3-2-08).
+    await waitFor(() => expect(calls).toContainEqual({ batch: [
+      { id: SALARY, answer: "create", confirmed: entryBefore(SALARY).confirmed },
+      { id: ENERGY, answer: "create", confirmed: entryBefore(ENERGY).confirmed },
+    ] }));
+    expect([entry(SALARY).confirmed, entry(ENERGY).confirmed]).toEqual([entryBefore(SALARY).confirmed, entryBefore(ENERGY).confirmed]);
     await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(1));
   });
 });

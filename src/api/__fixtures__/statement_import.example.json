@@ -405,7 +405,15 @@
       }
     ],
     "to_restore": [
-      {"entity_type": "transaction", "entity_id": "87", "action": "updated", "description": "Aluguel"}
+      {
+        "entity_type": "transaction",
+        "entity_id": "87",
+        "action": "updated",
+        "description": "Aluguel de outubro",
+        "edited_after": true,
+        "changed_fields": ["description", "paid_at"],
+        "kept_fields": ["status", "paid_at"]
+      }
     ]
   },
   "undo_refused": {
