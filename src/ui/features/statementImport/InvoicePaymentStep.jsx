@@ -17,7 +17,7 @@ import { Badge } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { BankSide, Connector } from "./SuggestedPairsStep.jsx";
 import { DifferenceTag, Hl, MATCH_BOX } from "./FinclaMatchBox.jsx";
-import { BOX_LABEL, MONTH_NAMES, bankDateLabel } from "./StatementEntryCard.jsx";
+import { BOX_LABEL, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 
 /** "Fatura Itaú Visa · outubro": a fatura é o mês em que ela fecha. */
 export function invoiceLabel(invoice) {
@@ -41,6 +41,13 @@ export function InvoiceBadge({ children = "Pagamento de fatura" }) {
   );
 }
 
+/** "05/10" no mesmo ano do extrato (o do lançamento do banco); "30/12/2025" num ano diferente. */
+export function paidOnLabel(paidYmd, statementYmd) {
+  return String(paidYmd ?? "").slice(0, 4) === String(statementYmd ?? "").slice(0, 4)
+    ? dayMonthLabel(paidYmd)
+    : bankDateLabel(paidYmd);
+}
+
 function situation(entry) {
   const { invoice } = entry;
   if (invoice.status !== "paid") return STATUS_LABEL[invoice.status] ?? invoice.status;
@@ -48,7 +55,7 @@ function situation(entry) {
   const otherDay = invoice.paid_date !== entry.date;
   return (
     <span key="s" style={NUM}>
-      Já paga no Fincla em <Hl on={otherDay}>{bankDateLabel(invoice.paid_date)}</Hl>
+      Já paga no Fincla em <Hl on={otherDay}>{paidOnLabel(invoice.paid_date, entry.date)}</Hl>
     </span>
   );
 }
