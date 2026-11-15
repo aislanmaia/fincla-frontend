@@ -427,12 +427,81 @@ function StepRail({ statementImport, current, passed, onOpen }) {
   );
 }
 
-/** O topo de todos os passos (história 24): o progresso e, ao lado, a diferença de saldo agora. */
-function ProgressPanel({ statementImport, passed, balanceNow }) {
+/** Folga entre o topo fixo e o que ganha foco ao rolar (o cartão atual, "Alterar"…). */
+const STICKY_FOCUS_GAP = 12;
+
+/**
+ * O topo fixo da conciliação: gruda no alto da área que rola (`top: 0`), com fundo próprio para o
+ * que passa por baixo não aparecer. Fica como filho direto da página, então vale para todos os
+ * passos. Enquanto existe, reserva a altura dele no `scroll-padding-top` da área que rola: o foco
+ * que a página move (cartão atual, "Alterar") nunca fica escondido atrás dele. Ao sair, devolve.
+ */
+function StickyTop({ children, style = null }) {
+  const ref = useRef(null);
+  const scrollerRef = useRef(null);
+  useEffect(() => {
+    const scroller = ref.current?.closest("[data-fincla-main-scroll]");
+    if (!scroller) return undefined;
+    scrollerRef.current = scroller;
+    const previous = scroller.style.scrollPaddingTop;
+    const reserve = () => { scroller.style.scrollPaddingTop = `${(ref.current?.offsetHeight ?? 0) + STICKY_FOCUS_GAP}px`; };
+    reserve();
+    window.addEventListener("resize", reserve);
+    return () => {
+      window.removeEventListener("resize", reserve);
+      scroller.style.scrollPaddingTop = previous;
+      scrollerRef.current = null;
+    };
+  }, []);
+  // A altura muda com o conteúdo (o valor, a quebra de linha): a reserva acompanha a cada render.
+  useEffect(() => {
+    if (scrollerRef.current && ref.current) {
+      scrollerRef.current.style.scrollPaddingTop = `${ref.current.offsetHeight + STICKY_FOCUS_GAP}px`;
+    }
+  });
+  return (
+    <div
+      ref={ref}
+      data-sticky="balance-now"
+      style={{ position: "sticky", top: 0, zIndex: 5, background: T.bg, padding: "8px 0", margin: "-8px 0", ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * O topo de todos os passos (história 24): o progresso e, ao lado, a diferença de saldo agora, que
+ * fica FIXA ao rolar para a pessoa ver o valor mudar a cada resposta. No computador o topo inteiro
+ * gruda; no celular o progresso rola com a página e só a diferença gruda, compacta, numa linha.
+ */
+function ProgressPanel({ statementImport, passed, balanceNow, isMobile = false }) {
+  if (isMobile) {
+    return (
+      <>
+        <div data-testid="status-bar">
+          <ProgressCard statementImport={statementImport} passed={passed} />
+        </div>
+        <StickyTop>
+          <BalanceNowPanel point={balanceNow} compact />
+        </StickyTop>
+      </>
+    );
+  }
+  return (
+    <StickyTop>
+      <div data-testid="status-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
+        <ProgressCard statementImport={statementImport} passed={passed} />
+        <BalanceNowPanel point={balanceNow} />
+      </div>
+    </StickyTop>
+  );
+}
+
+function ProgressCard({ statementImport, passed }) {
   const done = STEPS.filter((s) => stepStatus(s.key, statementImport, passed.has(s.key)).tone === "done").length;
   const { summary } = statementImport;
   return (
-    <div data-testid="status-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
     <Card style={{ padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", flex: "3 1 320px", minWidth: 0 }}>
       <div role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>
         Seu progresso: <b style={NUM}>{done}</b> de <b style={NUM}>{STEPS.length}</b> passos conferidos
@@ -448,8 +517,6 @@ function ProgressPanel({ statementImport, passed, balanceNow }) {
         {summary.missing_description ? <> · <span style={{ color: T.amber }}>{plural(summary.missing_description, "sem descrição", "sem descrição")}</span></> : null}
       </div>
     </Card>
-    <BalanceNowPanel point={balanceNow} />
-    </div>
   );
 }
 
@@ -1005,7 +1072,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       </div>
       <OtherAccountNotice accountCheck={statementImport.account_check} accountName={accountName} />
       <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
-      <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} />
+      <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} isMobile={isMobile} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
         <ViewModeContext.Provider value={view}>

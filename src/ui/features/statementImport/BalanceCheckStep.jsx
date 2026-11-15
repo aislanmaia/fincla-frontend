@@ -141,12 +141,32 @@ export function BalanceDifferencePanel({ check }) {
  * do arquivo, já com as respostas. `point` = `balance_now` do rascunho (ou o último ponto da conferência
  * aberta); `null` = o arquivo não informa saldo: "—", nunca zero.
  */
-export function BalanceNowPanel({ point }) {
+export function BalanceNowPanel({ point, compact = false }) {
   const known = Boolean(point);
   const ok = known && point.difference === 0;
   const tone = !known ? { border: T.border, bg: T.surface, ink: T.inkMid } : ok
     ? { border: T.greenBorder, bg: T.greenLight, ink: T.green }
     : { border: T.red, bg: T.redLight, ink: T.red };
+  const state = !known ? "unknown" : ok ? "ok" : "off";
+  if (compact) {
+    // Celular: uma linha só (rótulo curto + valor), para o painel fixo não tomar a tela.
+    return (
+      <div
+        data-testid="balance-now"
+        data-state={state}
+        data-compact="true"
+        role="status"
+        aria-live="polite"
+        aria-label={known ? undefined : "Diferença de saldo agora: o arquivo não informa saldo"}
+        style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0, border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 12, padding: "8px 14px", boxShadow: T.sm }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Diferença agora</span>
+        <span data-testid="balance-now-value" style={{ ...NUM, fontSize: 16, fontWeight: 800, color: tone.ink, whiteSpace: "nowrap" }}>
+          {known ? signed(point.difference, point.currency) : "—"}
+        </span>
+      </div>
+    );
+  }
   let sub;
   if (!known) sub = "O arquivo não informa saldo";
   else if (ok) sub = <>Banco e Fincla batem em {dayMonthLabel(point.date)}</>;
@@ -154,7 +174,7 @@ export function BalanceNowPanel({ point }) {
   return (
     <div
       data-testid="balance-now"
-      data-state={!known ? "unknown" : ok ? "ok" : "off"}
+      data-state={state}
       role="status"
       aria-live="polite"
       style={{ ...G, minWidth: 0, flex: "1 1 240px", border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 14, padding: "12px 16px", boxShadow: T.sm }}
