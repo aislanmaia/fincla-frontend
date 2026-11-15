@@ -478,13 +478,34 @@ function PendingNotes({ check, onGoToPending }) {
         <div data-testid="waiting-transactions" role="note" style={AMBER}>
           <Info size={15} aria-hidden="true" style={{ color: T.amber, flexShrink: 0, marginTop: 2 }} />
           <span>
-            <b>{plural(check.waiting_transactions, "transação do Fincla ainda pode", "transações do Fincla ainda podem")}</b> ser o par de algum
-            dos <b>{plural(check.unanswered_entries, "lançamento sem resposta", "lançamentos sem resposta")}</b>.{" "}
-            {check.waiting_transactions === 1 ? "Ela não aparece" : "Elas não aparecem"} nesta lista até você responder.{" "}
+            <WaitingText check={check} />{" "}
             <button type="button" onClick={onGoToPending} style={{ ...LINK, fontSize: 13, color: T.blue }}>Responder agora</button>
           </span>
         </div>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * "1 transação e 1 transferência do Fincla ainda podem ser o par de algum dos 2 lançamentos sem
+ * resposta": transferência é chamada pelo nome (OBS-06), com singular e plural em cada parte.
+ */
+function WaitingText({ check }) {
+  const transfers = check.waiting_transfers ?? 0;
+  const transactions = check.waiting_transactions - transfers;
+  const parts = [
+    transactions ? plural(transactions, "transação", "transações") : null,
+    transfers ? plural(transfers, "transferência", "transferências") : null,
+  ].filter(Boolean);
+  const one = check.waiting_transactions === 1;
+  const ofEntries = check.unanswered_entries === 1
+    ? <>do <b>lançamento sem resposta</b></>
+    : <>de algum dos <b>{plural(check.unanswered_entries, "lançamento sem resposta", "lançamentos sem resposta")}</b></>;
+  return (
+    <>
+      <b>{parts.join(" e ")} do Fincla</b> ainda {one ? "pode" : "podem"} ser o par {ofEntries}.{" "}
+      {one ? "Ela não aparece" : "Elas não aparecem"} nesta lista até você responder.
     </>
   );
 }
