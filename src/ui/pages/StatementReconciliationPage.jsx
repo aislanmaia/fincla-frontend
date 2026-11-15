@@ -183,7 +183,7 @@ function useCategories(organizationId) {
 
 const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
 
-function UploadView({ organizationId, accountId, accountName, beforeUpload = null }) {
+function UploadView({ organizationId, accountId, accountName, beforeUpload = null, onDraftInProgress = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -208,6 +208,9 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
       else if (running) {
         setPreview(null);
         setInProgress(running);
+        // O rascunho pode ter nascido por outro caminho (outra aba, resposta perdida): a lista da
+        // conta é buscada de novo, para o quadro "Conciliação em andamento" aparecer na hora (D1).
+        onDraftInProgress?.();
       } else setError(handleApiError(err));
       setSending(false);
     }
@@ -377,7 +380,7 @@ function AccountStatementsView({ organizationId, accountId, accountName }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} />
+      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} onDraftInProgress={load} />
       {error ? <ErrorNote>{error}</ErrorNote> : null}
       {items ? (
         <ImportedStatementsList
