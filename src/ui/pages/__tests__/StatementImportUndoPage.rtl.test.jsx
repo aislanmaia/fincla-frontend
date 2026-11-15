@@ -90,11 +90,25 @@ describe("prévia", () => {
   });
 
   it("uma pareada sem edição depois só diz que volta ao que era", async () => {
-    preview.to_restore = [{ ...contract.undo_preview.to_restore[0], description: "Aluguel", edited_after: false, changed_fields: [], kept_fields: [] }];
+    preview.to_restore = [{
+      ...contract.undo_preview.to_restore[0], description: "Aluguel", edited_after: false, changed_fields: [], kept_fields: [], value_back: null, account_back: null,
+    }];
     await open();
 
     const [restored] = screen.getAllByTestId("undo-restored");
     expect(restored.textContent).toBe("AluguelVolta ao que era antes da conciliação.");
+  });
+
+  it("a pareada com o valor do banco e trazida de outra conta diz o valor e a conta que voltam (fincla-api#511)", async () => {
+    await open();
+
+    const [restored] = screen.getAllByTestId("undo-restored");
+    expect(within(restored).getByTestId("undo-value-back")).toHaveTextContent(
+      "O valor volta a R$ 1.490,00 (a conciliação tinha posto o valor do banco).",
+    );
+    expect(within(restored).getByTestId("undo-account-back")).toHaveTextContent(
+      "Volta para a conta Nubank (a conciliação a tinha movido para esta).",
+    );
   });
 
   it("sem edições depois, não fala de editadas", async () => {

@@ -13,7 +13,8 @@ export const STEPS = [
   {
     key: "doubt",
     title: "Decidir casos com dúvida",
-    todo: "Aqui ficam os lançamentos com mais de uma opção parecida ou com uma pequena diferença de valor.",
+    todo: "Aqui há mais de uma opção parecida ou uma pequena diferença de valor. Cada cartão mostra a dúvida: responda se o lançamento já está no Fincla.",
+    then: "Suas respostas ficam guardadas e só são aplicadas ao concluir a conciliação.",
   },
   {
     key: "invoice",
@@ -54,6 +55,8 @@ export const STEPS = [
 export function entriesOfStep(stepKey, entries) {
   // A sugestão fica no seu passo qualquer que seja a resposta: dá para voltar a ela ali mesmo.
   if (stepKey === "suggested") return entries.filter((e) => e.classification === "suggested");
+  // Dúvidas (fincla-api#511): começam sem resposta e continuam aqui depois de respondidas.
+  if (stepKey === "doubt") return entries.filter((e) => e.classification === "doubt");
   // Os respondidos continuam no passo (Não registrar minimizado, somados dentro da soma): nada some.
   if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.amount !== 0);
   if (stepKey === "yield") return entries.filter((e) => e.classification === "yield" && e.amount !== 0);
@@ -83,6 +86,10 @@ export function stepStatus(stepKey, statementImport, passed) {
     const missing = statementImport.summary.missing_description;
     if (missing) return { tone: "warn", text: plural(missing, "lançamento sem descrição", "lançamentos sem descrição") };
   }
+  if (stepKey === "doubt") {
+    const pending = entries.filter((e) => e.answer === null).length;
+    if (pending) return { tone: "warn", text: plural(pending, "lançamento para responder", "lançamentos para responder") };
+  }
   if (passed) return { tone: "done", text: "Conferido" };
   if (!entries.length) return { tone: "neutral", text: "Nada a fazer" };
   if (stepKey === "suggested") {
@@ -104,5 +111,5 @@ export function blockerText(blocker) {
   if (blocker.code === "missing_description") {
     return `${plural(blocker.count, "lançamento novo sem descrição", "lançamentos novos sem descrição")}. Escreva a descrição em Adicionar lançamentos novos.`;
   }
-  return `${plural(blocker.count, "lançamento sem resposta", "lançamentos sem resposta")}. Responda todos para concluir.`;
+  return `${plural(blocker.count, "lançamento sem resposta", "lançamentos sem resposta")}. Responda todos para concluir (em Decidir casos com dúvida).`;
 }

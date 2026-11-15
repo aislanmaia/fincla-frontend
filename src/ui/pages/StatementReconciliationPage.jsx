@@ -41,6 +41,8 @@ import { bankDateLabel } from "../features/statementImport/StatementEntryCard.js
 import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsStep.jsx";
+import { DoubtCard, DoubtStep, answerSnapshot, pairBody } from "../features/statementImport/DoubtStep.jsx";
+import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -354,6 +356,24 @@ function BalanceStep({ statementImport }) {
   );
 }
 
+/** Valores e contas que mudam ao concluir (fincla-api#511), com destaque. */
+function PairChanges({ entries }) {
+  const pairs = entries.filter((e) => e.answer === "pair" && e.fincla_match);
+  const newValue = pairs.filter((e) => e.fincla_match.differences.includes("amount")).length;
+  const moved = pairs.filter((e) => e.fincla_match.differences.includes("account")).length;
+  if (!newValue && !moved) return null;
+  return (
+    <ul data-testid="summary-pair-changes" style={{ ...G, fontSize: 12, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px 8px 28px", margin: "12px 0 0" }}>
+      {newValue ? (
+        <li><b>{plural(newValue, "transação passa", "transações passam")} a ter o valor do banco</b> (valor diferente no Fincla).</li>
+      ) : null}
+      {moved ? (
+        <li><b>{plural(moved, "transação é movida", "transações são movidas")} para esta conta</b> (estavam em outra conta).</li>
+      ) : null}
+    </ul>
+  );
+}
+
 function SummaryStep({ statementImport, concluding, error, onConclude, onClassify = null }) {
   const { summary, blockers } = statementImport;
   const rows = [
@@ -380,6 +400,7 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
             categoria e etiquetas continuam como estão.
           </p>
         ) : null}
+        <PairChanges entries={statementImport.entries} />
         {summary.to_create || summary.groups ? (
           <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "12px 0 0" }}>
             Ao concluir, cada lançamento marcado para adicionar e cada soma vira uma transação <b>paga na data do banco</b>
@@ -487,6 +508,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   const [answering, setAnswering] = useState(false);
   // O par que acabou de minimizar recebe o foco no "Alterar" da linha dele.
   const [focusedPair, setFocusedPair] = useState(null);
+  // Dúvidas (fincla-api#511): "Sim, é esta" dito sem escolher qual, e o lançamento da busca aberta.
+  const [wantPair, setWantPair] = useState(() => new Set());
+  const [searchFor, setSearchFor] = useState(null);
   // Os PATCH de progresso saem em fila: o próximo só parte quando o anterior respondeu, então o
   // servidor fica sempre com o último passo aberto (fincla-api#518).
   const progressQueue = useRef(Promise.resolve());
@@ -607,6 +631,69 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     }
   };
 
+  // Uma resposta de dúvida (ou de um lançamento pareado pela busca): guarda o que havia, com o par
+  // escolhido, para "Desfazer escolha" devolver exatamente.
+  const answerDoubt = async (entry, body) => {
+    setAnswering(true);
+    setActionError("");
+    try {
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, body);
+      setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), answerSnapshot(entry)] }));
+      setWantPair((prev) => { const next = new Set(prev); next.delete(entry.id); return next; });
+      withOpened(entry.id, body.answer === "create");
+      if (body.answer && body.answer !== "create") setFocusedPair(entry.id);
+      setLastBulk(null);
+      await reload();
+      return true;
+    } catch (err) {
+      setActionError(handleApiError(err));
+      return false;
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  const undoDoubtChoice = async (entry) => {
+    const previous = answerHistory[entry.id]?.at(-1);
+    if (!previous) return;
+    setAnswering(true);
+    setActionError("");
+    try {
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, previous);
+      setAnswerHistory((prev) => ({ ...prev, [entry.id]: prev[entry.id].slice(0, -1) }));
+      await reload();
+    } catch (err) {
+      setActionError(handleApiError(err));
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  // "Desfazer lá": o outro lançamento solta a transação. Uma dúvida volta a "sem resposta"; os
+  // outros voltam a "adicionar" (o que eram antes de alguém escolher um par para eles).
+  const undoThere = (other) => answerDoubt(other, { answer: other.classification === "doubt" ? null : "create" });
+
+  const pickInSearch = async (match) => {
+    const entry = searchFor;
+    if (await answerDoubt(entry, pairBody(match))) setSearchFor(null);
+  };
+
+  const doubtProps = {
+    isMobile,
+    busy: answering,
+    categories,
+    details,
+    fallbackLabel,
+    accountName,
+    onAnswer: answerDoubt,
+    onPick: (entry, match) => answerDoubt(entry, pairBody(match)),
+    onWantPair: (entry) => setWantPair((prev) => new Set(prev).add(entry.id)),
+    onChange: changeEntry,
+    onUndoChoice: undoDoubtChoice,
+    onUndoThere: undoThere,
+    onSearch: (entry) => setSearchFor(entry),
+  };
+
   const confirmPairs = async (entryIds, confirmed) => {
     setAnswering(true);
     setActionError("");
@@ -686,6 +773,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               categories={categories}
               details={details}
               fallbackLabel={fallbackLabel}
+              accountName={accountName}
               opened={openedPairs}
               history={answerHistory}
               lastBulk={lastBulk}
@@ -697,6 +785,19 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onMinimize={(entry) => { setFocusedPair(entry.id); withOpened(entry.id, false); }}
               onConfirmAll={(ids) => confirmPairs(ids, true)}
               onUndoConfirmAll={() => confirmPairs(lastBulk, false)}
+            />
+          ) : null}
+          {current === "doubt" && stepEntries.length ? (
+            <DoubtStep
+              {...doubtProps}
+              entries={stepEntries}
+              allEntries={statementImport.entries}
+              opened={openedPairs}
+              history={answerHistory}
+              wantPair={wantPair}
+              focusId={focusedPair}
+              onOpen={(entry) => withOpened(entry.id, true)}
+              onMinimize={(entry) => { setFocusedPair(entry.id); withOpened(entry.id, false); }}
             />
           ) : null}
           {ENTRY_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
@@ -715,6 +816,17 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onCreateGroup={createGroup}
               onUpdateGroup={updateGroup}
               onDeleteGroup={deleteGroup}
+              onSearch={(entry) => setSearchFor(entry)}
+              renderMatched={(entry) => (
+                <DoubtCard
+                  key={entry.id}
+                  {...doubtProps}
+                  entry={entry}
+                  entries={statementImport.entries}
+                  canUndo={Boolean(answerHistory[entry.id]?.length)}
+                  onWantPair={() => setSearchFor(entry)}
+                />
+              )}
             />
           ) : null}
           {current === "outside" && stepEntries.length ? <LeftOutStep entries={stepEntries} /> : null}
@@ -722,7 +834,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           {current === "summary" ? (
             <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} onClassify={() => open("new")} />
           ) : null}
-          {!["suggested", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
+          {!["suggested", "doubt", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", "doubt", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
           ) : null}
 
@@ -733,6 +845,20 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           ) : null}
         </main>
       </div>
+      {searchFor ? (
+        <FinclaSearchDialog
+          organizationId={organizationId}
+          accountId={accountId}
+          importId={importId}
+          entry={statementImport.entries.find((e) => e.id === searchFor.id) ?? searchFor}
+          entries={statementImport.entries}
+          accountName={accountName}
+          busy={answering}
+          onPick={pickInSearch}
+          onUndoThere={undoThere}
+          onClose={() => setSearchFor(null)}
+        />
+      ) : null}
     </div>
   );
 }
