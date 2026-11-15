@@ -13,6 +13,11 @@ import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
+
+/** "Confirmar os 3 de uma vez"; com uma sugestão só, "de uma vez" não cabe. */
+export function confirmAllLabel(count) {
+  return count === 1 ? "Confirmar este lançamento" : `Confirmar os ${count.toLocaleString("pt-BR")} de uma vez`;
+}
 import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { LINK } from "./StatementImportNotes.jsx";
@@ -316,7 +321,7 @@ export function SuggestedPairsStep({
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "lançamento encontrado", "lançamentos encontrados")}</span>
         {unconfirmed.length ? (
           <Btn variant="dark" small disabled={busy} onClick={() => onConfirmAll(unconfirmed.map((e) => e.id))}>
-            <Check size={13} aria-hidden="true" /> Confirmar os {unconfirmed.length} de uma vez
+            <Check size={13} aria-hidden="true" /> {confirmAllLabel(unconfirmed.length)}
           </Btn>
         ) : (
           <span style={{ ...G, fontSize: 12, color: T.green, fontWeight: 600 }}>Todos conferidos</span>

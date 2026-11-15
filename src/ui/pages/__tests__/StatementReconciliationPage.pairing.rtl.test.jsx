@@ -173,11 +173,11 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(within(card).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
   });
 
-  it("Confirmar os N de uma vez confirma as sugestões pendentes, com Desfazer na barra", async () => {
+  it("com uma sugestão pendente, o botão fala no singular e confirma só ela, com Desfazer na barra", async () => {
     const user = userEvent.setup();
     await openDraft();
 
-    await user.click(screen.getByRole("button", { name: "Confirmar os 1 de uma vez" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar este lançamento" }));
 
     await waitFor(() => expect(rows()).toHaveLength(2));
     expect(calls).toContainEqual({ confirm: { entry_ids: [PADARIA], confirmed: true } });
@@ -192,10 +192,23 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(draft.entries.find((e) => e.id === ALUGUEL).confirmed).toBe(true);
   });
 
+  it("com várias sugestões pendentes, Confirmar os N de uma vez confirma todas e a barra conta no plural (BUG-02)", async () => {
+    const user = userEvent.setup();
+    draft.entries.find((e) => e.id === ALUGUEL).confirmed = false;
+    await openDraft();
+
+    expect(screen.queryByRole("button", { name: "Confirmar este lançamento" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar os 2 de uma vez" }));
+
+    await waitFor(() => expect(screen.getByText("2 lançamentos confirmados")).toBeInTheDocument());
+    expect(calls).toContainEqual({ confirm: { entry_ids: [PADARIA, ALUGUEL], confirmed: true } });
+    expect(screen.getByText("Todos conferidos")).toBeInTheDocument();
+  });
+
   it("responder um dos confirmados em lote tira a barra: o Desfazer dela não fala mais da verdade (G3-2-06)", async () => {
     const user = userEvent.setup();
     await openDraft();
-    await user.click(screen.getByRole("button", { name: "Confirmar os 1 de uma vez" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar este lançamento" }));
     await waitFor(() => expect(screen.getByText("1 lançamento confirmado")).toBeInTheDocument());
 
     const row = rows().find((r) => r.textContent.includes("PIX QRS PADARIA 02 10"));
@@ -261,7 +274,7 @@ describe("o passo Confirmar lançamentos encontrados", () => {
   it("o passo só fica Conferido depois que a pessoa passa por ele", async () => {
     const user = userEvent.setup();
     await openDraft();
-    await user.click(screen.getByRole("button", { name: "Confirmar os 1 de uma vez" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar este lançamento" }));
     await waitFor(() => expect(rows()).toHaveLength(2));
 
     // Tudo confirmado, mas a pessoa ainda está no passo: falta conferir.

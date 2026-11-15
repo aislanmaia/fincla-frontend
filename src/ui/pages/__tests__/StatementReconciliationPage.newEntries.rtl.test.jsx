@@ -196,6 +196,18 @@ describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
     expect(screen.getByText("Todos os rendimentos foram somados.")).toBeInTheDocument();
   });
 
+  it("o total dos rendimentos fora da soma concorda com a quantidade: valor de 1, soma das N (BUG-02)", async () => {
+    const outside = (d, ids) => ids.forEach((id) => Object.assign(d.entries.find((e) => e.id === id), { answer: "create", group_id: null }));
+    const total = () => screen.getByText((_, el) => el?.tagName === "SPAN" && /^(valor|soma das \d+): /.test(el.textContent)).textContent;
+
+    await openDraft({ setup: (d) => outside(d, [YIELD_B]) });
+    expect(total()).toMatch(/^valor: \+R\$\s0,0\d$/);
+    cleanup();
+
+    await openDraft({ setup: (d) => outside(d, [YIELD_A, YIELD_B]) });
+    expect(total()).toMatch(/^soma das 2: \+R\$\s0,0\d$/);
+  });
+
   it("Tirar da soma volta o lançamento a ser adicionado sozinho, e a soma diminui", async () => {
     const user = await openDraft();
     const group = screen.getByTestId("statement-group");
@@ -454,9 +466,20 @@ describe("adicionar lançamentos novos", () => {
     await user.click(markBox("07/10/2026"));
     await user.click(markBox("20/10/2026"));
     await user.selectOptions(screen.getByLabelText("Categoria", { selector: "#bulk-category" }), "Casa");
-    await user.click(screen.getByRole("button", { name: "Aplicar aos 1 a adicionar" }));
+    await user.click(screen.getByRole("button", { name: "Aplicar ao 1 a adicionar" }));
 
     await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: ENERGY, category_tag_id: "cat-home" }] }));
+  });
+
+  it("com um marcado só, o botão de categoria fala no singular (BUG-02)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(markBox("07/10/2026"));
+    await user.selectOptions(screen.getByLabelText("Categoria", { selector: "#bulk-category" }), "Casa");
+    await user.click(screen.getByRole("button", { name: "Aplicar ao 1 marcado" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: ENERGY, category_tag_id: "cat-home" }] }));
+    expect(await screen.findByTestId("undo-bar")).toHaveTextContent("Categoria Casa aplicada a 1 lançamento");
   });
 
   it("só oferece em lote as categorias que aceitam todos os marcados", async () => {
@@ -477,6 +500,21 @@ describe("adicionar lançamentos novos", () => {
     expect(markBox("07/10/2026")).toBeChecked();
     expect(markBox("02/10/2026")).not.toBeChecked();
     expect(markBox("20/10/2026")).not.toBeChecked();
+  });
+
+  it("com um lançamento só sem categoria, o atalho fala no singular e marca só ele (BUG-02)", async () => {
+    const user = await openDraft({
+      step: "Adicionar lançamentos novos",
+      setup: (d) => { d.entries.find((e) => e.id === SALARY).category_tag_id = "cat-yield"; },
+    });
+
+    expect(screen.getByText("1 lançamento vai para Não classificado")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Marcar as \d+ sem categoria/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Marcar a que está sem categoria" }));
+
+    expect(markBox("07/10/2026")).toBeChecked();
+    expect(markBox("05/10/2026")).not.toBeChecked();
+    expect(markBox("02/10/2026")).not.toBeChecked();
   });
 
   it("não registrar as marcadas, com desfazer", async () => {
