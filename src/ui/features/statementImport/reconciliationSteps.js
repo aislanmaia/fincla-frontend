@@ -19,7 +19,8 @@ export const STEPS = [
   {
     key: "invoice",
     title: "Conferir pagamento de fatura",
-    todo: "Aqui aparece o pagamento de fatura de cartão que o banco mostra no extrato.",
+    todo: "O banco mostra o pagamento de uma fatura de cartão. Só confira se é a fatura certa.",
+    then: "Nenhuma transação é criada. Ao concluir a conciliação, a fatura fica paga na data do banco.",
   },
   {
     key: "yield",
@@ -57,6 +58,8 @@ export function entriesOfStep(stepKey, entries) {
   if (stepKey === "suggested") return entries.filter((e) => e.classification === "suggested");
   // Dúvidas (fincla-api#511): começam sem resposta e continuam aqui depois de respondidas.
   if (stepKey === "doubt") return entries.filter((e) => e.classification === "doubt");
+  // Pagamento de fatura (fincla-api#512): já decidido, sem resposta a dar; só conferir.
+  if (stepKey === "invoice") return entries.filter((e) => e.classification === "invoice");
   // Os respondidos continuam no passo (Não registrar minimizado, somados dentro da soma): nada some.
   if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.amount !== 0);
   if (stepKey === "yield") return entries.filter((e) => e.classification === "yield" && e.amount !== 0);
@@ -107,6 +110,9 @@ export function stepStatus(stepKey, statementImport, passed) {
     const unconfirmed = unconfirmedSuggestions(entries).length;
     if (unconfirmed) return { tone: "ready", text: plural(unconfirmed, "sugestão para confirmar", "sugestões para confirmar") };
     return { tone: "ready", text: "Sugestões prontas · falta você conferir" };
+  }
+  if (stepKey === "invoice") {
+    return { tone: "ready", text: `${plural(entries.length, "pagamento de fatura", "pagamentos de fatura")} · falta você conferir` };
   }
   if (INFO_ONLY.has(stepKey)) {
     const out = stillLeftOut(entries).length;
