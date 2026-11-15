@@ -34,7 +34,11 @@ import {
   uploadStatement,
 } from "../../api/statementImports";
 import {
+  ADD_STEPS,
+  ENTRY_BASED_STEPS,
+  LIST_STEPS,
   STEPS,
+  STEP_KEYS,
   blockerText,
   entriesOfStep,
   firstStepWithWork,
@@ -55,6 +59,8 @@ import {
 import { getUserPreferences, updateUserPreferences } from "../../api/userPreferences";
 import {
   BalanceCheckStep,
+  BalanceNowPanel,
+  balanceNowOf,
   SummaryDifference,
   SummaryEffects,
   ConcludeWithDifferenceNote,
@@ -71,19 +77,32 @@ import {
   ImportedStatementsList,
 } from "../features/statementImport/ImportedStatements.jsx";
 
-/** Passos em que cada lançamento é adicionado, somado ou fica de fora (fincla-api#513). */
-const ENTRY_STEPS = new Set(["yield", "new"]);
-
-/**
- * Passos de lista (fincla-api#517): só o lançamento atual aberto, avanço para o próximo sem
- * resposta, filtro e atalhos. Um passo de lista novo entra aqui e em `queueEntriesOf`.
- */
-const LIST_STEPS = new Set(["suggested", "doubt", "yield", "new"]);
-
 /** Os lançamentos da lista de um passo: nos de adicionar, os somados ficam dentro da soma. */
 function queueEntriesOf(stepKey, stepEntries) {
   if (!LIST_STEPS.has(stepKey)) return [];
-  return ENTRY_STEPS.has(stepKey) ? stepEntries.filter((e) => e.answer !== "group") : stepEntries;
+  return ADD_STEPS.has(stepKey) ? stepEntries.filter((e) => e.answer !== "group") : stepEntries;
+}
+
+/** O sinal com que uma transação entra no saldo: receita e estorno somam, o resto tira. */
+const signedValue = (match) => (match.type === "income" || match.type === "refund" ? match.value : -match.value);
+
+/**
+ * Transações ligadas a um lançamento que estava marcado para adicionar (lançamento novo ou rendimento
+ * respondido "Sim, é esta" com uma transação): a linha "Ligada ao lançamento do banco…" de "Conferir o
+ * saldo", com desfazer. Derivadas das respostas do rascunho, nunca de estado da tela.
+ */
+export function linkedTransactions(entries) {
+  return entries
+    .filter((e) => e.answer === "pair" && (e.classification === "new" || e.classification === "yield") && e.paired_transaction_id != null && e.fincla_match)
+    .map((e) => ({
+      transactionId: e.paired_transaction_id,
+      description: e.fincla_match.description,
+      amount: signedValue(e.fincla_match),
+      currency: e.fincla_match.currency,
+      entryId: e.id,
+      entryDate: e.date,
+      bankDescription: e.bank_description,
+    }));
 }
 
 /** Visualização Detalhada/Compacta, lembrada por pessoa no backend (padrão Detalhada). */
@@ -408,11 +427,13 @@ function StepRail({ statementImport, current, passed, onOpen }) {
   );
 }
 
-function ProgressPanel({ statementImport, passed }) {
+/** O topo de todos os passos (história 24): o progresso e, ao lado, a diferença de saldo agora. */
+function ProgressPanel({ statementImport, passed, balanceNow }) {
   const done = STEPS.filter((s) => stepStatus(s.key, statementImport, passed.has(s.key)).tone === "done").length;
   const { summary } = statementImport;
   return (
-    <Card style={{ padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+    <div data-testid="status-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
+    <Card style={{ padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", flex: "3 1 320px", minWidth: 0 }}>
       <div role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>
         Seu progresso: <b style={NUM}>{done}</b> de <b style={NUM}>{STEPS.length}</b> passos conferidos
         <div style={{ height: 4, background: T.grayLight, borderRadius: 99, marginTop: 6, width: 200, maxWidth: "100%" }}>
@@ -422,11 +443,13 @@ function ProgressPanel({ statementImport, passed }) {
       <div style={{ ...G, fontSize: 12, color: T.inkMid }}>
         <b style={NUM}>{plural(summary.total, "lançamento", "lançamentos")}</b> no extrato ·{" "}
         {summary.to_pair ? <><b style={NUM}>{summary.to_pair}</b> já no Fincla · </> : null}
-        {summary.already_reconciled ? <><b style={NUM}>{summary.already_reconciled}</b> já conferidos antes · </> : null}
+        {summary.already_reconciled ? <><b style={NUM}>{plural(summary.already_reconciled, "já conferido antes", "já conferidos antes")}</b> · </> : null}
         <b style={NUM}>{summary.to_create}</b> para adicionar
         {summary.missing_description ? <> · <span style={{ color: T.amber }}>{plural(summary.missing_description, "sem descrição", "sem descrição")}</span></> : null}
       </div>
     </Card>
+    <BalanceNowPanel point={balanceNow} />
+    </div>
   );
 }
 
@@ -450,6 +473,10 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
   ];
   // Só aparece com pagamento de fatura no extrato (fincla-api#512): é a fatura que fica paga.
   if (summary.invoice_payments) rows.push(["Pagamentos de fatura", summary.invoice_payments, "summary-invoice-payments"]);
+  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela.
+  if (summary.invoices_already_paid) {
+    rows.push(["Pagamentos de fatura já paga no Fincla", summary.invoices_already_paid, "summary-invoices-already-paid-count", "nada muda"]);
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* A diferença de saldo que fica, em destaque no topo (fincla-api#514). */}
@@ -513,6 +540,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
   const created = statementImport.entries.filter((e) => e.created_transaction_id != null).length
     + (statementImport.groups ?? []).filter((g) => g.created_transaction_id != null).length;
   const invoicesPaid = statementImport.entries.filter((e) => e.answer === "invoice_payment").length;
+  const alreadyPaid = statementImport.entries.filter((e) => e.answer === "invoice_already_paid").length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageTitle sans="Conciliar" serif="extrato" />
@@ -526,6 +554,11 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
         {invoicesPaid ? (
           <p data-testid="done-invoices-paid" style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
             {plural(invoicesPaid, "fatura de cartão ficou paga", "faturas de cartão ficaram pagas")} na data do banco.
+          </p>
+        ) : null}
+        {alreadyPaid ? (
+          <p data-testid="done-invoices-already-paid" style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
+            {plural(alreadyPaid, "pagamento era de uma fatura já paga", "pagamentos eram de faturas já pagas")} no Fincla: nada mudou {alreadyPaid === 1 ? "nela" : "nelas"}.
           </p>
         ) : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -608,11 +641,10 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // servidor fica sempre com o último passo aberto (fincla-api#518).
   const progressQueue = useRef(Promise.resolve());
   // Conferir o saldo (fincla-api#514): calculado pelo backend a cada mudança do rascunho, nos dois
-  // últimos passos; e as transações que a pessoa ligou a um lançamento pela dica (com desfazer).
+  // últimos passos.
   const [balanceCheck, setBalanceCheck] = useState(null);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkError, setCheckError] = useState("");
-  const [linked, setLinked] = useState([]);
 
   const reload = useCallback(
     () => getStatementImport(accountId, organizationId, importId).then(setStatementImport),
@@ -653,6 +685,12 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       .finally(() => { if (alive) setCheckLoading(false); });
     return () => { alive = false; };
   }, [wantsCheck, statementImport, accountId, organizationId, importId]);
+  // As transações que a pessoa ligou a um lançamento marcado para adicionar ("É este lançamento do
+  // banco", ou a busca): vêm das respostas do rascunho, então continuam à vista com desfazer depois de
+  // recarregar ou voltar ao passo (G3-3-08).
+  const linked = useMemo(() => linkedTransactions(statementImport?.entries ?? []), [statementImport]);
+  // A diferença do topo (história 24): a da conferência aberta, se já chegou; senão a do rascunho.
+  const balanceNow = balanceNowOf(statementImport, wantsCheck && !checkLoading ? balanceCheck : null);
   const balanceItems = useMemo(
     () => (balanceCheck?.unmatched_transactions ?? []).map((u) => ({ ...u, id: unmatchedItemId(u) })),
     [balanceCheck],
@@ -863,24 +901,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   };
 
   // "É este lançamento do banco": o lançamento marcado para adicionar vira o par da transação.
-  const pairFromHint = async (item, entry) => {
-    const done = await answerDoubt(entry, { answer: "pair", paired_transaction_id: item.transaction_id });
-    if (done) {
-      setLinked((prev) => [
-        ...prev.filter((l) => l.transactionId !== item.transaction_id),
-        {
-          transactionId: item.transaction_id,
-          description: item.description,
-          amount: item.amount,
-          currency: item.currency,
-          entryId: entry.id,
-          entryDate: entry.date,
-          bankDescription: entry.bank_description,
-          previous: answerSnapshot(entry),
-        },
-      ]);
-    }
-  };
+  const pairFromHint = (item, entry) => answerDoubt(entry, { answer: "pair", paired_transaction_id: item.transaction_id });
 
   const undoLink = async (link) => {
     const entry = statementImport.entries.find((e) => e.id === link.entryId);
@@ -888,8 +909,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entry.id, link.previous);
-      setLinked((prev) => prev.filter((l) => l.transactionId !== link.transactionId));
+      // Antes de ligar, o lançamento estava marcado para adicionar: volta a isso.
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer: "create", confirmed: false });
       await reload();
     } catch (err) {
       setActionError(handleApiError(err));
@@ -984,7 +1005,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       </div>
       <OtherAccountNotice accountCheck={statementImport.account_check} accountName={accountName} />
       <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
-      <ProgressPanel statementImport={statementImport} passed={passed} />
+      <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
         <ViewModeContext.Provider value={view}>
@@ -1028,8 +1049,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               wantPair={wantPair}
             />
           ) : null}
-          {ENTRY_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
-          {ENTRY_STEPS.has(current) && stepEntries.length ? (
+          {ADD_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
+          {ADD_STEPS.has(current) && stepEntries.length ? (
             <NewEntriesStep
               key={current}
               {...listProps}
@@ -1114,7 +1135,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onClassify={() => open("new")}
             />
           ) : null}
-          {!["suggested", "doubt", "invoice", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", "doubt", "invoice", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
+          {!STEP_KEYS.includes(current) || (ENTRY_BASED_STEPS.has(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
           ) : null}
 

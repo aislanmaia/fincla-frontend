@@ -5,6 +5,10 @@
 // REFERÊNCIA: já vem decidido, sem "Sim, é esta / Não, adicionar agora / Não registrar", e nunca
 // vira transação — as compras da fatura já estão no Fincla. Ao concluir, a fatura fica paga na
 // data do banco. A pessoa só confere se é a fatura certa.
+//
+// Fatura JÁ paga no Fincla (paga pelo app antes de conciliar, G3-3-01): o mesmo cartão, como
+// referência "Já paga no Fincla em DD/MM". Nada acontece ao concluir: nenhuma transação, a fatura
+// não muda. A diferença de data (Fincla × banco) aparece na conferência de saldo.
 import { CheckCircle2, Info } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -13,17 +17,15 @@ import { Badge } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { BankSide, Connector } from "./SuggestedPairsStep.jsx";
 import { DifferenceTag, Hl, MATCH_BOX } from "./FinclaMatchBox.jsx";
-import { BOX_LABEL, bankDateLabel } from "./StatementEntryCard.jsx";
-
-const MONTHS = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-];
+import { BOX_LABEL, MONTH_NAMES, bankDateLabel } from "./StatementEntryCard.jsx";
 
 /** "Fatura Itaú Visa · outubro": a fatura é o mês em que ela fecha. */
 export function invoiceLabel(invoice) {
-  return `Fatura ${invoice.card_name} · ${MONTHS[invoice.month - 1] ?? invoice.month}`;
+  return `Fatura ${invoice.card_name} · ${MONTH_NAMES[invoice.month - 1] ?? invoice.month}`;
 }
+
+/** O pagamento de uma fatura que já estava paga no Fincla antes da conciliação (só referência). */
+export const isAlreadyPaid = (entry) => entry.answer === "invoice_already_paid";
 
 const STATUS_LABEL = { open: "Em aberto", closed: "Fechada" };
 
@@ -39,6 +41,18 @@ export function InvoiceBadge({ children = "Pagamento de fatura" }) {
   );
 }
 
+function situation(entry) {
+  const { invoice } = entry;
+  if (invoice.status !== "paid") return STATUS_LABEL[invoice.status] ?? invoice.status;
+  if (!isAlreadyPaid(entry)) return `Paga em ${bankDateLabel(invoice.paid_date)}`;
+  const otherDay = invoice.paid_date !== entry.date;
+  return (
+    <span key="s" style={NUM}>
+      Já paga no Fincla em <Hl on={otherDay}>{bankDateLabel(invoice.paid_date)}</Hl>
+    </span>
+  );
+}
+
 function InvoiceSide({ entry, accountName }) {
   const { invoice } = entry;
   const amountDiffers = invoice.differences.includes("amount");
@@ -47,7 +61,7 @@ function InvoiceSide({ entry, accountName }) {
     ["Descrição", <b key="n">{invoiceLabel(invoice)}</b>],
     ["Total", <b key="v" style={NUM}><Hl on={amountDiffers}>{formatMoney(-invoice.total, invoice.currency)}</Hl></b>],
     ["Cartão", `${invoice.card_name} · paga pela ${invoice.account_name || accountName || "conta do extrato"}`],
-    ["Situação", invoice.status === "paid" ? `Paga em ${bankDateLabel(invoice.paid_date)}` : STATUS_LABEL[invoice.status] ?? invoice.status],
+    ["Situação", situation(entry)],
   ];
   const paidLess = invoice.difference > 0;
   return (
@@ -76,22 +90,57 @@ function InvoiceSide({ entry, accountName }) {
   );
 }
 
-/** A fatura sumiu ou foi paga depois da leitura: a conclusão será recusada, e a tela já avisa. */
+/**
+ * A fatura mudou depois da leitura: a conclusão será recusada, e a tela já avisa. Um pagamento a
+ * fazer encontra a fatura já paga; uma referência "já paga" encontra a fatura desmarcada.
+ */
+export function invoiceUnavailable(entry) {
+  if (!entry.invoice) return true;
+  return isAlreadyPaid(entry) ? entry.invoice.status !== "paid" : entry.invoice.status === "paid";
+}
+
+function unavailableText(entry) {
+  if (!entry.invoice) return "A fatura deste pagamento não existe mais no Fincla.";
+  if (isAlreadyPaid(entry)) return `A ${invoiceLabel(entry.invoice)} não está mais paga no Fincla: ela foi desmarcada depois da leitura do extrato.`;
+  return `A ${invoiceLabel(entry.invoice)} já foi marcada como paga depois da leitura do extrato.`;
+}
+
 function InvoiceUnavailable({ entry }) {
-  const gone = !entry.invoice;
   return (
     <div data-testid="invoice-unavailable" role="note" style={{ ...G, fontSize: 12, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px", margin: "0 14px 12px" }}>
-      {gone
-        ? "A fatura deste pagamento não existe mais no Fincla."
-        : `A ${invoiceLabel(entry.invoice)} já foi marcada como paga depois da leitura do extrato.`}{" "}
-      Para conciliar, descarte esta conciliação e envie o extrato de novo.
+      {unavailableText(entry)} Para conciliar, descarte esta conciliação e envie o extrato de novo.
     </div>
+  );
+}
+
+/** O que acontece ao concluir; nada promete "fica paga" quando a fatura já está paga ou mudou. */
+function Outcome({ entry, unavailable }) {
+  const { invoice } = entry;
+  if (isAlreadyPaid(entry)) {
+    return (
+      <span>
+        Este lançamento é o pagamento de uma fatura que <b>já está paga no Fincla</b>. Ao concluir, nada muda: nenhuma transação é
+        criada e a fatura continua como está.
+        {invoice && !unavailable && invoice.paid_date !== entry.date ? (
+          <> No Fincla ela foi paga em <b style={NUM}>{bankDateLabel(invoice.paid_date)}</b> e no banco em <b style={NUM}>{bankDateLabel(entry.date)}</b>: a diferença de data aparece na conferência de saldo.</>
+        ) : null}
+      </span>
+    );
+  }
+  return (
+    <span>
+      Este lançamento é o pagamento da fatura. Nenhuma transação é criada: as compras dela já estão no Fincla.
+      {invoice && !unavailable ? (
+        <> Ao concluir a conciliação, a <b>{invoiceLabel(invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(entry.date)}</b> (data do banco).</>
+      ) : null}
+    </span>
   );
 }
 
 function InvoicePaymentCard({ entry, isMobile, accountName }) {
   const { invoice } = entry;
-  const unavailable = !invoice || invoice.status === "paid";
+  const unavailable = invoiceUnavailable(entry);
+  const alreadyPaid = isAlreadyPaid(entry);
   return (
     <article
       data-testid="invoice-card"
@@ -101,6 +150,7 @@ function InvoicePaymentCard({ entry, isMobile, accountName }) {
       <header style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{bankDateLabel(entry.date)}</span>
         <InvoiceBadge />
+        {alreadyPaid ? <Badge color={T.green} bg={T.greenLight}>Já paga no Fincla</Badge> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>
         <BankSide entry={entry} dateDiffers={Boolean(invoice?.differences.includes("date"))} />
@@ -118,12 +168,7 @@ function InvoicePaymentCard({ entry, isMobile, accountName }) {
       {unavailable ? <InvoiceUnavailable entry={entry} /> : null}
       <footer data-testid="invoice-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}`, display: "flex", gap: 6, alignItems: "flex-start" }}>
         <Info size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          Este lançamento é o pagamento da fatura. Nenhuma transação é criada: as compras dela já estão no Fincla.
-          {invoice ? (
-            <> Ao concluir a conciliação, a <b>{invoiceLabel(invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(entry.date)}</b> (data do banco).</>
-          ) : null}
-        </span>
+        <Outcome entry={entry} unavailable={unavailable} />
       </footer>
     </article>
   );

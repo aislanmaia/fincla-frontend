@@ -3,6 +3,7 @@
 // dúvida e os resultados da busca. As diferenças vêm do backend (`differences`) e aparecem com
 // destaque e com o que acontece ao concluir: VALOR DIFERENTE (vale o do banco), DATAS DIFERENTES
 // (fica paga na data do banco) e OUTRA CONTA (a transação é movida para a conta do extrato).
+import { useId } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -34,6 +35,8 @@ export function matchTitle(entry, match) {
 }
 
 const has = (match, difference) => (match?.differences ?? []).includes(difference);
+/** Há algo a dizer sobre o que acontece ao concluir (VALOR DIFERENTE, DATAS DIFERENTES, OUTRA CONTA). */
+const hasConsequences = (match) => ["amount", "date", "account"].some((d) => has(match, d));
 
 /** Destaque de uma informação que difere do banco. */
 export function Hl({ on, children }) {
@@ -59,7 +62,7 @@ export function SuggestedBadge() {
  * O que cada diferença faz ao concluir. `ifChosen` acrescenta "(se for esta)" quando a pessoa ainda
  * está escolhendo (opções e busca).
  */
-export function MatchConsequences({ entry, match, accountName, ifChosen = false }) {
+export function MatchConsequences({ entry, match, accountName, ifChosen = false, id = undefined }) {
   const when = <>Ao <b>concluir a conciliação</b>{ifChosen ? " (se for esta)" : ""}</>;
   const lines = [];
   if (has(match, "amount")) {
@@ -106,7 +109,7 @@ export function MatchConsequences({ entry, match, accountName, ifChosen = false 
   }
   if (!lines.length) return null;
   return (
-    <div style={{ ...G, fontSize: 12, color: T.inkMid, marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "flex", flexDirection: "column", gap: 6, lineHeight: 1.5 }}>
+    <div id={id} style={{ ...G, fontSize: 12, color: T.inkMid, marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "flex", flexDirection: "column", gap: 6, lineHeight: 1.5 }}>
       {lines}
     </div>
   );
@@ -159,6 +162,7 @@ export function FinclaMatchBox({
   takenBy = null, onUndoThere = null, ifChosen = false, consequences = true, testId = "fincla-side",
 }) {
   const pad = useCompact() ? { padding: "8px 10px" } : null;
+  const consequencesId = useId();
   const label = (
     <div style={BOX_LABEL}>
       No Fincla <Badge>{KIND_LABEL[match.type] ?? match.type}</Badge>
@@ -179,25 +183,35 @@ export function FinclaMatchBox({
       </div>
     );
   }
+  const showConsequences = consequences && hasConsequences(match);
   const body = (
     <>
       {label}
       <MatchRows entry={entry} match={match} highlight />
-      {consequences ? <MatchConsequences entry={entry} match={match} accountName={accountName} ifChosen={ifChosen} /> : null}
+      {consequences ? (
+        <MatchConsequences entry={entry} match={match} accountName={accountName} ifChosen={ifChosen} id={consequencesId} />
+      ) : null}
     </>
   );
   if (onPick) {
+    // A opção inteira é clicável, mas o botão não embrulha a lista de dados (HTML válido): ele cobre a
+    // caixa por cima, com o nome curto, e o leitor de tela ouve as consequências pela descrição.
     return (
-      <button
-        type="button"
+      <div
         data-testid="match-option"
-        aria-pressed={pressed}
-        aria-label={`${matchTitle(entry, match)}, ${bankDateLabel(dayOf(match.date))}, ${signedMoney(entry, match.value, match.currency)}`}
-        onClick={() => onPick(match)}
-        style={{ ...MATCH_BOX, ...pad, textAlign: "left", cursor: "pointer", background: pressed ? T.blueLight : T.surface, borderColor: pressed ? T.blue : T.border, borderWidth: pressed ? 2 : 1, font: "inherit" }}
+        data-pressed={pressed ? "true" : "false"}
+        style={{ ...MATCH_BOX, ...pad, position: "relative", background: pressed ? T.blueLight : T.surface, borderColor: pressed ? T.blue : T.border, borderWidth: pressed ? 2 : 1 }}
       >
         {body}
-      </button>
+        <button
+          type="button"
+          aria-pressed={pressed}
+          aria-label={`${matchTitle(entry, match)}, ${bankDateLabel(dayOf(match.date))}, ${signedMoney(entry, match.value, match.currency)}`}
+          aria-describedby={showConsequences ? consequencesId : undefined}
+          onClick={() => onPick(match)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, padding: 0, border: 0, borderRadius: "inherit", background: "transparent", cursor: "pointer" }}
+        />
+      </div>
     );
   }
   return (

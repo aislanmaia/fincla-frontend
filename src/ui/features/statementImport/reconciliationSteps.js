@@ -53,6 +53,20 @@ export const STEPS = [
   },
 ];
 
+/** As chaves dos passos, na ordem. */
+export const STEP_KEYS = STEPS.map((s) => s.key);
+
+/**
+ * Como cada passo é feito, num lugar só (G3-3-13): um passo novo entra em STEPS e aqui.
+ * - LANÇAMENTOS: mostra os lançamentos do extrato de `entriesOfStep` ("Nada a fazer aqui" sem nenhum).
+ * - LISTA (fincla-api#517): só o lançamento atual aberto, avanço para o próximo sem resposta, filtro e
+ *   atalhos S/A/N/J/K.
+ * - ADICIONAR (fincla-api#513): cada lançamento é adicionado, somado ou fica de fora.
+ */
+export const ENTRY_BASED_STEPS = new Set(["suggested", "doubt", "invoice", "yield", "new"]);
+export const LIST_STEPS = new Set(["suggested", "doubt", "yield", "new"]);
+export const ADD_STEPS = new Set(["yield", "new"]);
+
 /** Os lançamentos do extrato que pertencem a um passo. */
 export function entriesOfStep(stepKey, entries) {
   // A sugestão fica no seu passo qualquer que seja a resposta: dá para voltar a ela ali mesmo.

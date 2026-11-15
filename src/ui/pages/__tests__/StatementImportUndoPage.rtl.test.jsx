@@ -79,7 +79,7 @@ describe("prévia", () => {
   it("a transação pareada que volta mostra o que foi editado depois e o que fica como a pessoa deixou (G3-2-01)", async () => {
     await open();
 
-    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("1 transação que já estava no Fincla volta ao estado de antes da conciliação");
+    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("2 transações que já estavam no Fincla voltam ao estado de antes da conciliação");
     const [restored] = screen.getAllByTestId("undo-restored");
     expect(restored).toHaveTextContent("Aluguel de outubro");
     expect(within(restored).getByText("Editada depois: descrição, data de pagamento")).toBeInTheDocument();
@@ -95,6 +95,26 @@ describe("prévia", () => {
     expect(screen.getByTestId("undo-recreated-count")).toHaveTextContent("1 transação excluída na conferência de saldo volta a existir");
     const recreated = screen.getAllByTestId("undo-restored").find((r) => r.textContent.includes("2ª parcela salário"));
     expect(recreated).toHaveTextContent("Volta a existir como era antes da conciliação.");
+  });
+
+  it("a transação com a data mudada na conferência diz para que dia a data volta (G3-3-06)", async () => {
+    await open();
+
+    const moved = screen.getAllByTestId("undo-restored").find((r) => r.textContent.includes("Conta de luz"));
+    expect(within(moved).getByTestId("undo-date-back")).toHaveTextContent("A data volta a 15/10 (a conciliação tinha mudado para 07/10).");
+    // A pareada não muda de data: nada sobre data.
+    const paired = screen.getAllByTestId("undo-restored").find((r) => r.textContent.includes("Aluguel de outubro"));
+    expect(within(paired).queryByTestId("undo-date-back")).toBeNull();
+  });
+
+  it("as contagens do que volta vêm do backend, nunca de uma conta da tela (G3-3-13)", async () => {
+    preview.summary = { ...preview.summary, restored_transactions: 1, recreated_transactions: 3 };
+    await open();
+
+    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("1 transação que já estava no Fincla volta ao estado de antes da conciliação");
+    expect(screen.getByTestId("undo-recreated-count")).toHaveTextContent("3 transações excluídas na conferência de saldo voltam a existir");
+    // A lista cobre transações e faturas: o nome diz isso.
+    expect(screen.getByRole("list", { name: "O que volta ao estado de antes" })).toBeInTheDocument();
   });
 
   it("uma pareada sem edição depois só diz que volta ao que era", async () => {
@@ -120,7 +140,7 @@ describe("prévia", () => {
   });
 
   it("sem edições depois, não fala de editadas", async () => {
-    preview.summary = { to_delete: 1, edited_after: 0, already_deleted: 0, to_restore: 0 };
+    preview.summary = { to_delete: 1, edited_after: 0, already_deleted: 0, to_restore: 0, restored_transactions: 0, recreated_transactions: 0, restored_invoices: 0 };
     preview.transactions_to_delete = [contract.undo_preview.transactions_to_delete[1]];
     await open();
 
@@ -250,7 +270,7 @@ describe("quando não dá para desfazer", () => {
     preview = {
       ...clone(contract.undo_refused),
       refusal: { code: "already_undone", message: "Esta importação já foi desfeita." },
-      summary: { to_delete: 0, edited_after: 0, already_deleted: 0, to_restore: 0 },
+      summary: { to_delete: 0, edited_after: 0, already_deleted: 0, to_restore: 0, restored_transactions: 0, recreated_transactions: 0, restored_invoices: 0 },
       transactions_to_delete: [],
     };
     params = { accountId: ACCOUNT, importId: IMPORT };

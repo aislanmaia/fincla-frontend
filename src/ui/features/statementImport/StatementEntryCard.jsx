@@ -14,6 +14,15 @@ export function bankDateLabel(ymd) {
   return y && m && d ? `${d}/${m}/${y}` : "";
 }
 
+/** "2026-10-07" → "07/10" (dia e mês), lendo AAAA-MM-DD sem converter fuso. */
+export function dayMonthLabel(ymd) {
+  const [, m, d] = String(ymd ?? "").split("-");
+  return m && d ? `${d}/${m}` : "";
+}
+
+/** Os meses por extenso, uma lista só para todos os passos da conciliação. */
+export const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
 export const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
 export const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
 export const FIELD_LABEL = { ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, display: "block", marginBottom: 4 };

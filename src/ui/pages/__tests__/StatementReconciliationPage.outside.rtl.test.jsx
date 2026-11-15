@@ -109,6 +109,14 @@ describe("Ver o que fica de fora", () => {
     );
   });
 
+  it("o progresso no topo concorda no singular: 1 já conferido antes (G3-3-04)", async () => {
+    await openDraft();
+
+    const bar = screen.getByTestId("status-bar");
+    expect(bar).toHaveTextContent("1 já conferido antes ·");
+    expect(bar).not.toHaveTextContent("1 já conferidos");
+  });
+
   it("já conferido mostra com qual transação do Fincla, sem nada a responder", async () => {
     await openDraft();
     const user = userEvent.setup();

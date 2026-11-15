@@ -16,7 +16,7 @@ import { formatMoney } from "../money/formatMoney.js";
 import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
 import { previewStatementImportUndo, undoStatementImport } from "../../api/statementImports";
-import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { bankDateLabel, dayMonthLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
 import { statementReconciliationPath } from "../routing/statementImportRoute.js";
@@ -101,6 +101,11 @@ function RestoredTransactionRow({ entity }) {
           O valor volta a <b style={NUM}>{formatMoney(entity.value_back, entity.value_back_currency)}</b> (a conciliação tinha posto o valor do banco).
         </span>
       ) : null}
+      {entity.date_back ? (
+        <span data-testid="undo-date-back" style={{ ...NUM, fontSize: 12, color: T.ink }}>
+          A data volta a <b>{dayMonthLabel(entity.date_back)}</b> (a conciliação tinha mudado para {dayMonthLabel(entity.date_changed_to)}).
+        </span>
+      ) : null}
       {entity.account_back ? (
         <span data-testid="undo-account-back" style={{ fontSize: 12, color: T.ink }}>
           Volta para a conta <b>{entity.account_back.name ?? "de antes"}</b> (a conciliação a tinha movido para esta).
@@ -139,12 +144,16 @@ function RestoredInvoiceRow({ entity }) {
   );
 }
 
+/** "Volta a ficar em aberto" / "Volta a ficar fechada": a situação de antes da conciliação (fincla-api#512). */
+const statusBackText = (statusBack) => `volta a ficar ${INVOICE_STATUS_LABEL[statusBack] ?? "em aberto"}`;
+
 function WhatHappens({ preview }) {
   const { summary } = preview;
   const invoices = preview.to_restore.filter((r) => r.entity_type === "invoice");
+  // As três partes do que volta vêm contadas pelo backend (G3-3-13): a tela não subtrai.
+  const restoredTransactions = summary.restored_transactions;
   // Excluídas na conferência de saldo (fincla-api#514): voltam a existir, contadas à parte.
-  const recreated = preview.to_restore.filter((r) => r.entity_type === "transaction" && r.action === "deleted").length;
-  const restoredTransactions = summary.to_restore - invoices.length - recreated;
+  const recreated = summary.recreated_transactions;
   return (
     <ul style={{ ...G, fontSize: 14, color: T.ink, margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
       <li data-testid="undo-delete-count">
@@ -170,7 +179,7 @@ function WhatHappens({ preview }) {
       ) : null}
       {invoices.filter((r) => r.invoice?.status_back).map((r) => (
         <li key={r.entity_id} data-testid="undo-invoice-reopens">
-          a <b>{invoiceLabel(r.invoice)}</b> volta a ficar em aberto
+          A <b>{invoiceLabel(r.invoice)}</b> {statusBackText(r.invoice.status_back)}
         </li>
       ))}
       {summary.already_deleted ? (
@@ -293,7 +302,7 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
               </ul>
             ) : null}
             {preview.to_restore.length ? (
-              <ul aria-label="Transações que voltam ao estado de antes" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              <ul aria-label="O que volta ao estado de antes" style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {preview.to_restore.map((r) => (r.entity_type === "invoice" && r.invoice
                   ? <RestoredInvoiceRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />
                   : <RestoredTransactionRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />))}

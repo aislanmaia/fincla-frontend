@@ -4,7 +4,9 @@
 // só mostra. O painel diz se os saldos batem e o PRIMEIRO dia em que se separam; a lista mostra as
 // transações do Fincla sem par no extrato, com Abrir / Mudar data / Excluir / Está certa assim
 // (uma por vez, no mecanismo de lista da #517, ou várias marcadas). Excluir e mudar data só valem ao
-// concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer".
+// concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer". As
+// transferências sem par (G3-3-10) entram na mesma lista, só para ver: a conciliação nunca altera
+// transferência, então elas têm "Abrir" e nada mais.
 import { memo, useState } from "react";
 import { AlertTriangle, Check, Info, Link2, X } from "lucide-react";
 
@@ -17,29 +19,21 @@ import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 /** Com sinal (−/+), e zero sem sinal: "R$ 0,00". */
 const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : formatMoneySigned(value, currency));
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
-import { bankDateLabel } from "./StatementEntryCard.jsx";
+import { MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 import { LINK } from "./StatementImportNotes.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
-const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
 export function longDateLabel(ymd) {
   const [, m, d] = String(ymd ?? "").split("-");
-  return m && d ? `${Number(d)} de ${MONTHS[Number(m) - 1]}` : "";
-}
-
-/** "07/10" (dia e mês). */
-function shortDateLabel(ymd) {
-  const [, m, d] = String(ymd ?? "").split("-");
-  return m && d ? `${d}/${m}` : "";
+  return m && d ? `${Number(d)} de ${MONTH_NAMES[Number(m) - 1]}` : "";
 }
 
 /** O mês do último saldo, para "Diferença de saldo que fica no fim de outubro". */
 export function monthOf(ymd) {
   const [, m] = String(ymd ?? "").split("-");
-  return m ? MONTHS[Number(m) - 1] : "";
+  return m ? MONTH_NAMES[Number(m) - 1] : "";
 }
 
 /** O id que a lista (#517) usa para cada transação. */
@@ -69,7 +63,7 @@ function DifferenceText({ check }) {
     return <>Sem saldo no arquivo não dá para comparar. Nenhuma diferença fica registrada ao concluir.</>;
   }
   const last = points[points.length - 1];
-  if (!first) return <>Banco e Fincla terminam {shortDateLabel(last.date)} com <b style={NUM}>{formatMoney(last.bank, last.currency)}</b>.</>;
+  if (!first) return <>Banco e Fincla terminam {dayMonthLabel(last.date)} com <b style={NUM}>{formatMoney(last.bank, last.currency)}</b>.</>;
   const index = points.findIndex((p) => p.date === first);
   if (index > 0) {
     return (
@@ -104,7 +98,7 @@ function DayStrip({ check }) {
                 border: `${first ? 2 : 1}px solid ${ok ? T.greenBorder : T.red}`,
               }}
             >
-              {shortDateLabel(p.date)}
+              {dayMonthLabel(p.date)}
             </li>
           );
         })}
@@ -140,6 +134,44 @@ export function BalanceDifferencePanel({ check }) {
       <DayStrip check={check} />
     </Card>
   );
+}
+
+/**
+ * "Diferença de saldo agora", no topo de todos os passos (história 24): banco × Fincla no último saldo
+ * do arquivo, já com as respostas. `point` = `balance_now` do rascunho (ou o último ponto da conferência
+ * aberta); `null` = o arquivo não informa saldo: "—", nunca zero.
+ */
+export function BalanceNowPanel({ point }) {
+  const known = Boolean(point);
+  const ok = known && point.difference === 0;
+  const tone = !known ? { border: T.border, bg: T.surface, ink: T.inkMid } : ok
+    ? { border: T.greenBorder, bg: T.greenLight, ink: T.green }
+    : { border: T.red, bg: T.redLight, ink: T.red };
+  let sub;
+  if (!known) sub = "O arquivo não informa saldo";
+  else if (ok) sub = <>Banco e Fincla batem em {dayMonthLabel(point.date)}</>;
+  else sub = <>Banco <b style={NUM}>{formatMoney(point.bank, point.currency)}</b> · Fincla <b style={NUM}>{formatMoney(point.fincla, point.currency)}</b> em {dayMonthLabel(point.date)}</>;
+  return (
+    <div
+      data-testid="balance-now"
+      data-state={!known ? "unknown" : ok ? "ok" : "off"}
+      role="status"
+      aria-live="polite"
+      style={{ ...G, minWidth: 0, flex: "1 1 240px", border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 14, padding: "12px 16px", boxShadow: T.sm }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Diferença de saldo agora</div>
+      <div data-testid="balance-now-value" style={{ ...NUM, fontSize: 22, fontWeight: 800, color: tone.ink, marginTop: 2 }}>
+        {known ? signed(point.difference, point.currency) : "—"}
+      </div>
+      <div style={{ fontSize: 12, color: T.inkMid, marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+}
+
+/** O ponto do topo: o da conferência aberta (mais novo depois de uma resposta dela), senão o do rascunho. */
+export function balanceNowOf(statementImport, check) {
+  if (check?.points?.length) return check.points[check.points.length - 1];
+  return statementImport?.balance_now ?? null;
 }
 
 /** "Você pode concluir mesmo assim": a diferença fica registrada, sem ajuste de saldo. */
@@ -226,7 +258,7 @@ function UnmatchedSummary({ item, selected, onSelect, busy }) {
         <span style={{ ...NUM, fontSize: 13, fontWeight: 600, color: item.amount > 0 ? T.green : T.ink, textDecoration: struck ? "line-through" : "none" }}>
           {signed(item.amount, item.currency)}
         </span>
-        <div style={{ ...NUM, fontSize: 11, color: T.inkLight }}>pesa {signed(item.weight, item.currency)}</div>
+        <div style={{ ...NUM, fontSize: 11, color: T.inkLight }}>entra no saldo com {signed(item.weight, item.currency)}</div>
       </div>
     </>
   );
@@ -344,6 +376,44 @@ const UnmatchedRow = memo(function UnmatchedRowView({ item, periodEnd, selected,
   );
 });
 
+/**
+ * Uma transferência do Fincla sem par no extrato (G3-3-10): entra na diferença, mas a conciliação
+ * nunca altera transferência — só "Abrir", sem Excluir nem Mudar data.
+ */
+function UnmatchedTransferRow({ transfer }) {
+  const [open, setOpen] = useState(false);
+  const route = [transfer.from_account_name, transfer.to_account_name].filter(Boolean).join(" → ");
+  return (
+    <div data-testid="unmatched-transfer" style={{ ...ROW, flexDirection: "column", alignItems: "stretch" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <b style={{ fontSize: 13, color: T.ink, wordBreak: "break-word" }}>{transfer.description || "Transferência"}</b>
+            <Badge color={T.blue} bg={T.blueLight}>transferência</Badge>
+          </span>
+          <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>
+            {bankDateLabel(transfer.day)}{route ? ` · ${route}` : ""} · está no Fincla e não aparece no extrato
+          </span>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <span style={{ ...NUM, fontSize: 13, fontWeight: 600, color: transfer.amount > 0 ? T.green : T.ink }}>{signed(transfer.amount, transfer.currency)}</span>
+          <div style={{ ...NUM, fontSize: 11, color: T.inkLight }}>entra no saldo com {signed(transfer.amount, transfer.currency)}</div>
+        </div>
+      </div>
+      <div>
+        <Btn variant="outGray" small onClick={() => setOpen((v) => !v)} aria-expanded={open}>Abrir</Btn>
+      </div>
+      {open ? (
+        <div data-testid="transfer-details" style={{ ...BLUE, flexDirection: "column", gap: 2, fontSize: 12 }}>
+          <span><b>{transfer.description || "Transferência"}</b> · transferência{route ? ` de ${route.replace(" → ", " para ")}` : ""}</span>
+          <span style={NUM}>Data {bankDateLabel(transfer.day)}</span>
+          <span style={{ color: T.inkLight }}>A conciliação não altera transferências. Se ela não aconteceu, ajuste em Lançamentos depois de concluir.</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Uma transação que a pessoa disse ser um lançamento do banco ("É este lançamento do banco"), com desfazer. */
 function LinkedRow({ link, busy, onUndo }) {
   return (
@@ -354,7 +424,7 @@ function LinkedRow({ link, busy, onUndo }) {
           <Badge color={T.blue} bg={T.blueLight}>Ligada ao lançamento do banco de {bankDateLabel(link.entryDate)}</Badge>
         </span>
         <span style={{ fontSize: 12, color: T.inkLight }}>
-          Você disse que é o lançamento “{link.bankDescription}”. Não pesa mais na diferença.{" "}
+          Você disse que é o lançamento “{link.bankDescription}”. Não entra mais na diferença.{" "}
           <button type="button" disabled={busy} onClick={() => onUndo(link)} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer</button>
         </span>
       </div>
@@ -399,7 +469,7 @@ function PendingNotes({ check, onGoToPending }) {
           <AlertTriangle size={15} aria-hidden="true" style={{ color: T.amber, flexShrink: 0, marginTop: 2 }} />
           <span>
             {plural(check.unanswered_entries, "lançamento do banco ainda está", "lançamentos do banco ainda estão")} sem decisão. Eles
-            também pesam na diferença até você decidir.{" "}
+            também entram na diferença até você decidir.{" "}
             <button type="button" onClick={onGoToPending} style={{ ...LINK, fontSize: 13, color: T.blue }}>Ir para eles</button>
           </span>
         </div>
@@ -419,6 +489,28 @@ function PendingNotes({ check, onGoToPending }) {
   );
 }
 
+function PaidInvoiceText({ invoice: i }) {
+  const amount = i.difference !== 0
+    ? <>O banco pagou <b style={NUM}>{formatMoney(Math.abs(i.difference), i.currency)}</b> a {i.difference > 0 ? "menos" : "mais"} que o total da fatura no Fincla. </>
+    : null;
+  if (i.already_paid) {
+    const otherDay = i.fincla_paid_on !== i.paid_on;
+    return (
+      <>
+        A fatura já estava paga no Fincla e nada muda nela. {amount}
+        {otherDay ? <>As compras dela saíram do saldo do Fincla em <b style={NUM}>{bankDateLabel(i.fincla_paid_on)}</b> e do banco em <b style={NUM}>{bankDateLabel(i.paid_on)}</b>: nesses dias os saldos ficam diferentes. </> : null}
+        {amount ? "Essa diferença de valor entra na diferença de saldo." : null}
+      </>
+    );
+  }
+  return (
+    <>
+      No Fincla a fatura é paga pelo total ({formatMoney(i.total, i.currency)}); o banco pagou {formatMoney(i.paid, i.currency)}. {amount}Essa diferença
+      entra na diferença de saldo.
+    </>
+  );
+}
+
 function PaidInvoices({ invoices }) {
   if (!invoices.length) return null;
   return (
@@ -427,17 +519,21 @@ function PaidInvoices({ invoices }) {
       {invoices.map((i) => (
         <div key={i.entry_id} data-testid="paid-invoice" style={ROW}>
           <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-            <b style={{ fontSize: 13, color: T.ink }}>Fatura {i.card_name} · {MONTHS[i.month - 1]} de {i.year}</b>
-            <span style={{ ...NUM, fontSize: 12, color: T.inkMid }}>
-              Total no Fincla {formatMoney(i.total, i.currency)} · pago pelo banco em {bankDateLabel(i.paid_on)}: {formatMoney(i.paid, i.currency)}
+            <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <b style={{ fontSize: 13, color: T.ink }}>{invoiceLabel(i)} de {i.year}</b>
+              {i.already_paid ? <Badge color={T.green} bg={T.greenLight}>Já paga no Fincla</Badge> : null}
             </span>
-            <span style={{ fontSize: 12, color: T.inkLight }}>
-              O banco pagou {i.difference > 0 ? "menos" : "mais"} que o total da fatura. Não muda o saldo da conta: a fatura fica paga com o valor do banco.
+            <span style={{ ...NUM, fontSize: 12, color: T.inkMid }}>
+              Total no Fincla {formatMoney(i.total, i.currency)}
+              {i.already_paid ? ` · paga no Fincla em ${bankDateLabel(i.fincla_paid_on)}` : ""} · pago pelo banco em {bankDateLabel(i.paid_on)}: {formatMoney(i.paid, i.currency)}
+            </span>
+            <span data-testid="paid-invoice-text" style={{ fontSize: 12, color: T.inkLight }}>
+              <PaidInvoiceText invoice={i} />
             </span>
           </div>
           <div style={{ textAlign: "right" }}>
             <span style={{ ...NUM, fontSize: 13, fontWeight: 600 }}>{signed(i.difference, i.currency)}</span>
-            <div style={{ fontSize: 11, color: T.inkLight }}>diferença</div>
+            <div style={{ fontSize: 11, color: T.inkLight }}>diferença de valor</div>
           </div>
         </div>
       ))}
@@ -492,6 +588,7 @@ export function BalanceCheckStep({
   const [lastBatch, setLastBatch] = useState(null);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const live = items.filter((i) => i.check !== "delete" && i.weight !== 0);
+  const transfers = check.unmatched_transfers ?? [];
   const chosen = items.filter((i) => selected.has(i.transaction_id));
 
   const remember = (list) => setItemHistory((prev) => {
@@ -544,12 +641,13 @@ export function BalanceCheckStep({
       <PendingNotes check={check} onGoToPending={onGoToPending} />
 
       <h3 style={{ ...SECTION, color: T.red }}>
-        Transações do Fincla sem par no extrato <Badge color={T.red} bg={T.redLight}>{live.length}</Badge>
+        Transações do Fincla sem par no extrato <Badge color={T.red} bg={T.redLight}>{live.length + transfers.length}</Badge>
       </h3>
       {linked.map((link) => <LinkedRow key={link.transactionId} link={link} busy={busy} onUndo={onUndoLink} />)}
-      {!items.length ? (
+      {!items.length && !transfers.length ? (
         <p style={{ ...G, fontSize: 13, color: T.inkLight, margin: 0 }}>Nenhuma. Tudo o que está no Fincla nesta conta apareceu no extrato.</p>
-      ) : (
+      ) : null}
+      {items.length ? (
         <>
           <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} shortcutKeys={[]} noun={TRANSACTION_NOUN}>
             {items.length > 1 ? (
@@ -594,7 +692,8 @@ export function BalanceCheckStep({
             />
           )))}
         </>
-      )}
+      ) : null}
+      {transfers.map((t) => <UnmatchedTransferRow key={t.transfer_id} transfer={t} />)}
 
       <PaidInvoices invoices={check.paid_invoices} />
       <LeftOutEntries entries={check.left_out_entries} onRedecide={onRedecide} />
@@ -615,8 +714,9 @@ const EFFECT_TONE = {
 };
 
 /**
- * Os selos do resumo: VALOR MUDA, CONTA MUDA, FATURA PAGA, EXCLUSÃO, DATA MUDA. Valores, contas e
- * faturas vêm dos lançamentos (o que o rascunho diz agora); exclusões e datas, da conferência.
+ * Os selos do resumo: VALOR MUDA, CONTA MUDA, FATURA PAGA (e FATURA JÁ PAGA, que não muda nada),
+ * EXCLUSÃO, DATA MUDA. Valores, contas e faturas vêm dos lançamentos (o que o rascunho diz agora);
+ * exclusões e datas, da conferência.
  */
 export function summaryEffects(entries, check) {
   const pairs = entries.filter((e) => e.answer === "pair" && e.fincla_match);
@@ -636,6 +736,15 @@ export function summaryEffects(entries, check) {
       text: e.invoice
         ? <>A <b>{invoiceLabel(e.invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>
         : <>Uma fatura de cartão fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>,
+    })),
+    ...entries.filter((e) => e.answer === "invoice_already_paid").map((e) => ({
+      key: `invoice-already-paid-${e.id}`,
+      testId: "summary-invoices-already-paid",
+      tone: "blue",
+      tag: "Fatura já paga",
+      text: e.invoice
+        ? <>A <b>{invoiceLabel(e.invoice)}</b> já está paga no Fincla: nada muda nela e nenhuma transação é criada.</>
+        : <>Uma fatura de cartão já paga no Fincla: nada muda nela e nenhuma transação é criada.</>,
     })),
     deletions ? { tone: "red", tag: "Exclusão", text: <><b>{plural(deletions, "transação do Fincla é excluída", "transações do Fincla são excluídas")}</b>.</> } : null,
     dates ? { tone: "blue", tag: "Data muda", text: <><b>{plural(dates, "transação muda de data", "transações mudam de data")}</b>.</> } : null,
