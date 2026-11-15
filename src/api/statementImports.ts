@@ -78,12 +78,48 @@ export interface StatementGroup {
 }
 
 /**
- * Como o Fincla leu o lançamento (fixo, fincla-api#510): `suggested` = uma única transação da
- * mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar lançamentos
- * encontrados"); `yield` = rendimento pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar
- * no mês (fincla-api#513); `new` = sem par.
+ * Como o Fincla leu o lançamento (fixo, fincla-api#510): `suggested` = uma única transação (ou
+ * transferência) da mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar
+ * lançamentos encontrados"); `doubt` = várias candidatas, ou uma só com diferença de até R$ 1,00
+ * (passo "Decidir casos com dúvida", fincla-api#511; começa sem resposta); `yield` = rendimento
+ * pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar no mês (fincla-api#513); `new` = sem par.
  */
-export type StatementEntryClassification = 'new' | 'suggested' | 'yield';
+export type StatementEntryClassification = 'new' | 'suggested' | 'doubt' | 'yield';
+
+/** O que difere do banco (fincla-api#511): VALOR DIFERENTE, DATAS DIFERENTES, OUTRA CONTA. */
+export type MatchDifference = 'amount' | 'date' | 'account';
+
+/**
+ * Uma coisa do Fincla que pode ser o par do lançamento (fincla-api#511), lida ao vivo: uma
+ * transação (`kind: 'transaction'`) ou uma transferência entre as contas da organização.
+ */
+export interface FinclaMatch {
+  kind: 'transaction' | 'transfer';
+  transaction_id: number | null;
+  transfer_id: string | null;
+  /** Na transferência, a observação (pode vir vazia). */
+  description: string;
+  type: StatementTransactionType | 'transfer';
+  /** Sem sinal. */
+  value: number;
+  currency: string | null;
+  /** Data de competência; a tela lê os 10 primeiros caracteres. */
+  date: string;
+  /** Dia em que o dinheiro se moveu no Fincla (`paid_at`, senão `date`), "YYYY-MM-DD". */
+  day: string;
+  status: 'pending' | 'confirmed' | 'paid' | null;
+  paid_at: string | null;
+  payment_method: string | null;
+  category_name: string | null;
+  tag_names: string[];
+  account_id: string | null;
+  account_name: string | null;
+  from_account_name: string | null;
+  to_account_name: string | null;
+  differences: MatchDifference[];
+  /** Outro lançamento do extrato já disse "Sim, é esta" com ela: desativada, com "Desfazer lá". */
+  taken_by_entry_id: string | null;
+}
 
 /** O lado "No Fincla" do par: a transação como está hoje. */
 export interface FinclaTransaction {
@@ -100,6 +136,9 @@ export interface FinclaTransaction {
   payment_method: string;
   category_name: string | null;
   tag_names: string[];
+  account_id: string | null;
+  account_name: string | null;
+  differences: MatchDifference[];
 }
 
 export interface StatementEntry {
@@ -138,6 +177,13 @@ export interface StatementEntry {
   confirmed: boolean;
   /** A transação do par (a escolhida, senão a sugerida); `null` se não há. */
   fincla_transaction: FinclaTransaction | null;
+  /** Transferência sugerida / pareada (fincla-api#511). */
+  suggested_transfer_id: string | null;
+  paired_transfer_id: string | null;
+  /** O par mostrado, transação OU transferência (a escolhida, senão a sugerida); `null` se não há. */
+  fincla_match: FinclaMatch | null;
+  /** Candidatas ao vivo na conta (só em rascunho), as mais parecidas primeiro. */
+  candidates: FinclaMatch[];
 }
 
 export interface StatementImport {
@@ -195,8 +241,15 @@ export interface StatementImportListItem {
 }
 
 export interface UpdateStatementEntryRequest {
-  /** Sim, é esta (`pair`) / Não, adicionar agora (`create`) / Não registrar (`ignore`). */
-  answer?: 'pair' | 'create' | 'ignore';
+  /**
+   * Sim, é esta (`pair`) / Não, adicionar agora (`create`) / Não registrar (`ignore`); `null` volta
+   * a "sem resposta" (o "Desfazer lá" de uma dúvida, fincla-api#511).
+   */
+  answer?: 'pair' | 'create' | 'ignore' | null;
+  /** Com `pair`: qual transação (uma candidata ou achada na busca). */
+  paired_transaction_id?: number | null;
+  /** Com `pair`: qual transferência. */
+  paired_transfer_id?: string | null;
   /** Responder marca `true`; "Desfazer escolha" devolve o anterior. */
   confirmed?: boolean;
   description?: string;
@@ -215,10 +268,21 @@ export interface UpdateStatementGroupRequest {
 }
 
 type RawFinclaTransaction = Omit<FinclaTransaction, 'value' | 'currency'> & { value: WireMoney };
-type RawEntry = Omit<StatementEntry, 'amount' | 'currency' | 'fincla_transaction'> & {
+type RawFinclaMatch = Omit<FinclaMatch, 'value' | 'currency'> & { value: WireMoney };
+type RawEntry = Omit<StatementEntry, 'amount' | 'currency' | 'fincla_transaction' | 'fincla_match' | 'candidates'> & {
   amount: WireMoney;
   fincla_transaction?: RawFinclaTransaction | null;
+  fincla_match?: RawFinclaMatch | null;
+  candidates?: RawFinclaMatch[];
 };
+
+export const normalizeFinclaMatch = (raw: RawFinclaMatch): FinclaMatch => ({
+  ...raw,
+  value: toAmount(raw.value),
+  currency: toCurrency(raw.value),
+  differences: raw.differences ?? [],
+  taken_by_entry_id: raw.taken_by_entry_id ?? null,
+});
 type RawGroup = Omit<StatementGroup, 'amount' | 'currency'> & { amount: WireMoney };
 type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> & {
   entries: RawEntry[];
@@ -226,15 +290,24 @@ type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> &
   bank_balances: { date: string; balance: WireMoney }[];
 };
 
-export const normalizeStatementEntry = ({ fincla_transaction, ...raw }: RawEntry): StatementEntry => ({
+export const normalizeStatementEntry = ({ fincla_transaction, fincla_match, candidates, ...raw }: RawEntry): StatementEntry => ({
   ...raw,
+  suggested_transfer_id: raw.suggested_transfer_id ?? null,
+  paired_transfer_id: raw.paired_transfer_id ?? null,
+  fincla_match: fincla_match ? normalizeFinclaMatch(fincla_match) : null,
+  candidates: (candidates ?? []).map(normalizeFinclaMatch),
   amount: toAmount(raw.amount),
   currency: toCurrency(raw.amount),
   suggested_transaction_id: raw.suggested_transaction_id ?? null,
   paired_transaction_id: raw.paired_transaction_id ?? null,
   confirmed: Boolean(raw.confirmed),
   fincla_transaction: fincla_transaction
-    ? { ...fincla_transaction, value: toAmount(fincla_transaction.value), currency: toCurrency(fincla_transaction.value) }
+    ? {
+        ...fincla_transaction,
+        value: toAmount(fincla_transaction.value),
+        currency: toCurrency(fincla_transaction.value),
+        differences: fincla_transaction.differences ?? [],
+      }
     : null,
 });
 
@@ -314,6 +387,26 @@ export const updateStatementEntry = async (
     params: { organization_id: organizationId },
   });
   return normalizeStatementEntry(response.data);
+};
+
+/**
+ * "Está no Fincla com outros dados…" (fincla-api#511): procura o par em todas as contas ativas da
+ * mesma moeda. `query` é UMA coisa: texto, valor (47,20) ou dia (09/10). Não muda nada.
+ */
+export const searchFinclaForEntry = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  entryId: string,
+  query = '',
+): Promise<FinclaMatch[]> => {
+  const params: Record<string, string> = { organization_id: organizationId };
+  if (query.trim()) params.q = query.trim();
+  const response = await apiClient.get<{ results: RawFinclaMatch[] }>(
+    `${base(accountId)}/${importId}/entries/${entryId}/search`,
+    { params },
+  );
+  return (response.data.results ?? []).map(normalizeFinclaMatch);
 };
 
 /** Lote (tudo ou nada): várias mudanças de uma vez. Desfazer = outro lote com o que havia antes. */
@@ -441,6 +534,11 @@ export interface UndoRestoredEntity {
   changed_fields: UndoChangedField[];
   /** Do que a conciliação mudou, o que a pessoa mudou de novo depois: fica o valor dela. */
   kept_fields: UndoChangedField[];
+  /** O valor que volta (a conciliação pôs o do banco), fincla-api#511; `null` se não muda. */
+  value_back: number | null;
+  value_back_currency: string | null;
+  /** A conta para onde a transação volta (a conciliação a moveu); `null` se não muda. */
+  account_back: { id: string; name: string | null } | null;
 }
 
 export interface StatementUndoPreview {
@@ -453,8 +551,13 @@ export interface StatementUndoPreview {
   to_restore: UndoRestoredEntity[];
 }
 
-type RawUndoPreview = Omit<StatementUndoPreview, 'transactions_to_delete'> & {
+type RawRestored = Omit<UndoRestoredEntity, 'value_back' | 'value_back_currency' | 'account_back'> & {
+  value_back?: WireMoney | null;
+  account_back?: { id: string; name: string | null } | null;
+};
+type RawUndoPreview = Omit<StatementUndoPreview, 'transactions_to_delete' | 'to_restore'> & {
   transactions_to_delete: (Omit<UndoDeletedTransaction, 'amount' | 'currency'> & { amount: WireMoney })[];
+  to_restore?: RawRestored[];
 };
 
 export const normalizeStatementUndoPreview = (raw: RawUndoPreview): StatementUndoPreview => ({
@@ -464,7 +567,12 @@ export const normalizeStatementUndoPreview = (raw: RawUndoPreview): StatementUnd
     amount: toAmount(t.amount),
     currency: toCurrency(t.amount),
   })),
-  to_restore: raw.to_restore ?? [],
+  to_restore: (raw.to_restore ?? []).map(({ value_back, account_back, ...r }) => ({
+    ...r,
+    value_back: value_back == null ? null : toAmount(value_back),
+    value_back_currency: value_back == null ? null : toCurrency(value_back),
+    account_back: account_back ?? null,
+  })),
 });
 
 /** O que desfazer a importação vai fazer agora (e o motivo, se não der). Não muda nada. */
