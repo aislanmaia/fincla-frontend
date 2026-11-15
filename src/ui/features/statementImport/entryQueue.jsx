@@ -225,19 +225,39 @@ function ShortcutsHint({ keys }) {
  * O topo da lista de um passo: posição, quantos faltam, visualização, filtro com contagens, atalhos
  * e o aviso do que o filtro esconde. `children` entra na linha da posição (ex.: "Confirmar todos").
  */
-export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], children = null }) {
+/** As palavras da lista: lançamentos do extrato (padrão) ou transações do Fincla ("Conferir o saldo", #514). */
+export const ENTRY_NOUN = {
+  title: "Lançamento",
+  one: "lançamento",
+  many: "lançamentos",
+  answeredOne: "lançamento já respondido não aparece",
+  answeredMany: "lançamentos já respondidos não aparecem",
+  pendingOne: "lançamento sem resposta não aparece",
+  pendingMany: "lançamentos sem resposta não aparecem",
+};
+export const TRANSACTION_NOUN = {
+  title: "Transação",
+  one: "transação",
+  many: "transações",
+  answeredOne: "transação já respondida não aparece",
+  answeredMany: "transações já respondidas não aparecem",
+  pendingOne: "transação sem resposta não aparece",
+  pendingMany: "transações sem resposta não aparecem",
+};
+
+export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], noun = ENTRY_NOUN, children = null }) {
   const counts = { all: queue.total, pending: queue.pending, answered: queue.answeredCount };
   let hiddenText = null;
   if (queue.hidden) {
     hiddenText = queue.filter === "pending"
-      ? plural(queue.hidden, "lançamento já respondido não aparece", "lançamentos já respondidos não aparecem")
-      : plural(queue.hidden, "lançamento sem resposta não aparece", "lançamentos sem resposta não aparecem");
+      ? plural(queue.hidden, noun.answeredOne, noun.answeredMany)
+      : plural(queue.hidden, noun.pendingOne, noun.pendingMany);
   }
   return (
     <div data-testid="queue-header" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px", alignItems: "center" }}>
         <span role="status" data-testid="queue-position" style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.ink }}>
-          {queue.position ? `Lançamento ${queue.position.toLocaleString("pt-BR")} de ${queue.total.toLocaleString("pt-BR")}` : plural(queue.total, "lançamento", "lançamentos")}
+          {queue.position ? `${noun.title} ${queue.position.toLocaleString("pt-BR")} de ${queue.total.toLocaleString("pt-BR")}` : plural(queue.total, noun.one, noun.many)}
         </span>
         <span data-testid="queue-pending" style={{ ...G, ...NUM, fontSize: 12, fontWeight: 600, color: queue.pending ? T.amber : T.green }}>
           {queue.pending ? plural(queue.pending, "sem resposta", "sem resposta") : "Todos respondidos"}
@@ -262,7 +282,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
       <ShortcutsHint keys={shortcutKeys} />
       {!queue.pending && queue.currentId === null && queue.total ? (
         <p role="note" style={{ ...G, fontSize: 12, color: T.green, margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
-          <Check size={13} aria-hidden="true" />Tudo respondido neste passo. Clique em qualquer lançamento para rever.
+          <Check size={13} aria-hidden="true" />Tudo respondido neste passo. Clique em qualquer {noun.one} para rever.
         </p>
       ) : null}
       {hiddenText ? (
@@ -280,7 +300,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
  * linha), o foco vem para cá, para teclado e leitor de tela continuarem no lançamento atual.
  * Depois de "Não, adicionar agora" o cartão fica aberto e ganha "Próximo sem resposta →".
  */
-export function CurrentEntryFrame({ queue, entry, children }) {
+export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children }) {
   const ref = useRef(null);
   const { takeFocus, focusTick } = queue;
   // biome-ignore lint/correctness/useExhaustiveDependencies: o pedido de foco é o tick; takeFocus muda a cada render.
@@ -293,7 +313,7 @@ export function CurrentEntryFrame({ queue, entry, children }) {
       ref={ref}
       tabIndex={-1}
       data-testid="current-entry"
-      aria-label={`Lançamento ${queue.position} de ${queue.total}`}
+      aria-label={`${noun.title} ${queue.position} de ${queue.total}`}
       style={{ borderRadius: 16, boxShadow: `0 0 0 3px ${T.blueLight}`, outline: "none", display: "flex", flexDirection: "column", gap: 8, scrollMarginTop: 16 }}
     >
       {children}

@@ -41,7 +41,8 @@ export const STEPS = [
   {
     key: "balance",
     title: "Conferir o saldo",
-    todo: "Compare o saldo do banco com o do Fincla, já com as suas respostas.",
+    todo: "Compare o saldo do banco com o do Fincla, dia a dia, já com as suas respostas.",
+    then: "Excluir ou mudar data aqui também só vale ao concluir. Se sobrar diferença, dá para concluir mesmo assim: ela fica registrada.",
   },
   {
     key: "summary",

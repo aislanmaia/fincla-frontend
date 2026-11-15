@@ -197,7 +197,8 @@
     },
     "latest_concluded": false,
     "file_check": {"status": "new", "import_id": null, "account_id": null, "account_name": null, "concluded_at": null},
-    "left_out": null
+    "left_out": null,
+    "final_difference": null
   },
   "suggested_draft": {
     "id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
@@ -449,7 +450,8 @@
       "account_name": "Itaú",
       "concluded_at": "2026-11-02T18:40:00"
     },
-    "left_out": null
+    "left_out": null,
+    "final_difference": null
   },
   "outside_draft": {
     "id": "9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
@@ -646,7 +648,8 @@
       "account_name": "Itaú",
       "concluded_at": "2026-11-02T18:40:00"
     },
-    "left_out": {"before": "2026-09-08", "reason": "account_start"}
+    "left_out": {"before": "2026-09-08", "reason": "account_start"},
+    "final_difference": null
   },
   "undone": {
     "id": "3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f",
@@ -698,6 +701,7 @@
     "latest_concluded": false,
     "file_check": {"status": "new", "import_id": null, "account_id": null, "account_name": null, "concluded_at": null},
     "left_out": null,
+    "final_difference": {"amount": "-23.06", "currency": "BRL"},
     "deleted_transactions": 1
   },
   "entry": {
@@ -730,7 +734,7 @@
     "import_id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
     "can_undo": true,
     "refusal": null,
-    "summary": {"to_delete": 2, "edited_after": 1, "already_deleted": 1, "to_restore": 1},
+    "summary": {"to_delete": 2, "edited_after": 1, "already_deleted": 1, "to_restore": 2},
     "transactions_to_delete": [
       {
         "transaction_id": 101,
@@ -762,6 +766,17 @@
         "kept_fields": ["status", "paid_at"],
         "value_back": {"amount": "1490.00", "currency": "BRL"},
         "account_back": {"id": "d3e4f5a6-b7c8-4d9e-8f0a-1b2c3d4e5f6a", "name": "Nubank"}
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "92",
+        "action": "deleted",
+        "description": "2ª parcela salário",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null
       }
     ]
   },
@@ -1289,7 +1304,8 @@
     "account_check": {"status": "same_account", "suggested_account": null},
     "latest_concluded": false,
     "file_check": {"status": "new", "import_id": null, "account_id": null, "account_name": null, "concluded_at": null},
-    "left_out": null
+    "left_out": null,
+    "final_difference": null
   },
   "search": {
     "results": [
@@ -1336,5 +1352,88 @@
         "taken_by_entry_id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c01"
       }
     ]
+  },
+  "balance_check": {
+    "import_id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
+    "points": [
+      {"date": "2026-09-30", "bank": {"amount": "1000.00", "currency": "BRL"}, "fincla": {"amount": "1000.00", "currency": "BRL"}, "difference": {"amount": "0.00", "currency": "BRL"}},
+      {"date": "2026-10-07", "bank": {"amount": "3834.10", "currency": "BRL"}, "fincla": {"amount": "3954.10", "currency": "BRL"}, "difference": {"amount": "-120.00", "currency": "BRL"}},
+      {"date": "2026-10-31", "bank": {"amount": "1834.10", "currency": "BRL"}, "fincla": {"amount": "1857.16", "currency": "BRL"}, "difference": {"amount": "-23.06", "currency": "BRL"}}
+    ],
+    "first_divergent_date": "2026-10-07",
+    "final_difference": {"amount": "-23.06", "currency": "BRL"},
+    "unmatched_transactions": [
+      {
+        "transaction_id": 92,
+        "description": "2ª parcela salário",
+        "type": "income",
+        "amount": {"amount": "4873.58", "currency": "BRL"},
+        "date": "2026-10-10T00:00:00",
+        "day": "2026-10-10",
+        "payment_method": "bank_transfer",
+        "category_name": "Salário",
+        "tag_names": [],
+        "recurring": true,
+        "check": "delete",
+        "new_date": null,
+        "weight": {"amount": "0.00", "currency": "BRL"},
+        "hint_entry_id": null,
+        "delete_refusal": null
+      },
+      {
+        "transaction_id": 95,
+        "description": "Conta de luz",
+        "type": "expense",
+        "amount": {"amount": "-120.00", "currency": "BRL"},
+        "date": "2026-10-15T00:00:00",
+        "day": "2026-10-15",
+        "payment_method": "boleto",
+        "category_name": "Moradia",
+        "tag_names": ["Energia"],
+        "recurring": false,
+        "check": "change_date",
+        "new_date": "2026-10-07",
+        "weight": {"amount": "-120.00", "currency": "BRL"},
+        "hint_entry_id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+        "delete_refusal": null
+      },
+      {
+        "transaction_id": 97,
+        "description": "Farmácia",
+        "type": "expense",
+        "amount": {"amount": "-23.06", "currency": "BRL"},
+        "date": "2026-10-20T00:00:00",
+        "day": "2026-10-20",
+        "payment_method": "pix",
+        "category_name": "Saúde",
+        "tag_names": [],
+        "recurring": false,
+        "check": null,
+        "new_date": null,
+        "weight": {"amount": "-23.06", "currency": "BRL"},
+        "hint_entry_id": null,
+        "delete_refusal": "refunded"
+      }
+    ],
+    "waiting_transactions": 1,
+    "unanswered_entries": 1,
+    "left_out_entries": [
+      {"entry_id": "5d6e7f8a-9b0c-4d1e-8f2a-3b4c5d6e7f8a", "date": "2026-10-20", "bank_description": "TARIFA PACOTE", "amount": {"amount": "-9.90", "currency": "BRL"}, "kind": "ignored"},
+      {"entry_id": "3d4e5f6a-7b8c-4d9e-8f0a-1b2c3d4e5f6a", "date": "2026-09-28", "bank_description": "PIX TRANSF MERCADO", "amount": {"amount": "-80.00", "currency": "BRL"}, "kind": "brought_back"}
+    ],
+    "paid_invoices": [
+      {
+        "entry_id": "4e5f6a7b-8c9d-4e0f-8a1b-2c3d4e5f6a7b",
+        "invoice_id": 43,
+        "card_name": "Itaú Visa",
+        "year": 2026,
+        "month": 10,
+        "total": {"amount": "8279.05", "currency": "BRL"},
+        "paid": {"amount": "8278.54", "currency": "BRL"},
+        "paid_on": "2026-10-13",
+        "difference": {"amount": "0.51", "currency": "BRL"}
+      }
+    ],
+    "effects": {"value_changes": 1, "account_moves": 1, "invoices_paid": 1, "deletions": 1, "date_changes": 1}
   }
 }

@@ -23,8 +23,10 @@ import {
   deleteStatementGroup,
   confirmStatementSuggestions,
   draftInProgressOf,
+  getStatementBalanceCheck,
   getStatementImport,
   listStatementImports,
+  updateStatementBalanceChecks,
   updateStatementEntries,
   updateStatementEntry,
   updateStatementGroup,
@@ -51,6 +53,14 @@ import {
   useQueueShortcuts,
 } from "../features/statementImport/entryQueue.jsx";
 import { getUserPreferences, updateUserPreferences } from "../../api/userPreferences";
+import {
+  BalanceCheckStep,
+  SummaryDifference,
+  SummaryEffects,
+  ConcludeWithDifferenceNote,
+  isCheckAnswered,
+  unmatchedItemId,
+} from "../features/statementImport/BalanceCheckStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
@@ -427,35 +437,7 @@ function EmptyStep({ children }) {
   );
 }
 
-function BalanceStep({ statementImport }) {
-  const last = statementImport.bank_balances[statementImport.bank_balances.length - 1];
-  return (
-    <EmptyStep>
-      Nada a fazer aqui por enquanto.
-      {last ? <> O banco informa saldo de <b style={NUM}>{formatMoney(last.balance, last.currency)}</b> em {bankDateLabel(last.date)}.</> : null}
-    </EmptyStep>
-  );
-}
-
-/** Valores e contas que mudam ao concluir (fincla-api#511), com destaque. */
-function PairChanges({ entries }) {
-  const pairs = entries.filter((e) => e.answer === "pair" && e.fincla_match);
-  const newValue = pairs.filter((e) => e.fincla_match.differences.includes("amount")).length;
-  const moved = pairs.filter((e) => e.fincla_match.differences.includes("account")).length;
-  if (!newValue && !moved) return null;
-  return (
-    <ul data-testid="summary-pair-changes" style={{ ...G, fontSize: 12, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px 8px 28px", margin: "12px 0 0" }}>
-      {newValue ? (
-        <li><b>{plural(newValue, "transação passa", "transações passam")} a ter o valor do banco</b> (valor diferente no Fincla).</li>
-      ) : null}
-      {moved ? (
-        <li><b>{plural(moved, "transação é movida", "transações são movidas")} para esta conta</b> (estavam em outra conta).</li>
-      ) : null}
-    </ul>
-  );
-}
-
-function SummaryStep({ statementImport, concluding, error, onConclude, onClassify = null }) {
+function SummaryStep({ statementImport, check, checkLoading, checkError, concluding, error, onConclude, onClassify = null }) {
   const { summary, blockers } = statementImport;
   const rows = [
     ["Lançamentos no extrato", summary.total, "summary-total"],
@@ -467,6 +449,8 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* A diferença de saldo que fica, em destaque no topo (fincla-api#514). */}
+      <SummaryDifference check={check} loading={checkLoading} error={checkError} />
       <Card style={{ padding: 16 }}>
         <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "1fr auto", gap: "8px 16px" }}>
           {rows.map(([label, value, testId, note]) => (
@@ -482,7 +466,7 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
             categoria e etiquetas continuam como estão.
           </p>
         ) : null}
-        <PairChanges entries={statementImport.entries} />
+        <SummaryEffects entries={statementImport.entries} check={check} />
         {summary.to_create || summary.groups ? (
           <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "12px 0 0" }}>
             Ao concluir, cada lançamento marcado para adicionar e cada soma vira uma transação <b>paga na data do banco</b>
@@ -497,6 +481,7 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
           {onClassify ? <button type="button" onClick={onClassify} style={{ ...LINK, fontSize: 13, color: T.blue }}>Classificar agora</button> : null}
         </div>
       ) : null}
+      <ConcludeWithDifferenceNote check={check} />
       {blockers.length ? (
         <div data-testid="conclude-blocked" style={{ ...G, fontSize: 13, color: T.inkMid, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px" }}>
           Ainda não dá para concluir: {blockers.map(blockerText).join(" ")}
@@ -533,6 +518,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
           {plural(created, "transação adicionada", "transações adicionadas")}
           {accountName ? <> à conta <b>{accountName}</b></> : null}, {created === 1 ? "paga na data do banco" : "pagas nas datas do banco"}.
         </p>
+        <RecordedDifference statementImport={statementImport} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onOpenAccountTransactions ? (
             <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))}>Ver transações da conta</Btn>
@@ -553,6 +539,23 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
         ) : null}
       </Card>
     </div>
+  );
+}
+
+/** A diferença de saldo registrada ao concluir (fincla-api#514): null = o arquivo não informava saldo. */
+function RecordedDifference({ statementImport }) {
+  const value = statementImport.final_difference;
+  if (value === null || value === undefined) {
+    return <p data-testid="recorded-difference" style={{ ...G, fontSize: 13, color: T.inkLight, margin: 0 }}>O extrato não informava saldo: nenhuma diferença foi registrada.</p>;
+  }
+  if (value === 0) {
+    return <p data-testid="recorded-difference" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>Saldos batendo: banco e Fincla iguais no fim do extrato.</p>;
+  }
+  const shown = (value > 0 ? "+" : "−") + formatMoney(Math.abs(value), statementImport.final_difference_currency);
+  return (
+    <p data-testid="recorded-difference" style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
+      Diferença registrada: <b style={{ ...NUM, color: T.red }}>{shown}</b> (banco menos Fincla no fim do extrato). Nenhum ajuste de saldo foi feito.
+    </p>
   );
 }
 
@@ -595,6 +598,12 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // Os PATCH de progresso saem em fila: o próximo só parte quando o anterior respondeu, então o
   // servidor fica sempre com o último passo aberto (fincla-api#518).
   const progressQueue = useRef(Promise.resolve());
+  // Conferir o saldo (fincla-api#514): calculado pelo backend a cada mudança do rascunho, nos dois
+  // últimos passos; e as transações que a pessoa ligou a um lançamento pela dica (com desfazer).
+  const [balanceCheck, setBalanceCheck] = useState(null);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkError, setCheckError] = useState("");
+  const [linked, setLinked] = useState([]);
 
   const reload = useCallback(
     () => getStatementImport(accountId, organizationId, importId).then(setStatementImport),
@@ -623,6 +632,32 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   const listEntries = useMemo(() => queueEntriesOf(current, stepEntries), [current, stepEntries]);
   const queue = useEntryQueue(current ?? "", listEntries);
   const [view, changeView] = useReconciliationView(setActionError);
+
+  const wantsCheck = statementImport?.status === "draft" && (current === "balance" || current === "summary");
+  useEffect(() => {
+    if (!wantsCheck) return undefined;
+    let alive = true;
+    setCheckLoading(true);
+    getStatementBalanceCheck(accountId, organizationId, importId)
+      .then((check) => { if (alive) { setBalanceCheck(check); setCheckError(""); } })
+      .catch((err) => { if (alive) setCheckError(handleApiError(err)); })
+      .finally(() => { if (alive) setCheckLoading(false); });
+    return () => { alive = false; };
+  }, [wantsCheck, statementImport, accountId, organizationId, importId]);
+  const balanceItems = useMemo(
+    () => (balanceCheck?.unmatched_transactions ?? []).map((u) => ({ ...u, id: unmatchedItemId(u) })),
+    [balanceCheck],
+  );
+  const balanceQueue = useEntryQueue("balance", balanceItems, { answered: isCheckAnswered });
+  // "Ir para eles" / "Voltar a decidir": o lançamento abre no passo dele, depois que o passo abre.
+  const [openAfterStep, setOpenAfterStep] = useState(null);
+  const queueOpen = queue.open;
+  useEffect(() => {
+    if (openAfterStep && openAfterStep.step === current) {
+      queueOpen(openAfterStep.entryId);
+      setOpenAfterStep(null);
+    }
+  }, [openAfterStep, current, queueOpen]);
 
   const fallbackLabel = useMemo(
     () => categories.find((c) => c.is_fallback)?.label || "Não classificado",
@@ -804,6 +839,67 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     }
   };
 
+  const answerChecks = async (changes) => {
+    setAnswering(true);
+    setActionError("");
+    try {
+      setBalanceCheck(await updateStatementBalanceChecks(accountId, organizationId, importId, changes));
+      return true;
+    } catch (err) {
+      setActionError(handleApiError(err));
+      return false;
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  // "É este lançamento do banco": o lançamento marcado para adicionar vira o par da transação.
+  const pairFromHint = async (item, entry) => {
+    const done = await answerDoubt(entry, { answer: "pair", paired_transaction_id: item.transaction_id });
+    if (done) {
+      setLinked((prev) => [
+        ...prev.filter((l) => l.transactionId !== item.transaction_id),
+        {
+          transactionId: item.transaction_id,
+          description: item.description,
+          amount: item.amount,
+          currency: item.currency,
+          entryId: entry.id,
+          entryDate: entry.date,
+          bankDescription: entry.bank_description,
+          previous: answerSnapshot(entry),
+        },
+      ]);
+    }
+  };
+
+  const undoLink = async (link) => {
+    const entry = statementImport.entries.find((e) => e.id === link.entryId);
+    if (!entry) return;
+    setAnswering(true);
+    setActionError("");
+    try {
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, link.previous);
+      setLinked((prev) => prev.filter((l) => l.transactionId !== link.transactionId));
+      await reload();
+    } catch (err) {
+      setActionError(handleApiError(err));
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  /** O passo onde está um lançamento (para "Ir para eles" e "Voltar a decidir"). */
+  const stepOfEntry = (entryId) => STEPS.find((s) => entriesOfStep(s.key, statementImport.entries).some((e) => e.id === entryId))?.key;
+  const goToEntry = (entryId) => {
+    const step = entryId ? stepOfEntry(entryId) : null;
+    if (!step) return;
+    open(step);
+    setOpenAfterStep({ step, entryId });
+  };
+  const goToPending = () => goToEntry(statementImport.entries.find((e) => e.answer === null)?.id);
+  const redecide = (leftOut) => goToEntry(leftOut.entry_id);
+
   const conclude = async () => {
     setConcluding(true);
     setActionError("");
@@ -841,6 +937,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   }[current];
   const listOpen = Boolean(statementImport?.status === "draft" && LIST_STEPS.has(current) && queue.total);
   useQueueShortcuts(listOpen ? queue : null, shortcutAnswers, { disabled: Boolean(searchFor) || answering });
+  // Conferir o saldo: só J/K andam pela lista de transações sem par.
+  const balanceOpen = Boolean(statementImport?.status === "draft" && current === "balance" && balanceQueue.total);
+  useQueueShortcuts(balanceOpen ? balanceQueue : null, {}, { disabled: answering });
 
   if (loadError) return <ErrorNote>{loadError}</ErrorNote>;
   if (!statementImport || !current) return <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando a conciliação…</p>;
@@ -969,9 +1068,39 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onChangeEntry={changeEntry}
             />
           ) : null}
-          {current === "balance" ? <BalanceStep statementImport={statementImport} /> : null}
+          {current === "balance" && checkError ? <ErrorNote>{checkError}</ErrorNote> : null}
+          {current === "balance" && !balanceCheck && !checkError ? (
+            <EmptyStep>Calculando os saldos…</EmptyStep>
+          ) : null}
+          {current === "balance" && balanceCheck ? (
+            <BalanceCheckStep
+              check={balanceCheck}
+              items={balanceItems}
+              entries={statementImport.entries}
+              periodEnd={statementImport.period.end}
+              linked={linked}
+              busy={answering}
+              queue={balanceQueue}
+              view={view}
+              onViewChange={changeView}
+              onAnswer={answerChecks}
+              onPairHint={pairFromHint}
+              onUndoLink={undoLink}
+              onGoToPending={goToPending}
+              onRedecide={redecide}
+            />
+          ) : null}
           {current === "summary" ? (
-            <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} onClassify={() => open("new")} />
+            <SummaryStep
+              statementImport={statementImport}
+              check={balanceCheck}
+              checkLoading={checkLoading}
+              checkError={checkError}
+              concluding={concluding}
+              error={actionError}
+              onConclude={conclude}
+              onClassify={() => open("new")}
+            />
           ) : null}
           {!["suggested", "doubt", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", "doubt", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
