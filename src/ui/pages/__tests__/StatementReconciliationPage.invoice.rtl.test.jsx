@@ -172,6 +172,27 @@ describe("o passo Conferir pagamento de fatura", () => {
   });
 });
 
+describe("reimportação (fincla-api#516)", () => {
+  it("um pagamento de fatura conferido antes fica em Ver o que fica de fora, com a fatura que ele pagou", async () => {
+    const payment = draft.entries[0];
+    Object.assign(payment, { classification: "reconciled", answer: "reconciled", confirmed: true });
+    payment.invoice.status = "paid";
+    payment.invoice.paid_date = "2026-10-12";
+    draft.summary = { ...draft.summary, invoice_payments: 0, already_reconciled: 1 };
+    draft.current_step = "outside";
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+    await screen.findByRole("heading", { name: "Ver o que fica de fora" });
+
+    const user = userEvent.setup();
+    const toggle = screen.queryByRole("button", { name: /Já conferid/ });
+    if (toggle && toggle.getAttribute("aria-expanded") === "false") await user.click(toggle);
+    expect(screen.getByTestId("reconciled-entry")).toHaveTextContent("Já conferida com o pagamento da Fatura Itaú Visa · outubro");
+    // Nunca como uma fatura a pagar de novo.
+    expect(railStatus("Conferir pagamento de fatura")).toBe("Nada a fazer");
+  });
+});
+
 describe("o resumo", () => {
   it("conta o pagamento de fatura e destaca a fatura que fica paga na data do banco", async () => {
     draft.current_step = "summary";

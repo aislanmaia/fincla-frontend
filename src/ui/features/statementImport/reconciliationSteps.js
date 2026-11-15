@@ -63,9 +63,20 @@ export function entriesOfStep(stepKey, entries) {
   // Os respondidos continuam no passo (Não registrar minimizado, somados dentro da soma): nada some.
   if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.amount !== 0);
   if (stepKey === "yield") return entries.filter((e) => e.classification === "yield" && e.amount !== 0);
-  // Valor zero não move dinheiro: não vira transação e fica visível aqui.
-  if (stepKey === "outside") return entries.filter((e) => e.classification === "new" && e.amount === 0);
+  // "Ver o que fica de fora" (fincla-api#516): já conferidos numa importação anterior, anteriores
+  // ao início do saldo da conta (inclusive os trazidos de volta, que continuam aqui com o cartão) e
+  // valor zero, que não move dinheiro.
+  if (stepKey === "outside") {
+    return entries.filter((e) => LEFT_OUT_CLASSES.has(e.classification) || (e.classification === "new" && e.amount === 0));
+  }
   return [];
+}
+
+const LEFT_OUT_CLASSES = new Set(["reconciled", "before_start"]);
+
+/** Os do passo "Ver o que fica de fora" que continuam fora (não os trazidos de volta). */
+export function stillLeftOut(entries) {
+  return entries.filter((e) => e.answer === "reconciled" || e.answer === "ignore");
 }
 
 /** Passos que só mostram, sem nada a responder. */
@@ -103,7 +114,12 @@ export function stepStatus(stepKey, statementImport, passed) {
   if (stepKey === "invoice") {
     return { tone: "ready", text: `${plural(entries.length, "pagamento de fatura", "pagamentos de fatura")} · falta você conferir` };
   }
-  if (INFO_ONLY.has(stepKey)) return { tone: "neutral", text: `Nada a fazer · ${plural(entries.length, "não vira transação", "não viram transação")}` };
+  if (INFO_ONLY.has(stepKey)) {
+    const out = stillLeftOut(entries).length;
+    const back = entries.length - out;
+    const text = `Nada a fazer · ${plural(out, "não vira transação", "não viram transação")}`;
+    return { tone: "neutral", text: back ? `${text} · ${plural(back, "trazido de volta", "trazidos de volta")}` : text };
+  }
   return { tone: "ready", text: `${plural(entries.length, "lançamento", "lançamentos")} · falta você conferir` };
 }
 
