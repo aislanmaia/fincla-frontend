@@ -5,7 +5,7 @@
 // sugestão já vem respondida "Sim, é esta" e falta a pessoa confirmar. Responder (ou "Confirmar
 // os N de uma vez") minimiza o cartão numa linha que continua visível, com "Alterar" e "Desfazer
 // escolha": nada some sem um jeito de voltar. Nada muda no Fincla antes de concluir.
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Ban, Check, ChevronRight, Link2, Plus, Sparkles } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -22,6 +22,9 @@ import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./Stateme
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { LINK } from "./StatementImportNotes.jsx";
 import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
+import {
+  CurrentEntryFrame, EntryQueueHeader, InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact, useStableCallback,
+} from "./entryQueue.jsx";
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
 const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
@@ -35,8 +38,24 @@ const ANSWERS = [
 
 export function BankSide({ entry, dateDiffers }) {
   const moneyIn = entry.amount > 0;
+  const compact = useCompact();
+  if (compact) {
+    return (
+      <section data-testid="bank-side" style={{ ...BOX, background: T.bg, padding: "8px 10px" }}>
+        <div style={{ ...BOX_LABEL, marginBottom: 4 }}>No extrato do banco</div>
+        <InlineFields
+          testId="bank-inline"
+          items={[
+            ["Data", <span key="d" style={{ ...NUM, color: dateDiffers ? T.amber : T.ink, fontWeight: dateDiffers ? 700 : 400 }}>{bankDateLabel(entry.date)}</span>],
+            ["Descrição", <b key="n">{entry.bank_description}</b>],
+            ["Valor", <b key="v" style={{ ...NUM, color: moneyIn ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</b>],
+          ]}
+        />
+      </section>
+    );
+  }
   return (
-    <section style={{ ...BOX, background: T.bg }}>
+    <section data-testid="bank-side" style={{ ...BOX, background: T.bg }}>
       <div style={BOX_LABEL}>No extrato do banco</div>
       <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, wordBreak: "break-word" }}>{entry.bank_description}</div>
       <div style={{ ...G, ...NUM, fontSize: 12, color: dateDiffers ? T.amber : T.inkLight, fontWeight: dateDiffers ? 700 : 400, marginTop: 6 }}>
@@ -200,7 +219,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
         <StatusBadge entry={entry} />
         <span style={{ flex: 1 }} />
         {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
-        {entry.confirmed ? <Btn variant="outGray" small onClick={() => onMinimize(entry)}>Minimizar</Btn> : null}
+        {onMinimize ? <Btn variant="outGray" small onClick={() => onMinimize(entry)}>Minimizar</Btn> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>
         <BankSide entry={entry} dateDiffers={dateDiffers} />
@@ -227,14 +246,17 @@ function rowSummary(entry) {
   return <span style={{ color: T.inkLight }}>Fica fora do Fincla</span>;
 }
 
-/** Um par já decidido, minimizado numa linha que continua visível e pode ser reaberta. */
-function PairRow({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
+/**
+ * Um par minimizado numa linha que continua visível. Clicar em qualquer ponto da linha (ou no
+ * "Alterar" do começo dela) a reabre como o cartão atual.
+ */
+const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
   // Quando a linha acaba de tomar o lugar do cartão, o foco vem para o "Alterar" dela (o botão
   // que a pessoa apertou saiu da tela).
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
-    <div data-testid="pair-row" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
+    <div data-testid="pair-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
       <button
         ref={alterRef}
         type="button"
@@ -252,37 +274,38 @@ function PairRow({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
     </div>
   );
-}
+});
 
 /**
- * O passo inteiro. `opened` são os cartões que a pessoa reabriu; `history` guarda, por lançamento,
- * as respostas anteriores para "Desfazer escolha"; `lastBulk` é a última confirmação em lote, com
- * a sua barra de desfazer.
+ * O passo inteiro (lista do fincla-api#517): só o lançamento atual (`queue.currentId`) fica aberto;
+ * os outros são linhas. `history` guarda, por lançamento, as respostas anteriores para "Desfazer
+ * escolha"; `lastBulk` é a última confirmação em lote, com a sua barra de desfazer.
  */
 export function SuggestedPairsStep({
   entries,
+  queue,
+  view = "detailed",
+  onViewChange = null,
   isMobile,
   busy,
   categories,
   details = [],
   fallbackLabel,
   accountName = "",
-  opened,
   history,
   lastBulk,
-  focusId = null,
   onAnswer,
   onChange,
   onUndoChoice,
-  onOpen,
-  onMinimize,
   onConfirmAll,
   onUndoConfirmAll,
 }) {
   const unconfirmed = unconfirmedSuggestions(entries);
-  const isOpen = (e) => !e.confirmed || opened.has(e.id);
+  const openRow = useStableCallback((entry) => queue.open(entry.id));
+  const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "lançamento encontrado", "lançamentos encontrados")}</span>
         {unconfirmed.length ? (
@@ -300,25 +323,26 @@ export function SuggestedPairsStep({
           <button type="button" onClick={onUndoConfirmAll} disabled={busy} style={{ ...LINK, color: T.ink }}>Desfazer</button>
         </div>
       ) : null}
-      {entries.map((entry) => (isOpen(entry) ? (
-        <PairCard
-          key={entry.id}
-          entry={entry}
-          isMobile={isMobile}
-          busy={busy}
-          canUndo={Boolean(history[entry.id]?.length)}
-          categories={categories}
-          details={details}
-          fallbackLabel={fallbackLabel}
-          accountName={accountName}
-          onAnswer={onAnswer}
-          onChange={onChange}
-          onUndoChoice={onUndoChoice}
-          onMinimize={onMinimize}
-        />
+      {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
+        <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+          <PairCard
+            entry={entry}
+            isMobile={isMobile}
+            busy={busy}
+            canUndo={Boolean(history[entry.id]?.length)}
+            categories={categories}
+            details={details}
+            fallbackLabel={fallbackLabel}
+            accountName={accountName}
+            onAnswer={onAnswer}
+            onChange={onChange}
+            onUndoChoice={onUndoChoice}
+            onMinimize={(e) => queue.close(e.id)}
+          />
+        </CurrentEntryFrame>
       ) : (
         <div key={entry.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-          <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={focusId === entry.id} onOpen={onOpen} onUndoChoice={onUndoChoice} />
+          <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
         </div>
       )))}
     </div>

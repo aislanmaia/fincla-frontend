@@ -41,6 +41,7 @@ function applyAnswer(entry, body) {
 }
 
 const server = setupServer(
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
@@ -263,11 +264,15 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     const aluguel = screen.getByRole("article", { name: /PIX TRANSF ALUGUEL 08 10/ });
     expect(within(aluguel).getByText("Sim, já está no Fincla")).toBeInTheDocument();
     expect(within(aluguel).getByTestId("fincla-side")).toHaveTextContent("Paga em 08/10/2026");
-    expect(rows()).toHaveLength(0);
+    // Só um cartão aberto por vez (fincla-api#517): a padaria, que estava aberta, vira linha.
+    expect(screen.getAllByTestId("pair-card")).toHaveLength(1);
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toHaveTextContent("PIX QRS PADARIA 02 10");
 
     await user.click(within(aluguel).getByRole("button", { name: "Minimizar" }));
 
-    expect(rows()).toHaveLength(1);
+    expect(rows()).toHaveLength(2);
+    expect(screen.queryAllByTestId("pair-card")).toHaveLength(0);
     expect(calls).toEqual([]);
   });
 

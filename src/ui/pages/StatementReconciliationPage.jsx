@@ -43,7 +43,14 @@ import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsStep.jsx";
 import { OutsideStep } from "../features/statementImport/OutsideStep.jsx";
-import { DoubtCard, DoubtStep, answerSnapshot, pairBody } from "../features/statementImport/DoubtStep.jsx";
+import { DoubtCard, DoubtRow, DoubtStep, answerSnapshot, doubtYes, pairBody } from "../features/statementImport/DoubtStep.jsx";
+import {
+  ViewModeContext,
+  reuseUnchangedEntries,
+  useEntryQueue,
+  useQueueShortcuts,
+} from "../features/statementImport/entryQueue.jsx";
+import { getUserPreferences, updateUserPreferences } from "../../api/userPreferences";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
@@ -55,6 +62,39 @@ import {
 
 /** Passos em que cada lançamento é adicionado, somado ou fica de fora (fincla-api#513). */
 const ENTRY_STEPS = new Set(["yield", "new"]);
+
+/**
+ * Passos de lista (fincla-api#517): só o lançamento atual aberto, avanço para o próximo sem
+ * resposta, filtro e atalhos. Um passo de lista novo entra aqui e em `queueEntriesOf`.
+ */
+const LIST_STEPS = new Set(["suggested", "doubt", "yield", "new"]);
+
+/** Os lançamentos da lista de um passo: nos de adicionar, os somados ficam dentro da soma. */
+function queueEntriesOf(stepKey, stepEntries) {
+  if (!LIST_STEPS.has(stepKey)) return [];
+  return ENTRY_STEPS.has(stepKey) ? stepEntries.filter((e) => e.answer !== "group") : stepEntries;
+}
+
+/** Visualização Detalhada/Compacta, lembrada por pessoa no backend (padrão Detalhada). */
+function useReconciliationView(onError) {
+  const [view, setView] = useState("detailed");
+  useEffect(() => {
+    let alive = true;
+    getUserPreferences()
+      .then((prefs) => { if (alive) setView(prefs.statement_reconciliation_view); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const change = (next) => {
+    const before = view;
+    setView(next);
+    updateUserPreferences({ statement_reconciliation_view: next }).catch(() => {
+      setView(before);
+      onError("Não foi possível guardar a visualização escolhida. Tente de novo.");
+    });
+  };
+  return [view, change];
+}
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação.";
 
@@ -536,20 +576,19 @@ function UndoneView({ statementImport, onOpenAccountTransactions }) {
 function DraftView({ organizationId, accountId, importId, accountName, isMobile, onOpenAccountTransactions }) {
   const navigate = useNavigate();
   const { categories, details, error: categoriesError } = useCategories(organizationId);
-  const [statementImport, setStatementImport] = useState(null);
+  const [statementImport, setStatementImportRaw] = useState(null);
+  // Lançamentos que não mudaram mantêm o mesmo objeto: as linhas memoizadas não re-renderizam.
+  const setStatementImport = useCallback((next) => setStatementImportRaw((prev) => reuseUnchangedEntries(prev, next)), []);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [current, setCurrent] = useState(null);
   const [passed, setPassed] = useState(() => new Set());
   const [concluding, setConcluding] = useState(false);
-  // Passo "Confirmar lançamentos encontrados" (fincla-api#510): cartões reabertos, respostas
-  // anteriores de cada lançamento (para "Desfazer escolha") e a última confirmação em lote.
-  const [openedPairs, setOpenedPairs] = useState(() => new Set());
+  // Passo "Confirmar lançamentos encontrados" (fincla-api#510): respostas anteriores de cada
+  // lançamento (para "Desfazer escolha") e a última confirmação em lote.
   const [answerHistory, setAnswerHistory] = useState({});
   const [lastBulk, setLastBulk] = useState(null);
   const [answering, setAnswering] = useState(false);
-  // O par que acabou de minimizar recebe o foco no "Alterar" da linha dele.
-  const [focusedPair, setFocusedPair] = useState(null);
   // Dúvidas (fincla-api#511): "Sim, é esta" dito sem escolher qual, e o lançamento da busca aberta.
   const [wantPair, setWantPair] = useState(() => new Set());
   const [searchFor, setSearchFor] = useState(null);
@@ -559,7 +598,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
 
   const reload = useCallback(
     () => getStatementImport(accountId, organizationId, importId).then(setStatementImport),
-    [accountId, organizationId, importId],
+    [accountId, organizationId, importId, setStatementImport],
   );
 
   useEffect(() => {
@@ -575,6 +614,15 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       .catch((err) => { if (alive) setLoadError(handleApiError(err)); });
     return () => { alive = false; };
   }, [accountId, organizationId, importId]);
+
+  // A lista do passo aberto (fincla-api#517): qual lançamento está aberto, filtro e avanço.
+  const stepEntries = useMemo(
+    () => (statementImport && current ? entriesOfStep(current, statementImport.entries) : []),
+    [statementImport, current],
+  );
+  const listEntries = useMemo(() => queueEntriesOf(current, stepEntries), [current, stepEntries]);
+  const queue = useEntryQueue(current ?? "", listEntries);
+  const [view, changeView] = useReconciliationView(setActionError);
 
   const fallbackLabel = useMemo(
     () => categories.find((c) => c.is_fallback)?.label || "Não classificado",
@@ -628,15 +676,15 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     applyWhole(() => updateStatementGroup(accountId, organizationId, importId, groupId, body));
   const deleteGroup = (groupId) => applyWhole(() => deleteStatementGroup(accountId, organizationId, importId, groupId));
 
-  const withOpened = (entryId, isOpen) => setOpenedPairs((prev) => {
-    const next = new Set(prev);
-    if (isOpen) next.add(entryId);
-    else next.delete(entryId);
-    return next;
-  });
+  // Responder abre o próximo sem resposta; "Não, adicionar agora" deixa o cartão aberto para
+  // conferir a transação nova (com "Próximo sem resposta →").
+  const advanceAfter = (entry, answer) => { if (answer && answer !== "create") queue.advanceFrom(entry.id); };
 
   const answerPair = async (entry, answer) => {
-    if (answer === entry.answer && entry.confirmed) return;
+    if (answer === entry.answer && entry.confirmed) {
+      advanceAfter(entry, answer);
+      return;
+    }
     setAnswering(true);
     setActionError("");
     try {
@@ -645,9 +693,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
         ...prev,
         [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }],
       }));
-      // "Não, adicionar agora" deixa o cartão aberto para conferir a transação nova; as outras minimizam.
-      withOpened(entry.id, answer === "create");
-      if (answer !== "create") setFocusedPair(entry.id);
+      advanceAfter(entry, answer);
       // A barra "N confirmados · Desfazer" falava de um estado que esta resposta mudou.
       setLastBulk(null);
       await reload();
@@ -667,6 +713,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       await updateStatementEntry(accountId, organizationId, importId, entry.id, previous);
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: prev[entry.id].slice(0, -1) }));
       setLastBulk(null);
+      // A escolha desfeita volta a ser o lançamento aberto, para responder de novo.
+      queue.open(entry.id);
       await reload();
     } catch (err) {
       setActionError(handleApiError(err));
@@ -684,8 +732,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       await updateStatementEntry(accountId, organizationId, importId, entry.id, body);
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), answerSnapshot(entry)] }));
       setWantPair((prev) => { const next = new Set(prev); next.delete(entry.id); return next; });
-      withOpened(entry.id, body.answer === "create");
-      if (body.answer && body.answer !== "create") setFocusedPair(entry.id);
+      // "Desfazer lá" responde OUTRO lançamento: o atual continua aberto.
+      if (entry.id === queue.currentId) advanceAfter(entry, body.answer);
       setLastBulk(null);
       await reload();
       return true;
@@ -705,6 +753,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     try {
       await updateStatementEntry(accountId, organizationId, importId, entry.id, previous);
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: prev[entry.id].slice(0, -1) }));
+      if (entriesOfStep(current, statementImport.entries).some((e) => e.id === entry.id)) queue.open(entry.id);
       await reload();
     } catch (err) {
       setActionError(handleApiError(err));
@@ -744,7 +793,10 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     try {
       setStatementImport(await confirmStatementSuggestions(accountId, organizationId, importId, entryIds, confirmed));
       setLastBulk(confirmed ? entryIds : null);
-      setOpenedPairs((prev) => new Set([...prev].filter((id) => !entryIds.includes(id))));
+      // Todas confirmadas: nenhum cartão fica aberto (todas viram linhas que se reabrem com um clique).
+      // Desfeito o lote, a primeira das que voltaram a "falta confirmar" abre.
+      if (confirmed) queue.close(null);
+      else if (entryIds.length) queue.open(entryIds[0]);
     } catch (err) {
       setActionError(handleApiError(err));
     } finally {
@@ -765,6 +817,31 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     }
   };
 
+  const changeAndAdvance = async (entry, answer) => {
+    if (entry.answer === answer) {
+      advanceAfter(entry, answer);
+      return;
+    }
+    if (await changeEntry(entry.id, { answer })) advanceAfter(entry, answer);
+  };
+  // S/A/N respondem o lançamento aberto, como os botões do cartão de cada passo.
+  const shortcutAnswers = {
+    suggested: {
+      s: (e) => e.fincla_match && answerPair(e, "pair"),
+      a: (e) => answerPair(e, "create"),
+      n: (e) => answerPair(e, "ignore"),
+    },
+    doubt: {
+      s: (e) => doubtYes(e, doubtProps),
+      a: (e) => e.answer !== "create" && answerDoubt(e, { answer: "create" }),
+      n: (e) => (e.answer === "ignore" ? advanceAfter(e, "ignore") : answerDoubt(e, { answer: "ignore" })),
+    },
+    new: { s: (e) => setSearchFor(e), a: (e) => changeAndAdvance(e, "create"), n: (e) => changeAndAdvance(e, "ignore") },
+    yield: { s: (e) => setSearchFor(e), a: (e) => changeAndAdvance(e, "create"), n: (e) => changeAndAdvance(e, "ignore") },
+  }[current];
+  const listOpen = Boolean(statementImport?.status === "draft" && LIST_STEPS.has(current) && queue.total);
+  useQueueShortcuts(listOpen ? queue : null, shortcutAnswers, { disabled: Boolean(searchFor) || answering });
+
   if (loadError) return <ErrorNote>{loadError}</ErrorNote>;
   if (!statementImport || !current) return <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando a conciliação…</p>;
   if (statementImport.status === "concluded") {
@@ -776,8 +853,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
 
   const step = STEPS.find((s) => s.key === current);
   const stepIndex = STEPS.indexOf(step);
-  const stepEntries = entriesOfStep(current, statementImport.entries);
   const { period } = statementImport;
+  const listProps = { queue, view, onViewChange: changeView };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -802,6 +879,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       <ProgressPanel statementImport={statementImport} passed={passed} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
+        <ViewModeContext.Provider value={view}>
         <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <header>
             <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.ink, margin: 0 }}>{step.title}</h2>
@@ -812,6 +890,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
 
           {current === "suggested" && stepEntries.length ? (
             <SuggestedPairsStep
+              {...listProps}
               entries={stepEntries}
               isMobile={isMobile}
               busy={answering}
@@ -819,15 +898,11 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               details={details}
               fallbackLabel={fallbackLabel}
               accountName={accountName}
-              opened={openedPairs}
               history={answerHistory}
               lastBulk={lastBulk}
-              focusId={focusedPair}
               onAnswer={answerPair}
               onChange={changeEntry}
               onUndoChoice={undoPairChoice}
-              onOpen={(entry) => withOpened(entry.id, true)}
-              onMinimize={(entry) => { setFocusedPair(entry.id); withOpened(entry.id, false); }}
               onConfirmAll={(ids) => confirmPairs(ids, true)}
               onUndoConfirmAll={() => confirmPairs(lastBulk, false)}
             />
@@ -835,20 +910,18 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           {current === "doubt" && stepEntries.length ? (
             <DoubtStep
               {...doubtProps}
+              {...listProps}
               entries={stepEntries}
               allEntries={statementImport.entries}
-              opened={openedPairs}
               history={answerHistory}
               wantPair={wantPair}
-              focusId={focusedPair}
-              onOpen={(entry) => withOpened(entry.id, true)}
-              onMinimize={(entry) => { setFocusedPair(entry.id); withOpened(entry.id, false); }}
             />
           ) : null}
           {ENTRY_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
           {ENTRY_STEPS.has(current) && stepEntries.length ? (
             <NewEntriesStep
               key={current}
+              {...listProps}
               stepKey={current}
               entries={stepEntries}
               groups={statementImport.groups ?? []}
@@ -862,7 +935,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onUpdateGroup={updateGroup}
               onDeleteGroup={deleteGroup}
               onSearch={(entry) => setSearchFor(entry)}
-              renderMatched={(entry) => (
+              renderMatched={(entry, { current: isCurrent }) => (isCurrent ? (
                 <DoubtCard
                   key={entry.id}
                   {...doubtProps}
@@ -870,8 +943,18 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
                   entries={statementImport.entries}
                   canUndo={Boolean(answerHistory[entry.id]?.length)}
                   onWantPair={() => setSearchFor(entry)}
+                  onMinimize={(e) => queue.close(e.id)}
                 />
-              )}
+              ) : (
+                <DoubtRow
+                  key={entry.id}
+                  entry={entry}
+                  canUndo={Boolean(answerHistory[entry.id]?.length)}
+                  focus={queue.rowFocusId === entry.id}
+                  onOpen={(e) => queue.open(e.id)}
+                  onUndoChoice={undoDoubtChoice}
+                />
+              ))}
             />
           ) : null}
           {current === "outside" ? <ErrorNote>{categoriesError}</ErrorNote> : null}
@@ -900,6 +983,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
             </div>
           ) : null}
         </main>
+        </ViewModeContext.Provider>
       </div>
       {searchFor ? (
         <FinclaSearchDialog

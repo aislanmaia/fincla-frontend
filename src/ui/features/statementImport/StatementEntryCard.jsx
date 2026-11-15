@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Ban, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -6,6 +6,7 @@ import { G, NUM } from "../../typography";
 import { Badge, Select } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
+import { InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact } from "./entryQueue.jsx";
 
 /** "2026-10-02" → "02/10/2026", sem passar por `Date` (que leria em UTC e voltaria um dia). */
 export function bankDateLabel(ymd) {
@@ -141,11 +142,12 @@ function SelectBox({ entry, selected, onSelect }) {
 
 /**
  * Um lançamento "Não registrar" minimizado (fincla-api#513): continua visível, com selo e fundo
- * próprios, "Alterar" no começo da linha e "Desfazer". Só os botões agem (a linha em si não é
- * clicável: teclado e leitor de tela chegam a tudo pelos controles). `focus` leva o foco ao
- * "Alterar" quando a linha acaba de aparecer no lugar do cartão.
+ * próprios, "Alterar" no começo da linha e "Desfazer". Clicar em qualquer ponto livre da linha a
+ * reabre (fincla-api#517); a caixa de marcar e os botões fazem só a ação deles. Teclado e leitor
+ * de tela chegam a tudo pelos controles. `focus` leva o foco ao "Alterar" quando a linha acaba de
+ * aparecer no lugar do cartão.
  */
-export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onExpand, onUndo, focus = false }) {
+export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, focus = false }) {
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
@@ -153,7 +155,8 @@ export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onEx
       data-testid="ignored-entry"
       role="group"
       aria-label={`Lançamento ${entry.bank_description} não registrado`}
-      style={{ ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: SKIP_BG }}
+      onClick={openOnRowClick(() => onExpand(entry.id))}
+      style={{ ...ROW_CLICKABLE, ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: SKIP_BG }}
     >
       <SelectBox entry={entry} selected={selected} onSelect={onSelect} />
       <button ref={alterRef} type="button" onClick={() => onExpand(entry.id)} style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}>
@@ -169,7 +172,42 @@ export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onEx
       </button>
     </div>
   );
-}
+});
+
+/**
+ * Um lançamento que vai ser adicionado, minimizado numa linha (fincla-api#517): o que vai virar no
+ * Fincla (descrição e categoria) cabe nela. Clicar em qualquer ponto livre a reabre.
+ */
+export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, focus = false }) {
+  const alterRef = useRef(null);
+  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  return (
+    <div
+      data-testid="entry-row"
+      onClick={openOnRowClick(() => onExpand(entry.id))}
+      style={{ ...ROW_CLICKABLE, ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface }}
+    >
+      <SelectBox entry={entry} selected={selected} onSelect={onSelect} />
+      <button
+        ref={alterRef}
+        type="button"
+        onClick={() => onExpand(entry.id)}
+        aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
+        style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}
+      >
+        <ChevronRight size={12} aria-hidden="true" />Alterar
+      </button>
+      <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>{bankDateLabel(entry.date)}</span>
+      <span style={{ fontSize: 13, color: T.ink, fontWeight: 600, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>{entry.bank_description}</span>
+      <span style={{ ...NUM, fontSize: 13, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
+      <Badge color={T.green} bg={T.greenLight}><Plus size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Adicionar agora</Badge>
+      <span style={{ fontSize: 12, color: T.inkMid, flex: "1 1 160px", minWidth: 0 }}>
+        Adicionar ao Fincla: <b>{entry.description || "(sem descrição)"}</b> ·{" "}
+        {unclassified ? <Badge color={T.amber} bg={T.amberLight}>{categoryText}</Badge> : categoryText}
+      </span>
+    </div>
+  );
+});
 
 /**
  * O lado "No Fincla · nova transação": a transação que o lançamento vai virar ao concluir. Data e
@@ -297,6 +335,7 @@ export function StatementEntryCard({
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
+  const compact = useCompact();
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const tags = detailLabels(details, entry.detail_tag_ids);
 
@@ -324,13 +363,26 @@ export function StatementEntryCard({
         {onCollapse ? <button type="button" onClick={() => onCollapse(entry.id)} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer" }}>Minimizar</button> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}>
-        <section style={{ ...BOX, background: ignored ? SKIP_BG : T.bg }}>
-          <div style={BOX_LABEL}>No extrato do banco</div>
-          <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, wordBreak: "break-word" }}>{entry.bank_description}</div>
-          <div style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, marginTop: 6 }}>{bankDateLabel(entry.date)}</div>
-          <div style={{ ...G, ...NUM, fontSize: 16, fontWeight: 700, marginTop: 6, color: moneyIn ? T.green : T.ink }}>
-            {formatMoney(entry.amount, entry.currency)}
-          </div>
+        <section data-testid="bank-side" style={{ ...BOX, background: ignored ? SKIP_BG : T.bg, ...(compact ? { padding: "8px 10px" } : null) }}>
+          <div style={{ ...BOX_LABEL, ...(compact ? { marginBottom: 4 } : null) }}>No extrato do banco</div>
+          {compact ? (
+            <InlineFields
+              testId="bank-inline"
+              items={[
+                ["Data", <span key="d" style={NUM}>{bankDateLabel(entry.date)}</span>],
+                ["Descrição", <b key="n">{entry.bank_description}</b>],
+                ["Valor", <b key="v" style={{ ...NUM, color: moneyIn ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</b>],
+              ]}
+            />
+          ) : (
+            <>
+              <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, wordBreak: "break-word" }}>{entry.bank_description}</div>
+              <div style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, marginTop: 6 }}>{bankDateLabel(entry.date)}</div>
+              <div style={{ ...G, ...NUM, fontSize: 16, fontWeight: 700, marginTop: 6, color: moneyIn ? T.green : T.ink }}>
+                {formatMoney(entry.amount, entry.currency)}
+              </div>
+            </>
+          )}
         </section>
 
         {ignored ? (

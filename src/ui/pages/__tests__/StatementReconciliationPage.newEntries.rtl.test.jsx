@@ -6,7 +6,7 @@
 // verdade é garantida pelos testes de API. Aqui: o que a pessoa vê e o que a tela manda.
 import React from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -95,6 +95,7 @@ function applyEntry(target, body) {
 }
 
 const server = setupServer(
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () =>
     HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
   ),
@@ -177,7 +178,21 @@ const openDraft = async ({ step = null, setup = () => {} } = {}) => {
   if (step) await user.click(railStep(step));
   return user;
 };
-const card = (bankText) => screen.getAllByTestId("statement-entry").find((c) => within(c).queryByText(bankText));
+/** Os lançamentos livres do passo, abertos (cartão) ou minimizados (linha). */
+const freeEntries = () => [...screen.queryAllByTestId("statement-entry"), ...screen.queryAllByTestId("entry-row"), ...screen.queryAllByTestId("ignored-entry")];
+/**
+ * O cartão do lançamento. Só o atual fica aberto (fincla-api#517): se ele é uma linha, reabre pelo
+ * "Alterar" dela (clique síncrono, para os testes seguirem lendo o cartão em seguida).
+ */
+const card = (bankText) => {
+  const has = (el) => el.textContent.includes(bankText);
+  const opened = screen.queryAllByTestId("statement-entry").find(has);
+  if (opened) return opened;
+  const row = [...screen.queryAllByTestId("entry-row"), ...screen.queryAllByTestId("ignored-entry")].find(has);
+  if (!row) return undefined;
+  fireEvent.click(within(row).getByRole("button", { name: /Alterar/ }));
+  return screen.getAllByTestId("statement-entry").find(has);
+};
 const markBox = (date) => screen.getByRole("checkbox", { name: `Marcar lançamento de ${date}` });
 
 describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
@@ -217,7 +232,7 @@ describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
     await waitFor(() => expect(calls).toContainEqual({ patch: YIELD_B, body: { answer: "create" } }));
     await waitFor(() => expect(within(screen.getByTestId("statement-group")).getAllByTestId("summed-entry")).toHaveLength(1));
     expect(within(screen.getByTestId("statement-group")).getByTestId("group-amount")).toHaveTextContent("0,01");
-    expect(screen.getAllByTestId("statement-entry")).toHaveLength(1);
+    expect(freeEntries()).toHaveLength(1);
   });
 
   it("Desfazer soma devolve todos os lançamentos, um por um", async () => {
@@ -227,7 +242,7 @@ describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
 
     await waitFor(() => expect(calls).toContainEqual({ ungroup: GROUP }));
     await waitFor(() => expect(screen.queryByTestId("statement-group")).toBeNull());
-    expect(screen.getAllByTestId("statement-entry")).toHaveLength(2);
+    expect(freeEntries()).toHaveLength(2);
   });
 
   it("Desfazer soma no cartão tem barra de desfazer que refaz a soma com o que ela tinha (G3-2-04)", async () => {
@@ -331,10 +346,9 @@ describe("adicionar lançamentos novos", () => {
 
   it("a categoria do histórico diz de onde veio; escolher outra vira escolha sua", async () => {
     const user = await openDraft({ step: "Adicionar lançamentos novos" });
-    const bakery = card("PIX QRS PADARIA 02 10");
-
-    expect(within(bakery).getByText("Sugerida pelo seu histórico")).toBeInTheDocument();
     expect(within(card("REMUNERACAO SALARIO")).getByText("Sem categoria: vai para Não classificado")).toBeInTheDocument();
+    const bakery = card("PIX QRS PADARIA 02 10");
+    expect(within(bakery).getByText("Sugerida pelo seu histórico")).toBeInTheDocument();
 
     await user.selectOptions(within(bakery).getByLabelText("Categoria"), "Casa");
 
@@ -386,17 +400,30 @@ describe("adicionar lançamentos novos", () => {
     expect(back.getByTestId("entry-outcome")).toHaveTextContent("Ao concluir");
   });
 
-  it("a linha Não registrar só responde aos botões, não a um clique solto (G3-2-11)", async () => {
+  it("clicar em qualquer ponto da linha Não registrar a reabre; a caixa de marcar e o Desfazer só fazem a ação deles (G3-2-11, #517)", async () => {
     const user = await openDraft({ step: "Adicionar lançamentos novos" });
-    const fee = screen.getByTestId("ignored-entry");
+    const fee = () => screen.getAllByTestId("ignored-entry").find((r) => r.textContent.includes("TARIFA PACOTE"));
 
-    await user.click(within(fee).getByText("fica fora do Fincla"));
-
-    expect(screen.getByTestId("ignored-entry")).toBe(fee);
-    expect(card("TARIFA PACOTE")).toBeUndefined();
+    // A caixa de marcar só marca: a linha não reabre junto.
     await user.click(markBox("20/10/2026"));
     expect(markBox("20/10/2026")).toBeChecked();
-    expect(screen.getByTestId("ignored-entry")).toBe(fee);
+    expect(fee()).toBeTruthy();
+    expect(screen.getAllByTestId("statement-entry").some((c) => c.textContent.includes("TARIFA PACOTE"))).toBe(false);
+
+    // Um clique solto na linha a reabre como o cartão atual.
+    await user.click(within(fee()).getByText("fica fora do Fincla"));
+    const opened = screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes("TARIFA PACOTE"));
+    expect(within(opened).getByTestId("entry-not-recorded")).toBeInTheDocument();
+    expect(screen.getAllByTestId("statement-entry")).toHaveLength(1);
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+
+    // O Desfazer da linha desfaz e não reabre (uma ação por clique).
+    await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
+    await user.click(within(fee()).getByRole("button", { name: "Desfazer" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
+    expect(calls.filter((c) => c.patch)).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true));
+    expect(screen.queryAllByTestId("statement-entry")).toHaveLength(0);
   });
 
   it("Não registrar no cartão leva o foco ao Alterar da linha que fica no lugar (G3-2-10)", async () => {
@@ -525,7 +552,9 @@ describe("adicionar lançamentos novos", () => {
     await user.click(screen.getByRole("button", { name: "Não registrar as marcadas" }));
 
     await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: SALARY, answer: "ignore" }, { id: ENERGY, answer: "ignore" }] }));
-    await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(3));
+    // A energia é o lançamento aberto (estava sem descrição): continua cartão, agora "Não registrar".
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(2));
+    expect(within(card("PAG BOLETO ENERGIA")).getByTestId("entry-not-recorded")).toBeInTheDocument();
     const bar = screen.getByTestId("undo-bar");
     expect(bar).toHaveTextContent("2 lançamentos marcados como não registrar");
 
