@@ -46,7 +46,7 @@ function beforeStartTexts(leftOut) {
   if (leftOut?.reason === "balance_adjustment") {
     return {
       title: "Antes do último ajuste de saldo",
-      note: day ? `o saldo da conta conta a partir de ${day}; ficam de fora` : "ficam de fora",
+      note: day ? `o saldo da conta só soma o que acontece a partir de ${day}; ficam de fora` : "ficam de fora",
       hint: `O ajuste de saldo que você fez já inclui esses movimentos. ${bringBackHint(day)}`,
     };
   }

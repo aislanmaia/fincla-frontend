@@ -431,18 +431,23 @@ function StepRail({ statementImport, current, passed, onOpen }) {
 const STICKY_FOCUS_GAP = 12;
 
 /**
- * O topo fixo da conciliação: gruda no alto da área que rola (`top: 0`), com fundo próprio para o
- * que passa por baixo não aparecer. Fica como filho direto da página, então vale para todos os
+ * O topo fixo da conciliação: gruda no alto da área que rola, com fundo próprio para o que passa
+ * por baixo não aparecer. `top: 0` grudaria ABAIXO do padding do alto da área que rola (20px no
+ * computador, 14px no celular) e deixaria ali uma faixa onde o conteúdo aparece cortado (BUG-01 da
+ * QA da etapa 3): o `top` negativo desse padding faz o topo encostar no alto da área que rola. Fica como filho direto da página, então vale para todos os
  * passos. Enquanto existe, reserva a altura dele no `scroll-padding-top` da área que rola: o foco
  * que a página move (cartão atual, "Alterar") nunca fica escondido atrás dele. Ao sair, devolve.
  */
 function StickyTop({ children, style = null }) {
   const ref = useRef(null);
   const scrollerRef = useRef(null);
+  const [top, setTop] = useState(0);
   useEffect(() => {
     const scroller = ref.current?.closest("[data-fincla-main-scroll]");
     if (!scroller) return undefined;
     scrollerRef.current = scroller;
+    const paddingTop = Number.parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
+    setTop(paddingTop ? -paddingTop : 0);
     const previous = scroller.style.scrollPaddingTop;
     const reserve = () => { scroller.style.scrollPaddingTop = `${(ref.current?.offsetHeight ?? 0) + STICKY_FOCUS_GAP}px`; };
     reserve();
@@ -463,7 +468,7 @@ function StickyTop({ children, style = null }) {
     <div
       ref={ref}
       data-sticky="balance-now"
-      style={{ position: "sticky", top: 0, zIndex: 5, background: T.bg, padding: "8px 0", margin: "-8px 0", ...style }}
+      style={{ position: "sticky", top, zIndex: 5, background: T.bg, padding: "8px 0", margin: "-8px 0", ...style }}
     >
       {children}
     </div>
