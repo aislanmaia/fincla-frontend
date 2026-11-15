@@ -22,6 +22,7 @@ import {
   createStatementGroup,
   deleteStatementGroup,
   confirmStatementSuggestions,
+  draftInProgressOf,
   getStatementImport,
   listStatementImports,
   updateStatementEntries,
@@ -41,6 +42,7 @@ import { bankDateLabel } from "../features/statementImport/StatementEntryCard.js
 import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsStep.jsx";
+import { OutsideStep } from "../features/statementImport/OutsideStep.jsx";
 import { DoubtCard, DoubtStep, answerSnapshot, pairBody } from "../features/statementImport/DoubtStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
@@ -118,18 +120,25 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
   const [error, setError] = useState("");
   // A planilha que o Fincla não reconheceu: a pessoa indica as colunas e o mesmo arquivo é reenviado.
   const [preview, setPreview] = useState(null);
+  // O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516): continuar nela.
+  const [inProgress, setInProgress] = useState(null);
 
   const send = async (columnMapping = null) => {
     if (!file) return;
     setSending(true);
     setError("");
+    setInProgress(null);
     try {
       const draft = await uploadStatement(accountId, organizationId, file, columnMapping);
       navigate({ to: statementReconciliationPath(accountId, draft.id) });
     } catch (err) {
       const asked = columnMappingPreviewOf(err);
+      const running = draftInProgressOf(err);
       if (asked && !columnMapping) setPreview(asked);
-      else setError(handleApiError(err));
+      else if (running) {
+        setPreview(null);
+        setInProgress(running);
+      } else setError(handleApiError(err));
       setSending(false);
     }
   };
@@ -138,6 +147,7 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
     setFile(chosen);
     setError("");
     setPreview(null);
+    setInProgress(null);
   };
 
   return (
@@ -172,6 +182,12 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
             style={{ ...G, fontSize: 13 }}
           />
           <ErrorNote>{error}</ErrorNote>
+          {inProgress ? (
+            <DraftInProgressNotice
+              message={inProgress.message}
+              onContinue={() => navigate({ to: statementReconciliationPath(accountId, inProgress.importId) })}
+            />
+          ) : null}
           <div>
             <Btn variant="dark" onClick={() => send()} disabled={!file || sending}>
               <FileUp size={14} aria-hidden="true" style={{ marginRight: 6 }} />
@@ -183,6 +199,47 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
       <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0 }}>
         {NOTHING_CHANGES} O arquivo não fica guardado: só os lançamentos lidos.
       </p>
+    </div>
+  );
+}
+
+/** O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516): só dá para continuar nela. */
+function DraftInProgressNotice({ message, onContinue }) {
+  return (
+    <div data-testid="draft-in-progress-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <span>
+        <b>{message || "Você já tem uma conciliação em andamento deste arquivo nesta conta."}</b>{" "}
+        Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Conciliação em andamento”.
+      </span>
+      <div>
+        <Btn variant="outGray" small onClick={onContinue}>Continuar conciliação</Btn>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Este arquivo já foi importado" (fincla-api#516): só avisa. Os movimentos que a importação
+ * anterior conferiu vêm recolhidos em "Ver o que fica de fora" e não entram de novo.
+ */
+function FileCheckNotice({ fileCheck, accountId, onOpenOutside }) {
+  if (fileCheck?.status !== "already_imported") return null;
+  const on = fileCheck.concluded_at ? bankDateLabel(fileCheck.concluded_at.slice(0, 10)) : "";
+  const elsewhere = fileCheck.account_id && fileCheck.account_id !== accountId;
+  return (
+    <div data-testid="file-already-imported" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <span>
+        <b>Este arquivo já foi importado{on ? <> em <span style={NUM}>{on}</span></> : null}</b>
+        {elsewhere && fileCheck.account_name ? <> na conta <b>{fileCheck.account_name}</b></> : null}.{" "}
+        {elsewhere
+          ? "Se ele é mesmo desta conta, pode seguir."
+          : "Os lançamentos que já foram conferidos aparecem recolhidos em “Ver o que fica de fora” e não entram de novo."}
+      </span>
+      {!elsewhere ? (
+        <div>
+          <Btn variant="outGray" small onClick={onOpenOutside}>Ver o que fica de fora</Btn>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -314,6 +371,7 @@ function ProgressPanel({ statementImport, passed }) {
       <div style={{ ...G, fontSize: 12, color: T.inkMid }}>
         <b style={NUM}>{plural(summary.total, "lançamento", "lançamentos")}</b> no extrato ·{" "}
         {summary.to_pair ? <><b style={NUM}>{summary.to_pair}</b> já no Fincla · </> : null}
+        {summary.already_reconciled ? <><b style={NUM}>{summary.already_reconciled}</b> já conferidos antes · </> : null}
         <b style={NUM}>{summary.to_create}</b> para adicionar
         {summary.missing_description ? <> · <span style={{ color: T.amber }}>{plural(summary.missing_description, "sem descrição", "sem descrição")}</span></> : null}
       </div>
@@ -325,23 +383,6 @@ function EmptyStep({ children }) {
   return (
     <Card style={{ padding: 16 }}>
       <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>{children}</p>
-    </Card>
-  );
-}
-
-function LeftOutStep({ entries }) {
-  // Só valor zero chega aqui; "Não registrar" fica minimizado no próprio passo.
-  return (
-    <Card style={{ padding: 16 }}>
-      <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "0 0 10px" }}>Estes lançamentos não viram transação:</p>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-        {entries.map((e) => (
-          <li key={e.id} data-testid="left-out-entry" style={{ ...G, fontSize: 13, color: T.ink, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <span>{bankDateLabel(e.date)} · {e.bank_description}</span>
-            <span style={{ ...NUM, color: T.inkMid }}>{formatMoney(e.amount, e.currency)} · valor zero</span>
-          </li>
-        ))}
-      </ul>
     </Card>
   );
 }
@@ -381,7 +422,8 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
     ["Já estavam no Fincla", summary.to_pair, "summary-to-pair"],
     ["Serão adicionados", summary.to_create, "summary-to-create"],
     ["Somados em um lançamento", summary.grouped, "summary-grouped", summary.groups ? `em ${plural(summary.groups, "transação", "transações")}` : null],
-    ["Não serão registrados", summary.ignored, "summary-ignored"],
+    ["Não serão registrados", summary.ignored, "summary-ignored", summary.left_out_before_start ? `${summary.left_out_before_start.toLocaleString("pt-BR")} antes do início` : null],
+    ...(summary.already_reconciled ? [["Já conferidos antes", summary.already_reconciled, "summary-already-reconciled", "não mudam"]] : []),
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -559,8 +601,10 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     try {
       await updateStatementEntry(accountId, organizationId, importId, entryId, body);
       await reload();
+      return true;
     } catch (err) {
       setActionError(handleApiError(err));
+      return false;
     }
   };
 
@@ -754,6 +798,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
         </div>
       </div>
       <OtherAccountNotice accountCheck={statementImport.account_check} accountName={accountName} />
+      <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
       <ProgressPanel statementImport={statementImport} passed={passed} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
@@ -829,7 +874,18 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               )}
             />
           ) : null}
-          {current === "outside" && stepEntries.length ? <LeftOutStep entries={stepEntries} /> : null}
+          {current === "outside" ? <ErrorNote>{categoriesError}</ErrorNote> : null}
+          {current === "outside" ? (
+            <OutsideStep
+              entries={stepEntries}
+              leftOut={statementImport.left_out}
+              categories={categories}
+              details={details}
+              fallbackLabel={fallbackLabel}
+              isMobile={isMobile}
+              onChangeEntry={changeEntry}
+            />
+          ) : null}
           {current === "balance" ? <BalanceStep statementImport={statementImport} /> : null}
           {current === "summary" ? (
             <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} onClassify={() => open("new")} />
