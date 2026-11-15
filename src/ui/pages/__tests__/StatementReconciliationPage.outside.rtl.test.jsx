@@ -150,7 +150,13 @@ describe("Ver o que fica de fora", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Antes do início da conta/ }));
 
-    expect(screen.getByRole("note")).toHaveTextContent("O saldo inicial da conta no Fincla já inclui esses movimentos");
+    // Pela regra do saldo, o que vem antes do início não entra no saldo: trazer de volta não o desequilibra.
+    expect(screen.getByRole("note").textContent).toBe(
+      "O saldo inicial da conta no Fincla já inclui esses movimentos. Se você trouxer um de volta, ele entra no Fincla "
+      + "como transação, mas não muda o saldo da conta nem a diferença de saldo: o saldo só soma o que acontece a partir "
+      + "de 08/09/2026.",
+    );
+    expect(screen.getByRole("note")).not.toHaveTextContent("não bater");
     // O já trazido de volta aparece como cartão de lançamento novo; o outro, minimizado com o botão.
     expect(screen.getByRole("article", { name: `Lançamento ${BROUGHT_BACK.bank_description}` })).toBeInTheDocument();
     const early = screen.getByTestId("before-start-entry");
@@ -194,7 +200,23 @@ describe("Ver o que fica de fora", () => {
     expect(toggle).toHaveTextContent("o saldo da conta conta a partir de 09/09/2026; ficam de fora");
     await user.click(toggle);
 
-    expect(screen.getByRole("note")).toHaveTextContent("O ajuste de saldo que você fez já inclui esses movimentos");
+    expect(screen.getByRole("note").textContent).toBe(
+      "O ajuste de saldo que você fez já inclui esses movimentos. Se você trouxer um de volta, ele entra no Fincla "
+      + "como transação, mas não muda o saldo da conta nem a diferença de saldo: o saldo só soma o que acontece a partir "
+      + "de 09/09/2026.",
+    );
+  });
+
+  it("sem o dia em que o saldo começa, o aviso não inventa data", async () => {
+    draft.left_out = null;
+    await openDraft();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Antes do início da conta/ }));
+
+    expect(screen.getByRole("note").textContent).toBe(
+      "O saldo inicial da conta no Fincla já inclui esses movimentos. Se você trouxer um de volta, ele entra no Fincla "
+      + "como transação, mas não muda o saldo da conta nem a diferença de saldo.",
+    );
   });
 
   it("sem nada fora, diz que nada fica de fora", async () => {

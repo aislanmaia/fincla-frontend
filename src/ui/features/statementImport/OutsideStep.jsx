@@ -4,7 +4,8 @@
 // - Já conferidos: vieram de uma importação anterior; não viram nada e não mudam.
 // - Antes do início da conta / do último ajuste de saldo: o saldo do Fincla já inclui esses
 //   movimentos, então ficam fora por padrão. "Trazer de volta" marca o lançamento para adicionar
-//   (o cartão completo aparece, com "Não registrar" e a barra de desfazer para voltar atrás).
+//   (o cartão completo aparece, com "Não registrar" e a barra de desfazer para voltar atrás); a
+//   transação criada fica antes do início do saldo e não o muda.
 // - Valor zero: não move dinheiro, não vira transação.
 import { useState } from "react";
 import { Check, ChevronRight, Info, Link2 } from "lucide-react";
@@ -28,6 +29,17 @@ export function outsideSections(entries) {
   };
 }
 
+/**
+ * O que acontece ao trazer de volta, pela regra do saldo da conta (balance_repository): o saldo é a
+ * base (último ajuste, senão o saldo inicial) mais o que acontece a partir de `before`. O lançamento
+ * trazido de volta vira transação com a data do banco, ANTES desse dia: aparece no Fincla, mas não
+ * entra no saldo, então não muda o saldo nem a diferença de saldo.
+ */
+function bringBackHint(day) {
+  const effect = "Se você trouxer um de volta, ele entra no Fincla como transação, mas não muda o saldo da conta nem a diferença de saldo";
+  return day ? `${effect}: o saldo só soma o que acontece a partir de ${day}.` : `${effect}.`;
+}
+
 /** Título e explicação da seção "antes do início", conforme o que o saldo da conta toma por base. */
 function beforeStartTexts(leftOut) {
   const day = leftOut ? bankDateLabel(leftOut.before) : "";
@@ -35,13 +47,13 @@ function beforeStartTexts(leftOut) {
     return {
       title: "Antes do último ajuste de saldo",
       note: day ? `o saldo da conta conta a partir de ${day}; ficam de fora` : "ficam de fora",
-      hint: "O ajuste de saldo que você fez já inclui esses movimentos. Trazer de volta pode fazer o saldo não bater.",
+      hint: `O ajuste de saldo que você fez já inclui esses movimentos. ${bringBackHint(day)}`,
     };
   }
   return {
     title: "Antes do início da conta",
     note: day ? `a conta começa em ${day} no Fincla; ficam de fora` : "ficam de fora",
-    hint: "O saldo inicial da conta no Fincla já inclui esses movimentos. Trazer de volta pode fazer o saldo não bater.",
+    hint: `O saldo inicial da conta no Fincla já inclui esses movimentos. ${bringBackHint(day)}`,
   };
 }
 
