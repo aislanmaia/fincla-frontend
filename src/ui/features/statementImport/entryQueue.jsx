@@ -58,7 +58,9 @@ export const FILTERS = [
 export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) {
   const [currentByStep, setCurrentByStep] = useState({});
   const [filterByStep, setFilterByStep] = useState({});
-  const [focusTick, setFocusTick] = useState(0);
+  // Pedido de foco para o cartão aberto: { id, tick }. Atendido uma vez só (`takeFocus`).
+  const [focusRequest, setFocusRequest] = useState({ id: null, tick: 0 });
+  const servedTick = useRef(0);
   // O lançamento que acabou de minimizar sem outro abrir: o foco vai para o "Alterar" da linha dele.
   const [rowFocusId, setRowFocusId] = useState(null);
 
@@ -84,7 +86,7 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   const setCurrent = useCallback((id, { focus = true, rowFocus = null } = {}) => {
     setCurrentByStep((prev) => ({ ...prev, [stepKey]: id }));
     setRowFocusId(id === null ? rowFocus : null);
-    if (focus && id !== null) setFocusTick((n) => n + 1);
+    if (focus && id !== null) setFocusRequest((prev) => ({ id, tick: prev.tick + 1 }));
   }, [stepKey]);
 
   // As ações leem a lista do último render (um callback guardado continua valendo).
@@ -120,7 +122,13 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     answeredCount: entries.length - pending,
     hidden: entries.length - visible.length,
     filter,
-    focusTick,
+    focusTick: focusRequest.tick,
+    /** O cartão `id` deve receber o foco agora? Responde sim uma única vez por pedido. */
+    takeFocus: (id) => {
+      if (focusRequest.id !== id || focusRequest.tick === servedTick.current) return false;
+      servedTick.current = focusRequest.tick;
+      return true;
+    },
     rowFocusId,
     shown,
     answered,
@@ -274,13 +282,11 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
  */
 export function CurrentEntryFrame({ queue, entry, children }) {
   const ref = useRef(null);
-  const seen = useRef(queue.focusTick);
+  const { takeFocus, focusTick } = queue;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: o pedido de foco é o tick; takeFocus muda a cada render.
   useEffect(() => {
-    if (queue.focusTick !== seen.current) {
-      seen.current = queue.focusTick;
-      ref.current?.focus();
-    }
-  }, [queue.focusTick]);
+    if (takeFocus(entry.id)) ref.current?.focus();
+  }, [focusTick, entry.id]);
   const showNext = entry.answer === "create" && queue.hasNextUnanswered;
   return (
     <div
