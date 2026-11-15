@@ -5,6 +5,7 @@
 // sugestão já vem respondida "Sim, é esta" e falta a pessoa confirmar. Responder (ou "Confirmar
 // os N de uma vez") minimiza o cartão numa linha que continua visível, com "Alterar" e "Desfazer
 // escolha": nada some sem um jeito de voltar. Nada muda no Fincla antes de concluir.
+import { useEffect, useRef } from "react";
 import { Ban, Check, ChevronRight, Link2, Plus, Sparkles } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -12,7 +13,7 @@ import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
-import { StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { LINK } from "./StatementImportNotes.jsx";
 
@@ -131,11 +132,12 @@ function FinclaSide({ entry, dateDiffers }) {
   );
 }
 
+/** "Não registrar" com o selo e o fundo listrado próprios, os mesmos do passo de lançamentos novos. */
 function IgnoredSide() {
   return (
-    <section style={{ ...BOX, background: T.grayLight }}>
+    <section data-testid="pair-ignored-side" style={{ ...BOX, background: SKIP_BG }}>
       <div style={BOX_LABEL}>
-        No Fincla <Badge><Ban size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Não registrar</Badge>
+        No Fincla <SkipBadge />
       </div>
       <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
         Este lançamento não entra no Fincla. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo.
@@ -163,7 +165,7 @@ function StatusBadge({ entry }) {
   }
   if (entry.answer === "pair") return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Sim, já está no Fincla</Badge>;
   if (entry.answer === "create") return <Badge color={T.green} bg={T.greenLight}><Plus size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Adicionar agora</Badge>;
-  return <Badge><Ban size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Não registrar</Badge>;
+  return <SkipBadge />;
 }
 
 function AnswerButtons({ entry, busy, onAnswer }) {
@@ -256,10 +258,15 @@ function rowSummary(entry) {
 }
 
 /** Um par já decidido, minimizado numa linha que continua visível e pode ser reaberta. */
-function PairRow({ entry, canUndo, onOpen, onUndoChoice }) {
+function PairRow({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
+  // Quando a linha acaba de tomar o lugar do cartão, o foco vem para o "Alterar" dela (o botão
+  // que a pessoa apertou saiu da tela).
+  const alterRef = useRef(null);
+  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
-    <div data-testid="pair-row" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, ...G, fontSize: 12, color: T.inkMid }}>
+    <div data-testid="pair-row" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
       <button
+        ref={alterRef}
         type="button"
         onClick={() => onOpen(entry)}
         aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
@@ -292,6 +299,7 @@ export function SuggestedPairsStep({
   opened,
   history,
   lastBulk,
+  focusId = null,
   onAnswer,
   onChange,
   onUndoChoice,
@@ -338,7 +346,7 @@ export function SuggestedPairsStep({
         />
       ) : (
         <div key={entry.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-          <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} onOpen={onOpen} onUndoChoice={onUndoChoice} />
+          <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={focusId === entry.id} onOpen={onOpen} onUndoChoice={onUndoChoice} />
         </div>
       )))}
     </div>

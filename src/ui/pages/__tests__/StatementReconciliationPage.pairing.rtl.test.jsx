@@ -192,6 +192,55 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(draft.entries.find((e) => e.id === ALUGUEL).confirmed).toBe(true);
   });
 
+  it("responder um dos confirmados em lote tira a barra: o Desfazer dela não fala mais da verdade (G3-2-06)", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: "Confirmar os 1 de uma vez" }));
+    await waitFor(() => expect(screen.getByText("1 lançamento confirmado")).toBeInTheDocument());
+
+    const row = rows().find((r) => r.textContent.includes("PIX QRS PADARIA 02 10"));
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+    await user.click(within(padariaCard()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: PADARIA, body: { answer: "ignore" } }));
+    expect(screen.queryByText("1 lançamento confirmado")).not.toBeInTheDocument();
+    expect(calls.filter((c) => c.confirm)).toEqual([{ confirm: { entry_ids: [PADARIA], confirmed: true } }]);
+  });
+
+  it("Não registrar no par tem o fundo listrado e o selo próprios, na linha e no cartão (G3-2-09)", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(padariaCard()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const row = rows().find((r) => r.textContent.includes("PIX QRS PADARIA 02 10"));
+    expect(row.style.background).toContain("repeating-linear-gradient");
+    // A linha do aluguel (par confirmado) não tem o fundo do "Não registrar".
+    expect(rows().find((r) => r.textContent.includes("ALUGUEL")).style.background).not.toContain("repeating-linear-gradient");
+
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+    const side = within(padariaCard()).getByTestId("pair-ignored-side");
+    expect(side.style.background).toContain("repeating-linear-gradient");
+    expect(side).toHaveTextContent("Não registrar");
+  });
+
+  it("minimizar o cartão leva o foco ao Alterar da linha que fica no lugar (G3-2-10)", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(padariaCard()).getByRole("button", { name: "Sim, é esta" }));
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const row = rows().find((r) => r.textContent.includes("PIX QRS PADARIA 02 10"));
+    await waitFor(() => expect(within(row).getByRole("button", { name: /Alterar/ })).toHaveFocus());
+
+    await user.click(within(rows().find((r) => r.textContent.includes("ALUGUEL"))).getByRole("button", { name: /Alterar/ }));
+    await user.click(within(screen.getByRole("article", { name: /ALUGUEL/ })).getByRole("button", { name: "Minimizar" }));
+    const aluguel = rows().find((r) => r.textContent.includes("ALUGUEL"));
+    await waitFor(() => expect(within(aluguel).getByRole("button", { name: /Alterar/ })).toHaveFocus());
+  });
+
   it("Alterar reabre um par minimizado, e Minimizar o fecha de novo", async () => {
     const user = userEvent.setup();
     await openDraft();
