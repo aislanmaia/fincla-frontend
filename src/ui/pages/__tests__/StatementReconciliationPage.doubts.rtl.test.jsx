@@ -174,6 +174,84 @@ describe("a diferença de saldo no topo (história 24, G3-3-02)", () => {
   });
 });
 
+describe("a diferença de saldo fica fixa no topo ao rolar", () => {
+  const stickyOf = (panel) => panel.closest('[data-sticky="balance-now"]');
+
+  it("no computador o topo (progresso e diferença) gruda no alto da página, acima de todos os passos", async () => {
+    await openDraft();
+
+    const sticky = stickyOf(screen.getByTestId("balance-now"));
+    expect(sticky).not.toBeNull();
+    expect(sticky).toHaveStyle({ position: "sticky", top: "0px" });
+    // Fundo próprio: o que rola por baixo não aparece através dele.
+    expect(sticky.style.background).not.toBe("");
+    // Gruda na página inteira, não num pedaço dela: o passo e a lista ficam no mesmo bloco, abaixo.
+    expect(sticky.parentElement).toContainElement(screen.getByRole("heading", { name: "Decidir casos com dúvida" }));
+    // Continua completo no computador.
+    expect(screen.getByTestId("balance-now").textContent.replace(/\u00a0/g, " ")).toBe(
+      "Diferença de saldo agora−R$ 45,90Banco R$ 1.834,10 · Fincla R$ 1.880,00 em 31/10",
+    );
+  });
+
+  it("vale em qualquer passo: muda de passo e continua fixo", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await goTo(user, "Revisar e concluir");
+
+    expect(stickyOf(screen.getByTestId("balance-now"))).toHaveStyle({ position: "sticky", top: "0px" });
+  });
+
+  it("no celular fica compacto: uma linha com o rótulo curto e o valor, e só ele gruda", async () => {
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
+
+    const panel = screen.getByTestId("balance-now");
+    expect(panel).toHaveAttribute("data-compact", "true");
+    expect(panel.textContent.replace(/\u00a0/g, " ")).toBe("Diferença agora−R$ 45,90");
+    expect(panel).toHaveAttribute("role", "status");
+    expect(panel).toHaveStyle({ display: "flex", alignItems: "center" });
+    const sticky = stickyOf(panel);
+    expect(sticky).toHaveStyle({ position: "sticky", top: "0px" });
+    // O progresso não gruda junto (ocuparia a tela do celular).
+    expect(sticky).not.toContainElement(screen.getByText(/Seu progresso/));
+    expect(sticky.parentElement).toContainElement(screen.getByRole("heading", { name: "Decidir casos com dúvida" }));
+    // Texto nunca abaixo de 11px.
+    for (const el of [panel, ...panel.querySelectorAll("*")]) {
+      const size = Number.parseFloat(el.style.fontSize);
+      if (!Number.isNaN(size)) expect(size).toBeGreaterThanOrEqual(11);
+    }
+  });
+
+  it("no celular, sem saldo no arquivo, mostra — e nunca zero", async () => {
+    draft.balance_now = null;
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
+
+    const panel = screen.getByTestId("balance-now");
+    expect(within(panel).getByTestId("balance-now-value")).toHaveTextContent(/^—$/);
+    expect(panel).toHaveAttribute("aria-label", "Diferença de saldo agora: o arquivo não informa saldo");
+  });
+
+  it("o que ganha foco ao rolar não fica escondido atrás dele: a página reserva o espaço e devolve ao sair", async () => {
+    const scroller = document.createElement("div");
+    scroller.setAttribute("data-fincla-main-scroll", "");
+    scroller.style.scrollPaddingTop = "4px";
+    document.body.appendChild(scroller);
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    const { unmount } = render(<StatementReconciliationPage organizationId={ORG} />, { container: scroller });
+    await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
+
+    expect(scroller.style.scrollPaddingTop).toMatch(/^\d+px$/);
+    expect(scroller.style.scrollPaddingTop).not.toBe("4px");
+
+    unmount();
+    expect(scroller.style.scrollPaddingTop).toBe("4px");
+    scroller.remove();
+  });
+});
+
 describe("o passo Decidir casos com dúvida", () => {
   it("nada vem pré-marcado: o sem resposta mostra as opções e a já escolhida noutro lançamento desativada", async () => {
     await openDraft();

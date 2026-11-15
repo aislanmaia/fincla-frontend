@@ -913,7 +913,10 @@ export interface StatementBalanceCheck {
   currency: string | null;
   unmatched_transactions: UnmatchedTransaction[];
   unmatched_transfers: UnmatchedTransfer[];
+  /** Transações e transferências que ainda podem ser par de um lançamento sem resposta (fora da lista). */
   waiting_transactions: number;
+  /** Quantas de `waiting_transactions` são transferências: a tela as chama de "transferência". */
+  waiting_transfers: number;
   unanswered_entries: number;
   left_out_entries: LeftOutStatementEntry[];
   paid_invoices: PaidInvoiceDifference[];
@@ -935,6 +938,7 @@ type RawBalanceCheck = {
   unmatched_transactions: (Omit<UnmatchedTransaction, 'amount' | 'weight' | 'currency'> & { amount: WireMoney; weight: WireMoney })[];
   unmatched_transfers?: (Omit<UnmatchedTransfer, 'amount' | 'currency'> & { amount: WireMoney })[];
   waiting_transactions: number;
+  waiting_transfers?: number;
   unanswered_entries: number;
   left_out_entries: (Omit<LeftOutStatementEntry, 'amount' | 'currency'> & { amount: WireMoney })[];
   paid_invoices: (Omit<PaidInvoiceDifference, 'total' | 'paid' | 'difference' | 'currency'> & {
@@ -963,6 +967,7 @@ export const normalizeBalanceCheck = (raw: RawBalanceCheck): StatementBalanceChe
     currency: toCurrency(t.amount),
   })),
   waiting_transactions: raw.waiting_transactions ?? 0,
+  waiting_transfers: raw.waiting_transfers ?? 0,
   unanswered_entries: raw.unanswered_entries ?? 0,
   left_out_entries: (raw.left_out_entries ?? []).map((e) => ({ ...e, amount: toAmount(e.amount), currency: toCurrency(e.amount) })),
   paid_invoices: (raw.paid_invoices ?? []).map((i) => ({

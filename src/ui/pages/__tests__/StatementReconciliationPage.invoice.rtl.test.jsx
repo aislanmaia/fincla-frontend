@@ -200,9 +200,11 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
     const side = within(card).getByTestId("invoice-side");
     expect(side).toHaveTextContent("DescriçãoFatura Nubank · setembro");
     expect(side).toHaveTextContent("CartãoNubank · paga pela Itaú");
-    expect(side).toHaveTextContent("SituaçãoJá paga no Fincla em 05/10/2026");
+    // Sem o ano, como as outras datas curtas do passo: o pagamento é do mesmo ano do extrato.
+    expect(side.textContent).toContain("SituaçãoJá paga no Fincla em 05/10");
+    expect(side.textContent).not.toContain("Já paga no Fincla em 05/10/2026");
     // O dia do Fincla difere do banco: destacado.
-    expect(within(side).getAllByTestId("match-highlight").map((h) => h.textContent)).toEqual(["05/10/2026"]);
+    expect(within(side).getAllByTestId("match-highlight").map((h) => h.textContent)).toEqual(["05/10"]);
     expect(within(card).getByTestId("invoice-outcome").textContent).toBe(
       "Este lançamento é o pagamento de uma fatura que já está paga no Fincla. Ao concluir, nada muda: nenhuma transação é "
       + "criada e a fatura continua como está. No Fincla ela foi paga em 05/10/2026 e no banco em 08/10/2026: a diferença "
@@ -211,6 +213,16 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
     expect(card).not.toHaveTextContent("fica paga");
     expect(within(card).queryByTestId("invoice-unavailable")).not.toBeInTheDocument();
     expect(within(card).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("paga num ano diferente do extrato: mostra a data com o ano", async () => {
+    const paid = draft.entries.find((e) => e.answer === "invoice_already_paid");
+    paid.invoice.paid_date = "2025-12-30";
+    await openDraft();
+
+    const side = within(paidCard()).getByTestId("invoice-side");
+    expect(side.textContent).toContain("SituaçãoJá paga no Fincla em 30/12/2025");
+    expect(within(side).getAllByTestId("match-highlight").map((h) => h.textContent)).toEqual(["30/12/2025"]);
   });
 
   it("desmarcada no app depois da leitura: avisa que concluir vai ser recusado, sem prometer nada", async () => {

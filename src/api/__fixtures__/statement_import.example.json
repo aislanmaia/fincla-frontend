@@ -1534,6 +1534,7 @@
       }
     ],
     "waiting_transactions": 1,
+    "waiting_transfers": 0,
     "unanswered_entries": 1,
     "left_out_entries": [
       {"entry_id": "5d6e7f8a-9b0c-4d1e-8f2a-3b4c5d6e7f8a", "date": "2026-10-20", "bank_description": "TARIFA PACOTE", "amount": {"amount": "-9.90", "currency": "BRL"}, "kind": "ignored"},

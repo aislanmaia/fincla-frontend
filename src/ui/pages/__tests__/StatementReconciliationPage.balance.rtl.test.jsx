@@ -149,13 +149,50 @@ describe("Conferir o saldo: o painel", () => {
   });
 });
 
+describe("Conferir o saldo: o aviso do que ainda pode ser par", () => {
+  const waitingText = async (waiting, transfers, unanswered) => {
+    await openPage({
+      edit: ({ check: c }) => {
+        c.waiting_transactions = waiting;
+        c.waiting_transfers = transfers;
+        c.unanswered_entries = unanswered;
+      },
+    });
+    return screen.getByTestId("waiting-transactions").textContent.replace(/Responder agora$/, "").trim();
+  };
+
+  it("uma transferência é chamada de transferência, nunca de transação", async () => {
+    expect(await waitingText(1, 1, 1)).toBe(
+      "1 transferência do Fincla ainda pode ser o par do lançamento sem resposta. Ela não aparece nesta lista até você responder.",
+    );
+  });
+
+  it("várias transferências e vários lançamentos: plural nos dois", async () => {
+    expect(await waitingText(2, 2, 3)).toBe(
+      "2 transferências do Fincla ainda podem ser o par de algum dos 3 lançamentos sem resposta. Elas não aparecem nesta lista até você responder.",
+    );
+  });
+
+  it("transações e transferências juntas: cada uma pelo nome", async () => {
+    expect(await waitingText(3, 1, 2)).toBe(
+      "2 transações e 1 transferência do Fincla ainda podem ser o par de algum dos 2 lançamentos sem resposta. Elas não aparecem nesta lista até você responder.",
+    );
+  });
+
+  it("várias transações e um lançamento", async () => {
+    expect(await waitingText(2, 0, 1)).toBe(
+      "2 transações do Fincla ainda podem ser o par do lançamento sem resposta. Elas não aparecem nesta lista até você responder.",
+    );
+  });
+});
+
 describe("Conferir o saldo: transações sem par", () => {
   it("avisa das candidatas de lançamentos sem resposta e lista as sem par com o estado de cada uma", async () => {
     await openPage();
 
     expect(screen.getByTestId("pending-entries")).toHaveTextContent("1 lançamento do banco ainda está sem decisão.");
     expect(screen.getByTestId("waiting-transactions")).toHaveTextContent(
-      "1 transação do Fincla ainda pode ser o par de algum dos 1 lançamento sem resposta. Ela não aparece nesta lista até você responder.",
+      "1 transação do Fincla ainda pode ser o par do lançamento sem resposta. Ela não aparece nesta lista até você responder.",
     );
     expect(rows()).toHaveLength(3);
     // Excluir só vale ao concluir: a transação continua à vista, riscada.
