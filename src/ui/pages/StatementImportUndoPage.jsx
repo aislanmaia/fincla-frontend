@@ -17,6 +17,7 @@ import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
 import { previewStatementImportUndo, undoStatementImport } from "../../api/statementImports";
 import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
+import { invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
 import { statementReconciliationPath } from "../routing/statementImportRoute.js";
 
@@ -32,7 +33,10 @@ export const CHANGED_FIELD_LABEL = {
   payment_method: "forma de pagamento",
   tags: "categoria ou etiquetas",
   credit_card: "cartão",
+  paid_date: "data de pagamento",
 };
+
+const INVOICE_STATUS_LABEL = { open: "em aberto", closed: "fechada" };
 
 const TEXT = { ...G, fontSize: 13, color: T.inkMid, margin: 0 };
 
@@ -111,8 +115,34 @@ function RestoredTransactionRow({ entity }) {
   );
 }
 
+/**
+ * Uma fatura que a conciliação pagou (fincla-api#512): volta a ficar em aberto, sem data de
+ * pagamento, e o saldo volta. Se a pessoa desmarcou ou pagou de novo depois, fica como ela deixou.
+ */
+function RestoredInvoiceRow({ entity }) {
+  const { invoice } = entity;
+  const label = invoiceLabel(invoice);
+  return (
+    <li data-testid="undo-restored-invoice" style={{ ...G, display: "flex", flexDirection: "column", gap: 4, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
+      <span style={{ fontSize: 13, color: T.ink, overflowWrap: "anywhere" }}>{label}</span>
+      {entity.edited_after ? (
+        <span>
+          <Badge color={T.amber} bg={T.amberLight}>Editada depois: {fieldList(entity.changed_fields)}</Badge>
+        </span>
+      ) : null}
+      <span style={{ fontSize: 12, color: T.inkMid }}>
+        {invoice.status_back
+          ? <>Volta a ficar <b>{INVOICE_STATUS_LABEL[invoice.status_back] ?? "em aberto"}</b>, sem data de pagamento (a conciliação a tinha pago na data do banco).</>
+          : "Você mudou o pagamento dela depois da conciliação: fica como você deixou."}
+      </span>
+    </li>
+  );
+}
+
 function WhatHappens({ preview }) {
   const { summary } = preview;
+  const invoices = preview.to_restore.filter((r) => r.entity_type === "invoice");
+  const restoredTransactions = summary.to_restore - invoices.length;
   return (
     <ul style={{ ...G, fontSize: 14, color: T.ink, margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
       <li data-testid="undo-delete-count">
@@ -124,12 +154,17 @@ function WhatHappens({ preview }) {
           </span>
         ) : null}
       </li>
-      {summary.to_restore ? (
+      {restoredTransactions ? (
         <li data-testid="undo-restore-count">
-          <b style={NUM}>{plural(summary.to_restore, "transação que já estava", "transações que já estavam")}</b> no Fincla{" "}
-          {summary.to_restore === 1 ? "volta" : "voltam"} ao estado de antes da conciliação
+          <b style={NUM}>{plural(restoredTransactions, "transação que já estava", "transações que já estavam")}</b> no Fincla{" "}
+          {restoredTransactions === 1 ? "volta" : "voltam"} ao estado de antes da conciliação
         </li>
       ) : null}
+      {invoices.filter((r) => r.invoice?.status_back).map((r) => (
+        <li key={r.entity_id} data-testid="undo-invoice-reopens">
+          a <b>{invoiceLabel(r.invoice)}</b> volta a ficar em aberto
+        </li>
+      ))}
       {summary.already_deleted ? (
         <li data-testid="undo-already-deleted" style={{ color: T.inkMid }}>
           {plural(summary.already_deleted, "transação da conciliação já foi excluída", "transações da conciliação já foram excluídas")} por você: nada a fazer com {summary.already_deleted === 1 ? "ela" : "elas"}
@@ -251,7 +286,9 @@ export function StatementImportUndoPage({ organizationId, onOpenAccountTransacti
             ) : null}
             {preview.to_restore.length ? (
               <ul aria-label="Transações que voltam ao estado de antes" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {preview.to_restore.map((r) => <RestoredTransactionRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />)}
+                {preview.to_restore.map((r) => (r.entity_type === "invoice" && r.invoice
+                  ? <RestoredInvoiceRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />
+                  : <RestoredTransactionRow key={`${r.entity_type}-${r.entity_id}`} entity={r} />))}
               </ul>
             ) : null}
           </Card>

@@ -54,6 +54,8 @@ export interface StatementImportSummary {
   groups: number;
   /** Transações que vão para Não classificado (lançamentos novos e somas sem categoria). */
   unclassified: number;
+  /** Pagamentos de fatura (fincla-api#512): cada um deixa a fatura paga na data do banco. */
+  invoice_payments: number;
 }
 
 /** "Somar em um só lançamento" (fincla-api#513): vira UMA transação ao concluir. */
@@ -82,9 +84,37 @@ export interface StatementGroup {
  * transferência) da mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar
  * lançamentos encontrados"); `doubt` = várias candidatas, ou uma só com diferença de até R$ 1,00
  * (passo "Decidir casos com dúvida", fincla-api#511; começa sem resposta); `yield` = rendimento
- * pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar no mês (fincla-api#513); `new` = sem par.
+ * pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar no mês (fincla-api#513); `invoice` =
+ * pagamento de fatura de cartão pago por esta conta (passo "Conferir pagamento de fatura",
+ * fincla-api#512; já decidido, sem ações); `new` = sem par.
  */
-export type StatementEntryClassification = 'new' | 'suggested' | 'doubt' | 'yield';
+export type StatementEntryClassification = 'new' | 'suggested' | 'doubt' | 'yield' | 'invoice';
+
+/**
+ * A fatura que um pagamento do extrato paga (fincla-api#512), lida ao vivo: "No Fincla · fatura
+ * do cartão". Ao concluir ela fica paga na data do banco; nenhuma transação é criada.
+ */
+export interface StatementInvoice {
+  id: number;
+  card_id: number;
+  card_name: string;
+  /** A fatura é o mês em que ela fecha. */
+  year: number;
+  month: number;
+  /** Vencimento, "YYYY-MM-DD". */
+  due_date: string;
+  /** O que a fatura deve no Fincla hoje (estornos descontados), sem sinal. */
+  total: number;
+  currency: string | null;
+  status: 'open' | 'closed' | 'paid';
+  paid_date: string | null;
+  /** A conta que paga a fatura (a do extrato). */
+  account_name: string | null;
+  /** `amount`: total ≠ valor do banco; `date`: dia do banco ≠ vencimento. */
+  differences: ('amount' | 'date')[];
+  /** Total − valor pago pelo banco (positivo = o banco pagou menos), ao vivo. */
+  difference: number;
+}
 
 /** O que difere do banco (fincla-api#511): VALOR DIFERENTE, DATAS DIFERENTES, OUTRA CONTA. */
 export type MatchDifference = 'amount' | 'date' | 'account';
@@ -184,6 +214,12 @@ export interface StatementEntry {
   fincla_match: FinclaMatch | null;
   /** Candidatas ao vivo na conta (só em rascunho), as mais parecidas primeiro. */
   candidates: FinclaMatch[];
+  /** A fatura que este lançamento paga (`answer: 'invoice_payment'`, fincla-api#512). */
+  invoice_id: number | null;
+  /** Essa fatura, lida ao vivo; `null` se não é pagamento de fatura (ou se ela sumiu). */
+  invoice: StatementInvoice | null;
+  /** Registrada ao concluir: total − valor pago pelo banco. `null` = não registrada (nunca vira zero). */
+  invoice_difference: number | null;
 }
 
 export interface StatementImport {
@@ -269,12 +305,27 @@ export interface UpdateStatementGroupRequest {
 
 type RawFinclaTransaction = Omit<FinclaTransaction, 'value' | 'currency'> & { value: WireMoney };
 type RawFinclaMatch = Omit<FinclaMatch, 'value' | 'currency'> & { value: WireMoney };
-type RawEntry = Omit<StatementEntry, 'amount' | 'currency' | 'fincla_transaction' | 'fincla_match' | 'candidates'> & {
+type RawInvoice = Omit<StatementInvoice, 'total' | 'currency' | 'difference'> & { total: WireMoney; difference: WireMoney };
+type RawEntry = Omit<
+  StatementEntry,
+  'amount' | 'currency' | 'fincla_transaction' | 'fincla_match' | 'candidates' | 'invoice' | 'invoice_id' | 'invoice_difference'
+> & {
   amount: WireMoney;
   fincla_transaction?: RawFinclaTransaction | null;
   fincla_match?: RawFinclaMatch | null;
   candidates?: RawFinclaMatch[];
+  invoice_id?: number | null;
+  invoice?: RawInvoice | null;
+  invoice_difference?: WireMoney | null;
 };
+
+export const normalizeStatementInvoice = (raw: RawInvoice): StatementInvoice => ({
+  ...raw,
+  total: toAmount(raw.total),
+  currency: toCurrency(raw.total),
+  difference: toAmount(raw.difference),
+  differences: raw.differences ?? [],
+});
 
 export const normalizeFinclaMatch = (raw: RawFinclaMatch): FinclaMatch => ({
   ...raw,
@@ -290,8 +341,14 @@ type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> &
   bank_balances: { date: string; balance: WireMoney }[];
 };
 
-export const normalizeStatementEntry = ({ fincla_transaction, fincla_match, candidates, ...raw }: RawEntry): StatementEntry => ({
+export const normalizeStatementEntry = ({
+  fincla_transaction, fincla_match, candidates, invoice, invoice_difference, ...raw
+}: RawEntry): StatementEntry => ({
   ...raw,
+  invoice_id: raw.invoice_id ?? null,
+  invoice: invoice ? normalizeStatementInvoice(invoice) : null,
+  // Não registrada fica null: nunca vira zero.
+  invoice_difference: invoice_difference == null ? null : toFiniteNumber(invoice_difference),
   suggested_transfer_id: raw.suggested_transfer_id ?? null,
   paired_transfer_id: raw.paired_transfer_id ?? null,
   fincla_match: fincla_match ? normalizeFinclaMatch(fincla_match) : null,
@@ -508,7 +565,8 @@ export type UndoRefusalCode =
   | 'in_recurring_series'
   | 'unsupported_change';
 export type UndoChangedField =
-  | 'description' | 'value' | 'type' | 'date' | 'status' | 'paid_at' | 'account' | 'payment_method' | 'tags' | 'credit_card';
+  | 'description' | 'value' | 'type' | 'date' | 'status' | 'paid_at' | 'account' | 'payment_method' | 'tags' | 'credit_card'
+  | 'paid_date';
 
 export interface UndoDeletedTransaction {
   transaction_id: number;
@@ -524,7 +582,8 @@ export interface UndoDeletedTransaction {
 }
 
 export interface UndoRestoredEntity {
-  entity_type: 'transaction';
+  /** `invoice` (fincla-api#512): a fatura que a conciliação pagou volta a ficar em aberto. */
+  entity_type: 'transaction' | 'invoice';
   entity_id: string;
   action: 'updated' | 'deleted';
   /** Como está hoje (`updated`) ou como era antes (`deleted`). */
@@ -539,6 +598,11 @@ export interface UndoRestoredEntity {
   value_back_currency: string | null;
   /** A conta para onde a transação volta (a conciliação a moveu); `null` se não muda. */
   account_back: { id: string; name: string | null } | null;
+  /**
+   * Com `entity_type: 'invoice'`: qual fatura e a situação para a qual volta (`open`/`closed`, sem
+   * data de pagamento); `status_back: null` = a pessoa desmarcou ou pagou de novo e fica como ela deixou.
+   */
+  invoice: { card_name: string; year: number; month: number; status_back: 'open' | 'closed' | null } | null;
 }
 
 export interface StatementUndoPreview {
@@ -551,9 +615,10 @@ export interface StatementUndoPreview {
   to_restore: UndoRestoredEntity[];
 }
 
-type RawRestored = Omit<UndoRestoredEntity, 'value_back' | 'value_back_currency' | 'account_back'> & {
+type RawRestored = Omit<UndoRestoredEntity, 'value_back' | 'value_back_currency' | 'account_back' | 'invoice'> & {
   value_back?: WireMoney | null;
   account_back?: { id: string; name: string | null } | null;
+  invoice?: UndoRestoredEntity['invoice'];
 };
 type RawUndoPreview = Omit<StatementUndoPreview, 'transactions_to_delete' | 'to_restore'> & {
   transactions_to_delete: (Omit<UndoDeletedTransaction, 'amount' | 'currency'> & { amount: WireMoney })[];
@@ -567,11 +632,12 @@ export const normalizeStatementUndoPreview = (raw: RawUndoPreview): StatementUnd
     amount: toAmount(t.amount),
     currency: toCurrency(t.amount),
   })),
-  to_restore: (raw.to_restore ?? []).map(({ value_back, account_back, ...r }) => ({
+  to_restore: (raw.to_restore ?? []).map(({ value_back, account_back, invoice, ...r }) => ({
     ...r,
     value_back: value_back == null ? null : toAmount(value_back),
     value_back_currency: value_back == null ? null : toCurrency(value_back),
     account_back: account_back ?? null,
+    invoice: invoice ?? null,
   })),
 });
 
