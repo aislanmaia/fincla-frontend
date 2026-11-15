@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ban, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -133,19 +133,22 @@ function SelectBox({ entry, selected, onSelect }) {
 
 /**
  * Um lançamento "Não registrar" minimizado (fincla-api#513): continua visível, com selo e fundo
- * próprios, "Alterar" no começo da linha (ou clique em qualquer ponto) e "Desfazer".
+ * próprios, "Alterar" no começo da linha e "Desfazer". Só os botões agem (a linha em si não é
+ * clicável: teclado e leitor de tela chegam a tudo pelos controles). `focus` leva o foco ao
+ * "Alterar" quando a linha acaba de aparecer no lugar do cartão.
  */
-export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onExpand, onUndo }) {
+export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onExpand, onUndo, focus = false }) {
+  const alterRef = useRef(null);
+  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
     <div
       data-testid="ignored-entry"
       role="group"
       aria-label={`Lançamento ${entry.bank_description} não registrado`}
-      onClick={() => onExpand(entry.id)}
-      style={{ ...G, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: SKIP_BG }}
+      style={{ ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: SKIP_BG }}
     >
-      {onSelect ? <span onClick={(e) => e.stopPropagation()}><SelectBox entry={entry} selected={selected} onSelect={onSelect} /></span> : null}
-      <button type="button" onClick={(e) => { e.stopPropagation(); onExpand(entry.id); }} style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}>
+      <SelectBox entry={entry} selected={selected} onSelect={onSelect} />
+      <button ref={alterRef} type="button" onClick={() => onExpand(entry.id)} style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}>
         <ChevronRight size={12} aria-hidden="true" />Alterar
       </button>
       <span style={{ ...NUM, fontSize: 12, color: T.inkLight, opacity: 0.8 }}>{bankDateLabel(entry.date)}</span>
@@ -153,7 +156,7 @@ export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onEx
       <span style={{ ...NUM, fontSize: 13, color: T.inkMid, opacity: 0.7 }}>{formatMoney(entry.amount, entry.currency)}</span>
       <SkipBadge />
       <span style={{ fontSize: 12, color: T.inkLight }}>fica fora do Fincla</span>
-      <button type="button" onClick={(e) => { e.stopPropagation(); onUndo(entry.id); }} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+      <button type="button" onClick={() => onUndo(entry.id)} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>
         Desfazer
       </button>
     </div>

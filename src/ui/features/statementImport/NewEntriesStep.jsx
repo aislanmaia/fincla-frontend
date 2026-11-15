@@ -82,7 +82,9 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
   const currency = selected[0]?.currency ?? null;
   const refusal = sumRefusal(selected);
   // Só as categorias que aceitam todos os marcados (o backend recusa o lote inteiro senão).
-  const types = [...new Set(selected.filter((e) => e.answer === "create").map((e) => e.transaction_type ?? (e.amount > 0 ? "income" : "expense")))];
+  // Categoria só vale para quem vai virar transação sozinho: os "Não registrar" marcados ficam de fora.
+  const addable = selected.filter((e) => e.answer === "create");
+  const types = [...new Set(addable.map((e) => e.transaction_type ?? (e.amount > 0 ? "income" : "expense")))];
   const options = categories.filter((c) => !c.is_fallback && types.every((t) => categoriesForType([c], t).length));
   const month = refusal ? "" : MONTHS[Number(selected[0].date.slice(5, 7)) - 1];
 
@@ -95,12 +97,12 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
         {stepKey === "new" ? (
           <>
             <label htmlFor="bulk-category" style={{ fontSize: 12 }}>Categoria</label>
-            <Select id="bulk-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <Select id="bulk-category" value={categoryId} disabled={!addable.length} onChange={(e) => setCategoryId(e.target.value)}>
               <option value="">Escolha…</option>
-              {options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>)}
+              {addable.length ? options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>) : null}
             </Select>
-            <Btn variant="purple" small disabled={!categoryId || busy} onClick={() => onApplyCategory(categoryId)}>
-              Aplicar aos {selected.length} marcados
+            <Btn variant="purple" small disabled={!addable.length || !categoryId || busy} onClick={() => onApplyCategory(categoryId)}>
+              {addable.length === selected.length ? `Aplicar aos ${selected.length} marcados` : `Aplicar aos ${addable.length} a adicionar`}
             </Btn>
           </>
         ) : null}
@@ -109,6 +111,11 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
         </Btn>
         <Btn variant="outGray" small disabled={busy} onClick={onIgnore}>Não registrar as marcadas</Btn>
       </div>
+      {stepKey === "new" && !addable.length ? (
+        <div role="note" data-testid="bulk-category-note" style={{ ...G, fontSize: 12, color: T.inkMid, background: T.grayLight, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 12px" }}>
+          Os marcados estão como “Não registrar”: a categoria só vale para lançamentos que vão ser adicionados.
+        </div>
+      ) : null}
       {refusal && selected.length > 1 ? (
         <div role="note" style={{ ...G, fontSize: 12, color: T.amber, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px" }}>{refusal}</div>
       ) : null}
@@ -148,7 +155,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
         </span>
         <span style={{ flex: 1 }} />
         <b style={{ ...NUM, fontSize: 14, color: moneyIn ? T.green : T.ink }}>{signed(group.amount, group.currency)}</b>
-        <button type="button" onClick={() => onUngroup(group.id)} style={LINK_BTN}>Desfazer soma</button>
+        <button type="button" onClick={() => onUngroup(group)} style={LINK_BTN}>Desfazer soma</button>
       </header>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
         <div style={{ gridColumn: "1 / -1" }}>
@@ -224,6 +231,9 @@ export function NewEntriesStep({
   const [expanded, setExpanded] = useState(() => new Set());
   const [lastBulk, setLastBulk] = useState(null);
   const [busy, setBusy] = useState(false);
+  // O lançamento que acabou de minimizar: o foco vai para o "Alterar" da linha dele, para quem usa
+  // teclado ou leitor de tela não perder o lugar na lista.
+  const [focusId, setFocusId] = useState(null);
 
   const byId = new Map(entries.map((e) => [e.id, e]));
   const stepGroups = groups.filter((g) => byId.has(g.entry_ids[0]));
@@ -250,7 +260,8 @@ export function NewEntriesStep({
   });
 
   const ignoreSelected = () => run(async () => {
-    const before = selected.map((e) => ({ id: e.id, answer: e.answer }));
+    // O desfazer devolve a resposta E o "confirmado" que cada um tinha (o backend confirma quem responde).
+    const before = selected.map((e) => ({ id: e.id, answer: e.answer, confirmed: e.confirmed }));
     const done = await onBatch(selected.map((e) => ({ id: e.id, answer: "ignore" })));
     if (!done) return;
     setLastBulk({ label: `${plural(selected.length, "lançamento marcado", "lançamentos marcados")} como não registrar`, undo: () => onBatch(before) });
@@ -262,11 +273,38 @@ export function NewEntriesStep({
     const updated = await onCreateGroup(selected.map((e) => e.id), description);
     if (!updated) return;
     const created = updated.groups.find((g) => !known.has(g.id));
+    // Desfazer a soma devolve cada lançamento à resposta que tinha antes (o backend guarda).
     setLastBulk({
       label: `${plural(selected.length, "lançamento somado", "lançamentos somados")} em “${description}”`,
       undo: () => (created ? onDeleteGroup(created.id) : null),
     });
     setSelectedIds([]);
+  });
+
+  // "Desfazer soma" no cartão: a soma some, mas com barra de desfazer que a refaz com o que a
+  // pessoa tinha escolhido para ela (descrição, tipo, forma de pagamento, categoria e etiquetas).
+  const ungroup = (group) => run(async () => {
+    const kept = {
+      entry_ids: [...group.entry_ids],
+      description: group.description,
+      fields: {
+        transaction_type: group.transaction_type,
+        payment_method: group.payment_method,
+        category_tag_id: group.category_tag_id,
+        detail_tag_ids: [...(group.detail_tag_ids ?? [])],
+      },
+    };
+    const done = await onDeleteGroup(group.id);
+    if (!done) return;
+    setLastBulk({
+      label: `Soma “${group.description}” desfeita`,
+      undo: async () => {
+        const known = new Set(done.groups.map((g) => g.id));
+        const updated = await onCreateGroup(kept.entry_ids, kept.description);
+        const created = updated?.groups.find((g) => !known.has(g.id));
+        if (created) await onUpdateGroup(created.id, kept.fields);
+      },
+    });
   });
 
   const undoBulk = () => run(async () => {
@@ -290,7 +328,7 @@ export function NewEntriesStep({
           fallbackLabel={fallbackLabel}
           isMobile={isMobile}
           onUpdate={onUpdateGroup}
-          onUngroup={onDeleteGroup}
+          onUngroup={ungroup}
           onTakeOut={(entryId) => onChangeEntry(entryId, { answer: "create" })}
         />
       ))}
@@ -336,6 +374,7 @@ export function NewEntriesStep({
           <IgnoredEntryRow
             key={entry.id}
             entry={entry}
+            focus={focusId === entry.id}
             selected={selectedIds.includes(entry.id)}
             onSelect={select}
             onExpand={(id) => setExpandedFor(id, true)}
@@ -351,10 +390,10 @@ export function NewEntriesStep({
             isMobile={isMobile}
             selected={selectedIds.includes(entry.id)}
             onSelect={select}
-            onCollapse={entry.answer === "ignore" ? (id) => setExpandedFor(id, false) : null}
+            onCollapse={entry.answer === "ignore" ? (id) => { setFocusId(id); setExpandedFor(id, false); } : null}
             onChange={(id, body) => {
               // "Não registrar" escolhido no cartão: ele minimiza e continua na lista.
-              if (body.answer === "ignore") setExpandedFor(id, false);
+              if (body.answer === "ignore") { setFocusId(id); setExpandedFor(id, false); }
               return onChangeEntry(id, body);
             }}
           />
