@@ -71,8 +71,16 @@ function EntryFacts({ entry }) {
   );
 }
 
+/** Com o que o lançamento já foi conferido: a transação, ou a transferência entre contas (fincla-api#511). */
+function reconciledWith(entry) {
+  if (entry.fincla_transaction) return entry.fincla_transaction.description;
+  const match = entry.fincla_match;
+  if (match?.kind === "transfer") return match.description ? `a transferência “${match.description}”` : "uma transferência entre contas";
+  return match?.description || null;
+}
+
 function ReconciledRow({ entry }) {
-  const tx = entry.fincla_transaction;
+  const withWhat = reconciledWith(entry);
   return (
     <div data-testid="reconciled-entry" style={ROW}>
       <EntryFacts entry={entry} />
@@ -81,7 +89,7 @@ function ReconciledRow({ entry }) {
       </Badge>
       <span style={{ fontSize: 12, color: T.inkMid, flexBasis: "100%", display: "flex", alignItems: "center", gap: 4 }}>
         <Link2 size={12} aria-hidden="true" />
-        {tx ? <>Já conferida com <b style={{ color: T.ink }}>{tx.description}</b></> : "Já conferida numa importação anterior"}
+        {withWhat ? <>Já conferida com <b style={{ color: T.ink }}>{withWhat}</b></> : "Já conferida numa importação anterior"}
       </span>
     </div>
   );

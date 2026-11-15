@@ -122,6 +122,20 @@ describe("Ver o que fica de fora", () => {
     expect(screen.getByRole("button", { name: /Já conferidos/ })).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("já conferido com uma transferência entre contas diz que é a transferência", async () => {
+    const reconciled = draft.entries.find((e) => e.id === RECONCILED.id);
+    reconciled.fincla_transaction = null;
+    reconciled.paired_transaction_id = null;
+    reconciled.paired_transfer_id = "t-1";
+    reconciled.fincla_match = { ...reconciled.fincla_match, kind: "transfer", transaction_id: null, transfer_id: "t-1", description: "Reserva" };
+    await openDraft();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /Já conferidos/ }));
+
+    expect(screen.getByTestId("reconciled-entry")).toHaveTextContent("Já conferida com a transferência “Reserva”");
+  });
+
   it("Trazer de volta marca para adicionar, abre o cartão e Desfazer devolve para fora", async () => {
     await openDraft();
     const user = userEvent.setup();

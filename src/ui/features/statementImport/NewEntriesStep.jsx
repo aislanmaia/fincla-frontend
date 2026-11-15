@@ -233,6 +233,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
 export function NewEntriesStep({
   stepKey, entries, groups, categories, details, fallbackLabel, isMobile,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
+  onSearch = null, renderMatched = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [expanded, setExpanded] = useState(() => new Set());
@@ -377,7 +378,9 @@ export function NewEntriesStep({
       ) : null}
 
       {free.map((entry) => (
-        entry.answer === "ignore" && !expanded.has(entry.id) ? (
+        // Pareado pela busca "Está no Fincla com outros dados…" (fincla-api#511): mostra o par.
+        entry.answer === "pair" && renderMatched ? renderMatched(entry)
+        : entry.answer === "ignore" && !expanded.has(entry.id) ? (
           <IgnoredEntryRow
             key={entry.id}
             entry={entry}
@@ -398,6 +401,7 @@ export function NewEntriesStep({
             selected={selectedIds.includes(entry.id)}
             onSelect={select}
             onCollapse={entry.answer === "ignore" ? (id) => { setFocusId(id); setExpandedFor(id, false); } : null}
+            onSearch={onSearch}
             onChange={(id, body) => {
               // "Não registrar" escolhido no cartão: ele minimiza e continua na lista.
               if (body.answer === "ignore") { setFocusId(id); setExpandedFor(id, false); }

@@ -21,12 +21,10 @@ export function confirmAllLabel(count) {
 import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { LINK } from "./StatementImportNotes.jsx";
+import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
 const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
-const DT = { ...G, fontSize: 11, color: T.inkLight };
-const DD = { ...G, fontSize: 13, color: T.ink, margin: 0, minWidth: 0, wordBreak: "break-word" };
-const TYPE_LABEL = { income: "Receita", refund: "Estorno", expense: "Despesa" };
 
 const ANSWERS = [
   { value: "pair", label: "Sim, é esta", tone: T.blue },
@@ -34,11 +32,8 @@ const ANSWERS = [
   { value: "ignore", label: "Não registrar", tone: T.inkLight },
 ];
 
-/** O dia como a tela mostra: os 10 primeiros caracteres, sem passar por `Date`. */
-const dayOf = (value) => String(value ?? "").slice(0, 10);
-const paidWord = (entry) => (entry.amount < 0 ? "fica paga" : "fica recebida");
 
-function BankSide({ entry, dateDiffers }) {
+export function BankSide({ entry, dateDiffers }) {
   const moneyIn = entry.amount > 0;
   return (
     <section style={{ ...BOX, background: T.bg }}>
@@ -55,7 +50,7 @@ function BankSide({ entry, dateDiffers }) {
 }
 
 /** A linha entre o banco e o Fincla: ligados (par), nova transação, ou nada. */
-function Connector({ answer, isMobile }) {
+export function Connector({ answer, isMobile }) {
   const look = {
     pair: { color: T.blue, line: "solid", Icon: Link2, label: "ligado" },
     create: { color: T.green, line: "dashed", Icon: Plus, label: "nova transação" },
@@ -80,19 +75,13 @@ function Connector({ answer, isMobile }) {
   );
 }
 
-function SuggestedBadge() {
-  return (
-    <Badge color={T.blue} bg={T.blueLight}>
-      <Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />
-      Sugerido pelo Fincla
-    </Badge>
-  );
-}
-
-/** A transação do Fincla como ela está hoje, com o selo e o que muda ao concluir. */
-function FinclaSide({ entry, dateDiffers }) {
-  const tx = entry.fincla_transaction;
-  if (!tx) {
+/**
+ * A transação (ou transferência, fincla-api#511) do Fincla como ela está hoje, com o selo e o que
+ * muda ao concluir.
+ */
+function FinclaSide({ entry, accountName }) {
+  const match = entry.fincla_match;
+  if (!match) {
     return (
       <section style={{ ...BOX, background: T.grayLight }}>
         <div style={BOX_LABEL}>No Fincla</div>
@@ -102,43 +91,16 @@ function FinclaSide({ entry, dateDiffers }) {
       </section>
     );
   }
-  const rows = [
-    ["Data", <span key="d" style={{ ...NUM, color: dateDiffers ? T.amber : T.ink, fontWeight: dateDiffers ? 700 : 400 }}>{bankDateLabel(dayOf(tx.date))}</span>],
-    ["Descrição", <b key="n">{tx.description}</b>],
-    ["Valor", <b key="v" style={NUM}>{formatMoney(tx.type === "expense" ? -tx.value : tx.value, tx.currency)}</b>],
-    ["Categoria", tx.category_name ?? "Sem categoria"],
-  ];
-  if (tx.tag_names.length) rows.push(["Etiquetas", tx.tag_names.join(", ")]);
-  rows.push(["Situação", tx.paid_at ? `${tx.type === "expense" ? "Paga" : "Recebida"} em ${bankDateLabel(dayOf(tx.paid_at))}` : "Em aberto"]);
+  const suggested = match.kind === "transfer"
+    ? match.transfer_id === entry.suggested_transfer_id
+    : match.transaction_id === entry.suggested_transaction_id;
   return (
-    <section data-testid="fincla-side" style={{ ...BOX, borderColor: entry.answer === "pair" ? T.blue : T.border }}>
-      <div style={BOX_LABEL}>
-        No Fincla <Badge>{TYPE_LABEL[tx.type] ?? tx.type}</Badge>
-        {tx.id === entry.suggested_transaction_id ? <SuggestedBadge /> : null}
-      </div>
-      <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "4px 12px", alignItems: "baseline" }}>
-        {rows.map(([label, value]) => (
-          <div key={label} style={{ display: "contents" }}>
-            <dt style={DT}>{label}</dt>
-            <dd style={DD}>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {dateDiffers ? (
-        <div style={{ ...G, fontSize: 12, color: T.inkMid, marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
-          <Badge color={T.amber} bg={T.amberLight}>DATAS DIFERENTES</Badge>
-          <span style={{ flex: 1, minWidth: 200 }}>
-            Ao concluir a conciliação, {paidWord(entry)} em <b style={NUM}>{bankDateLabel(entry.date)}</b> (data do banco). A data da
-            transação, <b style={NUM}>{bankDateLabel(dayOf(tx.date))}</b>, continua.
-          </span>
-        </div>
-      ) : null}
-    </section>
+    <FinclaMatchBox entry={entry} match={match} accountName={accountName} suggested={suggested} consequences={entry.answer === "pair"} />
   );
 }
 
 /** "Não registrar" com o selo e o fundo listrado próprios, os mesmos do passo de lançamentos novos. */
-function IgnoredSide() {
+export function IgnoredSide() {
   return (
     <section data-testid="pair-ignored-side" style={{ ...BOX, background: SKIP_BG }}>
       <div style={BOX_LABEL}>
@@ -153,9 +115,12 @@ function IgnoredSide() {
 
 /** Em uma linha, o que acontece ao concluir a conciliação. */
 function outcomeText(entry) {
-  const tx = entry.fincla_transaction;
-  if (entry.answer === "pair" && tx) {
-    return <>Ao concluir a conciliação: <b>{tx.description}</b> {paidWord(entry)} em <b style={NUM}>{bankDateLabel(entry.date)}</b> (data do banco). Descrição, data, categoria e etiquetas continuam como estão.</>;
+  const match = entry.fincla_match;
+  if (entry.answer === "pair" && match?.kind === "transfer") {
+    return <>Ao concluir a conciliação: nada muda em <b>{matchTitle(entry, match)}</b>, que já está no Fincla; nenhuma transação é criada.</>;
+  }
+  if (entry.answer === "pair" && match) {
+    return <>Ao concluir a conciliação: <b>{match.description}</b> {paidWord(entry)} em <b style={NUM}>{bankDateLabel(entry.date)}</b> (data do banco). Descrição, data, categoria e etiquetas continuam como estão.</>;
   }
   if (entry.answer === "create") {
     return <>Ao concluir a conciliação: será adicionada <b>“{entry.description || "(sem descrição)"}”</b>, paga na data do banco. A transação sugerida fica como está.</>;
@@ -164,7 +129,7 @@ function outcomeText(entry) {
   return null;
 }
 
-function StatusBadge({ entry }) {
+export function StatusBadge({ entry }) {
   if (entry.answer === "pair" && !entry.confirmed) {
     return <Badge color={T.blue} bg={T.blueLight}><Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Sugerido · falta confirmar</Badge>;
   }
@@ -181,7 +146,7 @@ function AnswerButtons({ entry, busy, onAnswer }) {
       <div role="group" aria-label={label} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
         {ANSWERS.map((a, index) => {
           const pressed = entry.answer === a.value;
-          const unavailable = a.value === "pair" && !entry.fincla_transaction;
+          const unavailable = a.value === "pair" && !entry.fincla_match;
           return (
             <button
               key={a.value}
@@ -204,7 +169,7 @@ function AnswerButtons({ entry, busy, onAnswer }) {
   );
 }
 
-function UndoChoiceButton({ entry, onUndoChoice }) {
+export function UndoChoiceButton({ entry, onUndoChoice }) {
   return (
     <button type="button" onClick={() => onUndoChoice(entry)} style={{ ...LINK, fontSize: 12, color: T.inkMid }}>
       Desfazer escolha
@@ -213,9 +178,8 @@ function UndoChoiceButton({ entry, onUndoChoice }) {
 }
 
 /** O cartão aberto de um par sugerido. */
-function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, onAnswer, onChange, onUndoChoice, onMinimize }) {
-  const tx = entry.fincla_transaction;
-  const dateDiffers = Boolean(tx) && entry.answer === "pair" && dayOf(tx.paid_at ?? tx.date) !== entry.date;
+function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, accountName, onAnswer, onChange, onUndoChoice, onMinimize }) {
+  const dateDiffers = entry.answer === "pair" && Boolean(entry.fincla_match?.differences.includes("date"));
   const outcome = outcomeText(entry);
   let right;
   if (entry.answer === "create") {
@@ -223,7 +187,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
   } else if (entry.answer === "ignore") {
     right = <IgnoredSide />;
   } else {
-    right = <FinclaSide entry={entry} dateDiffers={dateDiffers} />;
+    right = <FinclaSide entry={entry} accountName={accountName} />;
   }
   return (
     <article
@@ -256,8 +220,9 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
 }
 
 function rowSummary(entry) {
-  const tx = entry.fincla_transaction;
-  if (entry.answer === "pair" && tx) return <>Sim, é <b>{tx.description}</b> · {bankDateLabel(dayOf(tx.date))} · {paidWord(entry)} em {bankDateLabel(entry.date)}</>;
+  const match = entry.fincla_match;
+  if (entry.answer === "pair" && match?.kind === "transfer") return <>Sim, é <b>{matchTitle(entry, match)}</b> · {bankDateLabel(match.day)}</>;
+  if (entry.answer === "pair" && match) return <>Sim, é <b>{match.description}</b> · {bankDateLabel(dayOf(match.date))} · {paidWord(entry)} em {bankDateLabel(entry.date)}</>;
   if (entry.answer === "create") return <>Adicionar ao Fincla: <b>{entry.description || "(sem descrição)"}</b></>;
   return <span style={{ color: T.inkLight }}>Fica fora do Fincla</span>;
 }
@@ -301,6 +266,7 @@ export function SuggestedPairsStep({
   categories,
   details = [],
   fallbackLabel,
+  accountName = "",
   opened,
   history,
   lastBulk,
@@ -344,6 +310,7 @@ export function SuggestedPairsStep({
           categories={categories}
           details={details}
           fallbackLabel={fallbackLabel}
+          accountName={accountName}
           onAnswer={onAnswer}
           onChange={onChange}
           onUndoChoice={onUndoChoice}

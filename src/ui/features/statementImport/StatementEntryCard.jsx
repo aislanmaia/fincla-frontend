@@ -100,8 +100,11 @@ const SEG_BTN = (pressed, tone) => ({
   color: pressed ? "#fff" : T.inkMid, display: "inline-flex", alignItems: "center", gap: 5,
 });
 
-/** "Este lançamento do banco já está no Fincla?" — nos lançamentos novos: adicionar agora ou não registrar. */
-function AnswerSegment({ entry, onChange }) {
+/**
+ * "Este lançamento do banco já está no Fincla?" — nos lançamentos novos: adicionar agora ou não
+ * registrar; `onSearch` (fincla-api#511) acrescenta "Está no Fincla com outros dados…".
+ */
+function AnswerSegment({ entry, onChange, onSearch = null }) {
   const label = "Este lançamento do banco já está no Fincla?";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -114,6 +117,11 @@ function AnswerSegment({ entry, onChange }) {
           <Ban size={12} aria-hidden="true" />Não registrar
         </button>
       </div>
+      {onSearch ? (
+        <button type="button" onClick={() => onSearch(entry)} style={{ ...G, fontSize: 12, color: T.blue, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+          Está no Fincla com outros dados…
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -285,7 +293,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
  */
 export function StatementEntryCard({
   entry, categories, details = [], fallbackLabel, isMobile, onChange,
-  selected = false, onSelect = null, onCollapse = null, embedded = false,
+  selected = false, onSelect = null, onCollapse = null, embedded = false, onSearch = null,
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
@@ -336,7 +344,7 @@ export function StatementEntryCard({
           <NewTransactionEditor entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} />
         )}
       </div>
-      <AnswerSegment entry={entry} onChange={onChange} />
+      <AnswerSegment entry={entry} onChange={onChange} onSearch={onSearch} />
       <OutcomeLine>
         {ignored ? (
           <>Este lançamento não entra no Fincla. Ele aparece na conferência de saldo.</>
