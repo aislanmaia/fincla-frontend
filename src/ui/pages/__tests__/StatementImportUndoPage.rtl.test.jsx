@@ -149,6 +149,90 @@ describe("prévia", () => {
   });
 });
 
+describe("contagens com 0, 1 e 2 (smoke em dev: \"As 0 transações adicionadas serão apagadas\")", () => {
+  const INVOICE = contract.undo_preview.to_restore.find((r) => r.entity_type === "invoice");
+  const withCounts = (n, { edited = 0 } = {}) => {
+    preview.summary = {
+      to_delete: n, edited_after: edited, already_deleted: n, to_restore: 0,
+      restored_transactions: n, recreated_transactions: n, restored_invoices: n,
+    };
+    preview.transactions_to_delete = contract.undo_preview.transactions_to_delete.slice(0, n);
+    preview.to_restore = Array.from({ length: n }, (_, i) => ({ ...clone(INVOICE), entity_id: String(41 + i), invoice: { ...INVOICE.invoice, month: 10 - i } }));
+  };
+  const textOf = (testId) => screen.queryByTestId(testId)?.textContent ?? null;
+  const confirmText = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    return screen.getByRole("group", { name: "Confirmar desfazer importação" }).querySelector("p").textContent;
+  };
+
+  it("com 0, nenhuma frase fala de zero transações", async () => {
+    withCounts(0);
+    await open();
+
+    expect([textOf("undo-delete-count"), textOf("undo-restore-count"), textOf("undo-recreated-count"), textOf("undo-already-deleted")])
+      .toEqual([null, null, null, null]);
+    expect(screen.queryAllByTestId("undo-invoice-reopens")).toHaveLength(0);
+    const text = await confirmText();
+    expect(text).toBe("Tem certeza? O que esta conciliação mudou no Fincla volta a ser como era antes.");
+    expect(document.body).not.toHaveTextContent(/\b0 transaç/);
+  });
+
+  it("com 1, tudo no singular", async () => {
+    withCounts(1);
+    await open();
+
+    expect(textOf("undo-delete-count")).toBe("1 transação adicionada será apagada");
+    expect(textOf("undo-restore-count")).toBe("1 transação que já estava no Fincla volta ao estado de antes da conciliação");
+    expect(textOf("undo-recreated-count")).toBe("1 transação excluída na conferência de saldo volta a existir");
+    expect(textOf("undo-already-deleted")).toBe("1 transação da conciliação já foi excluída por você: nada a fazer com ela");
+    expect(screen.getAllByTestId("undo-invoice-reopens").map((li) => li.textContent)).toEqual(["A Fatura Itaú Visa · outubro volta a ficar fechada"]);
+    expect(await confirmText()).toBe(
+      "Tem certeza? A transação adicionada será apagada. Para trazê-la de volta, será preciso importar o extrato de novo.",
+    );
+  });
+
+  it("com 1 editada depois, a confirmação continua no singular", async () => {
+    withCounts(1, { edited: 1 });
+    await open();
+
+    expect(await confirmText()).toBe(
+      "Tem certeza? A transação adicionada será apagada, mesmo editada depois. Para trazê-la de volta, será preciso importar o extrato de novo.",
+    );
+  });
+
+  it("com 2, tudo no plural", async () => {
+    withCounts(2);
+    await open();
+
+    expect(textOf("undo-delete-count")).toBe("2 transações adicionadas serão apagadas");
+    expect(textOf("undo-restore-count")).toBe("2 transações que já estavam no Fincla voltam ao estado de antes da conciliação");
+    expect(textOf("undo-recreated-count")).toBe("2 transações excluídas na conferência de saldo voltam a existir");
+    expect(textOf("undo-already-deleted")).toBe("2 transações da conciliação já foram excluídas por você: nada a fazer com elas");
+    expect(screen.getAllByTestId("undo-invoice-reopens").map((li) => li.textContent)).toEqual([
+      "A Fatura Itaú Visa · outubro volta a ficar fechada",
+      "A Fatura Itaú Visa · setembro volta a ficar fechada",
+    ]);
+    expect(await confirmText()).toBe(
+      "Tem certeza? As 2 transações adicionadas serão apagadas. Para trazê-las de volta, será preciso importar o extrato de novo.",
+    );
+  });
+
+  it("desfeita sem nenhuma transação apagada: não diz \"0 transações\"", async () => {
+    withCounts(0);
+    undoResponse = () => HttpResponse.json({ ...clone(contract.undone), deleted_transactions: 0 });
+    await open();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+
+    expect(await screen.findByRole("heading", { name: "Importação desfeita" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/\b0 transaç/);
+    const heading = screen.getByRole("heading", { name: "Importação desfeita" });
+    expect(heading.nextElementSibling.textContent).toBe("A conta Itaú voltou ao que era antes da conciliação.");
+  });
+});
+
 describe("confirmar na página", () => {
   it("nada é desfeito no primeiro clique: a confirmação aparece na própria página", async () => {
     const confirmSpy = vi.spyOn(window, "confirm");

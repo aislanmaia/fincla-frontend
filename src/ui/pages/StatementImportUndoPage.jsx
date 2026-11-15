@@ -156,15 +156,18 @@ function WhatHappens({ preview }) {
   const recreated = summary.recreated_transactions;
   return (
     <ul style={{ ...G, fontSize: 14, color: T.ink, margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-      <li data-testid="undo-delete-count">
-        <b style={NUM}>{plural(summary.to_delete, "transação adicionada", "transações adicionadas")}</b>{" "}
-        {summary.to_delete === 1 ? "será apagada" : "serão apagadas"}
-        {summary.edited_after ? (
-          <span style={{ color: T.amber }}>
-            {" "}({plural(summary.edited_after, "editada", "editadas")} depois da conciliação — {summary.edited_after === 1 ? "essa também some" : "essas também somem"})
-          </span>
-        ) : null}
-      </li>
+      {/* Com zero, nenhuma frase de "0 transações" (smoke em dev). */}
+      {summary.to_delete ? (
+        <li data-testid="undo-delete-count">
+          <b style={NUM}>{plural(summary.to_delete, "transação adicionada", "transações adicionadas")}</b>{" "}
+          {summary.to_delete === 1 ? "será apagada" : "serão apagadas"}
+          {summary.edited_after ? (
+            <span style={{ color: T.amber }}>
+              {" "}({plural(summary.edited_after, "editada", "editadas")} depois da conciliação — {summary.edited_after === 1 ? "essa também some" : "essas também somem"})
+            </span>
+          ) : null}
+        </li>
+      ) : null}
       {restoredTransactions ? (
         <li data-testid="undo-restore-count">
           <b style={NUM}>{plural(restoredTransactions, "transação que já estava", "transações que já estavam")}</b> no Fincla{" "}
@@ -191,13 +194,22 @@ function WhatHappens({ preview }) {
   );
 }
 
+/** A frase da confirmação concorda com a contagem: nada com 0, singular com 1, plural com 2+. */
+function ConfirmText({ summary }) {
+  const n = summary.to_delete;
+  if (!n) return "O que esta conciliação mudou no Fincla volta a ser como era antes.";
+  if (n === 1) {
+    return `A transação adicionada será apagada${summary.edited_after ? ", mesmo editada depois" : ""}. Para trazê-la de volta, será preciso importar o extrato de novo.`;
+  }
+  return `As ${n.toLocaleString("pt-BR")} transações adicionadas serão apagadas${summary.edited_after ? ", inclusive as editadas depois" : ""}. Para trazê-las de volta, será preciso importar o extrato de novo.`;
+}
+
 function ConfirmBox({ preview, undoing, onConfirm, onCancel }) {
   const { summary } = preview;
   return (
     <div role="group" aria-label="Confirmar desfazer importação" style={{ background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <p style={{ ...G, fontSize: 13, color: T.ink, margin: 0 }}>
-        <b>Tem certeza?</b> {summary.to_delete === 1 ? "A transação adicionada será apagada" : `As ${summary.to_delete} transações adicionadas serão apagadas`}
-        {summary.edited_after ? ", inclusive as editadas depois" : ""}. Para trazê-las de volta, será preciso importar o extrato de novo.
+        <b>Tem certeza?</b> <ConfirmText summary={summary} />
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Btn variant="red" onClick={onConfirm} disabled={undoing}>{undoing ? "Desfazendo…" : "Sim, desfazer importação"}</Btn>
@@ -211,9 +223,9 @@ function UndoneView({ deleted, accountName, onOpenTransactions, onBack }) {
   return (
     <ImportUndoneCard onOpenTransactions={onOpenTransactions} onBack={onBack}>
       {deleted == null
-        ? "As transações que esta importação adicionou foram apagadas."
-        : <>{plural(deleted, "transação adicionada foi apagada", "transações adicionadas foram apagadas")}.</>}
-      {accountName ? <> A conta <b>{accountName}</b> voltou ao que era antes da conciliação.</> : null}
+        ? "As transações que esta importação adicionou foram apagadas. "
+        : deleted ? <>{plural(deleted, "transação adicionada foi apagada", "transações adicionadas foram apagadas")}. </> : null}
+      {accountName ? <>A conta <b>{accountName}</b> voltou ao que era antes da conciliação.</> : "A conciliação foi desfeita."}
     </ImportUndoneCard>
   );
 }
