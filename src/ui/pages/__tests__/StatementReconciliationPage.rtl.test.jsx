@@ -308,8 +308,30 @@ describe("revisar e concluir", () => {
     await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
 
     expect(await screen.findByText("Conciliação concluída")).toBeInTheDocument();
-    expect(screen.getByText(/3 transações adicionadas/)).toBeInTheDocument();
+    expect(screen.getByText(/3 transações adicionadas/)).toHaveTextContent("3 transações adicionadas à conta Itaú, pagas nas datas do banco.");
     expect(calls).toContainEqual({ conclude: IMPORT });
+  });
+
+  it("com uma transação só, a frase da conclusão fica no singular (BUG-02)", async () => {
+    draft.entries[2].description = "Conta de luz";
+    draft.summary.missing_description = 0;
+    draft.blockers = [];
+    draft.can_conclude = true;
+    server.use(
+      http.post(`${BASE}/${IMPORT}/conclude`, () => {
+        const concluded = clone(draft);
+        concluded.status = "concluded";
+        concluded.concluded_at = "2026-11-14T10:30:00";
+        concluded.entries[2].created_transaction_id = 102;
+        return HttpResponse.json(concluded);
+      }),
+    );
+    const user = userEvent.setup();
+    await openSummary(user);
+
+    await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
+
+    expect(await screen.findByText(/1 transação adicionada/)).toHaveTextContent("1 transação adicionada à conta Itaú, paga na data do banco.");
   });
 
   it("depois de concluir, abre as transações da conta no período do extrato", async () => {
@@ -591,6 +613,15 @@ describe("Extratos importados (fincla-api#518)", () => {
     expect(rows[1]).toHaveTextContent("Importado em 03/10/2026 · concluída em 03/10/2026");
     expect(rows[2]).toHaveTextContent("41 adicionados e apagados ao desfazer");
     expect(rows[2]).toHaveTextContent("desfeita em 02/10/2026");
+  });
+
+  it("uma importação desfeita com uma transação só fala no singular (BUG-02)", async () => {
+    imports = clone(contract.imports.imports);
+    imports[2].summary.to_create = 1;
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(rows[2]).toHaveTextContent("1 adicionado e apagado ao desfazer");
   });
 
   it("diferença não registrada aparece como travessão, nunca como zero", async () => {

@@ -428,7 +428,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
         <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.green, margin: 0 }}>Conciliação concluída</h2>
         <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
           {plural(created, "transação adicionada", "transações adicionadas")}
-          {accountName ? <> à conta <b>{accountName}</b></> : null}, pagas nas datas do banco.
+          {accountName ? <> à conta <b>{accountName}</b></> : null}, {created === 1 ? "paga na data do banco" : "pagas nas datas do banco"}.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onOpenAccountTransactions ? (

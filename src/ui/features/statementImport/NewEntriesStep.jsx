@@ -43,6 +43,13 @@ function UndoBar({ bulk, onUndo }) {
   );
 }
 
+/** "Aplicar aos 3 marcados" / "Aplicar ao 1 marcado"; só os que vão ser adicionados quando há "Não registrar" entre eles. */
+function applyLabel(addable, selected) {
+  const n = addable.toLocaleString("pt-BR");
+  if (addable === selected) return addable === 1 ? "Aplicar ao 1 marcado" : `Aplicar aos ${n} marcados`;
+  return addable === 1 ? "Aplicar ao 1 a adicionar" : `Aplicar aos ${n} a adicionar`;
+}
+
 function GroupDraft({ count, monthName, onConfirm, onCancel, busy }) {
   const [description, setDescription] = useState("");
   const blank = !description.trim();
@@ -102,7 +109,7 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
               {addable.length ? options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>) : null}
             </Select>
             <Btn variant="purple" small disabled={!addable.length || !categoryId || busy} onClick={() => onApplyCategory(categoryId)}>
-              {addable.length === selected.length ? `Aplicar aos ${selected.length} marcados` : `Aplicar aos ${addable.length} a adicionar`}
+              {applyLabel(addable.length, selected.length)}
             </Btn>
           </>
         ) : null}
@@ -339,11 +346,11 @@ export function NewEntriesStep({
             {allSelected ? "Desmarcar todas" : `Marcar todas (${free.length})`}
           </Btn>
           {stepKey === "yield" ? (
-            <span style={{ fontSize: 12, color: T.inkLight }}>soma das {free.length}: <span style={NUM}>{signed(freeTotal, free[0]?.currency)}</span></span>
+            <span style={{ fontSize: 12, color: T.inkLight }}>{free.length === 1 ? "valor" : `soma das ${free.length.toLocaleString("pt-BR")}`}: <span style={NUM}>{signed(freeTotal, free[0]?.currency)}</span></span>
           ) : unclassified.length ? (
             <>
               <Btn variant="outAmber" small onClick={() => setSelectedIds(unclassified.map((e) => e.id))}>
-                Marcar as {unclassified.length} sem categoria
+                {unclassified.length === 1 ? "Marcar a que está sem categoria" : `Marcar as ${unclassified.length.toLocaleString("pt-BR")} sem categoria`}
               </Btn>
               <span style={{ fontSize: 12, color: T.amber }}>{plural(unclassified.length, "lançamento vai", "lançamentos vão")} para Não classificado</span>
             </>
