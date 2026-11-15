@@ -1611,6 +1611,7 @@
     "account_check": {"status": "same_account", "suggested_account": null},
     "latest_concluded": false,
     "file_check": {"status": "new", "import_id": null, "account_id": null, "account_name": null, "concluded_at": null},
-    "left_out": null
+    "left_out": null,
+    "final_difference": null
   }
 }
