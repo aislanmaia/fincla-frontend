@@ -72,6 +72,8 @@ function refreshTaken() {
 }
 
 const server = setupServer(
+  // "Revisar e concluir" mostra a diferença de saldo (fincla-api#514).
+  http.get(`${BASE}/${IMPORT}/balance-check`, () => HttpResponse.json(contract.balance_check)),
   http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),

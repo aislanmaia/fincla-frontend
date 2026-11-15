@@ -142,7 +142,9 @@ function RestoredInvoiceRow({ entity }) {
 function WhatHappens({ preview }) {
   const { summary } = preview;
   const invoices = preview.to_restore.filter((r) => r.entity_type === "invoice");
-  const restoredTransactions = summary.to_restore - invoices.length;
+  // Excluídas na conferência de saldo (fincla-api#514): voltam a existir, contadas à parte.
+  const recreated = preview.to_restore.filter((r) => r.entity_type === "transaction" && r.action === "deleted").length;
+  const restoredTransactions = summary.to_restore - invoices.length - recreated;
   return (
     <ul style={{ ...G, fontSize: 14, color: T.ink, margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
       <li data-testid="undo-delete-count">
@@ -158,6 +160,12 @@ function WhatHappens({ preview }) {
         <li data-testid="undo-restore-count">
           <b style={NUM}>{plural(restoredTransactions, "transação que já estava", "transações que já estavam")}</b> no Fincla{" "}
           {restoredTransactions === 1 ? "volta" : "voltam"} ao estado de antes da conciliação
+        </li>
+      ) : null}
+      {recreated ? (
+        <li data-testid="undo-recreated-count">
+          <b style={NUM}>{plural(recreated, "transação excluída na conferência de saldo", "transações excluídas na conferência de saldo")}</b>{" "}
+          {recreated === 1 ? "volta a existir" : "voltam a existir"}
         </li>
       ) : null}
       {invoices.filter((r) => r.invoice?.status_back).map((r) => (
