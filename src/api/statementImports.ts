@@ -44,7 +44,9 @@ export interface StatementImportSummary {
   to_create: number;
   missing_description: number;
   unanswered: number;
-  /** Respondidos "Não registrar": não viram transação. */
+  /** Respondidos "Sim, é esta": não viram transação nova (fincla-api#510). */
+  to_pair: number;
+  /** Respondidos "Não registrar": não viram nada. */
   ignored: number;
   /** Lançamentos somados em alguma soma (fincla-api#513). */
   grouped: number;
@@ -75,6 +77,31 @@ export interface StatementGroup {
   created_transaction_id: number | null;
 }
 
+/**
+ * Como o Fincla leu o lançamento (fixo, fincla-api#510): `suggested` = uma única transação da
+ * mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar lançamentos
+ * encontrados"); `yield` = rendimento pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar
+ * no mês (fincla-api#513); `new` = sem par.
+ */
+export type StatementEntryClassification = 'new' | 'suggested' | 'yield';
+
+/** O lado "No Fincla" do par: a transação como está hoje. */
+export interface FinclaTransaction {
+  id: number;
+  description: string;
+  type: StatementTransactionType;
+  /** Sem sinal. */
+  value: number;
+  currency: string | null;
+  /** Data de competência; a tela lê os 10 primeiros caracteres. */
+  date: string;
+  status: 'pending' | 'confirmed' | 'paid';
+  paid_at: string | null;
+  payment_method: string;
+  category_name: string | null;
+  tag_names: string[];
+}
+
 export interface StatementEntry {
   id: string;
   position: number;
@@ -88,8 +115,7 @@ export interface StatementEntry {
   currency: string | null;
   /** Só informativo (ADR 0009). */
   fitid: string | null;
-  /** `yield` = rendimento pequeno (entrada de centavos), que dá para somar no mês. */
-  classification: 'new' | 'yield';
+  classification: StatementEntryClassification;
   answer: StatementEntryAnswer | null;
   description: string | null;
   transaction_type: StatementTransactionType | null;
@@ -104,6 +130,14 @@ export interface StatementEntry {
   /** A soma em que o lançamento entrou (`answer: 'group'`). */
   group_id: string | null;
   created_transaction_id: number | null;
+  /** Transação que o Fincla sugeriu como par (selo "Sugerido pelo Fincla"). */
+  suggested_transaction_id: number | null;
+  /** Transação pareada enquanto `answer === 'pair'`. */
+  paired_transaction_id: number | null;
+  /** A pessoa já passou por este lançamento; sugestão não confirmada = "Sugerido · falta confirmar". */
+  confirmed: boolean;
+  /** A transação do par (a escolhida, senão a sugerida); `null` se não há. */
+  fincla_transaction: FinclaTransaction | null;
 }
 
 export interface StatementImport {
@@ -161,8 +195,10 @@ export interface StatementImportListItem {
 }
 
 export interface UpdateStatementEntryRequest {
-  /** `create` = adicionar; `ignore` = Não registrar. Num lançamento somado, tira da soma. */
-  answer?: 'create' | 'ignore';
+  /** Sim, é esta (`pair`) / Não, adicionar agora (`create`) / Não registrar (`ignore`). */
+  answer?: 'pair' | 'create' | 'ignore';
+  /** Responder marca `true`; "Desfazer escolha" devolve o anterior. */
+  confirmed?: boolean;
   description?: string;
   transaction_type?: StatementTransactionType;
   payment_method?: StatementPaymentMethod;
@@ -178,7 +214,11 @@ export interface UpdateStatementGroupRequest {
   detail_tag_ids?: string[];
 }
 
-type RawEntry = Omit<StatementEntry, 'amount' | 'currency'> & { amount: WireMoney };
+type RawFinclaTransaction = Omit<FinclaTransaction, 'value' | 'currency'> & { value: WireMoney };
+type RawEntry = Omit<StatementEntry, 'amount' | 'currency' | 'fincla_transaction'> & {
+  amount: WireMoney;
+  fincla_transaction?: RawFinclaTransaction | null;
+};
 type RawGroup = Omit<StatementGroup, 'amount' | 'currency'> & { amount: WireMoney };
 type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> & {
   entries: RawEntry[];
@@ -186,10 +226,16 @@ type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> &
   bank_balances: { date: string; balance: WireMoney }[];
 };
 
-export const normalizeStatementEntry = (raw: RawEntry): StatementEntry => ({
+export const normalizeStatementEntry = ({ fincla_transaction, ...raw }: RawEntry): StatementEntry => ({
   ...raw,
   amount: toAmount(raw.amount),
   currency: toCurrency(raw.amount),
+  suggested_transaction_id: raw.suggested_transaction_id ?? null,
+  paired_transaction_id: raw.paired_transaction_id ?? null,
+  confirmed: Boolean(raw.confirmed),
+  fincla_transaction: fincla_transaction
+    ? { ...fincla_transaction, value: toAmount(fincla_transaction.value), currency: toCurrency(fincla_transaction.value) }
+    : null,
 });
 
 export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
@@ -322,6 +368,25 @@ export const deleteStatementGroup = async (
   const response = await apiClient.delete<RawImport>(`${base(accountId)}/${importId}/groups/${groupId}`, {
     params: { organization_id: organizationId },
   });
+  return normalizeStatementImport(response.data);
+};
+
+/**
+ * "Confirmar os N de uma vez" (`confirmed: true`) e o desfazer dele (`confirmed: false`), tudo ou
+ * nada. Só lançamentos respondidos "Sim, é esta" podem ser confirmados (fincla-api#510).
+ */
+export const confirmStatementSuggestions = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  entryIds: string[],
+  confirmed = true,
+): Promise<StatementImport> => {
+  const response = await apiClient.post<RawImport>(
+    `${base(accountId)}/${importId}/suggestions/confirm`,
+    { entry_ids: entryIds, confirmed },
+    { params: { organization_id: organizationId } },
+  );
   return normalizeStatementImport(response.data);
 };
 

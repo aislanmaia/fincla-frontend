@@ -21,6 +21,7 @@ import {
   concludeStatementImport,
   createStatementGroup,
   deleteStatementGroup,
+  confirmStatementSuggestions,
   getStatementImport,
   listStatementImports,
   updateStatementEntries,
@@ -39,6 +40,7 @@ import {
 import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
+import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -309,6 +311,7 @@ function ProgressPanel({ statementImport, passed }) {
       </div>
       <div style={{ ...G, fontSize: 12, color: T.inkMid }}>
         <b style={NUM}>{plural(summary.total, "lançamento", "lançamentos")}</b> no extrato ·{" "}
+        {summary.to_pair ? <><b style={NUM}>{summary.to_pair}</b> já no Fincla · </> : null}
         <b style={NUM}>{summary.to_create}</b> para adicionar
         {summary.missing_description ? <> · <span style={{ color: T.amber }}>{plural(summary.missing_description, "sem descrição", "sem descrição")}</span></> : null}
       </div>
@@ -355,6 +358,7 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
   const { summary, blockers } = statementImport;
   const rows = [
     ["Lançamentos no extrato", summary.total, "summary-total"],
+    ["Já estavam no Fincla", summary.to_pair, "summary-to-pair"],
     ["Serão adicionados", summary.to_create, "summary-to-create"],
     ["Somados em um lançamento", summary.grouped, "summary-grouped", summary.groups ? `em ${plural(summary.groups, "transação", "transações")}` : null],
     ["Não serão registrados", summary.ignored, "summary-ignored"],
@@ -370,6 +374,12 @@ function SummaryStep({ statementImport, concluding, error, onConclude, onClassif
             </div>
           ))}
         </dl>
+        {summary.to_pair ? (
+          <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "12px 0 0" }}>
+            Ao concluir, cada transação confirmada com “Sim, é esta” fica <b>paga na data do banco</b>; descrição, data,
+            categoria e etiquetas continuam como estão.
+          </p>
+        ) : null}
         {summary.to_create || summary.groups ? (
           <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "12px 0 0" }}>
             Ao concluir, cada lançamento marcado para adicionar e cada soma vira uma transação <b>paga na data do banco</b>
@@ -469,6 +479,12 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   const [current, setCurrent] = useState(null);
   const [passed, setPassed] = useState(() => new Set());
   const [concluding, setConcluding] = useState(false);
+  // Passo "Confirmar lançamentos encontrados" (fincla-api#510): cartões reabertos, respostas
+  // anteriores de cada lançamento (para "Desfazer escolha") e a última confirmação em lote.
+  const [openedPairs, setOpenedPairs] = useState(() => new Set());
+  const [answerHistory, setAnswerHistory] = useState({});
+  const [lastBulk, setLastBulk] = useState(null);
+  const [answering, setAnswering] = useState(false);
   // Os PATCH de progresso saem em fila: o próximo só parte quando o anterior respondeu, então o
   // servidor fica sempre com o último passo aberto (fincla-api#518).
   const progressQueue = useRef(Promise.resolve());
@@ -542,6 +558,63 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     applyWhole(() => updateStatementGroup(accountId, organizationId, importId, groupId, body));
   const deleteGroup = (groupId) => applyWhole(() => deleteStatementGroup(accountId, organizationId, importId, groupId));
 
+  const withOpened = (entryId, isOpen) => setOpenedPairs((prev) => {
+    const next = new Set(prev);
+    if (isOpen) next.add(entryId);
+    else next.delete(entryId);
+    return next;
+  });
+
+  const answerPair = async (entry, answer) => {
+    if (answer === entry.answer && entry.confirmed) return;
+    setAnswering(true);
+    setActionError("");
+    try {
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer });
+      setAnswerHistory((prev) => ({
+        ...prev,
+        [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }],
+      }));
+      // "Não, adicionar agora" deixa o cartão aberto para conferir a transação nova; as outras minimizam.
+      withOpened(entry.id, answer === "create");
+      await reload();
+    } catch (err) {
+      setActionError(handleApiError(err));
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  const undoPairChoice = async (entry) => {
+    const previous = answerHistory[entry.id]?.at(-1);
+    if (!previous) return;
+    setAnswering(true);
+    setActionError("");
+    try {
+      await updateStatementEntry(accountId, organizationId, importId, entry.id, previous);
+      setAnswerHistory((prev) => ({ ...prev, [entry.id]: prev[entry.id].slice(0, -1) }));
+      await reload();
+    } catch (err) {
+      setActionError(handleApiError(err));
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  const confirmPairs = async (entryIds, confirmed) => {
+    setAnswering(true);
+    setActionError("");
+    try {
+      setStatementImport(await confirmStatementSuggestions(accountId, organizationId, importId, entryIds, confirmed));
+      setLastBulk(confirmed ? entryIds : null);
+      setOpenedPairs((prev) => new Set([...prev].filter((id) => !entryIds.includes(id))));
+    } catch (err) {
+      setActionError(handleApiError(err));
+    } finally {
+      setAnswering(false);
+    }
+  };
+
   const conclude = async () => {
     setConcluding(true);
     setActionError("");
@@ -599,6 +672,26 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           </header>
           {current !== "summary" ? <ErrorNote>{actionError}</ErrorNote> : null}
 
+          {current === "suggested" && stepEntries.length ? (
+            <SuggestedPairsStep
+              entries={stepEntries}
+              isMobile={isMobile}
+              busy={answering}
+              categories={categories}
+              details={details}
+              fallbackLabel={fallbackLabel}
+              opened={openedPairs}
+              history={answerHistory}
+              lastBulk={lastBulk}
+              onAnswer={answerPair}
+              onChange={changeEntry}
+              onUndoChoice={undoPairChoice}
+              onOpen={(entry) => withOpened(entry.id, true)}
+              onMinimize={(entry) => withOpened(entry.id, false)}
+              onConfirmAll={(ids) => confirmPairs(ids, true)}
+              onUndoConfirmAll={() => confirmPairs(lastBulk, false)}
+            />
+          ) : null}
           {ENTRY_STEPS.has(current) ? <ErrorNote>{categoriesError}</ErrorNote> : null}
           {ENTRY_STEPS.has(current) && stepEntries.length ? (
             <NewEntriesStep
@@ -622,7 +715,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
           {current === "summary" ? (
             <SummaryStep statementImport={statementImport} concluding={concluding} error={actionError} onConclude={conclude} onClassify={() => open("new")} />
           ) : null}
-          {!["new", "yield", "balance", "summary", "outside"].includes(current) || (ENTRY_STEPS.has(current) && !stepEntries.length) ? (
+          {!["suggested", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
           ) : null}
 

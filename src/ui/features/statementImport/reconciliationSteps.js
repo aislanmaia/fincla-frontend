@@ -1,6 +1,6 @@
 // Os 8 passos da conciliação (spec fincla-api#507), na ordem e com os textos do protótipo
-// aprovado. Nesta entrega (#508) todo lançamento lido é "novo"; os passos que ainda não têm
-// conteúdo aparecem no trilho e dizem que não há nada a fazer.
+// aprovado. O primeiro passo mostra os pares que o Fincla sugeriu (#510); os passos que ainda
+// não têm conteúdo aparecem no trilho e dizem que não há nada a fazer.
 import { plural } from "../../plural.js";
 
 export const STEPS = [
@@ -8,6 +8,7 @@ export const STEPS = [
     key: "suggested",
     title: "Confirmar lançamentos encontrados",
     todo: "O Fincla achou estes lançamentos do banco já registrados no Fincla. Confira se cada par está certo.",
+    then: "Nada muda no Fincla agora: tudo só é aplicado quando você concluir a conciliação, no último passo.",
   },
   {
     key: "doubt",
@@ -51,11 +52,13 @@ export const STEPS = [
 
 /** Os lançamentos do extrato que pertencem a um passo. */
 export function entriesOfStep(stepKey, entries) {
+  // A sugestão fica no seu passo qualquer que seja a resposta: dá para voltar a ela ali mesmo.
+  if (stepKey === "suggested") return entries.filter((e) => e.classification === "suggested");
   // Os respondidos continuam no passo (Não registrar minimizado, somados dentro da soma): nada some.
   if (stepKey === "new") return entries.filter((e) => e.classification === "new" && e.amount !== 0);
   if (stepKey === "yield") return entries.filter((e) => e.classification === "yield" && e.amount !== 0);
   // Valor zero não move dinheiro: não vira transação e fica visível aqui.
-  if (stepKey === "outside") return entries.filter((e) => e.amount === 0);
+  if (stepKey === "outside") return entries.filter((e) => e.classification === "new" && e.amount === 0);
   return [];
 }
 
@@ -82,8 +85,18 @@ export function stepStatus(stepKey, statementImport, passed) {
   }
   if (passed) return { tone: "done", text: "Conferido" };
   if (!entries.length) return { tone: "neutral", text: "Nada a fazer" };
+  if (stepKey === "suggested") {
+    const unconfirmed = unconfirmedSuggestions(entries).length;
+    if (unconfirmed) return { tone: "ready", text: plural(unconfirmed, "sugestão para confirmar", "sugestões para confirmar") };
+    return { tone: "ready", text: "Sugestões prontas · falta você conferir" };
+  }
   if (INFO_ONLY.has(stepKey)) return { tone: "neutral", text: `Nada a fazer · ${plural(entries.length, "não vira transação", "não viram transação")}` };
   return { tone: "ready", text: `${plural(entries.length, "lançamento", "lançamentos")} · falta você conferir` };
+}
+
+/** Sugestões ainda respondidas "Sim, é esta" sem a pessoa ter confirmado ("Sugerido · falta confirmar"). */
+export function unconfirmedSuggestions(entries) {
+  return entries.filter((e) => e.classification === "suggested" && e.answer === "pair" && !e.confirmed);
 }
 
 /** Por que "Concluir conciliação" está bloqueado, em português. */

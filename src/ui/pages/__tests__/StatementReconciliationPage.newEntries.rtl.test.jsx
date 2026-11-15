@@ -70,6 +70,7 @@ function recompute() {
     to_create: create.length,
     missing_description: create.filter((e) => !(e.description || "").trim()).length,
     unanswered: draft.entries.filter((e) => e.answer == null).length,
+    to_pair: draft.entries.filter((e) => e.answer === "pair").length,
     ignored: draft.entries.filter((e) => e.answer === "ignore").length,
     grouped: draft.entries.filter((e) => e.answer === "group").length,
     groups: draft.groups.length,
@@ -381,6 +382,30 @@ describe("adicionar lançamentos novos", () => {
 
     await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: SALARY, answer: "create" }, { id: ENERGY, answer: "create" }] }));
     await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(1));
+  });
+});
+
+describe("sugestão respondida Não, adicionar agora (fincla-api#510)", () => {
+  it("a transação nova embutida no cartão tem categoria pelo histórico e etiquetas da categoria", async () => {
+    const user = await openDraft({ setup: (d) => {
+      const suggested = clone(contract.suggested_draft);
+      d.entries = suggested.entries;
+      d.groups = [];
+      // O histórico sugeriu Alimentação para o primeiro lançamento sugerido.
+      const first = d.entries.find((e) => e.classification === "suggested" && !e.confirmed);
+      first.category_tag_id = FOOD;
+      first.suggested_category_tag_id = FOOD;
+    } });
+    const first = draft.entries.find((e) => e.classification === "suggested" && !e.confirmed);
+    const pairCard = () => screen.getAllByRole("article").find((a) => within(a).queryByText(first.bank_description) && within(a).queryByRole("button", { name: "Não, adicionar agora" }));
+
+    await user.click(within(pairCard()).getByRole("button", { name: "Não, adicionar agora" }));
+
+    const side = await screen.findByTestId("statement-entry-new-side");
+    expect(within(side).getByText("Sugerida pelo seu histórico")).toBeInTheDocument();
+    const tags = within(side).getByRole("group", { name: "Etiquetas de Alimentação" });
+    await user.click(within(tags).getByRole("button", { name: "Lanche" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: first.id, body: { detail_tag_ids: ["det-snack"] } }));
   });
 });
 

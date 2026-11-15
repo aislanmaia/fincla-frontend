@@ -161,16 +161,12 @@ export function IgnoredEntryRow({ entry, selected = false, onSelect = null, onEx
 }
 
 /**
- * Um lançamento novo: à esquerda o que o banco registrou, à direita a transação que ele vai
- * virar ao concluir. Data e valor vêm do banco e ficam travados; descrição, tipo, forma de
- * pagamento (sugerida pelo texto do banco), categoria (sugerida pelo histórico) e etiquetas da
- * categoria são da pessoa. A descrição é gravada ao sair do campo. "Não registrar" troca o lado
- * direito por um aviso, com fundo próprio.
+ * O lado "No Fincla · nova transação": a transação que o lançamento vai virar ao concluir. Data e
+ * valor vêm do banco e ficam travados; descrição, tipo, forma de pagamento (sugerida pelo texto do
+ * banco), categoria (sugerida pelo histórico) e etiquetas da categoria são da pessoa. A descrição é
+ * gravada ao sair do campo.
  */
-export function StatementEntryCard({
-  entry, categories, details = [], fallbackLabel, isMobile, onChange,
-  selected = false, onSelect = null, onCollapse = null,
-}) {
+function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange }) {
   const [description, setDescription] = useState(entry.description ?? "");
   useEffect(() => setDescription(entry.description ?? ""), [entry.description]);
 
@@ -179,13 +175,129 @@ export function StatementEntryCard({
   const options = categoriesForType(categories, type).filter((c) => !c.is_fallback);
   const blank = !description.trim();
   const fieldId = (name) => `entry-${entry.id}-${name}`;
-  const ignored = entry.answer === "ignore";
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
-  const tags = detailLabels(details, entry.detail_tag_ids);
 
   const saveDescription = () => {
     if (description !== (entry.description ?? "")) onChange(entry.id, { description });
   };
+
+  return (
+    <section style={{ ...BOX, borderColor: T.greenBorder }}>
+      <div style={BOX_LABEL}>
+        No Fincla · nova transação <Badge color={T.green} bg={T.greenLight}>Entra ao concluir</Badge>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor={fieldId("description")} style={FIELD_LABEL}>Descrição</label>
+          <input
+            id={fieldId("description")}
+            value={description}
+            maxLength={255}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={saveDescription}
+            aria-invalid={blank}
+            style={{ ...INPUT, borderColor: blank ? T.red : T.border }}
+          />
+          {blank
+            ? <span style={{ ...HELP, color: T.red }}>Escreva uma descrição.</span>
+            : <span style={HELP}>Começa com o texto do banco. Pode trocar por um nome seu.</span>}
+        </div>
+
+        <div>
+          <span style={FIELD_LABEL}>Data</span>
+          <LockedValue testId="locked-date" title="Vem do extrato e não pode ser alterada">{bankDateLabel(entry.date)}</LockedValue>
+          <span style={HELP}>Vem do banco</span>
+        </div>
+        <div>
+          <span style={FIELD_LABEL}>Valor</span>
+          <LockedValue testId="locked-amount" title="Vem do extrato e não pode ser alterado">{formatMoney(entry.amount, entry.currency)}</LockedValue>
+          <span style={HELP}>Vem do banco</span>
+        </div>
+
+        <div>
+          {moneyIn ? (
+            <>
+              <label htmlFor={fieldId("type")} style={FIELD_LABEL}>Tipo</label>
+              <Select id={fieldId("type")} value={type} onChange={(e) => onChange(entry.id, { transaction_type: e.target.value })} style={{ width: "100%" }}>
+                <option value="income">{TYPE_LABEL.income}</option>
+                <option value="refund">{TYPE_LABEL.refund}</option>
+              </Select>
+              <span style={HELP}>Entrada: receita ou estorno</span>
+            </>
+          ) : (
+            <>
+              <span style={FIELD_LABEL}>Tipo</span>
+              <LockedValue testId="locked-type" title="Saída do banco sempre vira despesa">{TYPE_LABEL.expense}</LockedValue>
+              <span style={HELP}>Saída do banco</span>
+            </>
+          )}
+        </div>
+        <div>
+          <label htmlFor={fieldId("payment")} style={FIELD_LABEL}>Forma de pagamento</label>
+          <Select
+            id={fieldId("payment")}
+            value={entry.payment_method ?? "bank_transfer"}
+            onChange={(e) => onChange(entry.id, { payment_method: e.target.value })}
+            style={{ width: "100%" }}
+          >
+            {STATEMENT_PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </Select>
+          <span style={HELP}>Sugerida pelo texto do banco</span>
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor={fieldId("category")} style={FIELD_LABEL}>Categoria</label>
+          <Select
+            id={fieldId("category")}
+            value={entry.category_tag_id ?? ""}
+            onChange={(e) => onChange(entry.id, { category_tag_id: e.target.value || null })}
+            style={{ width: "100%" }}
+          >
+            <option value="">{fallbackLabel}</option>
+            {options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>)}
+          </Select>
+          <CategoryHelp categoryId={entry.category_tag_id} suggestedId={entry.suggested_category_tag_id} />
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <span style={FIELD_LABEL}>Etiquetas</span>
+          <DetailTagPicker
+            categoryId={entry.category_tag_id}
+            categoryLabel={chosenCategory}
+            details={details}
+            selected={entry.detail_tag_ids}
+            onChange={(next) => onChange(entry.id, { detail_tag_ids: next })}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Um lançamento novo: à esquerda o que o banco registrou, à direita a transação que ele vai
+ * virar ao concluir (`NewTransactionEditor`). "Não registrar" troca o lado direito por um aviso,
+ * com fundo próprio.
+ *
+ * `embedded`: só o lado "No Fincla · nova transação", sem moldura, para o cartão de um par sugerido
+ * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco.
+ */
+export function StatementEntryCard({
+  entry, categories, details = [], fallbackLabel, isMobile, onChange,
+  selected = false, onSelect = null, onCollapse = null, embedded = false,
+}) {
+  const moneyIn = entry.amount > 0;
+  const ignored = entry.answer === "ignore";
+  const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
+  const tags = detailLabels(details, entry.detail_tag_ids);
+
+  if (embedded) {
+    // Só o lado "No Fincla · nova transação", sem moldura: o cartão de um par sugerido respondido
+    // "Não, adicionar agora" (fincla-api#510) já mostra o lado do banco e a pergunta.
+    return (
+      <article data-testid="statement-entry-new-side" aria-label="Nova transação" style={{ display: "flex", minWidth: 0 }}>
+        <NewTransactionEditor entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} />
+      </article>
+    );
+  }
 
   return (
     <article
@@ -218,93 +330,7 @@ export function StatementEntryCard({
             </p>
           </section>
         ) : (
-          <section style={{ ...BOX, borderColor: T.greenBorder }}>
-            <div style={BOX_LABEL}>
-              No Fincla · nova transação <Badge color={T.green} bg={T.greenLight}>Entra ao concluir</Badge>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label htmlFor={fieldId("description")} style={FIELD_LABEL}>Descrição</label>
-                <input
-                  id={fieldId("description")}
-                  value={description}
-                  maxLength={255}
-                  onChange={(e) => setDescription(e.target.value)}
-                  onBlur={saveDescription}
-                  aria-invalid={blank}
-                  style={{ ...INPUT, borderColor: blank ? T.red : T.border }}
-                />
-                {blank
-                  ? <span style={{ ...HELP, color: T.red }}>Escreva uma descrição.</span>
-                  : <span style={HELP}>Começa com o texto do banco. Pode trocar por um nome seu.</span>}
-              </div>
-
-              <div>
-                <span style={FIELD_LABEL}>Data</span>
-                <LockedValue testId="locked-date" title="Vem do extrato e não pode ser alterada">{bankDateLabel(entry.date)}</LockedValue>
-                <span style={HELP}>Vem do banco</span>
-              </div>
-              <div>
-                <span style={FIELD_LABEL}>Valor</span>
-                <LockedValue testId="locked-amount" title="Vem do extrato e não pode ser alterado">{formatMoney(entry.amount, entry.currency)}</LockedValue>
-                <span style={HELP}>Vem do banco</span>
-              </div>
-
-              <div>
-                {moneyIn ? (
-                  <>
-                    <label htmlFor={fieldId("type")} style={FIELD_LABEL}>Tipo</label>
-                    <Select id={fieldId("type")} value={type} onChange={(e) => onChange(entry.id, { transaction_type: e.target.value })} style={{ width: "100%" }}>
-                      <option value="income">{TYPE_LABEL.income}</option>
-                      <option value="refund">{TYPE_LABEL.refund}</option>
-                    </Select>
-                    <span style={HELP}>Entrada: receita ou estorno</span>
-                  </>
-                ) : (
-                  <>
-                    <span style={FIELD_LABEL}>Tipo</span>
-                    <LockedValue testId="locked-type" title="Saída do banco sempre vira despesa">{TYPE_LABEL.expense}</LockedValue>
-                    <span style={HELP}>Saída do banco</span>
-                  </>
-                )}
-              </div>
-              <div>
-                <label htmlFor={fieldId("payment")} style={FIELD_LABEL}>Forma de pagamento</label>
-                <Select
-                  id={fieldId("payment")}
-                  value={entry.payment_method ?? "bank_transfer"}
-                  onChange={(e) => onChange(entry.id, { payment_method: e.target.value })}
-                  style={{ width: "100%" }}
-                >
-                  {STATEMENT_PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </Select>
-                <span style={HELP}>Sugerida pelo texto do banco</span>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label htmlFor={fieldId("category")} style={FIELD_LABEL}>Categoria</label>
-                <Select
-                  id={fieldId("category")}
-                  value={entry.category_tag_id ?? ""}
-                  onChange={(e) => onChange(entry.id, { category_tag_id: e.target.value || null })}
-                  style={{ width: "100%" }}
-                >
-                  <option value="">{fallbackLabel}</option>
-                  {options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>)}
-                </Select>
-                <CategoryHelp categoryId={entry.category_tag_id} suggestedId={entry.suggested_category_tag_id} />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={FIELD_LABEL}>Etiquetas</span>
-                <DetailTagPicker
-                  categoryId={entry.category_tag_id}
-                  categoryLabel={chosenCategory}
-                  details={details}
-                  selected={entry.detail_tag_ids}
-                  onChange={(next) => onChange(entry.id, { detail_tag_ids: next })}
-                />
-              </div>
-            </div>
-          </section>
+          <NewTransactionEditor entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} />
         )}
       </div>
       <AnswerSegment entry={entry} onChange={onChange} />
