@@ -469,6 +469,37 @@ describe("retomar a conciliação (fincla-api#518)", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
+
+  it("rascunho expirado em StrictMode e ao recarregar: a mensagem de expiração fica, e a tela não lista nem grava nada", async () => {
+    // QA etapa 1, OBS-01. A API agora repete a mensagem de expiração em toda leitura e só apaga o
+    // rascunho na limpeza das LISTAS: se abrir o link listasse as importações da conta, a primeira
+    // leitura sairia certa e a segunda (StrictMode, recarregar) cairia em "não encontrada".
+    const message = "Esta conciliação ficou parada por mais de 30 dias e foi descartada. Para conciliar este extrato, envie o arquivo de novo.";
+    const seen = [];
+    server.use(
+      http.get(`${BASE}/${IMPORT}`, () => {
+        seen.push("read");
+        return HttpResponse.json({ detail: { code: "not_found", message } }, { status: 404 });
+      }),
+      http.get(BASE, () => {
+        seen.push("list");
+        return HttpResponse.json({ imports: [] });
+      }),
+    );
+    calls.length = 0;
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    const first = render(<React.StrictMode><StatementReconciliationPage organizationId={ORG} /></React.StrictMode>);
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    first.unmount();
+
+    render(<React.StrictMode><StatementReconciliationPage organizationId={ORG} /></React.StrictMode>);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.queryByText(/não encontrada/i)).toBeNull();
+    expect(seen.filter((s) => s === "read").length).toBeGreaterThanOrEqual(2);
+    expect(seen).not.toContain("list");
+    expect(calls).toEqual([]);
+  });
 });
 
 describe("descartar o rascunho (fincla-api#518)", () => {
