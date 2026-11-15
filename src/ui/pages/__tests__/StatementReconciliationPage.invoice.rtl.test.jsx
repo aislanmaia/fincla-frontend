@@ -28,10 +28,11 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const calls = [];
 let draft = clone(contract.invoice_draft);
 let preview = clone(contract.undo_preview);
+let check = clone(contract.balance_check);
 
 const server = setupServer(
   // "Revisar e concluir" mostra a diferença de saldo (fincla-api#514).
-  http.get(`${BASE}/${IMPORT}/balance-check`, () => HttpResponse.json(contract.balance_check)),
+  http.get(`${BASE}/${IMPORT}/balance-check`, () => HttpResponse.json(check)),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
@@ -58,6 +59,7 @@ afterEach(() => {
   calls.length = 0;
   draft = clone(contract.invoice_draft);
   preview = clone(contract.undo_preview);
+  check = clone(contract.balance_check);
   server.resetHandlers();
   navigate.mockReset();
 });
@@ -258,6 +260,74 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
       "Fatura já pagaA Fatura Nubank · setembro já está paga no Fincla: nada muda nela e nenhuma transação é criada.",
     );
     expect(screen.getAllByTestId("summary-invoices-paid")).toHaveLength(1);
+  });
+
+  describe("desmarcada no app depois da leitura (BUG-02): nenhum outro passo diz que ela está paga", () => {
+    const UNMARKED = "Esta fatura foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta "
+      + "conciliação e envie o extrato de novo, para o Fincla ler a fatura como está agora.";
+    const unmark = ({ backendSaysPaid = false } = {}) => {
+      const paid = draft.entries.find((e) => e.answer === "invoice_already_paid");
+      paid.invoice.status = "closed";
+      paid.invoice.paid_date = null;
+      // Como o backend responde agora: pelo estado atual, não pela resposta.
+      const item = check.paid_invoices.find((i) => i.entry_id === paid.id);
+      Object.assign(item, { already_paid: backendSaysPaid, fincla_paid_on: null });
+      return item;
+    };
+    const openStep = async (step, heading) => {
+      draft.current_step = step;
+      params = { accountId: ACCOUNT, importId: IMPORT };
+      render(<StatementReconciliationPage organizationId={ORG} />);
+      await screen.findByRole("heading", { name: heading });
+    };
+    const nubankItem = async () => {
+      const items = await screen.findAllByTestId("paid-invoice");
+      return items.find((i) => i.textContent.includes("Fatura Nubank"));
+    };
+
+    it.each([
+      ["o backend já responde pelo estado atual", false],
+      ["mesmo que a resposta ainda diga já paga", true],
+    ])("Conferir o saldo: sem selo, sem data vazia, com o mesmo aviso do cartão (%s)", async (_label, backendSaysPaid) => {
+      unmark({ backendSaysPaid });
+      await openStep("balance", "Conferir o saldo");
+
+      const item = await nubankItem();
+      expect(item).not.toHaveTextContent("Já paga no Fincla");
+      expect(item).not.toHaveTextContent("paga no Fincla em");
+      expect(item).not.toHaveTextContent("já estava paga");
+      expect(item).not.toHaveTextContent(/saldo do Fincla em\s+e/);
+      expect(item.textContent).toContain("Total no Fincla R$\u00a0640,00 · pago pelo banco em 08/10/2026: R$\u00a0640,00");
+      expect(within(item).getByTestId("paid-invoice-text").textContent).toBe(UNMARKED);
+      // A outra fatura (a pagar, ainda em aberto) não muda.
+      const [other] = screen.getAllByTestId("paid-invoice");
+      expect(within(other).getByTestId("paid-invoice-text").textContent).toMatch(/^No Fincla a fatura é paga pelo total/);
+    });
+
+    it("Conferir o saldo: paga, mas sem o dia, não escreve uma data vazia", async () => {
+      const item = check.paid_invoices.find((i) => i.already_paid);
+      item.fincla_paid_on = null;
+      await openStep("balance", "Conferir o saldo");
+
+      const shown = await nubankItem();
+      expect(shown).toHaveTextContent("Já paga no Fincla");
+      expect(shown).not.toHaveTextContent("paga no Fincla em");
+      expect(within(shown).getByTestId("paid-invoice-text").textContent).toBe("A fatura já estava paga no Fincla e nada muda nela. ");
+    });
+
+    it("Revisar e concluir: não a conta como já paga e mostra o mesmo aviso no lugar de já está paga", async () => {
+      unmark();
+      await openStep("summary", "Revisar e concluir");
+
+      expect(screen.queryByTestId("summary-invoices-already-paid-count")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pagamentos de fatura já paga/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("summary-invoices-already-paid")).not.toBeInTheDocument();
+      expect(screen.getByTestId("summary-pair-changes")).not.toHaveTextContent("já está paga");
+      expect(screen.getByTestId("summary-invoice-unavailable").textContent).toBe(`Fatura mudou${UNMARKED}`);
+      // A fatura a pagar continua contada e com o efeito dela.
+      expect(screen.getByTestId("summary-invoice-payments")).toHaveTextContent("1");
+      expect(screen.getAllByTestId("summary-invoices-paid")).toHaveLength(1);
+    });
   });
 
   it("concluída, a tela final não diz que ela ficou paga", async () => {

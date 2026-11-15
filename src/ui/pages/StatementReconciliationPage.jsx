@@ -68,7 +68,7 @@ import {
   unmatchedItemId,
 } from "../features/statementImport/BalanceCheckStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
-import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
+import { InvoicePaymentStep, invoiceLabel, isPaidNow } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -183,7 +183,7 @@ function useCategories(organizationId) {
 
 const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
 
-function UploadView({ organizationId, accountId, accountName, beforeUpload = null }) {
+function UploadView({ organizationId, accountId, accountName, beforeUpload = null, onDraftInProgress = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -208,6 +208,9 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
       else if (running) {
         setPreview(null);
         setInProgress(running);
+        // O rascunho pode ter nascido por outro caminho (outra aba, resposta perdida): a lista da
+        // conta é buscada de novo, para o quadro "Conciliação em andamento" aparecer na hora (D1).
+        onDraftInProgress?.();
       } else setError(handleApiError(err));
       setSending(false);
     }
@@ -377,7 +380,7 @@ function AccountStatementsView({ organizationId, accountId, accountName }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} />
+      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} onDraftInProgress={load} />
       {error ? <ErrorNote>{error}</ErrorNote> : null}
       {items ? (
         <ImportedStatementsList
@@ -545,9 +548,11 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
   ];
   // Só aparece com pagamento de fatura no extrato (fincla-api#512): é a fatura que fica paga.
   if (summary.invoice_payments) rows.push(["Pagamentos de fatura", summary.invoice_payments, "summary-invoice-payments"]);
-  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela.
-  if (summary.invoices_already_paid) {
-    rows.push(["Pagamentos de fatura já paga no Fincla", summary.invoices_already_paid, "summary-invoices-already-paid-count", "nada muda"]);
+  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela. Conta pelo estado de AGORA
+  // (BUG-02), a mesma decisão do cartão: desmarcada depois da leitura, não é "já paga".
+  const alreadyPaidNow = statementImport.entries.filter(isPaidNow).length;
+  if (alreadyPaidNow) {
+    rows.push(["Pagamentos de fatura já paga no Fincla", alreadyPaidNow, "summary-invoices-already-paid-count", "nada muda"]);
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
