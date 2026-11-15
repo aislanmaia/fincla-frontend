@@ -68,7 +68,7 @@ import {
   unmatchedItemId,
 } from "../features/statementImport/BalanceCheckStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
-import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
+import { InvoicePaymentStep, invoiceLabel, isPaidNow } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -545,9 +545,11 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
   ];
   // Só aparece com pagamento de fatura no extrato (fincla-api#512): é a fatura que fica paga.
   if (summary.invoice_payments) rows.push(["Pagamentos de fatura", summary.invoice_payments, "summary-invoice-payments"]);
-  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela.
-  if (summary.invoices_already_paid) {
-    rows.push(["Pagamentos de fatura já paga no Fincla", summary.invoices_already_paid, "summary-invoices-already-paid-count", "nada muda"]);
+  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela. Conta pelo estado de AGORA
+  // (BUG-02), a mesma decisão do cartão: desmarcada depois da leitura, não é "já paga".
+  const alreadyPaidNow = statementImport.entries.filter(isPaidNow).length;
+  if (alreadyPaidNow) {
+    rows.push(["Pagamentos de fatura já paga no Fincla", alreadyPaidNow, "summary-invoices-already-paid-count", "nada muda"]);
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

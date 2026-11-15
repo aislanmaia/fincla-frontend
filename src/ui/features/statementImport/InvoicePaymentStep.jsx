@@ -106,17 +106,28 @@ export function invoiceUnavailable(entry) {
   return isAlreadyPaid(entry) ? entry.invoice.status !== "paid" : entry.invoice.status === "paid";
 }
 
+/**
+ * O único jeito de decidir "já paga no Fincla" AGORA (BUG-02): a referência "já paga" cuja fatura
+ * continua paga. Desmarcada depois da leitura, nenhum passo diz que ela está paga.
+ */
+export const isPaidNow = (entry) => isAlreadyPaid(entry) && !invoiceUnavailable(entry);
+
 function unavailableText(entry) {
   if (!entry.invoice) return "A fatura deste pagamento não existe mais no Fincla.";
   if (isAlreadyPaid(entry)) return "Esta fatura foi desmarcada como paga depois da leitura do extrato.";
   return `A ${invoiceLabel(entry.invoice)} já foi marcada como paga depois da leitura do extrato.`;
 }
 
+/** O aviso de fatura que mudou depois da leitura, com a mesma instrução da recusa do Concluir. */
+export function invoiceUnavailableText(entry) {
+  const again = isAlreadyPaid(entry) && entry.invoice ? ", para o Fincla ler a fatura como está agora." : ".";
+  return `${unavailableText(entry)} Para conciliar, descarte esta conciliação e envie o extrato de novo${again}`;
+}
+
 function InvoiceUnavailable({ entry }) {
   return (
     <div data-testid="invoice-unavailable" role="note" style={{ ...G, fontSize: 12, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px", margin: "0 14px 12px" }}>
-      {unavailableText(entry)} Para conciliar, descarte esta conciliação e envie o extrato de novo
-      {isAlreadyPaid(entry) && entry.invoice ? ", para o Fincla ler a fatura como está agora." : "."}
+      {invoiceUnavailableText(entry)}
     </div>
   );
 }
@@ -125,7 +136,7 @@ function InvoiceUnavailable({ entry }) {
 function Outcome({ entry, unavailable }) {
   const { invoice } = entry;
   // Desmarcada depois da leitura (OBS-10): o estado de agora manda, nada diz que ela está paga.
-  if (isAlreadyPaid(entry) && !unavailable) {
+  if (isPaidNow(entry)) {
     return (
       <span>
         Este lançamento é o pagamento de uma fatura que <b>já está paga no Fincla</b>. Ao concluir, nada muda: nenhuma transação é
@@ -150,7 +161,7 @@ function InvoicePaymentCard({ entry, isMobile, accountName }) {
   const { invoice } = entry;
   const unavailable = invoiceUnavailable(entry);
   // O selo "Já paga no Fincla" só enquanto ela está paga AGORA; desmarcada, fica o aviso.
-  const alreadyPaid = isAlreadyPaid(entry) && !unavailable;
+  const alreadyPaid = isPaidNow(entry);
   return (
     <article
       data-testid="invoice-card"

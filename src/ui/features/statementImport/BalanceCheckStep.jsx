@@ -20,7 +20,7 @@ import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : formatMoneySigned(value, currency));
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
-import { invoiceLabel } from "./InvoicePaymentStep.jsx";
+import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
 import { LINK } from "./StatementImportNotes.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
@@ -530,12 +530,24 @@ function WaitingText({ check }) {
   );
 }
 
-function PaidInvoiceText({ invoice: i }) {
+/**
+ * O estado de AGORA manda (BUG-02): com o lançamento à mão, "já paga" é a mesma decisão do cartão
+ * (`isPaidNow`) e uma fatura que mudou depois da leitura mostra o mesmo aviso; sem ele, a resposta.
+ */
+function paidInvoiceState(i, entry) {
+  if (!entry) return { alreadyPaid: i.already_paid, unavailable: null };
+  const unavailable = invoiceUnavailable(entry) ? invoiceUnavailableText(entry) : null;
+  return { alreadyPaid: isPaidNow(entry), unavailable };
+}
+
+function PaidInvoiceText({ invoice: i, alreadyPaid, unavailable }) {
+  if (unavailable) return unavailable;
   const amount = i.difference !== 0
     ? <>O banco pagou <b style={NUM}>{formatMoney(Math.abs(i.difference), i.currency)}</b> a {i.difference > 0 ? "menos" : "mais"} que o total da fatura no Fincla. </>
     : null;
-  if (i.already_paid) {
-    const otherDay = i.fincla_paid_on !== i.paid_on;
+  if (alreadyPaid) {
+    // Sem o dia do Fincla, a frase não sai: nunca uma data vazia.
+    const otherDay = Boolean(i.fincla_paid_on) && i.fincla_paid_on !== i.paid_on;
     return (
       <>
         A fatura já estava paga no Fincla e nada muda nela. {amount}
@@ -552,32 +564,35 @@ function PaidInvoiceText({ invoice: i }) {
   );
 }
 
-function PaidInvoices({ invoices }) {
+function PaidInvoices({ invoices, entriesById }) {
   if (!invoices.length) return null;
   return (
     <>
       <h3 style={{ ...SECTION, color: T.purple }}>Faturas pagas neste extrato <Badge color={T.purple} bg={T.purpleLight}>{invoices.length}</Badge></h3>
-      {invoices.map((i) => (
-        <div key={i.entry_id} data-testid="paid-invoice" style={ROW}>
-          <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <b style={{ fontSize: 13, color: T.ink }}>{invoiceLabel(i)} de {i.year}</b>
-              {i.already_paid ? <Badge color={T.green} bg={T.greenLight}>Já paga no Fincla</Badge> : null}
-            </span>
-            <span style={{ ...NUM, fontSize: 12, color: T.inkMid }}>
-              Total no Fincla {formatMoney(i.total, i.currency)}
-              {i.already_paid ? ` · paga no Fincla em ${bankDateLabel(i.fincla_paid_on)}` : ""} · pago pelo banco em {bankDateLabel(i.paid_on)}: {formatMoney(i.paid, i.currency)}
-            </span>
-            <span data-testid="paid-invoice-text" style={{ fontSize: 12, color: T.inkLight }}>
-              <PaidInvoiceText invoice={i} />
-            </span>
+      {invoices.map((i) => {
+        const { alreadyPaid, unavailable } = paidInvoiceState(i, entriesById.get(i.entry_id));
+        return (
+          <div key={i.entry_id} data-testid="paid-invoice" style={ROW}>
+            <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <b style={{ fontSize: 13, color: T.ink }}>{invoiceLabel(i)} de {i.year}</b>
+                {alreadyPaid ? <Badge color={T.green} bg={T.greenLight}>Já paga no Fincla</Badge> : null}
+              </span>
+              <span style={{ ...NUM, fontSize: 12, color: T.inkMid }}>
+                Total no Fincla {formatMoney(i.total, i.currency)}
+                {alreadyPaid && i.fincla_paid_on ? ` · paga no Fincla em ${bankDateLabel(i.fincla_paid_on)}` : ""} · pago pelo banco em {bankDateLabel(i.paid_on)}: {formatMoney(i.paid, i.currency)}
+              </span>
+              <span data-testid="paid-invoice-text" style={{ fontSize: 12, color: T.inkLight }}>
+                <PaidInvoiceText invoice={i} alreadyPaid={alreadyPaid} unavailable={unavailable} />
+              </span>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ ...NUM, fontSize: 13, fontWeight: 600 }}>{signed(i.difference, i.currency)}</span>
+              <div style={{ fontSize: 11, color: T.inkLight }}>diferença de valor</div>
+            </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <span style={{ ...NUM, fontSize: 13, fontWeight: 600 }}>{signed(i.difference, i.currency)}</span>
-            <div style={{ fontSize: 11, color: T.inkLight }}>diferença de valor</div>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -736,7 +751,7 @@ export function BalanceCheckStep({
       ) : null}
       {transfers.map((t) => <UnmatchedTransferRow key={t.transfer_id} transfer={t} />)}
 
-      <PaidInvoices invoices={check.paid_invoices} />
+      <PaidInvoices invoices={check.paid_invoices} entriesById={byId} />
       <LeftOutEntries entries={check.left_out_entries} onRedecide={onRedecide} />
       <ConcludeWithDifferenceNote check={check} />
     </div>
@@ -769,23 +784,27 @@ export function summaryEffects(entries, check) {
   return [
     newValue ? { tone: "amber", tag: "Valor muda", text: <><b>{plural(newValue, "transação passa", "transações passam")} a ter o valor do banco</b> (valor diferente no Fincla).</> } : null,
     moved ? { tone: "purple", tag: "Conta muda", text: <><b>{plural(moved, "transação é movida", "transações são movidas")} para esta conta</b> (estavam em outra conta).</> } : null,
-    ...invoices.map((e) => ({
+    // A fatura que mudou depois da leitura (BUG-02) não promete nada: o mesmo aviso do cartão.
+    ...invoices.filter((e) => !invoiceUnavailable(e)).map((e) => ({
       key: `invoice-${e.id}`,
       testId: "summary-invoices-paid",
       tone: "blue",
       tag: "Fatura paga",
-      text: e.invoice
-        ? <>A <b>{invoiceLabel(e.invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>
-        : <>Uma fatura de cartão fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>,
+      text: <>A <b>{invoiceLabel(e.invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>,
     })),
-    ...entries.filter((e) => e.answer === "invoice_already_paid").map((e) => ({
+    ...entries.filter(isPaidNow).map((e) => ({
       key: `invoice-already-paid-${e.id}`,
       testId: "summary-invoices-already-paid",
       tone: "blue",
       tag: "Fatura já paga",
-      text: e.invoice
-        ? <>A <b>{invoiceLabel(e.invoice)}</b> já está paga no Fincla: nada muda nela e nenhuma transação é criada.</>
-        : <>Uma fatura de cartão já paga no Fincla: nada muda nela e nenhuma transação é criada.</>,
+      text: <>A <b>{invoiceLabel(e.invoice)}</b> já está paga no Fincla: nada muda nela e nenhuma transação é criada.</>,
+    })),
+    ...entries.filter((e) => (e.answer === "invoice_payment" || e.answer === "invoice_already_paid") && invoiceUnavailable(e)).map((e) => ({
+      key: `invoice-unavailable-${e.id}`,
+      testId: "summary-invoice-unavailable",
+      tone: "amber",
+      tag: "Fatura mudou",
+      text: invoiceUnavailableText(e),
     })),
     deletions ? { tone: "red", tag: "Exclusão", text: <><b>{plural(deletions, "transação do Fincla é excluída", "transações do Fincla são excluídas")}</b>.</> } : null,
     dates ? { tone: "blue", tag: "Data muda", text: <><b>{plural(dates, "transação muda de data", "transações mudam de data")}</b>.</> } : null,
