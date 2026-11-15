@@ -48,14 +48,42 @@ export interface StatementImportSummary {
   to_pair: number;
   /** Respondidos "Não registrar": não viram nada. */
   ignored: number;
+  /** Lançamentos somados em alguma soma (fincla-api#513). */
+  grouped: number;
+  /** Somas: cada uma vira uma transação. */
+  groups: number;
+  /** Transações que vão para Não classificado (lançamentos novos e somas sem categoria). */
+  unclassified: number;
+}
+
+/** "Somar em um só lançamento" (fincla-api#513): vira UMA transação ao concluir. */
+export interface StatementGroup {
+  id: string;
+  /** Digitada pela pessoa (obrigatória). */
+  description: string;
+  transaction_type: StatementTransactionType;
+  payment_method: StatementPaymentMethod;
+  /** `null` = vai para Não classificado ao concluir. */
+  category_tag_id: string | null;
+  suggested_category_tag_id: string | null;
+  detail_tag_ids: string[];
+  /** Lançamentos somados, na ordem das datas. */
+  entry_ids: string[];
+  /** Soma exata dos lançamentos, com sinal. */
+  amount: number;
+  currency: string | null;
+  /** Data do último lançamento somado: a data da transação. */
+  date: string;
+  created_transaction_id: number | null;
 }
 
 /**
  * Como o Fincla leu o lançamento (fixo, fincla-api#510): `suggested` = uma única transação da
  * mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar lançamentos
- * encontrados"); `new` = sem par.
+ * encontrados"); `yield` = rendimento pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar
+ * no mês (fincla-api#513); `new` = sem par.
  */
-export type StatementEntryClassification = 'new' | 'suggested';
+export type StatementEntryClassification = 'new' | 'suggested' | 'yield';
 
 /** O lado "No Fincla" do par: a transação como está hoje. */
 export interface FinclaTransaction {
@@ -95,6 +123,12 @@ export interface StatementEntry {
   payment_method: StatementPaymentMethod | null;
   /** `null` = vai para Não classificado ao concluir. */
   category_tag_id: string | null;
+  /** O que o histórico sugeriu; igual a `category_tag_id` → "Sugerida pelo seu histórico". */
+  suggested_category_tag_id: string | null;
+  /** Etiquetas da transação nova, todas da categoria escolhida. */
+  detail_tag_ids: string[];
+  /** A soma em que o lançamento entrou (`answer: 'group'`). */
+  group_id: string | null;
   created_transaction_id: number | null;
   /** Transação que o Fincla sugeriu como par (selo "Sugerido pelo Fincla"). */
   suggested_transaction_id: number | null;
@@ -114,6 +148,7 @@ export interface StatementImport {
   period: { start: string | null; end: string | null };
   bank_balances: { date: string; balance: number; currency: string | null }[];
   entries: StatementEntry[];
+  groups: StatementGroup[];
   summary: StatementImportSummary;
   can_conclude: boolean;
   blockers: { code: ConcludeBlockerCode; count: number }[];
@@ -168,6 +203,15 @@ export interface UpdateStatementEntryRequest {
   transaction_type?: StatementTransactionType;
   payment_method?: StatementPaymentMethod;
   category_tag_id?: string | null;
+  detail_tag_ids?: string[];
+}
+
+export interface UpdateStatementGroupRequest {
+  description?: string;
+  transaction_type?: StatementTransactionType;
+  payment_method?: StatementPaymentMethod;
+  category_tag_id?: string | null;
+  detail_tag_ids?: string[];
 }
 
 type RawFinclaTransaction = Omit<FinclaTransaction, 'value' | 'currency'> & { value: WireMoney };
@@ -175,8 +219,10 @@ type RawEntry = Omit<StatementEntry, 'amount' | 'currency' | 'fincla_transaction
   amount: WireMoney;
   fincla_transaction?: RawFinclaTransaction | null;
 };
-type RawImport = Omit<StatementImport, 'entries' | 'bank_balances'> & {
+type RawGroup = Omit<StatementGroup, 'amount' | 'currency'> & { amount: WireMoney };
+type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups'> & {
   entries: RawEntry[];
+  groups?: RawGroup[];
   bank_balances: { date: string; balance: WireMoney }[];
 };
 
@@ -195,6 +241,7 @@ export const normalizeStatementEntry = ({ fincla_transaction, ...raw }: RawEntry
 export const normalizeStatementImport = (raw: RawImport): StatementImport => ({
   ...raw,
   entries: (raw.entries ?? []).map(normalizeStatementEntry),
+  groups: (raw.groups ?? []).map((g) => ({ ...g, amount: toAmount(g.amount), currency: toCurrency(g.amount) })),
   bank_balances: (raw.bank_balances ?? []).map((b) => ({
     date: b.date,
     balance: toAmount(b.balance),
@@ -267,6 +314,61 @@ export const updateStatementEntry = async (
     params: { organization_id: organizationId },
   });
   return normalizeStatementEntry(response.data);
+};
+
+/** Lote (tudo ou nada): várias mudanças de uma vez. Desfazer = outro lote com o que havia antes. */
+export const updateStatementEntries = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  entries: (UpdateStatementEntryRequest & { id: string })[],
+): Promise<StatementImport> => {
+  const response = await apiClient.patch<RawImport>(`${base(accountId)}/${importId}/entries`, { entries }, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementImport(response.data);
+};
+
+/** Somar em um só lançamento: mesmo sentido e mesmo mês; descrição obrigatória. */
+export const createStatementGroup = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  entryIds: string[],
+  description: string,
+): Promise<StatementImport> => {
+  const response = await apiClient.post<RawImport>(
+    `${base(accountId)}/${importId}/groups`,
+    { entry_ids: entryIds, description },
+    { params: { organization_id: organizationId } },
+  );
+  return normalizeStatementImport(response.data);
+};
+
+export const updateStatementGroup = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  groupId: string,
+  body: UpdateStatementGroupRequest,
+): Promise<StatementImport> => {
+  const response = await apiClient.patch<RawImport>(`${base(accountId)}/${importId}/groups/${groupId}`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementImport(response.data);
+};
+
+/** Desfazer soma: os lançamentos voltam a ser adicionados um por um. */
+export const deleteStatementGroup = async (
+  accountId: string,
+  organizationId: string,
+  importId: string,
+  groupId: string,
+): Promise<StatementImport> => {
+  const response = await apiClient.delete<RawImport>(`${base(accountId)}/${importId}/groups/${groupId}`, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeStatementImport(response.data);
 };
 
 /**

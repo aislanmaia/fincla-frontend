@@ -42,6 +42,7 @@ export function countsLabel(item) {
   if (status === "draft") parts.push(`${summary.to_create} a adicionar`);
   else if (status === "undone") parts.push(`${plural(summary.to_create, "adicionado", "adicionados")} e apagados ao desfazer`);
   else parts.push(plural(summary.to_create, "adicionado", "adicionados"));
+  if (summary.grouped) parts.push(`${plural(summary.grouped, "somado", "somados")} em ${plural(summary.groups, "lançamento", "lançamentos")}`);
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));
   return parts.join(" · ");

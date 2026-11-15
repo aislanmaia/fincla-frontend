@@ -22,6 +22,15 @@ const ACCOUNT = contract.draft.account_id;
 const IMPORT = contract.draft.id;
 const BASE = `*/v1/accounts/${ACCOUNT}/statement-imports`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
+// A primeira fatia (#508): só os três lançamentos novos do exemplo, sem rendimentos somados nem
+// "Não registrar" (esses têm a página própria, StatementReconciliationPage.newEntries).
+const firstSlice = (full) => {
+  const d = clone(full);
+  d.entries = d.entries.slice(0, 3);
+  d.groups = [];
+  d.summary = { ...d.summary, total: 3, ignored: 0, grouped: 0, groups: 0, unclassified: 2 };
+  return d;
+};
 
 const CATEGORIES = [
   { id: "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d", name: "Food", label: "Alimentação", tag_type: { name: "categoria" }, is_active: true, is_fallback: false, allowed_transaction_types: ["expense"] },
@@ -30,7 +39,7 @@ const CATEGORIES = [
 ];
 
 const calls = [];
-let draft = clone(contract.draft);
+let draft = firstSlice(contract.draft);
 let imports = [];
 const server = setupServer(
   http.get("*/v1/accounts", () =>
@@ -78,7 +87,7 @@ afterAll(() => server.close());
 afterEach(() => {
   cleanup();
   calls.length = 0;
-  draft = clone(contract.draft);
+  draft = firstSlice(contract.draft);
   imports = [];
   server.resetHandlers();
   navigate.mockReset();
@@ -381,7 +390,7 @@ describe("retomar a conciliação (fincla-api#518)", () => {
     const card = screen.getByTestId("draft-in-progress");
     expect(card).toHaveTextContent("Conciliação em andamento");
     expect(card).toHaveTextContent("Extrato de 01/10/2026 a 31/10/2026");
-    expect(card).toHaveTextContent("3 lançamentos · 3 a adicionar");
+    expect(card).toHaveTextContent("6 lançamentos · 3 a adicionar · 2 somados em 1 lançamento · 1 não registrado");
     expect(card).toHaveTextContent("Última alteração em 14/11/2026");
     expect(card).toHaveTextContent("descartada em 14/12/2026");
     await user.click(within(card).getByRole("button", { name: "Continuar conciliação" }));
@@ -576,9 +585,9 @@ describe("Extratos importados (fincla-api#518)", () => {
     const rows = screen.getAllByTestId("imported-statement");
     expect(rows.map((r) => within(r).getByTestId("import-status").textContent)).toEqual(["Rascunho", "Concluída", "Desfeita", "Concluída"]);
     expect(rows[0]).toHaveTextContent("01/10/2026 a 31/10/2026");
-    expect(rows[0]).toHaveTextContent("3 lançamentos · 3 a adicionar");
+    expect(rows[0]).toHaveTextContent("6 lançamentos · 3 a adicionar · 2 somados em 1 lançamento · 1 não registrado");
     expect(within(rows[0]).queryByTestId("import-difference")).not.toBeInTheDocument();
-    expect(rows[1]).toHaveTextContent("41 lançamentos · 38 adicionados · 3 não registrados");
+    expect(rows[1]).toHaveTextContent("41 lançamentos · 30 adicionados · 8 somados em 1 lançamento · 3 não registrados");
     expect(rows[1]).toHaveTextContent("Importado em 03/10/2026 · concluída em 03/10/2026");
     expect(rows[2]).toHaveTextContent("41 adicionados e apagados ao desfazer");
     expect(rows[2]).toHaveTextContent("desfeita em 02/10/2026");

@@ -21,9 +21,18 @@ const ACCOUNT = contract.draft.account_id;
 const IMPORT = contract.draft.id;
 const BASE = `*/v1/accounts/${ACCOUNT}/statement-imports`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
+// A primeira fatia (#508): só os três lançamentos novos do exemplo, sem rendimentos somados nem
+// "Não registrar" (esses têm a página própria, StatementReconciliationPage.newEntries).
+const firstSlice = (full) => {
+  const d = clone(full);
+  d.entries = d.entries.slice(0, 3);
+  d.groups = [];
+  d.summary = { ...d.summary, total: 3, ignored: 0, grouped: 0, groups: 0, unclassified: 2 };
+  return d;
+};
 
 const uploads = [];
-let draft = clone(contract.draft);
+let draft = firstSlice(contract.draft);
 // What POST answers, in order; the last one repeats.
 let answers = [];
 const needsMapping = () => HttpResponse.json({ detail: clone(contract.column_mapping_required) }, { status: 422 });
@@ -50,7 +59,7 @@ afterEach(() => {
   cleanup();
   uploads.length = 0;
   answers = [];
-  draft = clone(contract.draft);
+  draft = firstSlice(contract.draft);
   server.resetHandlers();
   navigate.mockReset();
 });

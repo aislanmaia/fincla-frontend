@@ -206,13 +206,13 @@ function UndoChoiceButton({ entry, onUndoChoice }) {
 }
 
 /** O cartão aberto de um par sugerido. */
-function PairCard({ entry, isMobile, busy, canUndo, categories, fallbackLabel, onAnswer, onChange, onUndoChoice, onMinimize }) {
+function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, onAnswer, onChange, onUndoChoice, onMinimize }) {
   const tx = entry.fincla_transaction;
   const dateDiffers = Boolean(tx) && entry.answer === "pair" && dayOf(tx.paid_at ?? tx.date) !== entry.date;
   const outcome = outcomeText(entry);
   let right;
   if (entry.answer === "create") {
-    right = <StatementEntryCard entry={entry} categories={categories} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} embedded />;
+    right = <StatementEntryCard entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} embedded />;
   } else if (entry.answer === "ignore") {
     right = <IgnoredSide />;
   } else {
@@ -287,6 +287,7 @@ export function SuggestedPairsStep({
   isMobile,
   busy,
   categories,
+  details = [],
   fallbackLabel,
   opened,
   history,
@@ -328,6 +329,7 @@ export function SuggestedPairsStep({
           busy={busy}
           canUndo={Boolean(history[entry.id]?.length)}
           categories={categories}
+          details={details}
           fallbackLabel={fallbackLabel}
           onAnswer={onAnswer}
           onChange={onChange}
