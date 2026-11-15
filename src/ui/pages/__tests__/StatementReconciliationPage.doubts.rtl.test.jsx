@@ -234,6 +234,36 @@ describe("a diferença de saldo fica fixa no topo ao rolar", () => {
     expect(panel).toHaveAttribute("aria-label", "Diferença de saldo agora: o arquivo não informa saldo");
   });
 
+  // BUG-01 (QA etapa 3): a área que rola do app tem padding no alto (20px no computador, 14px no
+  // celular) e `top: 0` grudava o topo ABAIXO desse padding, deixando uma faixa onde o conteúdo
+  // aparecia cortado. O topo sobe o padding inteiro e encosta no alto da área que rola.
+  const renderInScroller = async (padding, props = {}) => {
+    const scroller = document.createElement("div");
+    scroller.setAttribute("data-fincla-main-scroll", "");
+    scroller.style.padding = padding;
+    document.body.appendChild(scroller);
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    const view = render(<StatementReconciliationPage organizationId={ORG} {...props} />, { container: scroller });
+    await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
+    return { scroller, ...view };
+  };
+
+  it.each([
+    ["no computador", "20px 28px 40px", {}, "-20px"],
+    ["no celular", "14px 14px 40px", { isMobile: true }, "-14px"],
+  ])("%s encosta no alto da área que rola, sem faixa acima onde o conteúdo aparece", async (_, padding, props, top) => {
+    const { scroller, unmount } = await renderInScroller(padding, props);
+
+    const sticky = stickyOf(screen.getByTestId("balance-now"));
+    expect(sticky.style.position).toBe("sticky");
+    expect(sticky.style.top).toBe(top);
+    // O fundo é o da página e é opaco: cobre o que passa por baixo.
+    expect(sticky.style.background).toBe("rgb(248, 247, 245)");
+
+    unmount();
+    scroller.remove();
+  });
+
   it("o que ganha foco ao rolar não fica escondido atrás dele: a página reserva o espaço e devolve ao sair", async () => {
     const scroller = document.createElement("div");
     scroller.setAttribute("data-fincla-main-scroll", "");

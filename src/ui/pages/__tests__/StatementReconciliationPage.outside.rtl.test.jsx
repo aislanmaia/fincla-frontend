@@ -197,7 +197,9 @@ describe("Ver o que fica de fora", () => {
     const user = userEvent.setup();
 
     const toggle = screen.getByRole("button", { name: /Antes do último ajuste de saldo/ });
-    expect(toggle).toHaveTextContent("o saldo da conta conta a partir de 09/09/2026; ficam de fora");
+    // Coerente com o aviso de "Trazer de volta" ("o saldo só soma o que acontece a partir de…").
+    expect(toggle.textContent).toContain("o saldo da conta só soma o que acontece a partir de 09/09/2026; ficam de fora");
+    expect(toggle.textContent).not.toContain("conta conta");
     await user.click(toggle);
 
     expect(screen.getByRole("note").textContent).toBe(

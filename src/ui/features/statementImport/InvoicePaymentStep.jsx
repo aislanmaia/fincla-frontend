@@ -108,14 +108,15 @@ export function invoiceUnavailable(entry) {
 
 function unavailableText(entry) {
   if (!entry.invoice) return "A fatura deste pagamento não existe mais no Fincla.";
-  if (isAlreadyPaid(entry)) return `A ${invoiceLabel(entry.invoice)} não está mais paga no Fincla: ela foi desmarcada depois da leitura do extrato.`;
+  if (isAlreadyPaid(entry)) return "Esta fatura foi desmarcada como paga depois da leitura do extrato.";
   return `A ${invoiceLabel(entry.invoice)} já foi marcada como paga depois da leitura do extrato.`;
 }
 
 function InvoiceUnavailable({ entry }) {
   return (
     <div data-testid="invoice-unavailable" role="note" style={{ ...G, fontSize: 12, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "8px 12px", margin: "0 14px 12px" }}>
-      {unavailableText(entry)} Para conciliar, descarte esta conciliação e envie o extrato de novo.
+      {unavailableText(entry)} Para conciliar, descarte esta conciliação e envie o extrato de novo
+      {isAlreadyPaid(entry) && entry.invoice ? ", para o Fincla ler a fatura como está agora." : "."}
     </div>
   );
 }
@@ -123,12 +124,13 @@ function InvoiceUnavailable({ entry }) {
 /** O que acontece ao concluir; nada promete "fica paga" quando a fatura já está paga ou mudou. */
 function Outcome({ entry, unavailable }) {
   const { invoice } = entry;
-  if (isAlreadyPaid(entry)) {
+  // Desmarcada depois da leitura (OBS-10): o estado de agora manda, nada diz que ela está paga.
+  if (isAlreadyPaid(entry) && !unavailable) {
     return (
       <span>
         Este lançamento é o pagamento de uma fatura que <b>já está paga no Fincla</b>. Ao concluir, nada muda: nenhuma transação é
         criada e a fatura continua como está.
-        {invoice && !unavailable && invoice.paid_date !== entry.date ? (
+        {invoice && invoice.paid_date !== entry.date ? (
           <> No Fincla ela foi paga em <b style={NUM}>{bankDateLabel(invoice.paid_date)}</b> e no banco em <b style={NUM}>{bankDateLabel(entry.date)}</b>: a diferença de data aparece na conferência de saldo.</>
         ) : null}
       </span>
@@ -147,7 +149,8 @@ function Outcome({ entry, unavailable }) {
 function InvoicePaymentCard({ entry, isMobile, accountName }) {
   const { invoice } = entry;
   const unavailable = invoiceUnavailable(entry);
-  const alreadyPaid = isAlreadyPaid(entry);
+  // O selo "Já paga no Fincla" só enquanto ela está paga AGORA; desmarcada, fica o aviso.
+  const alreadyPaid = isAlreadyPaid(entry) && !unavailable;
   return (
     <article
       data-testid="invoice-card"

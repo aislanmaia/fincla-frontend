@@ -232,10 +232,19 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
     await openDraft();
 
     const card = paidCard();
-    expect(within(card).getByTestId("invoice-unavailable")).toHaveTextContent(
-      "A Fatura Nubank · setembro não está mais paga no Fincla: ela foi desmarcada depois da leitura do extrato. Para conciliar, descarte esta conciliação e envie o extrato de novo.",
+    // OBS-10: o estado de AGORA manda. Nenhum selo nem texto diz que ela está paga.
+    expect(card).not.toHaveTextContent("Já paga no Fincla");
+    expect(card).not.toHaveTextContent("já está paga");
+    expect(within(card).getByTestId("invoice-side").textContent).toContain("SituaçãoFechada");
+    // O aviso e a instrução são os mesmos da recusa do Concluir (backend, invoice_no_longer_paid).
+    expect(within(card).getByTestId("invoice-unavailable").textContent).toBe(
+      "Esta fatura foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta conciliação e "
+      + "envie o extrato de novo, para o Fincla ler a fatura como está agora.",
     );
-    expect(within(card).getByTestId("invoice-outcome")).not.toHaveTextContent("diferença de data");
+    expect(within(card).getByTestId("invoice-outcome").textContent).toBe(
+      "Este lançamento é o pagamento da fatura. Nenhuma transação é criada: as compras dela já estão no Fincla.",
+    );
+    expect(within(card).queryAllByRole("button")).toEqual([]);
   });
 
   it("no resumo, conta à parte e diz que nada muda nela; a outra fatura fica paga", async () => {
