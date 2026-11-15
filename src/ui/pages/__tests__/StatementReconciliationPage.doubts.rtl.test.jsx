@@ -72,6 +72,7 @@ function refreshTaken() {
 }
 
 const server = setupServer(
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
@@ -208,8 +209,9 @@ describe("o passo Decidir casos com dúvida", () => {
       expect.stringContaining("Corte de cabelo"),
       expect.stringContaining("Aula de violão"),
     ]);
-    // A Julia volta a pedir resposta, com o próprio Desfazer escolha.
-    const julia = card("PIX TRANSF JULIA F04 10");
+    // A Julia volta a pedir resposta, com o próprio Desfazer escolha; o Paulo continua o aberto
+    // (só um cartão por vez, fincla-api#517), então ela aparece como linha.
+    const julia = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PIX TRANSF JULIA F04 10"));
     expect(within(julia).getByText("Falta responder")).toBeInTheDocument();
     expect(within(julia).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
   });
@@ -296,6 +298,10 @@ describe("as outras telas mostram o par de #511", () => {
     await openDraft();
 
     await goTo(user, "Adicionar lançamentos novos");
+    // Tudo já respondido no passo: os lançamentos vêm como linhas; a da farmácia diz o par.
+    const row = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("RSHOP FARMACIA ETA09 10"));
+    expect(row).toHaveTextContent("Sim, é Farmácia");
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
 
     const farmacia = card("RSHOP FARMACIA ETA09 10");
     expect(within(farmacia).getByText("OUTRA CONTA")).toBeInTheDocument();

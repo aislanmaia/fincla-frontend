@@ -38,6 +38,7 @@ let answers = [];
 const needsMapping = () => HttpResponse.json({ detail: clone(contract.column_mapping_required) }, { status: 422 });
 
 const server = setupServer(
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () =>
     HttpResponse.json([{ id: ACCOUNT, name: "Nubank", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
   ),
