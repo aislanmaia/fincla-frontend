@@ -120,6 +120,20 @@ describe("o passo Conferir pagamento de fatura", () => {
     expect(calls.filter((c) => c.patch || c.batch)).toEqual([]);
   });
 
+  it("os atalhos de teclado das listas não respondem nada aqui, e não há lista nem filtro", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.keyboard("s");
+    await user.keyboard("a");
+    await user.keyboard("n");
+    await user.keyboard("j");
+
+    expect(calls.filter((c) => c.patch || c.batch)).toEqual([]);
+    expect(screen.queryByText(/Falta responder/)).not.toBeInTheDocument();
+    expect(invoiceCard()).toBeInTheDocument();
+  });
+
   it("passar pelo passo o marca como conferido, e ele continua visível ao voltar", async () => {
     const user = userEvent.setup();
     await openDraft();
