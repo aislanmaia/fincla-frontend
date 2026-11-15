@@ -33,7 +33,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "1f2a3b4c-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
@@ -59,7 +62,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
@@ -85,7 +91,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "3b4c5d6e-7f8a-4b9c-8d0e-1f2a3b4c5d6e",
@@ -111,7 +120,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "4c5d6e7f-8a9b-4c0d-9e1f-2a3b4c5d6e7f",
@@ -137,7 +149,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "5d6e7f8a-9b0c-4d1e-8f2a-3b4c5d6e7f8a",
@@ -163,7 +178,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       }
     ],
     "groups": [
@@ -181,7 +199,7 @@
         "created_transaction_id": null
       }
     ],
-    "summary": {"total": 6, "to_create": 3, "missing_description": 1, "unanswered": 0, "to_pair": 0, "ignored": 1, "grouped": 2, "groups": 1, "unclassified": 3, "already_reconciled": 0, "left_out_before_start": 0},
+    "summary": {"total": 6, "to_create": 3, "missing_description": 1, "unanswered": 0, "to_pair": 0, "ignored": 1, "grouped": 2, "groups": 1, "unclassified": 3, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
     "can_conclude": false,
     "blockers": [{"code": "missing_description", "count": 1}],
     "created_at": "2026-11-14T10:20:00",
@@ -290,7 +308,10 @@
             "differences": ["date"],
             "taken_by_entry_id": null
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "1f2a3b4c-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
@@ -316,7 +337,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
@@ -342,7 +366,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "3b4c5d6e-7f8a-4b9c-8d0e-1f2a3b4c5d6e",
@@ -424,11 +451,14 @@
             "differences": [],
             "taken_by_entry_id": null
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       }
     ],
     "groups": [],
-    "summary": {"total": 4, "to_create": 2, "missing_description": 1, "unanswered": 0, "to_pair": 2, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 2, "already_reconciled": 0, "left_out_before_start": 0},
+    "summary": {"total": 4, "to_create": 2, "missing_description": 1, "unanswered": 0, "to_pair": 2, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 2, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
     "can_conclude": false,
     "blockers": [{"code": "missing_description", "count": 1}],
     "created_at": "2026-11-14T10:20:00",
@@ -487,7 +517,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "a1b2c3d4-0002-4e5f-8a9b-0c1d2e3f4a02",
@@ -513,7 +546,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "a1b2c3d4-0003-4e5f-8a9b-0c1d2e3f4a03",
@@ -573,7 +609,10 @@
           "differences": [],
           "taken_by_entry_id": null
         },
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "a1b2c3d4-0004-4e5f-8a9b-0c1d2e3f4a04",
@@ -599,7 +638,10 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "a1b2c3d4-0005-4e5f-8a9b-0c1d2e3f4a05",
@@ -625,11 +667,14 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       }
     ],
     "groups": [],
-    "summary": {"total": 5, "to_create": 2, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 2, "grouped": 0, "groups": 0, "unclassified": 2, "already_reconciled": 1, "left_out_before_start": 1},
+    "summary": {"total": 5, "to_create": 2, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 2, "grouped": 0, "groups": 0, "unclassified": 2, "already_reconciled": 1, "left_out_before_start": 1, "invoice_payments": 0},
     "can_conclude": true,
     "blockers": [],
     "created_at": "2026-11-15T09:00:00",
@@ -683,11 +728,14 @@
         "suggested_transfer_id": null,
         "paired_transfer_id": null,
         "fincla_match": null,
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       }
     ],
     "groups": [],
-    "summary": {"total": 1, "to_create": 1, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 0, "left_out_before_start": 0},
+    "summary": {"total": 1, "to_create": 1, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
     "can_conclude": false,
     "blockers": [],
     "created_at": "2026-10-02T21:00:00",
@@ -728,13 +776,16 @@
     "suggested_transfer_id": null,
     "paired_transfer_id": null,
     "fincla_match": null,
-    "candidates": []
+    "candidates": [],
+    "invoice_id": null,
+    "invoice": null,
+    "invoice_difference": null
   },
   "undo_preview": {
     "import_id": "6f1d2c3b-0a4e-4b8f-9c1d-2e3f4a5b6c7d",
     "can_undo": true,
     "refusal": null,
-    "summary": {"to_delete": 2, "edited_after": 1, "already_deleted": 1, "to_restore": 2},
+    "summary": {"to_delete": 2, "edited_after": 1, "already_deleted": 1, "to_restore": 3},
     "transactions_to_delete": [
       {
         "transaction_id": 101,
@@ -765,7 +816,20 @@
         "changed_fields": ["description", "paid_at"],
         "kept_fields": ["status", "paid_at"],
         "value_back": {"amount": "1490.00", "currency": "BRL"},
-        "account_back": {"id": "d3e4f5a6-b7c8-4d9e-8f0a-1b2c3d4e5f6a", "name": "Nubank"}
+        "account_back": {"id": "d3e4f5a6-b7c8-4d9e-8f0a-1b2c3d4e5f6a", "name": "Nubank"},
+        "invoice": null
+      },
+      {
+        "entity_type": "invoice",
+        "entity_id": "41",
+        "action": "updated",
+        "description": "Itaú Visa",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "invoice": {"card_name": "Itaú Visa", "year": 2026, "month": 10, "status_back": "closed"}
       },
       {
         "entity_type": "transaction",
@@ -776,7 +840,8 @@
         "changed_fields": [],
         "kept_fields": [],
         "value_back": null,
-        "account_back": null
+        "account_back": null,
+        "invoice": null
       }
     ]
   },
@@ -809,7 +874,7 @@
         "status": "draft",
         "file_format": "ofx",
         "period": {"start": "2026-10-01", "end": "2026-10-31"},
-        "summary": {"total": 6, "to_create": 3, "missing_description": 1, "unanswered": 0, "to_pair": 0, "ignored": 1, "grouped": 2, "groups": 1, "unclassified": 3, "already_reconciled": 0, "left_out_before_start": 0},
+        "summary": {"total": 6, "to_create": 3, "missing_description": 1, "unanswered": 0, "to_pair": 0, "ignored": 1, "grouped": 2, "groups": 1, "unclassified": 3, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
         "final_difference": null,
         "created_at": "2026-11-14T10:20:00",
         "last_activity_at": "2026-11-14T10:25:00",
@@ -824,7 +889,7 @@
         "status": "concluded",
         "file_format": "csv",
         "period": {"start": "2026-09-01", "end": "2026-09-30"},
-        "summary": {"total": 41, "to_create": 30, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 3, "grouped": 8, "groups": 1, "unclassified": 2, "already_reconciled": 0, "left_out_before_start": 0},
+        "summary": {"total": 41, "to_create": 30, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 3, "grouped": 8, "groups": 1, "unclassified": 2, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
         "final_difference": null,
         "created_at": "2026-10-03T08:10:00",
         "last_activity_at": "2026-10-03T08:40:00",
@@ -839,7 +904,7 @@
         "status": "undone",
         "file_format": "ofx",
         "period": {"start": "2026-09-01", "end": "2026-09-30"},
-        "summary": {"total": 41, "to_create": 41, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 0, "left_out_before_start": 0},
+        "summary": {"total": 41, "to_create": 41, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 0},
         "final_difference": null,
         "created_at": "2026-10-02T21:00:00",
         "last_activity_at": "2026-10-02T21:30:00",
@@ -854,7 +919,7 @@
         "status": "concluded",
         "file_format": "ofx",
         "period": {"start": "2026-08-01", "end": "2026-08-31"},
-        "summary": {"total": 56, "to_create": 50, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 2, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 4, "left_out_before_start": 1},
+        "summary": {"total": 56, "to_create": 50, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 2, "grouped": 0, "groups": 0, "unclassified": 0, "already_reconciled": 4, "left_out_before_start": 1, "invoice_payments": 0},
         "final_difference": {"amount": "-23.06", "currency": "BRL"},
         "created_at": "2026-09-02T19:00:00",
         "last_activity_at": "2026-09-02T19:45:00",
@@ -996,7 +1061,10 @@
             "differences": ["date"],
             "taken_by_entry_id": null
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c02",
@@ -1065,7 +1133,10 @@
             "differences": ["date"],
             "taken_by_entry_id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c01"
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c03",
@@ -1147,7 +1218,10 @@
             "differences": ["amount"],
             "taken_by_entry_id": null
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c04",
@@ -1215,7 +1289,10 @@
             "differences": [],
             "taken_by_entry_id": null
           }
-        ]
+        ],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       },
       {
         "id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c05",
@@ -1275,7 +1352,10 @@
           "differences": ["account"],
           "taken_by_entry_id": null
         },
-        "candidates": []
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
       }
     ],
     "groups": [],
@@ -1290,7 +1370,8 @@
       "groups": 0,
       "unclassified": 0,
       "already_reconciled": 0,
-      "left_out_before_start": 0
+      "left_out_before_start": 0,
+      "invoice_payments": 0
     },
     "can_conclude": false,
     "blockers": [{"code": "unanswered", "count": 1}],
@@ -1435,5 +1516,101 @@
       }
     ],
     "effects": {"value_changes": 1, "account_moves": 1, "invoices_paid": 1, "deletions": 1, "date_changes": 1}
+  },
+  "invoice_draft": {
+    "id": "8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d00",
+    "account_id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+    "status": "draft",
+    "file_format": "ofx",
+    "period": {"start": "2026-10-01", "end": "2026-10-31"},
+    "bank_balances": [{"date": "2026-10-31", "balance": {"amount": "100.00", "currency": "BRL"}}],
+    "entries": [
+      {
+        "id": "8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d01",
+        "position": 0,
+        "date": "2026-10-12",
+        "bank_description": "PAGAMENTO FATURA ITAU VISA",
+        "amount": {"amount": "-3412.57", "currency": "BRL"},
+        "fitid": "20261012001",
+        "classification": "invoice",
+        "answer": "invoice_payment",
+        "description": "PAGAMENTO FATURA ITAU VISA",
+        "transaction_type": "expense",
+        "payment_method": "bank_transfer",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "group_id": null,
+        "created_transaction_id": null,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "confirmed": false,
+        "fincla_transaction": null,
+        "suggested_transfer_id": null,
+        "paired_transfer_id": null,
+        "fincla_match": null,
+        "candidates": [],
+        "invoice_id": 41,
+        "invoice": {
+          "id": 41,
+          "card_id": 7,
+          "card_name": "Itaú Visa",
+          "year": 2026,
+          "month": 10,
+          "due_date": "2026-10-13",
+          "total": {"amount": "3412.60", "currency": "BRL"},
+          "status": "closed",
+          "paid_date": null,
+          "account_name": "Itaú",
+          "differences": ["amount", "date"],
+          "difference": {"amount": "0.03", "currency": "BRL"}
+        },
+        "invoice_difference": null
+      },
+      {
+        "id": "8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d02",
+        "position": 1,
+        "date": "2026-10-07",
+        "bank_description": "PAG BOLETO ENERGIA",
+        "amount": {"amount": "-120.00", "currency": "BRL"},
+        "fitid": "20261007001",
+        "classification": "new",
+        "answer": "create",
+        "description": "PAG BOLETO ENERGIA",
+        "transaction_type": "expense",
+        "payment_method": "boleto",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "group_id": null,
+        "created_transaction_id": null,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "confirmed": false,
+        "fincla_transaction": null,
+        "suggested_transfer_id": null,
+        "paired_transfer_id": null,
+        "fincla_match": null,
+        "candidates": [],
+        "invoice_id": null,
+        "invoice": null,
+        "invoice_difference": null
+      }
+    ],
+    "groups": [],
+    "summary": {"total": 2, "to_create": 1, "missing_description": 0, "unanswered": 0, "to_pair": 0, "ignored": 0, "grouped": 0, "groups": 0, "unclassified": 1, "already_reconciled": 0, "left_out_before_start": 0, "invoice_payments": 1},
+    "can_conclude": true,
+    "blockers": [],
+    "created_at": "2026-11-15T10:20:00",
+    "concluded_at": null,
+    "undone_at": null,
+    "last_activity_at": "2026-11-15T10:25:00",
+    "expires_at": "2026-12-15T10:25:00",
+    "current_step": "invoice",
+    "reviewed_steps": ["suggested", "doubt"],
+    "account_check": {"status": "same_account", "suggested_account": null},
+    "latest_concluded": false,
+    "file_check": {"status": "new", "import_id": null, "account_id": null, "account_name": null, "concluded_at": null},
+    "left_out": null
   }
 }

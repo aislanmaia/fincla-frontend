@@ -62,6 +62,7 @@ import {
   unmatchedItemId,
 } from "../features/statementImport/BalanceCheckStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
+import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -447,6 +448,8 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
     ["Não serão registrados", summary.ignored, "summary-ignored", summary.left_out_before_start ? `${summary.left_out_before_start.toLocaleString("pt-BR")} antes do início` : null],
     ...(summary.already_reconciled ? [["Já conferidos antes", summary.already_reconciled, "summary-already-reconciled", "não mudam"]] : []),
   ];
+  // Só aparece com pagamento de fatura no extrato (fincla-api#512): é a fatura que fica paga.
+  if (summary.invoice_payments) rows.push(["Pagamentos de fatura", summary.invoice_payments, "summary-invoice-payments"]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* A diferença de saldo que fica, em destaque no topo (fincla-api#514). */}
@@ -509,6 +512,7 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
   const navigate = useNavigate();
   const created = statementImport.entries.filter((e) => e.created_transaction_id != null).length
     + (statementImport.groups ?? []).filter((g) => g.created_transaction_id != null).length;
+  const invoicesPaid = statementImport.entries.filter((e) => e.answer === "invoice_payment").length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageTitle sans="Conciliar" serif="extrato" />
@@ -519,6 +523,11 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
           {accountName ? <> à conta <b>{accountName}</b></> : null}, {created === 1 ? "paga na data do banco" : "pagas nas datas do banco"}.
         </p>
         <RecordedDifference statementImport={statementImport} />
+        {invoicesPaid ? (
+          <p data-testid="done-invoices-paid" style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
+            {plural(invoicesPaid, "fatura de cartão ficou paga", "faturas de cartão ficaram pagas")} na data do banco.
+          </p>
+        ) : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onOpenAccountTransactions ? (
             <Btn variant="dark" onClick={() => onOpenAccountTransactions(statementImport.account_id, statementPeriod(statementImport))}>Ver transações da conta</Btn>
@@ -1006,6 +1015,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onUndoConfirmAll={() => confirmPairs(lastBulk, false)}
             />
           ) : null}
+          {current === "invoice" && stepEntries.length ? (
+            <InvoicePaymentStep entries={stepEntries} isMobile={isMobile} accountName={accountName} />
+          ) : null}
           {current === "doubt" && stepEntries.length ? (
             <DoubtStep
               {...doubtProps}
@@ -1102,7 +1114,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onClassify={() => open("new")}
             />
           ) : null}
-          {!["suggested", "doubt", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", "doubt", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
+          {!["suggested", "doubt", "invoice", "new", "yield", "balance", "summary", "outside"].includes(current) || (["suggested", "doubt", "invoice", ...ENTRY_STEPS].includes(current) && !stepEntries.length) ? (
             <EmptyStep>Nada a fazer aqui: nenhum lançamento deste extrato está neste passo.</EmptyStep>
           ) : null}
 

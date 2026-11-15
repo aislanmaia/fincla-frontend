@@ -18,6 +18,7 @@ import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : formatMoneySigned(value, currency));
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
+import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 import { LINK } from "./StatementImportNotes.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
@@ -621,13 +622,21 @@ export function summaryEffects(entries, check) {
   const pairs = entries.filter((e) => e.answer === "pair" && e.fincla_match);
   const newValue = pairs.filter((e) => e.fincla_match.differences.includes("amount")).length;
   const moved = pairs.filter((e) => e.fincla_match.differences.includes("account")).length;
-  const invoices = entries.filter((e) => e.answer === "invoice_payment").length;
+  const invoices = entries.filter((e) => e.answer === "invoice_payment");
   const deletions = check?.effects.deletions ?? 0;
   const dates = check?.effects.date_changes ?? 0;
   return [
     newValue ? { tone: "amber", tag: "Valor muda", text: <><b>{plural(newValue, "transação passa", "transações passam")} a ter o valor do banco</b> (valor diferente no Fincla).</> } : null,
     moved ? { tone: "purple", tag: "Conta muda", text: <><b>{plural(moved, "transação é movida", "transações são movidas")} para esta conta</b> (estavam em outra conta).</> } : null,
-    invoices ? { tone: "blue", tag: "Fatura paga", text: <><b>{plural(invoices, "fatura de cartão fica paga", "faturas de cartão ficam pagas")}</b> na data do banco.</> } : null,
+    ...invoices.map((e) => ({
+      key: `invoice-${e.id}`,
+      testId: "summary-invoices-paid",
+      tone: "blue",
+      tag: "Fatura paga",
+      text: e.invoice
+        ? <>A <b>{invoiceLabel(e.invoice)}</b> fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>
+        : <>Uma fatura de cartão fica paga em <b style={NUM}>{bankDateLabel(e.date)}</b> (data do banco). Nenhuma transação é criada.</>,
+    })),
     deletions ? { tone: "red", tag: "Exclusão", text: <><b>{plural(deletions, "transação do Fincla é excluída", "transações do Fincla são excluídas")}</b>.</> } : null,
     dates ? { tone: "blue", tag: "Data muda", text: <><b>{plural(dates, "transação muda de data", "transações mudam de data")}</b>.</> } : null,
   ].filter(Boolean);
@@ -641,7 +650,7 @@ export function SummaryEffects({ entries, check }) {
       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight }}>Também vai acontecer ao concluir</span>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {effects.map((e) => (
-          <li key={e.tag} data-testid="summary-effect" style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+          <li key={e.key ?? e.tag} data-testid={e.testId ?? "summary-effect"} style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
             <span style={{ ...G, fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", padding: "2px 7px", borderRadius: 6, color: EFFECT_TONE[e.tone].color, background: EFFECT_TONE[e.tone].bg }}>
               {e.tag}
             </span>

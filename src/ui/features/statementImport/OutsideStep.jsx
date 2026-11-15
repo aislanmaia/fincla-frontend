@@ -14,6 +14,7 @@ import { G, NUM } from "../../typography";
 import { Badge, Btn, Card } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 
 const LINK_BTN = { ...G, fontSize: 13, fontWeight: 600, color: T.blue, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 };
 const ROW = { ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface };
@@ -74,6 +75,8 @@ function EntryFacts({ entry }) {
 /** Com o que o lançamento já foi conferido: a transação, ou a transferência entre contas (fincla-api#511). */
 function reconciledWith(entry) {
   if (entry.fincla_transaction) return entry.fincla_transaction.description;
+  // Um pagamento de fatura conferido antes (fincla-api#512): a fatura que ele pagou.
+  if (entry.invoice) return `o pagamento da ${invoiceLabel(entry.invoice)}`;
   const match = entry.fincla_match;
   if (match?.kind === "transfer") return match.description ? `a transferência “${match.description}”` : "uma transferência entre contas";
   return match?.description || null;
