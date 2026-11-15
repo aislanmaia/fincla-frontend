@@ -57,6 +57,12 @@ const server = setupServer(
     calls.push({ entry: p.entryId, body });
     const entry = draft.entries.find((e) => e.id === p.entryId);
     Object.assign(entry, body);
+    // Como o backend: a resposta "Sim, é esta" mostra a transação do par; desfeita, nenhuma.
+    if (body.answer === "pair") {
+      Object.assign(entry, { fincla_match: { kind: "transaction", transaction_id: body.paired_transaction_id, transfer_id: null, description: "Conta de luz", type: "expense", value: { amount: "120.00", currency: "BRL" }, date: "2026-10-15T00:00:00", day: "2026-10-15", status: "paid", paid_at: "2026-10-15T00:00:00", payment_method: "boleto", category_name: "Moradia", tag_names: [], account_id: ACCOUNT, account_name: "Itaú", from_account_name: null, to_account_name: null, differences: ["date"], taken_by_entry_id: null } });
+    } else {
+      Object.assign(entry, { fincla_match: null, paired_transaction_id: null });
+    }
     // Pareada pela dica, a transação deixa de estar sem par (e volta com o desfazer).
     const paired = body.answer === "pair" ? body.paired_transaction_id : null;
     check = clone(check);
@@ -169,7 +175,37 @@ describe("Conferir o saldo: transações sem par", () => {
     // Os lançamentos que não vão para o Fincla também explicam a diferença.
     expect(screen.getByText("Lançamentos do extrato que você não registrou")).toBeInTheDocument();
     expect(screen.getAllByTestId("not-recorded-entry")[0]).toHaveTextContent("TARIFA PACOTE");
-    expect(screen.getByTestId("paid-invoice")).toHaveTextContent("O banco pagou menos que o total da fatura.");
+    // G3-3-07: no Fincla a fatura é paga pelo total; o que o banco pagou a menos ENTRA na diferença.
+    const [invoice, alreadyPaid] = screen.getAllByTestId("paid-invoice");
+    expect(within(invoice).getByTestId("paid-invoice-text").textContent.replace(/\u00a0/g, " ")).toBe(
+      "No Fincla a fatura é paga pelo total (R$ 8.279,05); o banco pagou R$ 8.278,54. O banco pagou R$ 0,51 a menos que o total da fatura no Fincla. Essa diferença entra na diferença de saldo.",
+    );
+    // G3-3-01: a fatura já paga no Fincla aparece com a diferença de data, e nada muda nela.
+    expect(alreadyPaid).toHaveTextContent("Fatura Nubank · setembro de 2026Já paga no Fincla");
+    expect(alreadyPaid).toHaveTextContent("paga no Fincla em 05/10/2026 · pago pelo banco em 08/10/2026");
+    expect(within(alreadyPaid).getByTestId("paid-invoice-text").textContent).toBe(
+      "A fatura já estava paga no Fincla e nada muda nela. As compras dela saíram do saldo do Fincla em 05/10/2026 e do banco em 08/10/2026: nesses dias os saldos ficam diferentes. ",
+    );
+    // Sem jargão: "entra no saldo com", nunca "pesa".
+    expect(rowOf("Farmácia")).toHaveTextContent(/entra no saldo com −R\$\s23,06/);
+    expect(screen.getByTestId("balance-step")).not.toHaveTextContent(/\bpesam?\b/);
+  });
+
+  it("transferências sem par aparecem só para ver, com Abrir e sem Excluir nem Mudar data (G3-3-10)", async () => {
+    const user = await openPage();
+
+    const [transfer] = screen.getAllByTestId("unmatched-transfer");
+    expect(transfer).toHaveTextContent("Guardartransferência");
+    expect(transfer).toHaveTextContent("20/10/2026 · Itaú → Reserva · está no Fincla e não aparece no extrato");
+    expect(transfer).toHaveTextContent(/entra no saldo com −R\$\s500,00/);
+    expect(within(transfer).getAllByRole("button").map((b) => b.textContent)).toEqual(["Abrir"]);
+    expect(within(transfer).queryByRole("checkbox")).toBeNull();
+    await user.click(within(transfer).getByRole("button", { name: "Abrir" }));
+    expect(within(transfer).getByTestId("transfer-details")).toHaveTextContent(
+      "Guardar · transferência de Itaú para ReservaData 20/10/2026A conciliação não altera transferências.",
+    );
+    // Entram na contagem do que explica a diferença: 2 transações vivas + a transferência.
+    expect(screen.getByText("Transações do Fincla sem par no extrato").closest("h3")).toHaveTextContent(/sem par no extrato\s?3$/);
   });
 
   it("Está certa assim grava a resposta e Desfazer a esquece", async () => {
@@ -251,6 +287,24 @@ describe("Conferir o saldo: transações sem par", () => {
     await user.click(within(linked).getByRole("button", { name: "Desfazer" }));
     expect(calls.filter((c) => c.entry).at(-1)).toEqual({ entry: ENERGY_ENTRY.id, body: { answer: "create", confirmed: false } });
     await waitFor(() => expect(screen.queryByTestId("linked-transaction")).not.toBeInTheDocument());
+  });
+
+  it("a ligação feita pela dica continua à vista depois de recarregar a página (G3-3-08)", async () => {
+    const user = await openPage();
+    await user.click(within(rowOf("Conta de luz")).getByRole("button", { name: "Alterar" }));
+    await user.click(within(rowOf("Conta de luz")).getByRole("button", { name: "É este lançamento do banco" }));
+    await screen.findByTestId("linked-transaction");
+
+    cleanup();
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+    await screen.findByTestId("balance-step");
+
+    const linked = await screen.findByTestId("linked-transaction");
+    expect(linked).toHaveTextContent("Conta de luz");
+    expect(linked).toHaveTextContent("Ligada ao lançamento do banco de 07/10/2026");
+    expect(linked).toHaveTextContent("Você disse que é o lançamento “PAG BOLETO ENERGIA”. Não entra mais na diferença.");
+    expect(within(linked).getByRole("button", { name: "Desfazer" })).toBeInTheDocument();
   });
 });
 

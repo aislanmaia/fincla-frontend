@@ -73,7 +73,10 @@ function refreshTaken() {
 
 const server = setupServer(
   // "Revisar e concluir" mostra a diferença de saldo (fincla-api#514).
-  http.get(`${BASE}/${IMPORT}/balance-check`, () => HttpResponse.json(contract.balance_check)),
+  http.get(`${BASE}/${IMPORT}/balance-check`, () => {
+    calls.push({ balanceCheck: true });
+    return HttpResponse.json(contract.balance_check);
+  }),
   http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
@@ -127,6 +130,50 @@ const goTo = async (user, title) => {
   await screen.findByRole("heading", { name: title });
 };
 
+describe("a diferença de saldo no topo (história 24, G3-3-02)", () => {
+  it("fica ao lado do progresso e muda depois de cada resposta, sem pedir a conferência inteira", async () => {
+    const user = userEvent.setup();
+    // O backend recalcula a cada resposta: Paulo era o corte de cabelo, e os saldos passam a bater.
+    server.use(http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
+      const body = await request.json();
+      calls.push({ patch: p.entryId, body });
+      const entry = draft.entries.find((e) => e.id === p.entryId);
+      applyAnswer(entry, body);
+      refreshTaken();
+      draft.balance_now = { ...draft.balance_now, fincla: draft.balance_now.bank, difference: { amount: "0.00", currency: "BRL" } };
+      return HttpResponse.json(entry);
+    }));
+    await openDraft();
+
+    const now = screen.getByTestId("balance-now");
+    expect(now).toHaveAttribute("role", "status");
+    expect(now).toHaveAttribute("aria-live", "polite");
+    expect(now).toHaveAttribute("data-state", "off");
+    expect(now.textContent.replace(/\u00a0/g, " ")).toBe(
+      "Diferença de saldo agora−R$ 45,90Banco R$ 1.834,10 · Fincla R$ 1.880,00 em 31/10",
+    );
+
+    await user.click(within(card("PIX TRANSF PAULO V06 10")).getByRole("button", { name: /Corte de cabelo/ }));
+
+    await waitFor(() => expect(screen.getByTestId("balance-now")).toHaveAttribute("data-state", "ok"));
+    expect(screen.getByTestId("balance-now").textContent.replace(/\u00a0/g, " ")).toBe(
+      "Diferença de saldo agoraR$ 0,00Banco e Fincla batem em 31/10",
+    );
+    expect(calls.filter((c) => c.balanceCheck)).toEqual([]);
+  });
+
+  it("sem saldo no arquivo mostra — e diz por quê, nunca zero", async () => {
+    draft.balance_now = null;
+    await openDraft();
+
+    const now = screen.getByTestId("balance-now");
+    expect(now).toHaveAttribute("data-state", "unknown");
+    expect(within(now).getByTestId("balance-now-value")).toHaveTextContent(/^—$/);
+    expect(now).toHaveTextContent("O arquivo não informa saldo");
+    expect(now).not.toHaveTextContent("0,00");
+  });
+});
+
 describe("o passo Decidir casos com dúvida", () => {
   it("nada vem pré-marcado: o sem resposta mostra as opções e a já escolhida noutro lançamento desativada", async () => {
     await openDraft();
@@ -142,7 +189,12 @@ describe("o passo Decidir casos com dúvida", () => {
     expect(within(paulo).getByText("Confira se é a mesma e clique nela para confirmar.")).toBeInTheDocument();
     const [option] = within(paulo).getAllByTestId("match-option");
     expect(option).toHaveTextContent("Corte de cabelo");
-    expect(option).toHaveAttribute("aria-pressed", "false");
+    // O botão cobre a opção sem embrulhar a lista de dados (G3-3-13): o nome é curto e as
+    // consequências chegam ao leitor de tela pela descrição.
+    const pick = within(option).getByRole("button");
+    expect(pick).toHaveAttribute("aria-pressed", "false");
+    expect(pick.querySelector("dl")).toBeNull();
+    expect(option.querySelector("button dl, button div")).toBeNull();
     // A aula de violão já é o par da Julia: visível, desativada, com o caminho de volta.
     const taken = within(paulo).getByTestId("match-taken");
     expect(taken).toHaveAttribute("aria-disabled", "true");
@@ -245,8 +297,11 @@ describe("o passo Decidir casos com dúvida", () => {
     await user.type(within(dialog).getByLabelText("Buscar por descrição, conta, valor ou data"), "farm");
 
     await waitFor(() => expect(calls.filter((c) => c.search).at(-1)).toEqual({ search: PAULO, q: "farm" }));
-    const option = await within(dialog).findByRole("button", { name: /Presente/ });
+    const pick = await within(dialog).findByRole("button", { name: /Presente/ });
+    const option = pick.closest("[data-testid='match-option']");
     expect(option).toHaveTextContent("Nubank");
+    // O leitor de tela ouve o que muda ao concluir pela descrição do botão (G3-3-13).
+    expect(pick).toHaveAccessibleDescription(/OUTRA CONTA.*a transação é movida/);
     expect(within(option).getByText("OUTRA CONTA")).toBeInTheDocument();
     expect(within(option).getByTestId("consequence-account")).toHaveTextContent(
       /Ao concluir a conciliação \(se for esta\), a transação é movida: Nubank\s+Itaú/,
@@ -254,7 +309,7 @@ describe("o passo Decidir casos com dúvida", () => {
     // A aula de violão aparece desativada, porque é o par da Julia.
     expect(within(within(dialog).getByTestId("match-taken")).getByRole("button", { name: "Desfazer lá" })).toBeInTheDocument();
 
-    await user.click(option);
+    await user.click(pick);
 
     await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "pair", paired_transaction_id: 96 } }]));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

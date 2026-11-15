@@ -106,7 +106,7 @@ describe("o passo Conferir pagamento de fatura", () => {
       + "Ao concluir a conciliação, a Fatura Itaú Visa · outubro fica paga em 12/10/2026 (data do banco).",
     );
     expect(within(card).queryByTestId("invoice-unavailable")).not.toBeInTheDocument();
-    expect(railStatus("Conferir pagamento de fatura")).toBe("1 pagamento de fatura · falta você conferir");
+    expect(railStatus("Conferir pagamento de fatura")).toBe("2 pagamentos de fatura · falta você conferir");
   });
 
   it("não tem Sim, é esta / Não, adicionar agora / Não registrar nem nada para editar, e não manda nada", async () => {
@@ -188,13 +188,77 @@ describe("o passo Conferir pagamento de fatura", () => {
   });
 });
 
+describe("fatura já paga no Fincla (G3-3-01)", () => {
+  // A fatura Nubank de setembro (R$ 640,00) foi paga pelo app em 05/10; o banco pagou em 08/10.
+  const paidCard = () => screen.getByRole("article", { name: "Pagamento de fatura de 08/10/2026" });
+
+  it("aparece como referência já paga, com o cartão e a fatura, sem ações e sem prometer pagar", async () => {
+    await openDraft();
+
+    const card = paidCard();
+    expect(within(card).getByText("Já paga no Fincla")).toBeInTheDocument();
+    const side = within(card).getByTestId("invoice-side");
+    expect(side).toHaveTextContent("DescriçãoFatura Nubank · setembro");
+    expect(side).toHaveTextContent("CartãoNubank · paga pela Itaú");
+    expect(side).toHaveTextContent("SituaçãoJá paga no Fincla em 05/10/2026");
+    // O dia do Fincla difere do banco: destacado.
+    expect(within(side).getAllByTestId("match-highlight").map((h) => h.textContent)).toEqual(["05/10/2026"]);
+    expect(within(card).getByTestId("invoice-outcome").textContent).toBe(
+      "Este lançamento é o pagamento de uma fatura que já está paga no Fincla. Ao concluir, nada muda: nenhuma transação é "
+      + "criada e a fatura continua como está. No Fincla ela foi paga em 05/10/2026 e no banco em 08/10/2026: a diferença "
+      + "de data aparece na conferência de saldo.",
+    );
+    expect(card).not.toHaveTextContent("fica paga");
+    expect(within(card).queryByTestId("invoice-unavailable")).not.toBeInTheDocument();
+    expect(within(card).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("desmarcada no app depois da leitura: avisa que concluir vai ser recusado, sem prometer nada", async () => {
+    const paid = draft.entries.find((e) => e.answer === "invoice_already_paid");
+    paid.invoice.status = "closed";
+    paid.invoice.paid_date = null;
+    await openDraft();
+
+    const card = paidCard();
+    expect(within(card).getByTestId("invoice-unavailable")).toHaveTextContent(
+      "A Fatura Nubank · setembro não está mais paga no Fincla: ela foi desmarcada depois da leitura do extrato. Para conciliar, descarte esta conciliação e envie o extrato de novo.",
+    );
+    expect(within(card).getByTestId("invoice-outcome")).not.toHaveTextContent("diferença de data");
+  });
+
+  it("no resumo, conta à parte e diz que nada muda nela; a outra fatura fica paga", async () => {
+    draft.current_step = "summary";
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+    await screen.findByRole("heading", { name: "Revisar e concluir" });
+
+    expect(screen.getByTestId("summary-invoices-already-paid-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("summary-invoices-already-paid").textContent).toBe(
+      "Fatura já pagaA Fatura Nubank · setembro já está paga no Fincla: nada muda nela e nenhuma transação é criada.",
+    );
+    expect(screen.getAllByTestId("summary-invoices-paid")).toHaveLength(1);
+  });
+
+  it("concluída, a tela final não diz que ela ficou paga", async () => {
+    draft = { ...draft, status: "concluded", concluded_at: "2026-11-15T10:30:00", expires_at: null, latest_concluded: true, balance_now: null };
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByTestId("done-invoices-paid")).toHaveTextContent("1 fatura de cartão ficou paga na data do banco.");
+    expect(screen.getByTestId("done-invoices-already-paid")).toHaveTextContent(
+      "1 pagamento era de uma fatura já paga no Fincla: nada mudou nela.",
+    );
+  });
+});
+
 describe("reimportação (fincla-api#516)", () => {
   it("um pagamento de fatura conferido antes fica em Ver o que fica de fora, com a fatura que ele pagou", async () => {
+    draft.entries = draft.entries.filter((e) => e.answer !== "invoice_already_paid");
     const payment = draft.entries[0];
     Object.assign(payment, { classification: "reconciled", answer: "reconciled", confirmed: true });
     payment.invoice.status = "paid";
     payment.invoice.paid_date = "2026-10-12";
-    draft.summary = { ...draft.summary, invoice_payments: 0, already_reconciled: 1 };
+    draft.summary = { ...draft.summary, invoice_payments: 0, invoices_already_paid: 0, already_reconciled: 1 };
     draft.current_step = "outside";
     params = { accountId: ACCOUNT, importId: IMPORT };
     render(<StatementReconciliationPage organizationId={ORG} />);
@@ -249,12 +313,22 @@ describe("desfazer", () => {
   it("diz que a fatura volta a ficar em aberto, separada das transações que voltam", async () => {
     await openUndo();
 
-    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("1 transação que já estava no Fincla volta ao estado de antes da conciliação");
-    expect(screen.getByTestId("undo-invoice-reopens")).toHaveTextContent("a Fatura Itaú Visa · outubro volta a ficar em aberto");
+    expect(screen.getByTestId("undo-restore-count")).toHaveTextContent("2 transações que já estavam no Fincla voltam ao estado de antes da conciliação");
+    // G3-3-05: o resumo diz a mesma situação do detalhe (a fatura estava fechada), com maiúscula.
+    expect(screen.getByTestId("undo-invoice-reopens")).toHaveTextContent(/^A Fatura Itaú Visa · outubro volta a ficar fechada$/);
     const row = screen.getByTestId("undo-restored-invoice");
     expect(row.textContent).toBe(
       "Fatura Itaú Visa · outubroVolta a ficar fechada, sem data de pagamento (a conciliação a tinha pago na data do banco).",
     );
+  });
+
+  it("uma fatura que estava em aberto diz que volta a ficar em aberto", async () => {
+    const invoice = preview.to_restore.find((r) => r.entity_type === "invoice");
+    invoice.invoice = { ...invoice.invoice, status_back: "open" };
+    await openUndo();
+
+    expect(screen.getByTestId("undo-invoice-reopens")).toHaveTextContent(/^A Fatura Itaú Visa · outubro volta a ficar em aberto$/);
+    expect(screen.getByTestId("undo-restored-invoice")).toHaveTextContent("Volta a ficar em aberto, sem data de pagamento");
   });
 
   it("paga de novo pela pessoa depois de concluir: fica como ela deixou", async () => {

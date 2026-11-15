@@ -6,8 +6,13 @@
 import apiClient from './client';
 import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
 
-/** `reconciled` (fincla-api#516): já conferido numa importação anterior; nunca vem da pessoa e não muda. */
-export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment' | 'reconciled';
+/**
+ * `reconciled` (fincla-api#516): já conferido numa importação anterior; nunca vem da pessoa e não muda.
+ * `invoice_already_paid` (G3-3-01): pagamento de uma fatura que já está paga no Fincla — só referência,
+ * nada acontece ao concluir.
+ */
+export type StatementEntryAnswer =
+  | 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment' | 'invoice_already_paid' | 'reconciled';
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
 /** Só o que passa por conta corrente: compra no cartão de crédito sai na fatura, não no extrato. */
 export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_transfer' | 'cash';
@@ -57,6 +62,8 @@ export interface StatementImportSummary {
   unclassified: number;
   /** Pagamentos de fatura (fincla-api#512): cada um deixa a fatura paga na data do banco. */
   invoice_payments: number;
+  /** Pagamentos de uma fatura já paga no Fincla (G3-3-01): só referência, nada muda ao concluir. */
+  invoices_already_paid: number;
   /** Já conferidos numa importação anterior (fincla-api#516): não viram nada. */
   already_reconciled: number;
   /** Anteriores ao início do saldo da conta que continuam fora (já contados em `ignored`). */
@@ -286,6 +293,11 @@ export interface StatementImport {
    */
   final_difference: number | null;
   final_difference_currency: string | null;
+  /**
+   * Só em rascunho (história 24): banco × Fincla, já com as respostas, no último saldo do arquivo — a
+   * diferença do topo da página, em todos os passos. `null` = o arquivo não informa saldo (nunca zero).
+   */
+  balance_now: BalancePoint | null;
 }
 
 /** A resposta do desfazer: a importação desfeita e quantas transações ele de fato apagou. */
@@ -372,8 +384,13 @@ export const normalizeFinclaMatch = (raw: RawFinclaMatch): FinclaMatch => ({
   taken_by_entry_id: raw.taken_by_entry_id ?? null,
 });
 type RawGroup = Omit<StatementGroup, 'amount' | 'currency'> & { amount: WireMoney };
-type RawImport = Omit<StatementImport, 'entries' | 'bank_balances' | 'groups' | 'final_difference' | 'final_difference_currency'> & {
+type RawPoint = { date: string; bank: WireMoney; fincla: WireMoney; difference: WireMoney };
+type RawImport = Omit<
+  StatementImport,
+  'entries' | 'bank_balances' | 'groups' | 'final_difference' | 'final_difference_currency' | 'balance_now'
+> & {
   final_difference?: WireMoney | null;
+  balance_now?: RawPoint | null;
   entries: RawEntry[];
   groups?: RawGroup[];
   bank_balances: { date: string; balance: WireMoney }[];
@@ -406,9 +423,19 @@ export const normalizeStatementEntry = ({
     : null,
 });
 
-export const normalizeStatementImport = ({ final_difference, ...raw }: RawImport): StatementImport => ({
+const normalizePoint = (p: RawPoint): BalancePoint => ({
+  date: p.date,
+  bank: toAmount(p.bank),
+  fincla: toAmount(p.fincla),
+  difference: toAmount(p.difference),
+  currency: toCurrency(p.bank),
+});
+
+export const normalizeStatementImport = ({ final_difference, balance_now, ...raw }: RawImport): StatementImport => ({
   ...raw,
   final_difference: final_difference == null ? null : toFiniteNumber(final_difference),
+  // Sem saldo no arquivo fica null: nunca vira zero.
+  balance_now: balance_now ? normalizePoint(balance_now) : null,
   final_difference_currency: final_difference == null ? null : toCurrency(final_difference),
   entries: (raw.entries ?? []).map(normalizeStatementEntry),
   groups: (raw.groups ?? []).map((g) => ({ ...g, amount: toAmount(g.amount), currency: toCurrency(g.amount) })),
@@ -649,6 +676,9 @@ export interface UndoRestoredEntity {
   value_back_currency: string | null;
   /** A conta para onde a transação volta (a conciliação a moveu); `null` se não muda. */
   account_back: { id: string; name: string | null } | null;
+  /** "Mudar data" (G3-3-06): o dia para o qual a data volta, e o que a conciliação tinha posto; `null` = não volta. */
+  date_back: string | null;
+  date_changed_to: string | null;
   /**
    * Com `entity_type: 'invoice'`: qual fatura e a situação para a qual volta (`open`/`closed`, sem
    * data de pagamento); `status_back: null` = a pessoa desmarcou ou pagou de novo e fica como ela deixou.
@@ -661,12 +691,29 @@ export interface StatementUndoPreview {
   can_undo: boolean;
   /** Por que não dá para desfazer agora (mensagem PT-BR pronta); `null` quando dá. */
   refusal: { code: UndoRefusalCode; message: string } | null;
-  summary: { to_delete: number; edited_after: number; already_deleted: number; to_restore: number };
+  /**
+   * `restored_transactions` / `recreated_transactions` / `restored_invoices`: as partes de `to_restore`,
+   * contadas pelo backend (a tela não subtrai).
+   */
+  summary: {
+    to_delete: number;
+    edited_after: number;
+    already_deleted: number;
+    to_restore: number;
+    restored_transactions: number;
+    recreated_transactions: number;
+    restored_invoices: number;
+  };
   transactions_to_delete: UndoDeletedTransaction[];
   to_restore: UndoRestoredEntity[];
 }
 
-type RawRestored = Omit<UndoRestoredEntity, 'value_back' | 'value_back_currency' | 'account_back' | 'invoice'> & {
+type RawRestored = Omit<
+  UndoRestoredEntity,
+  'value_back' | 'value_back_currency' | 'account_back' | 'invoice' | 'date_back' | 'date_changed_to'
+> & {
+  date_back?: string | null;
+  date_changed_to?: string | null;
   value_back?: WireMoney | null;
   account_back?: { id: string; name: string | null } | null;
   invoice?: UndoRestoredEntity['invoice'];
@@ -688,6 +735,8 @@ export const normalizeStatementUndoPreview = (raw: RawUndoPreview): StatementUnd
     value_back: value_back == null ? null : toAmount(value_back),
     value_back_currency: value_back == null ? null : toCurrency(value_back),
     account_back: account_back ?? null,
+    date_back: r.date_back ?? null,
+    date_changed_to: r.date_changed_to ?? null,
     invoice: invoice ?? null,
   })),
 });
@@ -825,6 +874,26 @@ export interface PaidInvoiceDifference {
   /** Total no Fincla − pago (positivo = o banco pagou menos). */
   difference: number;
   currency: string | null;
+  /** A fatura já estava paga no Fincla (G3-3-01): nada muda nela; `fincla_paid_on` = o dia em que foi paga. */
+  already_paid: boolean;
+  fincla_paid_on: string | null;
+}
+
+/**
+ * Transferência do Fincla nesta conta, no período, sem par no extrato (G3-3-10). Só para ver: a
+ * conciliação nunca altera transferência.
+ */
+export interface UnmatchedTransfer {
+  transfer_id: string;
+  /** A observação da transferência (pode vir vazia). */
+  description: string;
+  /** Com sinal: saída desta conta negativa, entrada positiva. */
+  amount: number;
+  currency: string | null;
+  date: string;
+  day: string;
+  from_account_name: string | null;
+  to_account_name: string | null;
 }
 
 export interface BalanceEffects {
@@ -843,6 +912,7 @@ export interface StatementBalanceCheck {
   final_difference: number | null;
   currency: string | null;
   unmatched_transactions: UnmatchedTransaction[];
+  unmatched_transfers: UnmatchedTransfer[];
   waiting_transactions: number;
   unanswered_entries: number;
   left_out_entries: LeftOutStatementEntry[];
@@ -859,10 +929,11 @@ export interface BalanceCheckChange {
 
 type RawBalanceCheck = {
   import_id: string;
-  points: { date: string; bank: WireMoney; fincla: WireMoney; difference: WireMoney }[];
+  points: RawPoint[];
   first_divergent_date: string | null;
   final_difference: WireMoney | null;
   unmatched_transactions: (Omit<UnmatchedTransaction, 'amount' | 'weight' | 'currency'> & { amount: WireMoney; weight: WireMoney })[];
+  unmatched_transfers?: (Omit<UnmatchedTransfer, 'amount' | 'currency'> & { amount: WireMoney })[];
   waiting_transactions: number;
   unanswered_entries: number;
   left_out_entries: (Omit<LeftOutStatementEntry, 'amount' | 'currency'> & { amount: WireMoney })[];
@@ -876,13 +947,7 @@ type RawBalanceCheck = {
 
 export const normalizeBalanceCheck = (raw: RawBalanceCheck): StatementBalanceCheck => ({
   import_id: raw.import_id,
-  points: (raw.points ?? []).map((p) => ({
-    date: p.date,
-    bank: toAmount(p.bank),
-    fincla: toAmount(p.fincla),
-    difference: toAmount(p.difference),
-    currency: toCurrency(p.bank),
-  })),
+  points: (raw.points ?? []).map(normalizePoint),
   first_divergent_date: raw.first_divergent_date ?? null,
   final_difference: raw.final_difference == null ? null : toFiniteNumber(raw.final_difference),
   currency: raw.final_difference == null ? (raw.points?.[0] ? toCurrency(raw.points[0].bank) : null) : toCurrency(raw.final_difference),
@@ -891,6 +956,11 @@ export const normalizeBalanceCheck = (raw: RawBalanceCheck): StatementBalanceChe
     amount: toAmount(u.amount),
     weight: toAmount(u.weight),
     currency: toCurrency(u.amount),
+  })),
+  unmatched_transfers: (raw.unmatched_transfers ?? []).map((t) => ({
+    ...t,
+    amount: toAmount(t.amount),
+    currency: toCurrency(t.amount),
   })),
   waiting_transactions: raw.waiting_transactions ?? 0,
   unanswered_entries: raw.unanswered_entries ?? 0,
@@ -901,6 +971,8 @@ export const normalizeBalanceCheck = (raw: RawBalanceCheck): StatementBalanceChe
     paid: toAmount(i.paid),
     difference: toAmount(i.difference),
     currency: toCurrency(i.total),
+    already_paid: Boolean(i.already_paid),
+    fincla_paid_on: i.fincla_paid_on ?? null,
   })),
   effects: raw.effects,
 });

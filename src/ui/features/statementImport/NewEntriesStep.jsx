@@ -15,7 +15,7 @@ import { formatMoney } from "../../money/formatMoney.js";
 import {
   BOX, FIELD_LABEL, HELP, INPUT, STATEMENT_PAYMENT_METHODS, TYPE_LABEL,
   CategoryHelp, IgnoredEntryRow, NewEntryRow, OutcomeLine, StatementEntryCard, SummedBadge,
-  bankDateLabel, categoriesForType, categoryLabel, detailLabels,
+  MONTH_NAMES, bankDateLabel, categoriesForType, categoryLabel, detailLabels,
 } from "./StatementEntryCard.jsx";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, useStableCallback } from "./entryQueue.jsx";
@@ -80,8 +80,6 @@ function GroupDraft({ count, monthName, onConfirm, onCancel, busy }) {
   );
 }
 
-const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-
 function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCategory, onIgnore, onSum }) {
   const [categoryId, setCategoryId] = useState("");
   const [drafting, setDrafting] = useState(false);
@@ -94,7 +92,7 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
   const addable = selected.filter((e) => e.answer === "create");
   const types = [...new Set(addable.map((e) => e.transaction_type ?? (e.amount > 0 ? "income" : "expense")))];
   const options = categories.filter((c) => !c.is_fallback && types.every((t) => categoriesForType([c], t).length));
-  const month = refusal ? "" : MONTHS[Number(selected[0].date.slice(5, 7)) - 1];
+  const month = refusal ? "" : MONTH_NAMES[Number(selected[0].date.slice(5, 7)) - 1];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
