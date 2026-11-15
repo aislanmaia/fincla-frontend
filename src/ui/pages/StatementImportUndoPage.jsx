@@ -92,6 +92,16 @@ function RestoredTransactionRow({ entity }) {
             ? "Volta só o que a conciliação mudou; o que você editou depois continua como está."
             : "Volta ao que era antes da conciliação."}
       </span>
+      {entity.value_back != null ? (
+        <span data-testid="undo-value-back" style={{ fontSize: 12, color: T.ink }}>
+          O valor volta a <b style={NUM}>{formatMoney(entity.value_back, entity.value_back_currency)}</b> (a conciliação tinha posto o valor do banco).
+        </span>
+      ) : null}
+      {entity.account_back ? (
+        <span data-testid="undo-account-back" style={{ fontSize: 12, color: T.ink }}>
+          Volta para a conta <b>{entity.account_back.name ?? "de antes"}</b> (a conciliação a tinha movido para esta).
+        </span>
+      ) : null}
       {entity.kept_fields?.length ? (
         <span data-testid="undo-kept" style={{ fontSize: 12, color: T.inkMid }}>
           Você mudou de novo depois: fica como você deixou ({fieldList(entity.kept_fields)}).
