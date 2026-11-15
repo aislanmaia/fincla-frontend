@@ -14,10 +14,11 @@ import { plural } from "../../plural.js";
 import { formatMoney } from "../../money/formatMoney.js";
 import {
   BOX, FIELD_LABEL, HELP, INPUT, STATEMENT_PAYMENT_METHODS, TYPE_LABEL,
-  CategoryHelp, IgnoredEntryRow, OutcomeLine, StatementEntryCard, SummedBadge,
+  CategoryHelp, IgnoredEntryRow, NewEntryRow, OutcomeLine, StatementEntryCard, SummedBadge,
   bankDateLabel, categoriesForType, categoryLabel, detailLabels,
 } from "./StatementEntryCard.jsx";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
+import { CurrentEntryFrame, EntryQueueHeader, useStableCallback } from "./entryQueue.jsx";
 
 const LINK_BTN = { ...G, fontSize: 12, color: T.inkMid, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 };
 
@@ -230,18 +231,19 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
   );
 }
 
+/**
+ * `queue` (fincla-api#517) é a lista dos lançamentos livres (fora das somas): só o atual fica aberto
+ * como cartão; os outros são linhas. `renderMatched(entry, { current })` desenha um lançamento
+ * pareado pela busca ("Está no Fincla com outros dados…"): o cartão quando é o atual, senão a linha.
+ */
 export function NewEntriesStep({
-  stepKey, entries, groups, categories, details, fallbackLabel, isMobile,
+  stepKey, entries, groups, categories, details, fallbackLabel, isMobile, queue, view = "detailed", onViewChange = null,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
   onSearch = null, renderMatched = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
-  const [expanded, setExpanded] = useState(() => new Set());
   const [lastBulk, setLastBulk] = useState(null);
   const [busy, setBusy] = useState(false);
-  // O lançamento que acabou de minimizar: o foco vai para o "Alterar" da linha dele, para quem usa
-  // teclado ou leitor de tela não perder o lugar na lista.
-  const [focusId, setFocusId] = useState(null);
 
   const byId = new Map(entries.map((e) => [e.id, e]));
   const stepGroups = groups.filter((g) => byId.has(g.entry_ids[0]));
@@ -249,8 +251,9 @@ export function NewEntriesStep({
   const selected = free.filter((e) => selectedIds.includes(e.id));
   const unclassified = free.filter((e) => e.answer === "create" && !e.category_tag_id);
 
-  const select = (id, on) => setSelectedIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)));
-  const setExpandedFor = (id, on) => setExpanded((cur) => { const next = new Set(cur); if (on) next.add(id); else next.delete(id); return next; });
+  const select = useStableCallback((id, on) => setSelectedIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id))));
+  const expand = useStableCallback((id) => queue.open(id));
+  const undoIgnore = useStableCallback((id) => onChangeEntry(id, { answer: "create" }));
 
   const run = async (work) => {
     setBusy(true);
@@ -377,39 +380,61 @@ export function NewEntriesStep({
         />
       ) : null}
 
-      {free.map((entry) => (
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} shortcutKeys={onSearch ? ["s", "a", "n"] : ["a", "n"]} />
+      {free.filter(queue.shown).map((entry) => {
+        const current = entry.id === queue.currentId;
         // Pareado pela busca "Está no Fincla com outros dados…" (fincla-api#511): mostra o par.
-        entry.answer === "pair" && renderMatched ? renderMatched(entry)
-        : entry.answer === "ignore" && !expanded.has(entry.id) ? (
-          <IgnoredEntryRow
-            key={entry.id}
-            entry={entry}
-            focus={focusId === entry.id}
-            selected={selectedIds.includes(entry.id)}
-            onSelect={select}
-            onExpand={(id) => setExpandedFor(id, true)}
-            onUndo={(id) => onChangeEntry(id, { answer: "create" })}
-          />
-        ) : (
-          <StatementEntryCard
-            key={entry.id}
-            entry={entry}
-            categories={categories}
-            details={details}
-            fallbackLabel={fallbackLabel}
-            isMobile={isMobile}
-            selected={selectedIds.includes(entry.id)}
-            onSelect={select}
-            onCollapse={entry.answer === "ignore" ? (id) => { setFocusId(id); setExpandedFor(id, false); } : null}
-            onSearch={onSearch}
-            onChange={(id, body) => {
-              // "Não registrar" escolhido no cartão: ele minimiza e continua na lista.
-              if (body.answer === "ignore") { setFocusId(id); setExpandedFor(id, false); }
-              return onChangeEntry(id, body);
-            }}
-          />
-        )
-      ))}
+        if (entry.answer === "pair" && renderMatched) {
+          return current
+            ? <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>{renderMatched(entry, { current: true })}</CurrentEntryFrame>
+            : renderMatched(entry, { current: false });
+        }
+        if (!current) {
+          return entry.answer === "ignore" ? (
+            <IgnoredEntryRow
+              key={entry.id}
+              entry={entry}
+              focus={queue.rowFocusId === entry.id}
+              selected={selectedIds.includes(entry.id)}
+              onSelect={select}
+              onExpand={expand}
+              onUndo={undoIgnore}
+            />
+          ) : (
+            <NewEntryRow
+              key={entry.id}
+              entry={entry}
+              categoryText={categoryLabel(categories, entry.category_tag_id, fallbackLabel)}
+              unclassified={!entry.category_tag_id}
+              focus={queue.rowFocusId === entry.id}
+              selected={selectedIds.includes(entry.id)}
+              onSelect={select}
+              onExpand={expand}
+            />
+          );
+        }
+        return (
+          <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+            <StatementEntryCard
+              entry={entry}
+              categories={categories}
+              details={details}
+              fallbackLabel={fallbackLabel}
+              isMobile={isMobile}
+              selected={selectedIds.includes(entry.id)}
+              onSelect={select}
+              onCollapse={(id) => queue.close(id)}
+              onSearch={onSearch}
+              onChange={async (id, body) => {
+                const done = await onChangeEntry(id, body);
+                // "Não registrar" escolhido no cartão: ele minimiza (continua na lista) e o próximo abre.
+                if (done && body.answer === "ignore") queue.advanceFrom(id);
+                return done;
+              }}
+            />
+          </CurrentEntryFrame>
+        );
+      })}
     </div>
   );
 }

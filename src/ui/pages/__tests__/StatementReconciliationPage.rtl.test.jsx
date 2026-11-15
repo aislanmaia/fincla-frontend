@@ -42,6 +42,7 @@ const calls = [];
 let draft = firstSlice(contract.draft);
 let imports = [];
 const server = setupServer(
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
   http.get("*/v1/accounts", () =>
     HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
   ),
@@ -97,6 +98,19 @@ const openDraft = async () => {
   params = { accountId: ACCOUNT, importId: IMPORT };
   render(<StatementReconciliationPage organizationId={ORG} />);
   await screen.findAllByText("PIX QRS PADARIA 02 10");
+};
+
+/**
+ * O cartão de um lançamento novo (fincla-api#517: só o atual fica aberto). Se ele é uma linha,
+ * reabre pelo "Alterar".
+ */
+const entryCard = async (user, bankText) => {
+  const opened = screen.queryAllByTestId("statement-entry").find((c) => c.textContent.includes(bankText));
+  if (opened) return opened;
+  const row = [...screen.queryAllByTestId("entry-row"), ...screen.queryAllByTestId("ignored-entry")]
+    .find((r) => r.textContent.includes(bankText));
+  await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+  return screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes(bankText));
 };
 
 describe("enviar o extrato", () => {
@@ -157,11 +171,18 @@ describe("rascunho", () => {
 
   it("abre em Adicionar lançamentos novos com o banco de um lado e a transação nova do outro", async () => {
     await openDraft();
+    const user = userEvent.setup();
 
     expect(screen.getByRole("heading", { name: "Adicionar lançamentos novos" })).toBeInTheDocument();
+    // Só o atual fica aberto (fincla-api#517): o que ainda falta, a energia sem descrição.
     const cards = screen.getAllByTestId("statement-entry");
-    expect(cards).toHaveLength(3);
-    const bakery = cards[0];
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toHaveTextContent("PAG BOLETO ENERGIA");
+    expect(screen.getAllByTestId("entry-row").map((r) => r.textContent)).toEqual([
+      expect.stringContaining("PIX QRS PADARIA 02 10"),
+      expect.stringContaining("REMUNERACAO SALARIO"),
+    ]);
+    const bakery = await entryCard(user, "PIX QRS PADARIA 02 10");
     expect(within(bakery).getByText("No extrato do banco")).toBeInTheDocument();
     expect(within(bakery).getByText("No Fincla · nova transação")).toBeInTheDocument();
     expect(within(bakery).getByText("PIX QRS PADARIA 02 10")).toBeInTheDocument();
@@ -174,7 +195,7 @@ describe("rascunho", () => {
     expect(within(bakery).queryByLabelText("Tipo")).toBeNull();
     expect(within(bakery).getByTestId("locked-type")).toHaveTextContent("Despesa");
     // Entrada: receita ou estorno; sem categoria vai para Não classificado.
-    const salary = cards[1];
+    const salary = await entryCard(user, "REMUNERACAO SALARIO");
     expect(within(salary).getByLabelText("Tipo")).toHaveValue("income");
     expect(within(salary).getByText(/vai para Não classificado/)).toBeInTheDocument();
     expect(screen.getAllByText(/Nada muda no Fincla até você concluir a conciliação/).length).toBeGreaterThan(0);
@@ -183,7 +204,7 @@ describe("rascunho", () => {
   it("grava a descrição ao sair do campo e mantém o texto do banco visível", async () => {
     await openDraft();
     const user = userEvent.setup();
-    const energy = screen.getAllByTestId("statement-entry")[2];
+    const energy = await entryCard(user, "PAG BOLETO ENERGIA");
 
     expect(within(energy).getByText("Escreva uma descrição.")).toBeInTheDocument();
     await user.type(within(energy).getByLabelText("Descrição"), "Conta de luz");
@@ -199,14 +220,15 @@ describe("rascunho", () => {
   it("muda categoria e tipo; Não classificado volta a ser sem categoria", async () => {
     await openDraft();
     const user = userEvent.setup();
-    const [bakery, salary] = screen.getAllByTestId("statement-entry");
+    const salary = await entryCard(user, "REMUNERACAO SALARIO");
 
     // Só aparecem as categorias que aceitam o tipo do lançamento.
     const options = within(within(salary).getByLabelText("Categoria")).getAllByRole("option").map((o) => o.textContent);
     expect(options).toEqual(["Não classificado", "Salário"]);
-
-    await user.selectOptions(within(bakery).getByLabelText("Categoria"), "Não classificado");
     await user.selectOptions(within(salary).getByLabelText("Tipo"), "refund");
+
+    const bakery = await entryCard(user, "PIX QRS PADARIA 02 10");
+    await user.selectOptions(within(bakery).getByLabelText("Categoria"), "Não classificado");
 
     await waitFor(() => {
       expect(calls).toContainEqual({ patch: contract.draft.entries[0].id, body: { category_tag_id: null } });
@@ -217,11 +239,12 @@ describe("rascunho", () => {
   it("a forma de pagamento vem sugerida pelo texto do banco e pode ser trocada", async () => {
     await openDraft();
     const user = userEvent.setup();
-    const [bakery, salary, energy] = screen.getAllByTestId("statement-entry");
-
-    expect(within(bakery).getByLabelText("Forma de pagamento")).toHaveValue("pix");
+    const energy = await entryCard(user, "PAG BOLETO ENERGIA");
     expect(within(energy).getByLabelText("Forma de pagamento")).toHaveValue("boleto");
+    const bakery = await entryCard(user, "PIX QRS PADARIA 02 10");
+    expect(within(bakery).getByLabelText("Forma de pagamento")).toHaveValue("pix");
     expect(within(bakery).getByText("Sugerida pelo texto do banco")).toBeInTheDocument();
+    const salary = await entryCard(user, "REMUNERACAO SALARIO");
     // Extrato de conta não tem compra no cartão de crédito: ela sai na fatura.
     const options = within(within(salary).getByLabelText("Forma de pagamento")).getAllByRole("option").map((o) => o.textContent);
     expect(options).toEqual(["Pix", "Boleto", "Cartão de débito", "Transferência", "Dinheiro"]);
@@ -443,8 +466,10 @@ describe("retomar a conciliação (fincla-api#518)", () => {
     expect(steps[4]).toHaveTextContent("1 lançamento sem descrição");
     expect(steps[5]).toHaveTextContent(/nada a fazer/i);
 
-    await userEvent.setup().click(steps[4]);
-    expect(screen.getByDisplayValue("Padaria do bairro (editada antes de fechar a aba)")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(steps[4]);
+    const bakery = await entryCard(user, "PIX QRS PADARIA 02 10");
+    expect(within(bakery).getByDisplayValue("Padaria do bairro (editada antes de fechar a aba)")).toBeInTheDocument();
   });
 
   it("abrir o rascunho não grava nada; cada troca de passo grava o passo e os já vistos, na ordem", async () => {

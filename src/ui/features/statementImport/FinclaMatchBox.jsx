@@ -11,6 +11,7 @@ import { Badge } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
 import { LINK } from "./StatementImportNotes.jsx";
+import { InlineFields, useCompact } from "./entryQueue.jsx";
 
 export const MATCH_BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
 const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
@@ -113,6 +114,7 @@ export function MatchConsequences({ entry, match, accountName, ifChosen = false 
 
 /** As linhas do "No Fincla": data, descrição, valor, conta, categoria, etiquetas e situação. */
 function MatchRows({ entry, match, highlight }) {
+  const compact = useCompact();
   const transfer = match.kind === "transfer";
   const rows = [
     ["Data", <span key="d" style={NUM}><Hl on={highlight && has(match, "date")}>{bankDateLabel(dayOf(match.date))}</Hl></span>],
@@ -126,6 +128,15 @@ function MatchRows({ entry, match, highlight }) {
     rows.push(["Categoria", match.category_name ?? "Sem categoria"]);
     if (match.tag_names?.length) rows.push(["Etiquetas", match.tag_names.join(", ")]);
     rows.push(["Situação", match.paid_at ? `${match.type === "expense" ? "Paga" : "Recebida"} em ${bankDateLabel(dayOf(match.paid_at))}` : "Em aberto"]);
+  }
+  if (compact) {
+    // Compacta (fincla-api#517): data, descrição e valor numa linha; o resto na segunda.
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <InlineFields testId="match-inline" items={rows.slice(0, 3)} />
+        <InlineFields items={rows.slice(3)} />
+      </div>
+    );
   }
   return (
     <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "4px 12px", alignItems: "baseline" }}>
@@ -147,6 +158,7 @@ export function FinclaMatchBox({
   entry, match, accountName, suggested = false, pressed = false, onPick = null,
   takenBy = null, onUndoThere = null, ifChosen = false, consequences = true, testId = "fincla-side",
 }) {
+  const pad = useCompact() ? { padding: "8px 10px" } : null;
   const label = (
     <div style={BOX_LABEL}>
       No Fincla <Badge>{KIND_LABEL[match.type] ?? match.type}</Badge>
@@ -155,7 +167,7 @@ export function FinclaMatchBox({
   );
   if (takenBy) {
     return (
-      <div data-testid="match-taken" aria-disabled="true" style={{ ...MATCH_BOX, background: T.grayLight, opacity: 0.85 }}>
+      <div data-testid="match-taken" aria-disabled="true" style={{ ...MATCH_BOX, ...pad, background: T.grayLight, opacity: 0.85 }}>
         {label}
         <MatchRows entry={entry} match={match} highlight={false} />
         <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "8px 0 0" }}>
@@ -182,14 +194,14 @@ export function FinclaMatchBox({
         aria-pressed={pressed}
         aria-label={`${matchTitle(entry, match)}, ${bankDateLabel(dayOf(match.date))}, ${signedMoney(entry, match.value, match.currency)}`}
         onClick={() => onPick(match)}
-        style={{ ...MATCH_BOX, textAlign: "left", cursor: "pointer", background: pressed ? T.blueLight : T.surface, borderColor: pressed ? T.blue : T.border, borderWidth: pressed ? 2 : 1, font: "inherit" }}
+        style={{ ...MATCH_BOX, ...pad, textAlign: "left", cursor: "pointer", background: pressed ? T.blueLight : T.surface, borderColor: pressed ? T.blue : T.border, borderWidth: pressed ? 2 : 1, font: "inherit" }}
       >
         {body}
       </button>
     );
   }
   return (
-    <section data-testid={testId} style={{ ...MATCH_BOX, borderColor: entry.answer === "pair" ? T.blue : T.border }}>
+    <section data-testid={testId} style={{ ...MATCH_BOX, ...pad, borderColor: entry.answer === "pair" ? T.blue : T.border }}>
       {body}
     </section>
   );
