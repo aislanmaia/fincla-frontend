@@ -6,7 +6,8 @@
 import apiClient from './client';
 import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
 
-export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment';
+/** `reconciled` (fincla-api#516): já conferido numa importação anterior; nunca vem da pessoa e não muda. */
+export type StatementEntryAnswer = 'pair' | 'create' | 'ignore' | 'group' | 'invoice_payment' | 'reconciled';
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
 /** Só o que passa por conta corrente: compra no cartão de crédito sai na fatura, não no extrato. */
 export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_transfer' | 'cash';
@@ -54,6 +55,29 @@ export interface StatementImportSummary {
   groups: number;
   /** Transações que vão para Não classificado (lançamentos novos e somas sem categoria). */
   unclassified: number;
+  /** Já conferidos numa importação anterior (fincla-api#516): não viram nada. */
+  already_reconciled: number;
+  /** Anteriores ao início do saldo da conta que continuam fora (já contados em `ignored`). */
+  left_out_before_start: number;
+}
+
+/**
+ * Este arquivo já foi importado? (fincla-api#516) Só avisa. `already_imported` traz a importação
+ * concluída mais recente do mesmo arquivo (desfeita não conta).
+ */
+export interface FileCheck {
+  status: 'new' | 'already_imported';
+  import_id: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  concluded_at: string | null;
+}
+
+/** Lançamentos antes de `before` ficam fora por padrão: o saldo do Fincla já os inclui (fincla-api#516). */
+export interface LeftOutFloor {
+  before: string;
+  /** `account_start`: saldo inicial declarado na abertura; `balance_adjustment`: último ajuste de saldo. */
+  reason: 'account_start' | 'balance_adjustment';
 }
 
 /** "Somar em um só lançamento" (fincla-api#513): vira UMA transação ao concluir. */
@@ -81,9 +105,10 @@ export interface StatementGroup {
  * Como o Fincla leu o lançamento (fixo, fincla-api#510): `suggested` = uma única transação da
  * mesma conta, mesmo sentido, mesmo valor e data a até 5 dias (passo "Confirmar lançamentos
  * encontrados"); `yield` = rendimento pequeno (entrada abaixo de R$ 1,00) sem par, que dá para somar
- * no mês (fincla-api#513); `new` = sem par.
+ * no mês (fincla-api#513); `reconciled` = já conferido numa importação anterior e `before_start` =
+ * anterior ao início do saldo da conta (fincla-api#516, "Ver o que fica de fora"); `new` = sem par.
  */
-export type StatementEntryClassification = 'new' | 'suggested' | 'yield';
+export type StatementEntryClassification = 'new' | 'suggested' | 'yield' | 'reconciled' | 'before_start';
 
 /** O lado "No Fincla" do par: a transação como está hoje. */
 export interface FinclaTransaction {
@@ -167,6 +192,10 @@ export interface StatementImport {
   account_check: AccountCheck;
   /** Concluída e a mais recente da conta: a única que pode ser desfeita (fincla-api#509). */
   latest_concluded: boolean;
+  /** O mesmo arquivo já foi importado (fincla-api#516). */
+  file_check: FileCheck;
+  /** Desde quando o extrato conta para o saldo; `null` = nada fica fora por data. */
+  left_out: LeftOutFloor | null;
 }
 
 /** A resposta do desfazer: a importação desfeita e quantas transações ele de fato apagou. */
@@ -281,6 +310,17 @@ export const uploadStatement = async (
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return normalizeStatementImport(response.data);
+};
+
+/**
+ * O rascunho em andamento do mesmo arquivo nesta conta, quando o envio foi recusado por isso
+ * (409 `draft_in_progress`, fincla-api#516); senão `null`.
+ */
+export const draftInProgressOf = (error: unknown): { importId: string; message: string } | null => {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+  const detail = response?.data?.detail as { reason?: string; import_id?: string; message?: string } | undefined;
+  if (response?.status !== 409 || detail?.reason !== 'draft_in_progress' || !detail.import_id) return null;
+  return { importId: detail.import_id, message: detail.message ?? '' };
 };
 
 /** A prévia de "indique as colunas" quando o envio falhou por planilha não reconhecida; senão `null`. */
