@@ -22,6 +22,8 @@ import {
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveTransactionsDeepLink } from "../features/transactions/transactionsDeepLink.js";
+import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
+import { exportTexts } from "../features/export/exportTexts.js";
 import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
 import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
@@ -2863,15 +2865,24 @@ function TransacoesPageBody({
     () => (organizationId ? buildTransactionsSummaryQuery({ organizationId, ...transactionsFilters }) : null),
     [organizationId, transactionsFilters],
   );
-  /* O período recorta sempre (mesmo o padrão, que não acende chip), então o arquivo o diz sempre. */
+  /* O período recorta sempre (mesmo o padrão, que não acende chip), então o arquivo o diz sempre — nas DATAS que o
+     pedido leva, com ano: o arquivo é lido depois e fora da tela, onde "Este mês" não diz nada (QA BUG-04).
+     As etiquetas saem numa linha só, com o modo (todas × qualquer) no texto do painel de Tags (QA BUG-01). */
   const exportFiltersText = useMemo(() => {
-    const periodo = allFacets.find((f) => f.key === "periodo");
-    const out = periodo ? [`${periodo.label}: ${periodo.value}`] : [];
+    const texts = exportTexts("pt-BR");
+    const out = [texts.period(exportFilterParams?.date_start, exportFilterParams?.date_end)];
+    let tagsDone = false;
     for (const entry of activeFilterEntries) {
-      if (entry.key !== "periodo") out.push(`${entry.label}: ${entry.value}`);
+      if (entry.key === "periodo") continue;
+      if (entry.key === "tag" || entry.key.startsWith("tag:")) {
+        if (!tagsDone) out.push(texts.tags(filter.tags, TAG_MODE_LABELS[filter.tagMode] ?? TAG_MODE_LABELS.any));
+        tagsDone = true;
+        continue;
+      }
+      out.push(`${entry.label}: ${entry.value}`);
     }
-    return out;
-  }, [allFacets, activeFilterEntries]);
+    return out.filter(Boolean);
+  }, [exportFilterParams, activeFilterEntries, filter.tags, filter.tagMode]);
   const canExport = shouldUseRealData && Boolean(organizationId) && !tagFilterBlocked;
 
   // ── Detail panel content ──────────────────────────────────────────────────

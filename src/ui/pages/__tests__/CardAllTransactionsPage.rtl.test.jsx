@@ -370,6 +370,95 @@ describe("CardAllTransactionsPage · recorte de tempo", () => {
     expect(screen.getByRole("button", { name: /Recorte de tempo: Fatura: Nov/ })).toBeInTheDocument();
   });
 
+  /** Exporta o CSV e devolve os `filters_text` do pedido e as linhas que o diálogo mostrou (QA BUG-04). */
+  const exportFiltersText = async (user) => {
+    const exports = [];
+    server.use(http.get("*/v1/transactions/export", ({ request }) => {
+      exports.push(new URL(request.url));
+      return new HttpResponse("\uFEFF", { headers: { "Content-Type": "text/csv; charset=utf-8" } });
+    }));
+    const realCreate = URL.createObjectURL;
+    URL.createObjectURL = () => "blob:x";
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      await user.click(screen.getByRole("button", { name: /Exportar/ }));
+      const dialog = screen.getByRole("dialog", { name: "Exportar lançamentos" });
+      const shown = within(dialog).getAllByRole("listitem").map((li) => li.textContent);
+      await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+      await waitFor(() => expect(exports).toHaveLength(1));
+      return { sent: exports[0].searchParams.getAll("filters_text"), shown };
+    } finally {
+      URL.createObjectURL = realCreate;
+      click.mockRestore();
+    }
+  };
+
+  it.each([
+    ["Todas juntas (E)", "all"],
+    ["Qualquer uma (OU)", "any"],
+  ])("etiquetas no modo %s: o arquivo diz o modo e as etiquetas numa linha (QA BUG-01)", async (modeLabel, mode) => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
+    server.use(http.get("*/v1/tags", () => HttpResponse.json({ tags: [
+      { id: "bbbbbbbb-1111-4111-8111-111111111111", name: "Farmácia", type: "custom" },
+      { id: "bbbbbbbb-2222-4222-8222-222222222222", name: "Combustível", type: "custom" },
+    ] })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Abrir filtros/ }));
+    await user.click(screen.getByRole("button", { name: /^Tags/ }));
+    await user.click(await screen.findByRole("button", { name: "Tag Farmácia" }));
+    await user.click(screen.getByRole("button", { name: "Tag Combustível" }));
+    await user.click(screen.getByRole("button", { name: modeLabel }));
+    await waitFor(() => expect(requests.at(-1).searchParams.getAll("tag_id")).toHaveLength(2));
+    expect(requests.at(-1).searchParams.get("tag_match")).toBe(mode);
+    const { sent, shown } = await exportFiltersText(user);
+    const line = `Tags · ${modeLabel}: #Farmácia, #Combustível`;
+    expect(sent.filter((text) => text.startsWith("Tags"))).toEqual([line]);
+    expect(shown).toContain(line);
+  });
+
+  it("o arquivo diz a fatura com mês e ano, mesmo a do ano corrente (QA BUG-04)", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    const { sent, shown } = await exportFiltersText(user);
+    expect(sent[0]).toBe("Fatura: Out/2026");
+    expect(shown[0]).toBe("Fatura: Out/2026");
+    // O chip da tela segue curto: o ano só falta onde a tela dá o contexto.
+    expect(screen.getByRole("button", { name: "Recorte de tempo: Fatura: Out. Ajustar." })).toBeInTheDocument();
+  });
+
+  it("várias faturas saem todas nomeadas, com ano", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Fatura de setembro 2026" }));
+    await waitFor(() => expect(ids(requests.at(-1))).toEqual(["39", "40"]));
+    await user.keyboard("{Escape}");
+    const { sent } = await exportFiltersText(user);
+    expect(sent[0]).toBe("Faturas: Set/2026, Out/2026");
+  });
+
+  it("no modo Período o arquivo diz as datas do pedido, nunca 'Este mês'", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(2, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("button", { name: "Período livre" }));
+    await user.click(screen.getByRole("button", { name: "Preset: Este mês" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));
+    const listed = requests.at(-1).searchParams;
+    await user.keyboard("{Escape}");
+    const { sent } = await exportFiltersText(user);
+    const br = (ymd) => ymd.split("-").reverse().join("/");
+    expect(sent[0]).toBe(`Período: ${br(listed.get("date_start"))} a ${br(listed.get("date_end"))}`);
+  });
+
   it("marca várias faturas, manda os ids repetidos e põe o ano nas de outro ano", async () => {
     withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
@@ -831,6 +920,8 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(filtersText).toContain("Busca: Linha");
     expect(filtersText.length).toBeGreaterThanOrEqual(2); // o recorte de fatura/período vem junto da busca
     expect(filtersText.some((text) => /Sem filtros/.test(text))).toBe(false);
+    // QA BUG-04: o recorte de tempo sai com ano (o arquivo é lido fora da tela), nunca "Fatura: Out" nem "Este mês".
+    expect(filtersText[0]).toBe("Período: todo o histórico");
     expect(asked.get("timezone")).toBeTruthy();
     expect(asked.get("organization_id")).toBe(ORG_ID);
     expect(asked.get("format")).toBe("csv");

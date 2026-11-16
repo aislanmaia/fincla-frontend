@@ -86,6 +86,17 @@ export function invoiceChipLabel(options, keys, now = new Date()) {
   return `Faturas: ${chosen.map((option) => monthLabel(option, currentYear)).join(", ")}`;
 }
 
+/**
+ * As faturas como o arquivo exportado as descreve: todas nomeadas e SEMPRE com ano ("Fatura: Out/2026",
+ * "Faturas: Set/2026, Out/2026"). O arquivo é lido depois e fora da tela, onde o ano corrente não é contexto.
+ */
+export function invoiceExportLabel(options, keys) {
+  const chosen = selectedInvoices(options, keys).sort((a, b) => (a.year - b.year) || (a.month - b.month));
+  if (chosen.length === 0) return "Nenhuma fatura";
+  const names = chosen.map((option) => `${MONTHS[option.month - 1]}/${option.year}`);
+  return `${chosen.length === 1 ? "Fatura" : "Faturas"}: ${names.join(", ")}`;
+}
+
 /** Ids para a API. `undefined` = sem filtro de fatura (modo Período). */
 export function invoiceIdsForQuery(mode, options, keys) {
   if (mode !== "invoice") return undefined;
