@@ -159,7 +159,7 @@ function MatchRows({ entry, match, highlight }) {
  */
 export function FinclaMatchBox({
   entry, match, accountName, suggested = false, pressed = false, onPick = null,
-  takenBy = null, onUndoThere = null, ifChosen = false, consequences = true, testId = "fincla-side",
+  takenBy = null, onUndoThere = null, ifChosen = false, consequences = true, testId = "fincla-side", onConfirm = null,
 }) {
   const pad = useCompact() ? { padding: "8px 10px" } : null;
   const consequencesId = useId();
@@ -214,9 +214,20 @@ export function FinclaMatchBox({
       </div>
     );
   }
+  // `onConfirm`: a única transação sugerida, já marcada "Sim, é esta". Clicar nela confirma, como o
+  // botão; o botão invisível cobre a caixa sem embrulhar a lista de dados (HTML válido).
   return (
-    <section data-testid={testId} style={{ ...MATCH_BOX, ...pad, borderColor: entry.answer === "pair" ? T.blue : T.border }}>
+    <section data-testid={testId} style={{ ...MATCH_BOX, ...pad, borderColor: entry.answer === "pair" ? T.blue : T.border, ...(onConfirm ? { position: "relative" } : null) }}>
       {body}
+      {onConfirm ? (
+        <button
+          type="button"
+          aria-label={`Confirmar que é ${matchTitle(entry, match)}, ${bankDateLabel(dayOf(match.date ?? match.day))}, ${signedMoney(entry, match.value, match.currency)}`}
+          aria-describedby={showConsequences ? consequencesId : undefined}
+          onClick={onConfirm}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, padding: 0, border: 0, borderRadius: "inherit", background: "transparent", cursor: "pointer" }}
+        />
+      ) : null}
     </section>
   );
 }
