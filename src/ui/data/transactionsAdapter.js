@@ -10,7 +10,6 @@ import {
   unsettleTransaction,
   updateTransaction,
 } from "../../api/transactions";
-import { downloadTransactionsCsv } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
 import {
   hasObservedIdempotencySupport,
@@ -881,26 +880,6 @@ export async function fetchRefundCandidates({
   return filtered.slice(0, limit);
 }
 
-export function buildTransactionsCsvOptions({
-  filterType = "todos",
-  filterMethod = "todos",
-  period = "tudo",
-  customFrom = "",
-  customTo = "",
-}) {
-  const dateRange = resolveDateRange(period, customFrom, customTo);
-  const paymentMethod = resolvePaymentMethodParam(filterMethod);
-
-  return {
-    ...(filterType === "receita" ? { type: "income" } : {}),
-    ...(filterType === "despesa" ? { type: "expense" } : {}),
-    ...(filterType === "estorno" ? { type: "refund" } : {}),
-    ...(paymentMethod ? { paymentMethod } : {}),
-    ...(dateRange.date_start ? { dateStart: dateRange.date_start } : {}),
-    ...(dateRange.date_end ? { dateEnd: dateRange.date_end } : {}),
-  };
-}
-
 export function buildTransactionsSummaryQuery({
   organizationId,
   search = "",
@@ -1089,13 +1068,6 @@ export async function setTransactionSettledForUi(transactionId, organizationId, 
     ? await settleTransaction(transactionId, organizationId)
     : await unsettleTransaction(transactionId, organizationId);
   return mapApiTransactionToUi(updated);
-}
-
-export async function downloadTransactionsCsvForUi(organizationId, options) {
-  // `options` chega no formato legado (filterType/filterMethod/period/...);
-  // buildTransactionsCsvOptions traduz para o contrato do endpoint
-  // (type/paymentMethod/dateStart/dateEnd). Sem isso o export ia sem filtro nenhum.
-  return downloadTransactionsCsv(organizationId, buildTransactionsCsvOptions(options), "transacoes.csv");
 }
 
 /**
