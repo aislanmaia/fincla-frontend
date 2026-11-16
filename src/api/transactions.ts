@@ -181,43 +181,88 @@ export type ExportTransactionsQuery = Omit<
 
 const EXPORT_TIMEOUT_MS = 60_000;
 
+/** Formatos que o exportador do servidor gera (ADR 0010). Novos formatos entram aqui e no painel. */
+export type ExportFormat = 'csv' | 'xlsx' | 'pdf';
+
 /**
- * O CSV é pedido como texto: o corpo de um erro (`detail.code`) vem como texto e o app lê JSON, então
- * devolve-se a ele a forma `response.data.detail` que o resto do app já sabe ler.
+ * O pedido de exportação: os filtros da listagem (o recorte) mais o que só a tela sabe dizer — o título da tela
+ * de origem, os filtros ativos em texto e o começo do nome do arquivo. O fuso do usuário vai junto para o nome do
+ * arquivo e a hora de geração saírem no dia dele.
  */
-function parseErrorBody(error: unknown): void {
+export type ExportTransactionsRequest = ExportTransactionsQuery & {
+  format: ExportFormat;
+  title?: string;
+  filters_text?: string[];
+  file_prefix?: string;
+  timezone?: string;
+  locale?: string;
+  content?: 'full' | 'summary';
+};
+
+export type ExportedFile = { blob: Blob; fileName: string | null };
+
+/** O nome que o servidor deu ao arquivo (`Content-Disposition`), ou `null` se ele não veio legível. */
+export function fileNameFromDisposition(header: unknown): string | null {
+  if (typeof header !== 'string') return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim());
+    } catch {
+      /* cai para o filename simples */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : null;
+}
+
+/**
+ * O corpo vem em bytes (ver `exportTransactions`), inclusive o de um erro: decodifica e devolve ao app a forma
+ * `response.data.detail` (com `code`, `total`, `limit`) que ele já sabe ler. Corpo ilegível vira `undefined`.
+ */
+function parseBinaryErrorBody(error: unknown): void {
   const response = (error as { response?: { data?: unknown } })?.response;
-  if (!response || typeof response.data !== 'string') return;
+  const data = response?.data;
+  if (!response || !(data instanceof ArrayBuffer || ArrayBuffer.isView(data))) return;
   try {
-    response.data = JSON.parse(response.data);
+    response.data = JSON.parse(new TextDecoder('utf-8').decode(data as ArrayBuffer));
   } catch {
     response.data = undefined;
   }
 }
 
 /**
- * Baixa o CSV do conjunto COMPLETO que os filtros descrevem (o servidor percorre todas as páginas; limite de
- * 20.000). Recusas: `422 export_too_large` (com `total` e `limit`) e `409 export_changed` (exportar de novo).
- * O BOM (UTF-8) é recolocado: a leitura como texto o descarta, e sem ele a planilha estraga os acentos.
+ * A única porta para o exportador de lançamentos. Baixa o arquivo do recorte COMPLETO (o servidor lê todas as
+ * páginas; limite de 20.000) e devolve o blob com o nome que o servidor escolheu. Recusas chegam como erro do
+ * axios com `response.data.detail`: `422 export_too_large` (`total`, `limit`), `409 export_changed`.
  */
-export const exportTransactionsCsv = async (filters: ExportTransactionsQuery): Promise<Blob> => {
+export const exportTransactions = async (request: ExportTransactionsRequest): Promise<ExportedFile> => {
   try {
-    const response = await apiClient.get<string>('/transactions/export', {
-      params: { ...filters, format: 'csv' },
+    /* Bytes, não `blob`: o arquivo pode ser binário (XLSX/PDF) e o mesmo pedido serve aos três formatos; o blob é
+       montado aqui com o tipo que o servidor declarou. */
+    const response = await apiClient.get<ArrayBuffer>('/transactions/export', {
+      params: request,
       paramsSerializer: repeatArrayParams,
-      responseType: 'text',
+      responseType: 'arraybuffer',
       timeout: EXPORT_TIMEOUT_MS,
       // Leitura longa: um timeout não deve refazer a exportação inteira no servidor (ver client.ts).
       ...({ __noRetry: true } as Record<string, unknown>),
     });
-    return new Blob(['\uFEFF', response.data.replace(/^\uFEFF/, '')], {
-      type: 'text/csv;charset=utf-8',
-    });
+    const headers = (response.headers ?? {}) as Record<string, unknown>;
+    const type = typeof headers['content-type'] === 'string' ? (headers['content-type'] as string) : '';
+    return {
+      blob: new Blob([response.data], type ? { type } : undefined),
+      fileName: fileNameFromDisposition(headers['content-disposition']),
+    };
   } catch (error) {
-    parseErrorBody(error);
+    parseBinaryErrorBody(error);
     throw error;
   }
 };
+
+/** O CSV do recorte, sem os textos da tela (lançamentos do cartão; migra para o painel na #524). */
+export const exportTransactionsCsv = async (filters: ExportTransactionsQuery): Promise<Blob> =>
+  (await exportTransactions({ ...filters, format: 'csv' })).blob;
 
 /**
  * Põe vários lançamentos (1 a 200) na mesma categoria, tudo ou nada: se algum for recusado, nada muda
