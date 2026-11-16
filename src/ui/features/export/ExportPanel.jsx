@@ -10,6 +10,8 @@ import { G, NUM } from "../../typography";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { EXPORT_MAX_ROWS, exportFailureMessage } from "./exportFailure.js";
 import { userTimezone } from "./exportRequest.js";
+import { exportTexts } from "./exportTexts.js";
+import { useIsNarrow } from "../../useIsNarrow.js";
 import {
   UNAVAILABLE,
   byCurrencyLine,
@@ -31,6 +33,8 @@ import { saveBlob } from "./saveBlob.js";
  * `selection` ({ ids, count, summary }) é a "Exportar seleção" (#524): troca o recorte pelos marcados.
  * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado.
  * `fullScreen` é o modo celular (#527): quem usa decide pelo limite de 700 px.
+ * Abaixo de 700 px de largura a prévia lateral não aparece (não cabe ao lado dos passos); a tela cheia com
+ * "Ver prévia do arquivo" é da #527.
  */
 
 export const FORMAT_OPTIONS = {
@@ -48,6 +52,9 @@ const PDF_CONTENT = [
 ];
 
 const countText = (n) => Number(n ?? 0).toLocaleString("pt-BR");
+const TEXTS = exportTexts("pt-BR");
+/** Abaixo de 700 px (o limite do painel, D4 da #520) a prévia lateral sai. */
+export const PREVIEW_MIN_WIDTH = 700;
 
 function ExportStep({ n, title, children }) {
   return (
@@ -73,17 +80,17 @@ function ScopeStep({ selection, count, filtersText }) {
   if (selection) {
     return (
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
-        <b>{countText(selection.count)} lançamentos selecionados</b>. Saem só os que você marcou.
+        <b>{TEXTS.selected(selection.count)}</b>. Saem só os que você marcou.
       </p>
     );
   }
   return (
     <>
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
-        Sai o recorte inteiro: <b>{countText(count)} lançamentos</b>, não só o que está carregado na tela.
+        Sai o recorte inteiro: <b>{TEXTS.entries(count)}</b>, não só o que está carregado na tela.
       </p>
       <ul aria-label="Filtros ativos" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
-        {(filtersText.length ? filtersText : ["Sem filtros: todos os lançamentos"]).map((text) => (
+        {(filtersText.length ? filtersText : [TEXTS.noFilters]).map((text) => (
           <li
             key={text}
             style={{
@@ -185,7 +192,7 @@ function TotalsStep({ totals }) {
         <TotalCell label="Estornos" value={moneyOrUnavailable(totals.refunds, totals.currency)} color={T.green} />
       </div>
       <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>
-        {countText(totals.count)} lançamentos · {countText(totals.pending)} pendentes (incluídos nos totais)
+        {TEXTS.entries(totals.count)} · {TEXTS.pendingIncluded(totals.pending)}
       </span>
       {perCurrency && <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>Por moeda: {perCurrency}</span>}
       {note && <p style={{ ...G, margin: 0, fontSize: 11, color: totals.unavailable ? T.amber : T.inkMid }}>{note}</p>}
@@ -204,7 +211,7 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
   const meta = [
     line(title),
     line("Sua organização · gerado agora"),
-    ...(selection ? [line(`${countText(selection.count)} lançamentos selecionados`)] : (filtersText.length ? filtersText : ["Sem filtros: todos os lançamentos"]).map((t) => line(t))),
+    ...(selection ? [line(TEXTS.selected(selection.count))] : (filtersText.length ? filtersText : [TEXTS.noFilters]).map((t) => line(t))),
   ];
   const note = conversionNote(totals);
   if (note) meta.push(line(note));
@@ -216,14 +223,14 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
         line("RECEITAS", csvNumber(totals.income, cur), cur),
         line("DESPESAS", csvNumber(totals.expenses == null ? null : -totals.expenses, cur), cur),
         line("ESTORNOS", csvNumber(totals.refunds, cur), cur),
-        line(`LANÇAMENTOS: ${totals.count} (${totals.pending} pendentes, incluídos nos totais)`),
+        line(TEXTS.fileCountLine(totals.count, totals.pending)),
         ...(totals.mixed
           ? totals.byCurrency.map((item) => line(`RESULTADO EM ${item.currency}`, csvNumber(item.result, item.currency), item.currency))
           : []),
       ]
     : [];
   const header = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
-  const rows = [line(`… ${countText(totals?.count)} lançamentos, um por linha …`)];
+  const rows = [line(`… ${TEXTS.entries(totals?.count)}, um por linha …`)];
   return [...meta, null, ...block, null, header, ...rows, null, resultLine]
     .map((cells) => (cells ? cells.map(csvCell).join(",") : ""))
     .join("\n");
@@ -268,6 +275,8 @@ export function ExportPanel({
   const [format, setFormat] = useState(formats.includes("pdf") ? "pdf" : formats[0]);
   const [content, setContent] = useState("full");
   const [status, setStatus] = useState({ busy: false, error: "" });
+  const narrow = useIsNarrow(PREVIEW_MIN_WIDTH - 1);
+  const showPreview = !fullScreen && !narrow;
 
   const totals = exportTotalsFromSummary(selection ? selection.summary : summary);
   const sliceCount = selection ? selection.count : (count ?? totals?.count ?? 0);
@@ -316,7 +325,7 @@ export function ExportPanel({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: fullScreen ? "minmax(0, 1fr)" : "minmax(240px, 300px) minmax(0, 1fr)",
+          gridTemplateColumns: showPreview ? "minmax(240px, 300px) minmax(0, 1fr)" : "minmax(0, 1fr)",
           gap: 18,
           alignItems: "start",
         }}
@@ -341,7 +350,7 @@ export function ExportPanel({
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>
           )}
         </div>
-        {!fullScreen && PREVIEW_BUILDERS[format] && (
+        {showPreview && PREVIEW_BUILDERS[format] && (
           <FilePreview format={format} preview={PREVIEW_BUILDERS[format]({ title, filtersText, selection, totals })} />
         )}
       </div>

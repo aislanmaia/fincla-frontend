@@ -92,7 +92,7 @@ describe("<ExportPanel>", () => {
     expect(totals).toHaveTextContent(/Receitas\s*US\$\s1\.000,00/);
     expect(totals).toHaveTextContent(/Despesas\s*US\$\s250,40/);
     expect(totals).toHaveTextContent(/Estornos\s*US\$\s20,00/);
-    expect(panel).toHaveTextContent("3 lançamentos · 1 pendentes (incluídos nos totais)");
+    expect(panel).toHaveTextContent("3 lançamentos · 1 pendente (incluído nos totais)");
     expect(panel).not.toHaveTextContent("R$");
     expect(panel).not.toHaveTextContent("Por moeda");
   });
@@ -205,6 +205,64 @@ describe("<ExportPanel>", () => {
     expect(within(panel).queryByRole("list", { name: "Filtros ativos" })).toBeNull();
     await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalledWith(expect.objectContaining({ ids: [7, 9], filters_text: [] })));
+  });
+});
+
+const ONE_ENTRY = {
+  ...ONE_CURRENCY, total_transactions: 1, unsettled_count: 1,
+  result_by_currency: [{ ...ONE_CURRENCY.result_by_currency[0], total_transactions: 1 }],
+};
+
+describe("<ExportPanel> — singular e plural (QA BUG-03)", () => {
+  it("com 1 lançamento e 1 pendente: passo 1, passo 3 e prévia no singular", () => {
+    const { panel } = renderPanel({ count: 1, summary: ONE_ENTRY });
+    expect(within(panel).getByRole("region", { name: "Lançamentos exportados" }))
+      .toHaveTextContent("Sai o recorte inteiro: 1 lançamento, não só o que está carregado na tela.");
+    expect(panel).toHaveTextContent("1 lançamento · 1 pendente (incluído nos totais)");
+    const preview = within(panel).getByTestId("export-preview").textContent;
+    expect(preview).toContain('"LANÇAMENTOS: 1 (1 pendente, incluído nos totais)"');
+    expect(preview).toContain("… 1 lançamento, um por linha …");
+    expect(panel).not.toHaveTextContent(/1 lançamentos|1 pendentes/);
+  });
+
+  it("com 2 lançamentos e 0 pendentes, plural", () => {
+    const { panel } = renderPanel({ count: 2, summary: { ...ONE_ENTRY, total_transactions: 2, unsettled_count: 0 } });
+    expect(panel).toHaveTextContent("2 lançamentos · 0 pendentes (incluídos nos totais)");
+    expect(within(panel).getByTestId("export-preview")).toHaveTextContent("LANÇAMENTOS: 2 (0 pendentes, incluídos nos totais)");
+  });
+
+  it("seleção de 1 lançamento no singular, no painel e na prévia", () => {
+    const { panel } = renderPanel({ selection: { ids: [7], count: 1, summary: ONE_ENTRY } });
+    expect(panel).toHaveTextContent("1 lançamento selecionado. Saem só os que você marcou.");
+    expect(within(panel).getByTestId("export-preview")).toHaveTextContent('"1 lançamento selecionado"');
+  });
+});
+
+describe("<ExportPanel> — prévia lateral só com espaço (QA BUG-02)", () => {
+  const stubViewport = (width) => {
+    window.matchMedia = vi.fn((query) => {
+      const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+      return {
+        matches: Number.isFinite(max) ? width <= max : false,
+        media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      };
+    });
+  };
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  it.each([390, 699])("com %i px a prévia não aparece e os passos ocupam a largura", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    expect(within(panel).queryByTestId("export-preview")).toBeNull();
+    expect(within(panel).getByRole("region", { name: "Totais do relatório" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
+  });
+
+  it.each([700, 1440])("com %i px a prévia continua ao lado dos passos", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    expect(within(panel).getByTestId("export-preview")).toHaveTextContent("Prévia do arquivo (CSV)");
   });
 });
 
