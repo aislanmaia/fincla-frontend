@@ -150,10 +150,10 @@ const renderPage = (props = {}) =>
       organizationId="org-test" transactionsRefreshToken={0} onTransactionsInvalidate={vi.fn()} {...props} />,
   );
 
-async function exportCsv() {
+async function exportFile() {
   await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
   const panel = await screen.findByRole("dialog", { name: "Exportar" });
-  await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+  await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
   await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
   return exportMock.mock.calls[0][0];
 }
@@ -174,11 +174,12 @@ describe("<TransacoesPage> — Exportar (#521)", () => {
   it("o pedido leva todos os filtros da listagem, com o título, o prefixo e os filtros em texto", async () => {
     legacyOverride = FULL_SLICE;
     renderPage();
-    const request = await exportCsv();
+    const request = await exportFile();
 
     expect(request).toMatchObject({
       organization_id: "org-test",
-      format: "csv",
+      format: "pdf",
+      content: "full",
       title: "Transações",
       file_prefix: "transacoes",
       description: "padaria",
@@ -207,7 +208,7 @@ describe("<TransacoesPage> — Exportar (#521)", () => {
   it("o período sai nas datas do pedido, com ano — nunca o rótulo relativo do chip (QA BUG-04)", async () => {
     legacyOverride = FULL_SLICE; // datas 2026-10-01 a 2026-10-31 no pedido, enquanto o chip diz "Este mês"
     renderPage();
-    const request = await exportCsv();
+    const request = await exportFile();
     expect(request.date_start).toBe("2026-10-01");
     expect(request.filters_text[0]).toBe("Período: 01/10/2026 a 31/10/2026");
     expect(request.filters_text.join(" | ")).not.toMatch(/Este mês|Mês anterior/);
@@ -233,7 +234,7 @@ describe("<TransacoesPage> — Exportar (#521)", () => {
     const chips = within(within(panel).getByRole("list", { name: "Filtros ativos" })).getAllByRole("listitem").map((li) => li.textContent);
     expect(chips).toContain(line);
     expect(chips.filter((text) => text.startsWith("Tags"))).toEqual([line]);
-    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
     const request = exportMock.mock.calls[0][0];
     expect(request.filters_text).toContain(line);
@@ -245,7 +246,7 @@ describe("<TransacoesPage> — Exportar (#521)", () => {
   it("o arquivo é salvo com o nome que o servidor deu e o painel fecha", async () => {
     const { saveBlob } = await import("../../features/export/saveBlob.js");
     renderPage();
-    await exportCsv();
+    await exportFile();
     await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "transacoes-2026-11-15.csv"));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Exportar" })).toBeNull());
   });

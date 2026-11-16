@@ -379,7 +379,7 @@ describe("CardAllTransactionsPage · recorte de tempo", () => {
       await user.click(screen.getByRole("button", { name: /Exportar/ }));
       const dialog = await screen.findByRole("dialog", { name: "Exportar" });
       const shown = within(within(dialog).getByRole("list", { name: "Filtros ativos" })).getAllByRole("listitem").map((li) => li.textContent);
-      await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+      await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
       await waitFor(() => expect(exports).toHaveLength(1));
       return { sent: exports[0].searchParams.getAll("filters_text"), shown };
     } finally {
@@ -905,6 +905,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const user = userEvent.setup();
     const dialog = await openExport(user);
     expect(dialog).toHaveTextContent("2 lançamentos");
+    await user.click(within(dialog).getByRole("button", { name: "CSV" })); // este teste lê o CSV
     await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(created).toHaveLength(1));
     expect(await created[0].text()).toContain("Linha 2");
@@ -946,7 +947,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     const dialog = await openExport(user);
-    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("O recorte tem 25.000 lançamentos e o limite por arquivo é 20.000. Estreite os filtros e exporte de novo.");
     expect(created).toHaveLength(0);
   });
@@ -959,9 +960,9 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     const dialog = await openExport(user);
-    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("O extrato mudou enquanto o arquivo era preparado. Exporte de novo.");
-    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Não foi possível preparar a exportação. Tente novamente."));
   });
 
@@ -973,7 +974,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const user = userEvent.setup();
     const dialog = await openExport(user);
     expect(within(dialog).getByRole("alert")).toHaveTextContent("O recorte tem 25.000 lançamentos e o limite por arquivo é 20.000");
-    expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
     expect(asked).toBe(0);
   });
 
@@ -983,7 +984,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     const dialog = await openExport(user);
-    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Seu plano não inclui exportação.");
   });
 
@@ -1476,6 +1477,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(selectionSummary.searchParams.getAll("ids")).toEqual(["12"]);
     expect(selectionSummary.searchParams.get("slice_currency")).toBe("true");
     expect(selectionSummary.searchParams.get("organization_id")).toBe(ORG_ID);
+    await user.click(within(panel).getByRole("button", { name: "CSV" })); // este teste lê o CSV
     await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(exports).toHaveLength(1));
     const asked = exports[0].searchParams;
@@ -1503,7 +1505,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const panel = await screen.findByRole("dialog", { name: "Exportar" });
     expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toBeInTheDocument();
     expect(await within(panel).findByTestId("export-totals")).toHaveTextContent(/120,00/);
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(exports).toHaveLength(1));
     expect(exports[0].searchParams.has("ids")).toBe(false);
     expect(exports[0].searchParams.get("credit_card_id")).toBe("7");
@@ -1526,7 +1528,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const panel = await screen.findByRole("dialog", { name: "Exportar seleção" });
     const text = "Um ou mais lançamentos marcados não existem mais. Atualize a lista e selecione de novo.";
     expect(await within(panel).findByText(new RegExp(text))).toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(within(panel).getAllByRole("alert").map((node) => node.textContent).join(" ")).toContain(`${text}`));
     expect(within(panel).getAllByRole("alert")).toHaveLength(2);
   });
@@ -1564,7 +1566,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Selecionar Padaria", checked: true })).not.toBeInTheDocument());
     const dialog = screen.getByRole("dialog", { name: "Exportar seleção" });
     expect(dialog).toHaveTextContent("1 lançamento selecionado");
-    expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
   });
 
   it("com a faceta Categoria aberta, o pedido de contagens ignora as categorias marcadas (OU, não E)", async () => {

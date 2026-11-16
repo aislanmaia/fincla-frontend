@@ -30,6 +30,18 @@ const PT_BR = {
     const p = Number(pending ?? 0);
     return `LANÇAMENTOS: ${Number(count ?? 0)} (${p} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais)`;
   },
+  /** A nota do PDF "Só o resumo" (igual à do servidor, #523). */
+  summaryOnlyNote(n) {
+    const count = Number(n ?? 0);
+    return count === 1
+      ? "Versão resumida: o 1 lançamento do recorte não está listado neste arquivo. Exporte em “Completo” para vê-lo."
+      : `Versão resumida: a lista dos ${count} lançamentos não está neste arquivo. Exporte em “Completo” para vê-la.`;
+  },
+  /** A linha de contagem do PDF, igual à do servidor. */
+  pdfCountLine(count, pending) {
+    const p = Number(pending ?? 0);
+    return `${this.entries(count)} · ${p} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais`;
+  },
   countLabel: "LANÇAMENTOS",
   pendingLabel: "PENDENTES (incluídos nos totais)",
   /** O aviso da planilha quando os totais não podem ser fórmula (igual ao do servidor). */
