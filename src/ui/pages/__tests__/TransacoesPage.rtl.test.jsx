@@ -722,10 +722,13 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
   });
 
-  /* 30 s, não 15: isolado este teste leva ~14,7 s — cada `userEvent` percorre a
-     árvore inteira da página, que tem 4 mil linhas, e são seis interações.
-     Sob a suíte cheia ele estourava o padrão por margem de segundos. O limite
-     maior é sobre o custo do jsdom nesta página, não sobre esperar bug passar. */
+  /* Sem teto próprio: vale o global de `vite.config.ts` (45 s). Este teste tinha
+     `30000` aqui, de antes do teto global, e esse número passou a REBAIXAR o
+     limite — o mesmo erro dos overrides por `describe` que o cabeçalho deste
+     arquivo descreve. Isolado ele leva ~10,5 s, igual na main e no branch: cada
+     interação custa ~1 s porque a primeira consulta por papel depois de um
+     render recalcula o estilo de cada ancestral no jsdom. Sob a carga do gate
+     (73 arquivos dividindo o pool) passou de 30 s duas vezes. */
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     // 1600: o chip de visualizações mostra o rótulo. Abaixo disso ele é só o
     // marcador, e o "alterada" vira um ponto — coberto pelo teste do chip.
@@ -745,7 +748,7 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(
       screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
     ).toHaveAttribute("aria-checked", "false");
-  }, 30000);
+  });
 
   /* O desktop compacto abre A MESMA DOCK do largo. Antes ele abria a faixa
      permanente de nove cards — o painel que o redesenho aposentou —, e o teste
