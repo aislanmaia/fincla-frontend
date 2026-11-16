@@ -8,7 +8,7 @@ import { currencyInfo } from "../../money/currencyRegistry.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
-import { EXPORT_MAX_ROWS, exportFailureMessage } from "./exportFailure.js";
+import { EXPORT_MAX_ROWS, SELECTION_MAX_IDS, exportFailureMessage, selectionTooLargeMessage } from "./exportFailure.js";
 import { userTimezone } from "./exportRequest.js";
 import { exportTexts } from "./exportTexts.js";
 import { useIsNarrow } from "../../useIsNarrow.js";
@@ -30,7 +30,8 @@ import { saveBlob } from "./saveBlob.js";
  * os parâmetros de filtro da listagem (o MESMO objeto que pediu o resumo), a contagem do recorte e o resumo que ela
  * já tem. O painel não filtra e não soma: o arquivo sai do exportador do servidor, com os totais do mesmo resumo.
  *
- * `selection` ({ ids, count, summary }) é a "Exportar seleção" (#524): troca o recorte pelos marcados.
+ * `selection` ({ ids, count, summary, error }) é a "Exportar seleção" (#524): troca o recorte pelos marcados. `summary` é
+ * o resumo pedido com os mesmos `ids` (totais só dos marcados); `error`, o motivo de ele não ter vindo.
  * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado.
  * `fullScreen` é o modo celular (#527): quem usa decide pelo limite de 700 px.
  * Abaixo de 700 px de largura a prévia lateral não aparece (não cabe ao lado dos passos); a tela cheia com
@@ -177,7 +178,10 @@ function TotalCell({ label, value, color }) {
   );
 }
 
-function TotalsStep({ totals }) {
+function TotalsStep({ totals, error }) {
+  if (error) {
+    return <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Não foi possível calcular os totais: {error}</p>;
+  }
   if (!totals) {
     return <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Os totais ainda estão carregando.</p>;
   }
@@ -280,7 +284,8 @@ export function ExportPanel({
 
   const totals = exportTotalsFromSummary(selection ? selection.summary : summary);
   const sliceCount = selection ? selection.count : (count ?? totals?.count ?? 0);
-  const tooLarge = sliceCount > EXPORT_MAX_ROWS;
+  const selectionTooLarge = Boolean(selection) && sliceCount > SELECTION_MAX_IDS;
+  const tooLarge = !selection && sliceCount > EXPORT_MAX_ROWS;
 
   const runExport = async () => {
     setStatus({ busy: true, error: "" });
@@ -307,7 +312,7 @@ export function ExportPanel({
   const footer = (
     <>
       <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-      <Btn variant="dark" full disabled={status.busy || tooLarge} onClick={runExport}>
+      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
     </>
@@ -339,12 +344,15 @@ export function ExportPanel({
                 Estreite os filtros e exporte de novo.
               </p>
             )}
+            {selectionTooLarge && (
+              <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{selectionTooLargeMessage(sliceCount)}</p>
+            )}
           </ExportStep>
           <ExportStep n={2} title="Formato do arquivo">
             <FormatStep formats={formats} format={format} onFormat={setFormat} content={content} onContent={setContent} />
           </ExportStep>
           <ExportStep n={3} title="Totais do relatório">
-            <TotalsStep totals={totals} />
+            <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection?.error} />
           </ExportStep>
           {status.error && (
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>

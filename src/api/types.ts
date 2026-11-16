@@ -833,6 +833,11 @@ export interface TransactionsSummaryQuery {
    * A Visão Geral e os demais NÃO mandam: eles escrevem os totais com o símbolo da moeda base.
    */
   slice_currency?: boolean;
+  /**
+   * "Exportar seleção" (fincla-api#524): os totais só destes lançamentos (até 1.000). Substitui o recorte: os
+   * demais filtros são ignorados. Id fora da organização -> 404 `TRANSACTION_NOT_FOUND`.
+   */
+  ids?: number[];
 }
 
 export interface PeriodInfo {

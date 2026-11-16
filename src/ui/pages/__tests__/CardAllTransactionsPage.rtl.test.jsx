@@ -26,7 +26,7 @@ vi.mock("@tanstack/react-router", () => ({
   useSearch: () => route.search,
 }));
 import { CardAllTransactionsPage } from "../CardAllTransactionsPage.jsx";
-import { csvCell } from "../../features/cardTransactions/ledgerExport.js";
+import { AVAILABLE_EXPORT_FORMATS, FORMAT_OPTIONS } from "../../features/export/ExportPanel.jsx";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 
 const requests = [];
@@ -59,11 +59,6 @@ afterAll(() => server.close());
 afterEach(() => { route.search = {}; cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); fakeHistory.depth = 0; vi.unstubAllGlobals(); });
 
 describe("CardAllTransactionsPage", () => {
-  it("neutraliza fórmulas de planilha no CSV de descrições informadas pelo usuário", () => {
-    expect(csvCell('=HYPERLINK("https://example.com","Abrir")', true)).toBe('"\'=HYPERLINK(""https://example.com"",""Abrir"")"');
-    expect(csvCell("  @SUM(1,2)", true)).toBe('"\'  @SUM(1,2)"');
-    expect(csvCell("-35.00", false)).toBe('"-35.00"');
-  });
   it("mostra gasto por categoria do recorte completo na moeda recebida da API", async () => {
     server.use(http.get("*/v1/transactions/summary", ({ request }) => {
       const url = new URL(request.url);
@@ -382,8 +377,8 @@ describe("CardAllTransactionsPage · recorte de tempo", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     try {
       await user.click(screen.getByRole("button", { name: /Exportar/ }));
-      const dialog = screen.getByRole("dialog", { name: "Exportar lançamentos" });
-      const shown = within(dialog).getAllByRole("listitem").map((li) => li.textContent);
+      const dialog = await screen.findByRole("dialog", { name: "Exportar" });
+      const shown = within(within(dialog).getByRole("list", { name: "Filtros ativos" })).getAllByRole("listitem").map((li) => li.textContent);
       await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
       await waitFor(() => expect(exports).toHaveLength(1));
       return { sent: exports[0].searchParams.getAll("filters_text"), shown };
@@ -883,7 +878,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
   const openExport = async (user) => {
     await screen.findByText("Linha 1");
     await user.click(screen.getByRole("button", { name: /Exportar/ }));
-    return screen.getByRole("dialog", { name: "Exportar lançamentos" });
+    return screen.findByRole("dialog", { name: "Exportar" });
   };
   const withTwoPages = () => server.use(http.get("*/v1/transactions", ({ request }) => {
     const url = new URL(request.url);
@@ -894,6 +889,11 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
 
   it("exporta o conjunto inteiro pelo servidor, com os mesmos filtros da lista e sem paginar nem ordenar", async () => {
     withTwoPages();
+    const summaries = [];
+    server.use(http.get("*/v1/transactions/summary", ({ request }) => {
+      summaries.push(new URL(request.url));
+      return HttpResponse.json({ total_transactions: 2, total_income: null, total_expenses: { amount: "10.00", currency: "BRL" }, total_refunds: { amount: "0.00", currency: "BRL" }, balance: { amount: "-10.00", currency: "BRL" }, unsettled_count: 0, breakdown: { by_category: [], by_month: [] } });
+    }));
     const exports = [];
     server.use(http.get("*/v1/transactions/export", ({ request }) => {
       exports.push(new URL(request.url));
@@ -931,6 +931,12 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     // Tudo o que a lista filtrou o export também filtra (menos paginação e ordem).
     for (const [key, value] of listed.entries()) if (!["page", "limit", "sort_by", "sort_order"].includes(key)) expect(asked.getAll(key)).toContain(value);
     expect(requests.some((url) => url.searchParams.get("page") === "2")).toBe(false);
+    // O card da tela e o painel usam o resumo com a moeda do recorte (D1): tela e arquivo saem do mesmo cálculo,
+    // com os mesmos filtros que o arquivo leva.
+    const screenSummary = summaries.at(-1).searchParams;
+    expect(screenSummary.get("slice_currency")).toBe("true");
+    for (const [key, value] of screenSummary.entries()) if (!["include_breakdown", "slice_currency", "locale"].includes(key)) expect(asked.getAll(key)).toContain(value);
+    expect(within(dialog).getByTestId("export-totals")).toHaveTextContent(/-?R\$\s*10,00/);
   });
 
   it("o recorte acima do limite diz o tamanho e pede para estreitar os filtros", async () => {
@@ -959,17 +965,15 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Não foi possível preparar a exportação. Tente novamente."));
   });
 
-  it("recorte acima do limite do arquivo avisa antes de pedir e desabilita só o CSV", async () => {
+  it("recorte acima do limite do arquivo avisa no painel antes de pedir e não deixa exportar", async () => {
     server.use(http.get("*/v1/transactions", () => HttpResponse.json({ data: [{ id: 1, date: "2026-09-01", description: "Linha 1", value: 5, value_currency: "BRL", type: "expense" }], pagination: { total: 25000, page: 1, limit: 30, pages: 834, has_next: true, has_prev: false } })));
     let asked = 0;
     server.use(http.get("*/v1/transactions/export", () => { asked += 1; return new HttpResponse("x"); }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     const dialog = await openExport(user);
-    expect(dialog).toHaveTextContent("O recorte passa de 20.000 lançamentos");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("O recorte tem 25.000 lançamentos e o limite por arquivo é 20.000");
     expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeDisabled();
-    await user.click(within(dialog).getByRole("button", { name: "PDF" }));
-    expect(within(dialog).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
     expect(asked).toBe(0);
   });
 
@@ -983,22 +987,19 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Seu plano não inclui exportação.");
   });
 
-  it("o PDF segue pelo navegador e parte do conjunto completo (todas as páginas)", async () => {
+  it("os formatos são os do exportador do servidor; nada é gerado no navegador", async () => {
     withTwoPages();
-    let exported = 0;
-    server.use(http.get("*/v1/transactions/export", () => { exported += 1; return new HttpResponse("x"); }));
     const printed = [];
     const realCreate = document.createElement.bind(document);
-    vi.spyOn(document, "createElement").mockImplementation((tag, ...rest) => { const el = realCreate(tag, ...rest); if (tag === "iframe") Object.defineProperty(el, "srcdoc", { set: (html) => printed.push(html), get: () => "" }); return el; });
+    vi.spyOn(document, "createElement").mockImplementation((name, ...rest) => { if (name === "iframe") printed.push(name); return realCreate(name, ...rest); });
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     const dialog = await openExport(user);
-    await user.click(within(dialog).getByRole("button", { name: "PDF" }));
-    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
-    await waitFor(() => expect(printed).toHaveLength(1));
-    expect(printed[0]).toContain("Linha 1");
-    expect(printed[0]).toContain("Linha 2");
-    expect(exported).toBe(0);
+    const formats = within(within(dialog).getByRole("group", { name: "Formato do arquivo" })).getAllByRole("button").map((button) => button.textContent);
+    expect(formats).toEqual(AVAILABLE_EXPORT_FORMATS.map((key) => FORMAT_OPTIONS[key].label));
+    // A página não lê o recorte página a página para montar arquivo: só o servidor lê.
+    expect(requests.some((url) => url.searchParams.get("page") === "2")).toBe(false);
+    expect(printed).toHaveLength(0);
   });
 
   const semDono = { id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" };
@@ -1439,35 +1440,95 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     });
   });
 
-  it("Exportar seleção abre o modal de exportação, leva só as linhas marcadas e baixa com a extensão no nome", async () => {
+  /** O resumo da seleção (com `ids`) responde só os totais dos marcados; o da tela, o recorte inteiro. */
+  const withSummaries = (seen) => server.use(http.get("*/v1/transactions/summary", ({ request }) => {
+    const url = new URL(request.url);
+    seen.push(url);
+    const money = (amount) => ({ amount, currency: "BRL" });
+    return url.searchParams.has("ids")
+      ? HttpResponse.json({ total_transactions: 1, total_income: money("0.00"), total_expenses: money("20.00"), total_refunds: money("0.00"), balance: money("-20.00"), unsettled_count: 1 })
+      : HttpResponse.json({ total_transactions: 2, total_income: money("0.00"), total_expenses: money("120.00"), total_refunds: money("0.00"), balance: money("-120.00"), unsettled_count: 2, breakdown: { by_category: [], by_month: [] } });
+  }));
+
+  it("Exportar seleção abre o painel no modo seleção: diz quantos, mostra os totais só dos marcados e o pedido leva os ids", async () => {
     withLedger();
-    const created = [];
-    const names = [];
-    const realUrl = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clicked() { names.push(this.download); });
-    try {
+    const summaries = [];
+    withSummaries(summaries);
+    const exports = [];
+    server.use(http.get("*/v1/transactions/export", ({ request }) => {
+      exports.push(new URL(request.url));
+      return new HttpResponse("\uFEFF", { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="cartao-azul-7112-2026-11-16.csv"' } });
+    }));
+    const { created, names } = stubDownload();
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     await screen.findByText("Padaria");
     await user.click(screen.getByRole("checkbox", { name: "Selecionar Padaria" }));
     await user.click(screen.getByRole("button", { name: "Exportar seleção" }));
-    expect(created).toHaveLength(0);
-    const dialog = screen.getByRole("dialog", { name: "Exportar seleção" });
-    expect(dialog).toHaveTextContent("Saem só os lançamentos que você marcou: 1 lançamento");
-    expect(within(dialog).getByRole("group", { name: "Formato" })).toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar seleção" });
+    expect(within(panel).getByRole("region", { name: "Lançamentos exportados" })).toHaveTextContent("1 lançamento selecionado");
+    expect(within(panel).queryByRole("list", { name: "Filtros ativos" })).not.toBeInTheDocument();
+    // Totais pelo MESMO resumo do servidor, pedido com os ids marcados (não a soma das linhas carregadas).
+    const totals = await within(panel).findByTestId("export-totals");
+    expect(totals).toHaveTextContent(/R\$\s*20,00/);
+    expect(totals).not.toHaveTextContent(/120,00/);
+    const selectionSummary = summaries.find((url) => url.searchParams.has("ids"));
+    expect(selectionSummary.searchParams.getAll("ids")).toEqual(["12"]);
+    expect(selectionSummary.searchParams.get("slice_currency")).toBe("true");
+    expect(selectionSummary.searchParams.get("organization_id")).toBe(ORG_ID);
+    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(exports).toHaveLength(1));
+    const asked = exports[0].searchParams;
+    expect(asked.getAll("ids")).toEqual(["12"]);
+    expect(asked.get("organization_id")).toBe(ORG_ID);
+    expect(asked.getAll("filters_text")).toEqual([]);
+    expect(asked.get("title")).toBe("Lançamentos · Azul •7112");
+    expect(asked.get("file_prefix")).toBe("cartao-azul-7112");
     await waitFor(() => expect(created).toHaveLength(1));
-    const csv = await created[0].text();
-    expect(csv).toContain("Padaria");
-    expect(csv).not.toContain("Notebook");
-    expect(names[0]).toMatch(/^lancamentos-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(names[0]).toBe(`lancamentos-${todayLocalYmd()}.csv`);
-    } finally {
-      click.mockRestore();
-      URL.createObjectURL = realUrl.create;
-      URL.revokeObjectURL = realUrl.revoke;
-    }
+    expect(names[0]).toBe("cartao-azul-7112-2026-11-16.csv");
+  });
+
+  it("Exportar (sem seleção) não leva ids e mostra os filtros da tela", async () => {
+    withLedger();
+    const summaries = [];
+    withSummaries(summaries);
+    const exports = [];
+    server.use(http.get("*/v1/transactions/export", ({ request }) => { exports.push(new URL(request.url)); return new HttpResponse("x"); }));
+    stubDownload();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Padaria");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar Padaria" }));
+    await user.click(screen.getByRole("button", { name: /^Exportar$/ }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toBeInTheDocument();
+    expect(await within(panel).findByTestId("export-totals")).toHaveTextContent(/120,00/);
+    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(exports).toHaveLength(1));
+    expect(exports[0].searchParams.has("ids")).toBe(false);
+    expect(exports[0].searchParams.get("credit_card_id")).toBe("7");
+    expect(summaries.some((url) => url.searchParams.has("ids"))).toBe(false);
+  });
+
+  it("um lançamento marcado que sumiu (404) diz o motivo nos totais e na exportação", async () => {
+    withLedger();
+    const gone = { detail: { error: "TRANSACTION_NOT_FOUND", message: "x", type: "not_found" } };
+    server.use(
+      http.get("*/v1/transactions/summary", ({ request }) => (new URL(request.url).searchParams.has("ids") ? HttpResponse.json(gone, { status: 404 }) : HttpResponse.json({ total_transactions: 2, breakdown: { by_category: [], by_month: [] } }))),
+      http.get("*/v1/transactions/export", () => HttpResponse.json(gone, { status: 404 })),
+    );
+    stubDownload();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Padaria");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar Padaria" }));
+    await user.click(screen.getByRole("button", { name: "Exportar seleção" }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar seleção" });
+    const text = "Um ou mais lançamentos marcados não existem mais. Atualize a lista e selecione de novo.";
+    expect(await within(panel).findByText(new RegExp(text))).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(within(panel).getAllByRole("alert").map((node) => node.textContent).join(" ")).toContain(`${text}`));
+    expect(within(panel).getAllByRole("alert")).toHaveLength(2);
   });
 
   it("no celular a faixa de chips mostra que rola: seta e esmaecido só quando há mais chips, e a seta avança a faixa", async () => {
@@ -1492,7 +1553,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(scroller.scrollBy.mock.lastCall[0].left).toBeLessThan(0);
   });
 
-  it("o modal de exportar seleção guarda o que estava marcado ao abrir, mesmo que a lista recarregue por baixo", async () => {
+  it("o painel de exportar seleção guarda o que estava marcado ao abrir, mesmo que a lista recarregue por baixo", async () => {
     withLedger();
     const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
     const user = userEvent.setup();
@@ -1502,7 +1563,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     rerender(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={1} />);
     await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Selecionar Padaria", checked: true })).not.toBeInTheDocument());
     const dialog = screen.getByRole("dialog", { name: "Exportar seleção" });
-    expect(dialog).toHaveTextContent("1 lançamento");
+    expect(dialog).toHaveTextContent("1 lançamento selecionado");
     expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
   });
 
