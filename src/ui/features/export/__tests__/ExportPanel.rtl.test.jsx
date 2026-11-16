@@ -278,6 +278,20 @@ describe("<ExportPanel>", () => {
     for (const key of ["description", "account_id", "settled"]) expect(asked, key).not.toHaveProperty(key);
   });
 
+  it("seleção acima de 500 ids avisa no painel e não pede o arquivo; 500 passa (G3-2-07)", async () => {
+    const ids = Array.from({ length: 501 }, (_, index) => 2147483647 - index);
+    const { panel } = renderPanel({ selection: { ids, count: 501, summary: null } });
+    const step = within(panel).getByRole("region", { name: "Lançamentos exportados" });
+    expect(within(step).getByRole("alert")).toHaveTextContent("A seleção tem 501 lançamentos e o máximo é 500. Selecione menos lançamentos ou exporte pelos filtros da tela.");
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+    cleanup();
+    const atLimit = renderPanel({ selection: { ids: ids.slice(1), count: 500, summary: ONE_CURRENCY } }).panel;
+    expect(within(within(atLimit).getByRole("region", { name: "Lançamentos exportados" })).queryByRole("alert")).toBeNull();
+    await userEvent.click(within(atLimit).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    expect(exportMock.mock.calls[0][0].ids).toHaveLength(500);
+  });
+
   it("sem totais (resumo carregando ou falhou) o botão Exportar fica parado (G3-2-03)", async () => {
     const { panel } = renderPanel({ summary: null });
     expect(within(panel).getByText("Os totais ainda estão carregando.")).toBeInTheDocument();

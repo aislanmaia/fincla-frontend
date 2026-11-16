@@ -3,8 +3,12 @@ import { refusalReason } from "../../../api/apiError";
 /** O servidor exporta no máximo isto por arquivo (acima, recusa antes de ler qualquer linha). */
 export const EXPORT_MAX_ROWS = 20000;
 
-/** "Exportar seleção" (#524): o máximo de ids que o pedido leva (a URL tem limite no servidor). */
-export const SELECTION_MAX_IDS = 1000;
+/**
+ * "Exportar seleção" (#524): o máximo de ids que o pedido leva. Vai na URL de um GET, e o servidor recusa pedido
+ * acima de 16 KiB antes de responder: 500 ids no maior tamanho (10 dígitos) cabem com folga (G3-2-07; o mesmo
+ * limite de `MAX_SELECTION_IDS` da API, que devolve 422 `selection_too_large` acima dele).
+ */
+export const SELECTION_MAX_IDS = 500;
 
 /** A seleção passou do limite: o texto do painel e o da recusa do servidor são o mesmo. */
 export const selectionTooLargeMessage = (count, limit = SELECTION_MAX_IDS) =>
