@@ -32,7 +32,7 @@ import { saveBlob } from "./saveBlob.js";
  *
  * `selection` ({ ids, count, summary, error }) é a "Exportar seleção" (#524): troca o recorte pelos marcados. `summary` é
  * o resumo pedido com os mesmos `ids` (totais só dos marcados); `error`, o motivo de ele não ter vindo.
- * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado.
+ * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado (senão, o CSV).
  * `fullScreen` é o modo celular (#527): quem usa decide pelo limite de 700 px.
  * Abaixo de 700 px de largura a prévia lateral não aparece (não cabe ao lado dos passos); a tela cheia com
  * "Ver prévia do arquivo" é da #527.
@@ -40,12 +40,16 @@ import { saveBlob } from "./saveBlob.js";
 
 export const FORMAT_OPTIONS = {
   pdf: { label: "PDF", hint: "Para ler e enviar", Icon: FileText },
-  xlsx: { label: "XLSX", hint: "Excel, com totais formatados", Icon: FileSpreadsheet },
+  xlsx: { label: "XLSX", hint: "Planilha do Excel, para editar e fazer contas", Icon: FileSpreadsheet },
   csv: { label: "CSV", hint: "Texto simples, para outros sistemas", Icon: FileType2 },
 };
 
-/** Os formatos que o exportador do servidor já gera. XLSX (#522) e PDF (#523) entram aqui. */
-export const AVAILABLE_EXPORT_FORMATS = ["csv"];
+/** Os formatos que o exportador do servidor já gera, na ordem do protótipo. PDF (#523) entra aqui, na frente. */
+export const AVAILABLE_EXPORT_FORMATS = ["xlsx", "csv"];
+
+/** O formato que abre selecionado: PDF quando houver; até lá, o CSV de sempre. */
+export const initialExportFormat = (formats) =>
+  formats.includes("pdf") ? "pdf" : formats.includes("csv") ? "csv" : formats[0];
 
 const PDF_CONTENT = [
   { key: "full", label: "Completo", hint: "Resumo, categorias e a lista de lançamentos" },
@@ -240,10 +244,154 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
     .join("\n");
 }
 
-/** Uma prévia por formato; XLSX (#522) e PDF (#523) acrescentam a sua aqui. */
-const PREVIEW_BUILDERS = { csv: buildCsvPreview };
+function CsvPreview(props) {
+  return (
+    <pre
+      style={{
+        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: 14, fontSize: 11,
+        lineHeight: 1.5, overflowX: "auto", margin: 0, color: T.ink, whiteSpace: "pre",
+      }}
+    >
+      {buildCsvPreview(props)}
+    </pre>
+  );
+}
 
-function FilePreview({ format, preview }) {
+const SHEET_COLUMNS = ["A", "B", "C", "D", "E", "F", "G"];
+const TABLE_HEADER = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
+
+/** Um número como a planilha o mostra em pt-BR: casas da moeda pelo registro, sem símbolo (a moeda vai na coluna F). */
+const sheetNumber = (value, currency) => {
+  if (value == null) return UNAVAILABLE;
+  const places = currencyInfo(currency).decimalPlaces;
+  return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: places, maximumFractionDigits: places });
+};
+
+/**
+ * A planilha que o servidor vai gerar (#522), linha a linha, com os mesmos dados do passo 3: topo, bloco de totais,
+ * cabeçalho congelado, um marcador no lugar dos lançamentos, só o Resultado embaixo e o resumo por categoria.
+ * Com uma moeda (e lançamentos) os totais são fórmulas; aqui elas aparecem como o Excel em pt-BR as mostra.
+ */
+export function buildXlsxPreview({ title, filtersText, selection, totals }) {
+  const row = (cells, kind = "plain", formula = null) => ({ cells, kind, formula });
+  const top = [
+    row([title]),
+    row(["Sua organização · gerado agora"]),
+    ...(selection ? [TEXTS.selected(selection.count)] : (filtersText.length ? filtersText : [TEXTS.noFilters])).map((t) =>
+      row([t], "muted"),
+    ),
+  ];
+  const note = conversionNote(totals);
+  if (note) top.push(row([note], totals?.unavailable ? "warning" : "muted"));
+  if (totals?.mixed) {
+    const symbols = [...totals.byCurrency].sort((a, b) => a.currency.localeCompare(b.currency)).map((item) => currencyInfo(item.currency).symbol);
+    top.push(row([TEXTS.fixedTotals(symbols)], "warning"));
+  }
+  const cur = totals?.currency ?? "";
+  const count = totals?.count ?? 0;
+  const formulas = Boolean(totals) && count > 0 && !totals.mixed && !totals.unavailable;
+  const blockSize = 6 + (totals?.mixed ? totals.byCurrency.length : 0);
+  const headerRow = top.length + 1 + blockSize + 1 + 1; // 1-based: topo, branco, bloco, branco, cabeçalho
+  const span = (col) => `${col}${headerRow + 1}:${col}${headerRow + count}`;
+  const sumIf = (label) => `=SOMASE(${span("D")};"${label}";${span("E")})`;
+  const fx = (formula) => (formulas ? formula : null);
+  const total = (label, value, formula, kind = "total") =>
+    row([label, "", "", "", sheetNumber(value, cur), cur, ""], kind, fx(formula));
+  const resultFormula = `=SOMA(${span("E")})`;
+  const block = totals
+    ? [
+        total("RESULTADO", totals.result, resultFormula, "result"),
+        total("RECEITAS", totals.income, sumIf("Receita")),
+        total("DESPESAS", totals.expenses == null ? null : -totals.expenses, sumIf("Despesa")),
+        total("ESTORNOS", totals.refunds, sumIf("Estorno")),
+        row([TEXTS.countLabel, "", "", "", String(count), "", ""], "total", fx(`=CONT.VALORES(${span("D")})`)),
+        row([TEXTS.pendingLabel, "", "", "", String(totals.pending), "", ""], "total",
+          fx(`=CONT.VALORES(${span("G")})-CONT.SE(${span("G")};"Paga")`)),
+        ...(totals.mixed
+          ? totals.byCurrency.map((item) =>
+              row([`RESULTADO EM ${item.currency}`, "", "", "", sheetNumber(item.result, item.currency), item.currency, ""], "muted"))
+          : []),
+      ]
+    : [];
+  const blank = row([]);
+  return {
+    formulas,
+    headerRow,
+    rows: [
+      ...top,
+      blank,
+      ...block,
+      blank,
+      row(TABLE_HEADER, "header"),
+      row(["", `… ${TEXTS.entries(count)}, um por linha …`], "placeholder"),
+      ...(totals ? [total("RESULTADO", totals.result, resultFormula, "result")] : []),
+      blank,
+      row(["Categoria", "Lançamentos", "", "", "Total líquido", "Moeda", ""], "header"),
+      row(["… uma linha por categoria e moeda …"], "placeholder"),
+    ],
+  };
+}
+
+const SHEET_ROW_STYLE = {
+  plain: {}, muted: { color: T.inkLight }, warning: { color: T.amber }, placeholder: { color: T.inkGhost, fontStyle: "italic" },
+  total: { fontWeight: 700 }, result: { fontWeight: 700, background: T.greenLight },
+  header: { fontWeight: 700, background: T.grayLight },
+};
+
+function XlsxPreview(props) {
+  const { rows, headerRow, formulas } = buildXlsxPreview(props);
+  const resultFormula = rows.find((r) => r.formula)?.formula;
+  const cellStyle = { border: `1px solid ${T.border}`, padding: "3px 6px", whiteSpace: "nowrap", fontSize: 11 };
+  return (
+    <div data-testid="export-preview-sheet" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>
+        ▲ Linhas 1–{headerRow} congeladas: título, filtros, totais e o cabeçalho da tabela ficam visíveis ao rolar.
+        Abaixo dos lançamentos, só o Resultado.{" "}
+        {formulas ? "Os totais são fórmulas: mudam se você corrigir ou apagar uma linha." : ""}
+      </span>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ ...G, display: "flex", gap: 8, background: T.grayLight, borderBottom: `1px solid ${T.border}`, padding: "4px 8px", fontSize: 11, color: T.inkMid }}>
+          <span style={{ fontFamily: "monospace" }}>fx</span>
+          <span style={{ fontFamily: "monospace", color: resultFormula ? T.ink : T.inkGhost }}>{resultFormula ?? "valores fixos"}</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ ...G, ...NUM, borderCollapse: "collapse", color: T.ink }}>
+            <thead>
+              <tr>
+                <th aria-hidden="true" style={{ ...cellStyle, background: T.grayLight }} />
+                {SHEET_COLUMNS.map((col) => (
+                  <th key={col} scope="col" style={{ ...cellStyle, background: T.grayLight, fontWeight: 500, color: T.inkGhost }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, index) => (
+                <tr
+                  key={index}
+                  data-frozen-end={index + 1 === headerRow ? "true" : undefined}
+                  style={{ ...SHEET_ROW_STYLE[r.kind], borderBottom: index + 1 === headerRow ? `3px solid ${T.inkGhost}` : undefined }}
+                >
+                  <td style={{ ...cellStyle, background: T.grayLight, color: T.inkGhost, textAlign: "center" }}>{index + 1}</td>
+                  {SHEET_COLUMNS.map((col, j) => (
+                    <td key={col} title={j === 4 && r.formula ? r.formula : undefined} style={{ ...cellStyle, textAlign: j === 4 ? "right" : "left" }}>
+                      {r.cells[j] ?? ""}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Uma prévia por formato; PDF (#523) acrescenta a sua aqui. */
+const PREVIEWS = { csv: CsvPreview, xlsx: XlsxPreview };
+
+function FilePreview({ format, data }) {
+  const Preview = PREVIEWS[format];
   return (
     <div
       data-testid="export-preview"
@@ -252,14 +400,7 @@ function FilePreview({ format, preview }) {
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>
         Prévia do arquivo ({FORMAT_OPTIONS[format].label})
       </div>
-      <pre
-        style={{
-          background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: 14, fontSize: 11,
-          lineHeight: 1.5, overflowX: "auto", margin: 0, color: T.ink, whiteSpace: "pre",
-        }}
-      >
-        {preview}
-      </pre>
+      <Preview {...data} />
     </div>
   );
 }
@@ -276,7 +417,7 @@ export function ExportPanel({
   fullScreen = false,
   onClose,
 }) {
-  const [format, setFormat] = useState(formats.includes("pdf") ? "pdf" : formats[0]);
+  const [format, setFormat] = useState(() => initialExportFormat(formats));
   const [content, setContent] = useState("full");
   const [status, setStatus] = useState({ busy: false, error: "" });
   const narrow = useIsNarrow(PREVIEW_MIN_WIDTH - 1);
@@ -358,8 +499,8 @@ export function ExportPanel({
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>
           )}
         </div>
-        {showPreview && PREVIEW_BUILDERS[format] && (
-          <FilePreview format={format} preview={PREVIEW_BUILDERS[format]({ title, filtersText, selection, totals })} />
+        {showPreview && PREVIEWS[format] && (
+          <FilePreview format={format} data={{ title, filtersText, selection, totals }} />
         )}
       </div>
     </SideDrawer>

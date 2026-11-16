@@ -30,6 +30,12 @@ const PT_BR = {
     const p = Number(pending ?? 0);
     return `LANÇAMENTOS: ${Number(count ?? 0)} (${p} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais)`;
   },
+  countLabel: "LANÇAMENTOS",
+  pendingLabel: "PENDENTES (incluídos nos totais)",
+  /** O aviso da planilha quando os totais não podem ser fórmula (igual ao do servidor). */
+  fixedTotals(symbols) {
+    return `Totais fixos, sem fórmula: o recorte tem lançamentos em ${symbols.join(", ")}, e somar a coluna Valor juntaria moedas diferentes.`;
+  },
   day(ymd) {
     return formatYmdToLocaleDisplay(ymd, this.locale);
   },

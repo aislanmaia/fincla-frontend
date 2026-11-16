@@ -10,7 +10,7 @@ const saveBlobMock = vi.fn();
 vi.mock("../saveBlob.js", () => ({ saveBlob: (...args) => saveBlobMock(...args) }));
 
 import { setCurrencyRegistry } from "../../../money/currencyRegistry.js";
-import { ExportPanel, buildCsvPreview } from "../ExportPanel.jsx";
+import { ExportPanel, buildCsvPreview, buildXlsxPreview } from "../ExportPanel.jsx";
 import { exportTotalsFromSummary } from "../exportTotals.js";
 
 /**
@@ -177,10 +177,38 @@ describe("<ExportPanel>", () => {
     expect(within(panel).queryByRole("radiogroup", { name: "Conteúdo do PDF" })).toBeNull();
   });
 
-  it("nesta entrega só o CSV é oferecido", () => {
+  it("nesta entrega o servidor gera XLSX e CSV; sem PDF, o CSV continua o padrão", () => {
     const { panel } = renderPanel({ formats: undefined });
     const group = within(panel).getByRole("group", { name: "Formato do arquivo" });
-    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["CSV"]);
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["XLSX", "CSV"]);
+    expect(within(group).getByRole("button", { name: "CSV" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("trocar para XLSX diz para que serve, mostra a planilha na prévia e pede format=xlsx (sem conteúdo de PDF)", async () => {
+    exportMock.mockResolvedValue({ blob: new Blob(["x"]), fileName: "transacoes-2026-11-15.xlsx" });
+    const { panel } = renderPanel({ formats: undefined });
+    await userEvent.click(within(panel).getByRole("button", { name: "XLSX" }));
+
+    expect(within(panel).getByRole("button", { name: "XLSX" })).toHaveAttribute("aria-pressed", "true");
+    expect(panel).toHaveTextContent("Planilha do Excel, para editar e fazer contas.");
+    expect(within(panel).queryByRole("radiogroup", { name: "Conteúdo do PDF" })).toBeNull();
+    const preview = within(panel).getByTestId("export-preview");
+    expect(preview).toHaveTextContent("Prévia do arquivo (XLSX)");
+    expect(within(preview).getByTestId("export-preview-sheet")).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar XLSX" }));
+    await waitFor(() => expect(saveBlobMock).toHaveBeenCalledWith(expect.any(Blob), "transacoes-2026-11-15.xlsx"));
+    expect(exportMock).toHaveBeenCalledTimes(1);
+    const [params] = exportMock.mock.calls[0];
+    expect(params).toEqual({
+      ...FILTER_PARAMS,
+      format: "xlsx",
+      title: "Transações",
+      filters_text: ["Período: Este mês", "Busca: padaria"],
+      file_prefix: "transacoes",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      locale: "pt-BR",
+    });
   });
 
   it("Esc, ✕ e Cancelar fecham", async () => {
@@ -276,5 +304,51 @@ describe("buildCsvPreview", () => {
     expect(preview).toContain('"","RESULTADO EM USD","","","-7.50","USD",""');
     expect(preview.at(-1)).toBe('"","RESULTADO","","","indisponível","BRL",""');
     expect(preview.at(-2)).toBe("");
+  });
+});
+
+describe("buildXlsxPreview", () => {
+  const sheet = (summary, extra = {}) =>
+    buildXlsxPreview({ title: "Transações", filtersText: ["Busca: x"], selection: null, totals: exportTotalsFromSummary(summary), ...extra });
+  const byLabel = (preview, label) => preview.rows.filter((r) => r.cells[0] === label);
+
+  it("uma moeda: totais em fórmula sobre as linhas da tabela, topo congelado até o cabeçalho", () => {
+    const preview = sheet(ONE_CURRENCY);
+    // Topo (3 linhas), branco, 6 linhas de totais, branco, cabeçalho na linha 12; lançamentos de 13 a 15.
+    expect(preview.headerRow).toBe(12);
+    expect(preview.rows[11].cells).toEqual(["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"]);
+    expect(preview.formulas).toBe(true);
+    const [top, bottom] = byLabel(preview, "RESULTADO");
+    expect(top.formula).toBe("=SOMA(E13:E15)");
+    expect(top.cells.slice(4, 6)).toEqual(["769,60", "USD"]);
+    expect(byLabel(preview, "DESPESAS")[0].formula).toBe('=SOMASE(D13:D15;"Despesa";E13:E15)');
+    expect(byLabel(preview, "DESPESAS")[0].cells[4]).toBe("-250,40");
+    expect(byLabel(preview, "PENDENTES (incluídos nos totais)")[0].formula).toBe('=CONT.VALORES(G13:G15)-CONT.SE(G13:G15;"Paga")');
+    // Abaixo dos lançamentos, só o Resultado; depois o resumo por categoria.
+    expect(preview.rows.indexOf(bottom)).toBe(13);
+    expect(preview.rows.slice(14).map((r) => r.cells[0])).toEqual([undefined, "Categoria", "… uma linha por categoria e moeda …"]);
+    expect(preview.rows.some((r) => r.cells.join("").includes("R$"))).toBe(false);
+  });
+
+  it("moedas misturadas: valores fixos, o aviso com os símbolos e o resultado de cada moeda", () => {
+    const preview = sheet(CONVERTED);
+    expect(preview.formulas).toBe(false);
+    expect(preview.rows.every((r) => r.formula === null)).toBe(true);
+    expect(preview.rows.map((r) => r.cells[0])).toContain(
+      "Totais fixos, sem fórmula: o recorte tem lançamentos em R$, US$, e somar a coluna Valor juntaria moedas diferentes.",
+    );
+    expect(byLabel(preview, "RESULTADO EM USD")[0].cells.slice(4, 6)).toEqual(["-7,50", "USD"]);
+    expect(byLabel(preview, "RESULTADO")[0].cells.slice(4, 6)).toEqual(["62,50", "EUR"]);
+  });
+
+  it("cotação indisponível: 'indisponível', nunca zero, e sem fórmula", () => {
+    const preview = sheet(UNAVAILABLE);
+    expect(byLabel(preview, "RESULTADO").map((r) => r.cells[4])).toEqual(["indisponível", "indisponível"]);
+    expect(preview.formulas).toBe(false);
+  });
+
+  it("recorte vazio: totais fixos (não há linhas para a fórmula)", () => {
+    const empty = { ...ONE_CURRENCY, total_transactions: 0, balance: 0, total_income: 0, total_expenses: 0, total_refunds: 0, unsettled_count: 0 };
+    expect(sheet(empty).formulas).toBe(false);
   });
 });
