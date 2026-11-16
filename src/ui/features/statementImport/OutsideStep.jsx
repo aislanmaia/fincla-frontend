@@ -124,7 +124,7 @@ function BroughtBackBar({ entry, onUndo }) {
     <div role="status" data-testid="brought-back-bar" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
       <Check size={14} aria-hidden="true" style={{ color: T.green }} />
       <span style={{ flex: 1 }}>“{entry.bank_description}” trazido de volta: entra no Fincla ao concluir.</span>
-      <Btn variant="outRed" small onClick={onUndo}>Desfazer</Btn>
+      <Btn variant="outGray" small onClick={onUndo}>Desfazer</Btn>
     </div>
   );
 }

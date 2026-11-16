@@ -1,13 +1,14 @@
 // Rascunho e histórico do Conciliar extrato (fincla-api#518; primeira tela aprovada em 2026-11-16).
 //
 // - `ResumeDraftCard`: "Continue de onde parou", um quadro por rascunho aberto da conta, com o selo
-//   da faixa respondida, a barra, o passo em que parou e, quando nada falta, "Concluir agora" com a
-//   confirmação no próprio quadro (resumo vindo do servidor; nunca `window.confirm`).
+//   da faixa de passos conferidos (a mesma conta da conciliação aberta), a barra, o passo em que parou
+//   e, com tudo conferido e nada bloqueando, "Concluir agora" com a confirmação no próprio quadro (os
+//   mesmos efeitos de "Revisar e concluir"; nunca `window.confirm`).
 // - `DiscardDraftControl`: descartar pede confirmação NA PÁGINA (nunca `window.confirm`).
 // - `ImportedStatementsList`: "Extratos importados" da conta, agrupados pelo ano do fim do período,
 //   rolando dentro da coluna, com a diferença registrada (`null` vira "—", nunca zero) e "Desfazer"
 //   só na concluída mais recente.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -15,10 +16,12 @@ import { Btn, Card } from "../../components/primitives";
 import { plural } from "../../plural.js";
 import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 import { handleApiError } from "../../../api/client";
-import { concludeStatementImport, discardStatementImport } from "../../../api/statementImports";
+import { concludeStatementImport, discardStatementImport, getStatementBalanceCheck } from "../../../api/statementImports";
+import { SummaryEffects } from "./BalanceCheckStep.jsx";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
 import { ErrorNote } from "./StatementImportNotes.jsx";
-import { STEPS, blockerText } from "./reconciliationSteps.js";
+import { STEPS, blockerText, passedStepsOf, progressBadge, stepProgress } from "./reconciliationSteps.js";
+import { summaryCountRows, unclassifiedText } from "./summaryRows.js";
 
 const STATUS = {
   draft: { label: "Em andamento", color: T.blue, bg: T.blueLight },
@@ -69,6 +72,17 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // O foco vai para a confirmação ao abrir e volta a "Descartar" ao manter o rascunho (G3-6).
+  const askRef = useRef(null);
+  const openRef = useRef(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (asking) askRef.current?.focus();
+    else if (returnFocus.current) {
+      returnFocus.current = false;
+      openRef.current?.focus();
+    }
+  }, [asking]);
 
   const discard = async () => {
     setBusy(true);
@@ -83,10 +97,10 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
   };
 
   if (!asking) {
-    return <Btn variant="outRed" small onClick={() => setAsking(true)}>{label}</Btn>;
+    return <Btn ref={openRef} variant="outRed" small onClick={() => setAsking(true)}>{label}</Btn>;
   }
   return (
-    <div role="group" aria-label="Confirmar descarte do rascunho" style={{ ...G, flexBasis: "100%", background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+    <div ref={askRef} tabIndex={-1} role="group" aria-label="Confirmar descarte do rascunho" style={{ ...G, outline: "none", flexBasis: "100%", background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <p style={{ fontSize: 13, color: T.ink, margin: 0 }}>
         <b>Descartar esta conciliação?</b> As respostas que você deu serão apagadas e não dá para recuperar.
         Nada muda nas suas transações.
@@ -94,7 +108,7 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
       {error ? <p role="alert" style={{ fontSize: 13, color: T.red, margin: 0 }}>{error}</p> : null}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <Btn variant="outRed" small onClick={discard} disabled={busy}>{busy ? "Descartando…" : "Sim, descartar"}</Btn>
-        <Btn variant="outGray" small onClick={() => { setAsking(false); setError(""); }} disabled={busy}>Manter rascunho</Btn>
+        <Btn variant="outGray" small onClick={() => { returnFocus.current = true; setAsking(false); setError(""); }} disabled={busy}>Manter rascunho</Btn>
       </div>
     </div>
   );
@@ -108,60 +122,67 @@ const BLUE_TONE = { color: T.blue, bg: T.blueLight, bar: T.blue };
 const GREEN_TONE = { color: T.green, bg: T.greenLight, bar: T.green };
 
 /**
- * Quanto do rascunho já foi respondido, e o selo da faixa (decisão de 2026-11-16): 0 → "Pronta para
- * começar"; < 50% → "Em andamento"; 50–79% → "Passou da metade"; ≥ 80% e ainda falta → "Quase lá";
- * nada falta → "Tudo respondido · só falta concluir". "Nada falta" é o servidor dizendo que dá para
- * concluir: tudo respondido mas com pendência (descrição em branco) continua em "Quase lá".
+ * O progresso do quadro, em PASSOS CONFERIDOS (decisão de 2026-11-16, G3): a mesma conta e a mesma
+ * função do "Seu progresso: N de 8 passos conferidos" da conciliação aberta, sobre o detalhe do
+ * rascunho. "Concluir agora" só quando todos os passos antes de "Revisar e concluir" foram
+ * conferidos e o servidor diz que dá para concluir.
  */
-export function draftProgress(draft) {
-  const total = draft.summary.total;
-  const left = draft.summary.unanswered;
-  const answered = Math.max(0, total - left);
-  const ratio = total ? answered / total : 0;
-  let badge;
-  if (draft.can_conclude) badge = "Tudo respondido · só falta concluir";
-  else if (answered === 0 && total) badge = "Pronta para começar";
-  else if (ratio < 0.5) badge = "Em andamento";
-  else if (ratio < 0.8) badge = "Passou da metade";
-  else badge = "Quase lá · falta pouco!";
-  const answeredText = `${answered.toLocaleString("pt-BR")} de ${plural(total, "lançamento respondido", "lançamentos respondidos")}`;
-  const count = left ? `${answeredText} · ${left === 1 ? "falta 1" : `faltam ${left.toLocaleString("pt-BR")}`}` : answeredText;
-  return { total, answered, ratio, badge, count, tone: draft.can_conclude ? GREEN_TONE : BLUE_TONE };
+export function draftProgress(statementImport) {
+  const progress = stepProgress(statementImport, passedStepsOf(statementImport));
+  const { badge, ready } = progressBadge(progress, statementImport.can_conclude);
+  return {
+    ...progress,
+    badge,
+    ready,
+    count: `${progress.done.toLocaleString("pt-BR")} de ${plural(progress.total, "passo conferido", "passos conferidos")}`,
+    tone: ready ? GREEN_TONE : BLUE_TONE,
+  };
 }
 
-/** A diferença de saldo que fica: `null` = o arquivo não informa saldo → "—", nunca zero. */
-function differenceLabel(point) {
-  if (!point) return "—";
-  return point.difference === 0 ? formatMoney(0, point.currency) : formatMoneySigned(point.difference, point.currency);
+/** A diferença de saldo que fica, a mesma da conferência: `null` = o arquivo não informa saldo → "—", nunca zero. */
+function differenceLabel(check) {
+  if (check.final_difference === null) return "—";
+  return check.final_difference === 0 ? formatMoney(0, check.currency) : formatMoneySigned(check.final_difference, check.currency);
 }
 
-/** As frases do resumo da conclusão, com os números do servidor. Contagem zero não vira frase. */
-export function concludeSummaryLines(draft) {
-  const { summary } = draft;
-  const actions = draft.balance_check_actions ?? { delete: 0, change_date: 0 };
-  const created = summary.to_create + summary.groups;
-  const lines = [];
-  if (created) lines.push(created === 1 ? "1 transação nova entra no Fincla, paga na data do banco." : `${created.toLocaleString("pt-BR")} transações novas entram no Fincla, pagas na data do banco.`);
-  if (summary.to_pair) lines.push(summary.to_pair === 1 ? "1 que já estava no Fincla fica paga na data do banco." : `${summary.to_pair.toLocaleString("pt-BR")} que já estavam no Fincla ficam pagas na data do banco.`);
-  if (summary.ignored) lines.push(`${plural(summary.ignored, "lançamento não será registrado", "lançamentos não serão registrados")}.`);
-  if (summary.unclassified) lines.push(`${plural(summary.unclassified, "transação vai", "transações vão")} para Não classificado.`);
-  if (actions.delete) lines.push(`${plural(actions.delete, "transação do Fincla será excluída", "transações do Fincla serão excluídas")}.`);
-  if (actions.change_date) lines.push(`${plural(actions.change_date, "transação do Fincla muda", "transações do Fincla mudam")} de data.`);
-  return lines;
-}
-
-function ConcludeConfirm({ draft, busy, onConfirm, onCancel, onOpen }) {
+/**
+ * A confirmação de "Concluir agora", no próprio quadro: os MESMOS efeitos de "Revisar e concluir"
+ * (as contagens de `summaryCountRows`, os selos de `SummaryEffects` com a conferência de saldo, Não
+ * classificado e a diferença registrada), compactos. Contagem zero não vira linha. Ao abrir, o foco
+ * vem para a confirmação.
+ */
+function ConcludeConfirm({ organizationId, draft, detail, busy, onConfirm, onCancel, onOpen }) {
+  const ref = useRef(null);
+  const [check, setCheck] = useState(null);
+  const [checkError, setCheckError] = useState("");
   const period = periodLabel(draft.period);
+  const unclassified = unclassifiedText(detail.summary);
+
+  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => {
+    let alive = true;
+    getStatementBalanceCheck(draft.account_id, organizationId, draft.id)
+      .then((data) => { if (alive) setCheck(data); })
+      .catch((err) => { if (alive) setCheckError(handleApiError(err)); });
+    return () => { alive = false; };
+  }, [draft.account_id, draft.id, organizationId]);
+
   return (
-    <div role="group" aria-label="Confirmar a conclusão" style={{ ...G, flexBasis: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div ref={ref} tabIndex={-1} role="group" aria-label="Confirmar a conclusão" style={{ ...G, flexBasis: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, outline: "none" }}>
       <b style={{ fontSize: 14, color: T.ink }}>{period ? <>Concluir a conciliação de <span style={NUM}>{period}</span>?</> : "Concluir esta conciliação?"}</b>
-      <ul style={{ ...NUM, margin: 0, paddingLeft: 18, fontSize: 13, color: T.inkMid, lineHeight: 1.7 }}>
-        {concludeSummaryLines(draft).map((line) => <li key={line}>{line}</li>)}
-        <li>Diferença de saldo que fica registrada: <b style={{ color: T.ink }}>{differenceLabel(draft.balance_now)}</b>.</li>
+      <ul data-testid="conclude-counts" style={{ ...NUM, margin: 0, paddingLeft: 18, fontSize: 13, color: T.inkMid, lineHeight: 1.7 }}>
+        {summaryCountRows(detail).filter(([, value]) => value).map(([label, value, testId, note]) => (
+          <li key={testId}>{label}: <b style={{ color: T.ink }}>{value.toLocaleString("pt-BR")}</b>{note ? ` · ${note}` : null}</li>
+        ))}
+        {unclassified ? <li>{unclassified}</li> : null}
+        {check ? <li>Diferença de saldo que fica registrada: <b style={{ color: T.ink }}>{differenceLabel(check)}</b>.</li> : null}
       </ul>
+      {check ? <SummaryEffects entries={detail.entries} check={check} /> : null}
+      {!check && !checkError ? <span style={{ fontSize: 12, color: T.inkLight }}>Calculando o que muda ao concluir…</span> : null}
+      {checkError ? <ErrorNote>{checkError}</ErrorNote> : null}
       <span style={{ fontSize: 12, color: T.inkLight }}>Dá para desfazer depois, em Extratos importados.</span>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Btn variant="green" onClick={onConfirm} disabled={busy}>{busy ? "Concluindo…" : "Sim, concluir"}</Btn>
+        <Btn variant="green" onClick={onConfirm} disabled={busy || !check}>{busy ? "Concluindo…" : "Sim, concluir"}</Btn>
         <Btn variant="outGray" onClick={onCancel} disabled={busy}>Agora não</Btn>
         <Btn variant="outGray" onClick={onOpen} disabled={busy}>Abrir conciliação</Btn>
       </div>
@@ -169,35 +190,58 @@ function ConcludeConfirm({ draft, busy, onConfirm, onCancel, onOpen }) {
   );
 }
 
-export function ResumeDraftCard({ organizationId, draft, onContinue, onDiscarded, onConcluded }) {
+/**
+ * Um quadro por rascunho aberto. `detail` é o rascunho inteiro (o mesmo do detalhe; `null` se não
+ * deu para ler): o progresso e o "Concluir agora" saem dele. `onConcluded`/`onRefused` recarregam a
+ * lista (promessa): o botão fica desabilitado do clique até a lista recarregada chegar.
+ */
+export function ResumeDraftCard({ organizationId, draft, detail, onContinue, onDiscarded, onConcluded, onRefused }) {
   const [confirming, setConfirming] = useState(false);
   const [concluding, setConcluding] = useState(false);
   const [error, setError] = useState("");
-  const progress = draftProgress(draft);
+  const concludeRef = useRef(null);
+  const returnFocus = useRef(false);
+  const progress = detail ? draftProgress(detail) : null;
   const period = periodLabel(draft.period);
   const step = STEPS.find((s) => s.key === draft.current_step);
   const titleId = `resume-draft-${draft.id}`;
+
+  // "Agora não" devolve o foco a "Concluir agora", que volta a existir depois de fechar a confirmação.
+  useEffect(() => {
+    if (!confirming && returnFocus.current) {
+      returnFocus.current = false;
+      concludeRef.current?.focus();
+    }
+  }, [confirming]);
 
   const conclude = async () => {
     setConcluding(true);
     setError("");
     try {
       await concludeStatementImport(draft.account_id, organizationId, draft.id);
-      setConfirming(false);
-      onConcluded?.(draft);
+      await onConcluded?.(draft);
     } catch (err) {
+      // O servidor recusou (outra aba mudou o rascunho, por exemplo): a lista e o quadro recarregam.
       setError(handleApiError(err));
+      setConfirming(false);
+      await onRefused?.(draft);
     } finally {
       setConcluding(false);
     }
   };
 
+  const blockers = detail && !detail.can_conclude && detail.blockers.length && (progress.allPassed || !detail.summary.unanswered)
+    ? detail.blockers.map(blockerText).join(" ")
+    : "";
+
   return (
     <section data-testid="resume-draft" aria-labelledby={titleId} style={{ ...G, background: T.surface, border: `2px solid ${T.blue}`, borderRadius: 16, padding: "20px 22px", display: "flex", flexWrap: "wrap", gap: "16px 32px", alignItems: "center" }}>
       <div style={{ flex: "2 1 360px", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-        <span data-testid="resume-badge" style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: progress.tone.color, background: progress.tone.bg, borderRadius: 9999, padding: "3px 10px" }}>
-          {progress.badge}
-        </span>
+        {progress ? (
+          <span data-testid="resume-badge" style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: progress.tone.color, background: progress.tone.bg, borderRadius: 9999, padding: "3px 10px" }}>
+            {progress.badge}
+          </span>
+        ) : null}
         <h2 id={titleId} style={{ fontSize: 20, fontWeight: 800, color: T.ink, margin: 0 }}>Continue de onde parou</h2>
         {period || step ? (
           <p style={{ fontSize: 14, color: T.inkMid, margin: 0 }}>
@@ -206,22 +250,24 @@ export function ResumeDraftCard({ organizationId, draft, onContinue, onDiscarded
             {step ? <>você parou em <b>{step.title}</b></> : null}
           </p>
         ) : null}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 440 }}>
-          <div
-            role="progressbar"
-            aria-label="Lançamentos respondidos"
-            aria-valuemin={0}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.answered}
-            style={{ height: 6, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}
-          >
-            <div style={{ height: 6, width: `${Math.round(progress.ratio * 100)}%`, background: progress.tone.bar, borderRadius: 99, transition: "width .3s" }} />
+        {progress ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 440 }}>
+            <div
+              role="progressbar"
+              aria-label="Passos conferidos"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.done}
+              style={{ height: 6, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}
+            >
+              <div style={{ height: 6, width: `${Math.round((progress.done / progress.total) * 100)}%`, background: progress.tone.bar, borderRadius: 99, transition: "width .3s" }} />
+            </div>
+            <span data-testid="resume-count" style={{ ...NUM, fontSize: 12, color: T.inkMid }}>{progress.count}</span>
           </div>
-          <span style={{ ...NUM, fontSize: 12, color: T.inkMid }}>{progress.count}</span>
-        </div>
-        {!draft.can_conclude && !draft.summary.unanswered && draft.blockers.length ? (
-          <span style={{ fontSize: 12, color: T.amber }}>{draft.blockers.map(blockerText).join(" ")}</span>
-        ) : null}
+        ) : (
+          <span style={{ fontSize: 12, color: T.inkLight }}>Não deu para ler o progresso agora. Abra a conciliação para ver onde parou.</span>
+        )}
+        {blockers ? <span data-testid="resume-blockers" style={{ fontSize: 12, color: T.amber }}>{blockers}</span> : null}
         <span style={{ fontSize: 12, color: T.inkLight }}>
           Suas respostas estão salvas.
           {draft.expires_at ? <> Se ficar parada, é descartada em <span style={NUM}>{dayOf(draft.expires_at)}</span>.</> : null}
@@ -229,9 +275,9 @@ export function ResumeDraftCard({ organizationId, draft, onContinue, onDiscarded
       </div>
       {!confirming ? (
         <div style={{ flex: "0 1 auto", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {draft.can_conclude ? (
+          {progress?.ready ? (
             <>
-              <Btn variant="green" onClick={() => { setError(""); setConfirming(true); }}>Concluir agora</Btn>
+              <Btn ref={concludeRef} variant="green" disabled={concluding} onClick={() => { setError(""); setConfirming(true); }}>Concluir agora</Btn>
               <Btn variant="outGray" onClick={() => onContinue(draft)}>Abrir conciliação</Btn>
             </>
           ) : (
@@ -241,10 +287,12 @@ export function ResumeDraftCard({ organizationId, draft, onContinue, onDiscarded
         </div>
       ) : (
         <ConcludeConfirm
+          organizationId={organizationId}
           draft={draft}
+          detail={detail}
           busy={concluding}
           onConfirm={conclude}
-          onCancel={() => { setConfirming(false); setError(""); }}
+          onCancel={() => { returnFocus.current = true; setConfirming(false); setError(""); }}
           onOpen={() => onContinue(draft)}
         />
       )}
@@ -266,13 +314,14 @@ function nextDay(ymd) {
 }
 
 /**
- * A dica do envio: até onde foi a última conciliação concluída (que não foi desfeita) e o dia em
- * que um extrato novo continua dela. `null` sem conciliação concluída (ou sem o fim do período).
+ * A dica do envio: até onde vai a conciliação concluída (que não foi desfeita) de MAIOR fim de período
+ * e o dia em que um extrato novo continua dela (G3: concluir setembro depois de outubro não faz a dica
+ * voltar para setembro). `null` sem conciliação concluída com o fim do período.
  */
 export function continueTip(items) {
   const concluded = items
     .filter((i) => i.status === "concluded" && i.period?.end)
-    .sort((a, b) => String(b.concluded_at ?? "").localeCompare(String(a.concluded_at ?? "")))[0];
+    .sort((a, b) => b.period.end.localeCompare(a.period.end))[0];
   if (!concluded) return null;
   const from = nextDay(concluded.period.end);
   const [, m, d] = from.split("-");

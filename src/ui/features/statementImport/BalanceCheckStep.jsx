@@ -216,9 +216,9 @@ const REFUSAL_TEXT = {
   refunded: "Tem um estorno ligado a ela: cuide do estorno em Lançamentos para poder excluir.",
 };
 
-/** O estado da resposta, com o desfazer: vermelho no cartão; discreto (`inRow`) na linha minimizada, já clicável. */
+/** O estado da resposta, com o desfazer: neutro no cartão (desfazer uma escolha não apaga nada); discreto (`inRow`) na linha minimizada, já clicável. */
 function CheckState({ item, periodEnd, onUndo, busy, inRow = false }) {
-  const undoVariant = inRow ? "ghost" : "outRed";
+  const undoVariant = inRow ? "ghost" : "outGray";
   if (item.check === "delete") {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -446,7 +446,7 @@ function LinkedRow({ link, busy, onUndo }) {
         </span>
         <span style={{ fontSize: 12, color: T.inkLight }}>
           Você disse que é o lançamento “{link.bankDescription}”. Não entra mais na diferença.{" "}
-          <Btn variant="outRed" small disabled={busy} onClick={() => onUndo(link)}>Desfazer</Btn>
+          <Btn variant="outGray" small disabled={busy} onClick={() => onUndo(link)}>Desfazer</Btn>
         </span>
       </div>
       <span style={{ ...NUM, fontSize: 13, color: T.inkMid }}>{signed(link.amount, link.currency)}</span>
@@ -718,7 +718,7 @@ export function BalanceCheckStep({
             <div data-testid="balance-batch-undo" role="status" style={{ ...G, display: "flex", gap: 8, alignItems: "center", fontSize: 13, padding: "8px 12px", borderRadius: 12, background: T.greenLight, border: `1px solid ${T.greenBorder}` }}>
               <Check size={14} aria-hidden="true" style={{ color: T.green }} />
               <span style={{ flex: 1 }}>{lastBatch.label}</span>
-              <Btn variant="outRed" small disabled={busy} onClick={undoBatch}>Desfazer</Btn>
+              <Btn variant="outGray" small disabled={busy} onClick={undoBatch}>Desfazer</Btn>
             </div>
           ) : null}
           {chosen.length ? <SelectionBar items={chosen} busy={busy} onClear={() => setSelected(new Set())} onBatch={batch} /> : null}

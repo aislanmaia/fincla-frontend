@@ -42,8 +42,10 @@ import {
   blockerText,
   entriesOfStep,
   firstStepWithWork,
+  stepProgress,
   stepStatus,
 } from "../features/statementImport/reconciliationSteps.js";
+import { summaryCountRows, unclassifiedText } from "../features/statementImport/summaryRows.js";
 import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
@@ -68,7 +70,7 @@ import {
   unmatchedItemId,
 } from "../features/statementImport/BalanceCheckStep.jsx";
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
-import { InvoicePaymentStep, invoiceLabel, isPaidNow } from "../features/statementImport/InvoicePaymentStep.jsx";
+import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
 import {
@@ -77,7 +79,7 @@ import {
   ResumeDraftCard,
   continueTip,
 } from "../features/statementImport/ImportedStatements.jsx";
-import { StatementDropZone } from "../features/statementImport/StatementDropZone.jsx";
+import { StatementDropZone, usePreventFileDropOutside } from "../features/statementImport/StatementDropZone.jsx";
 
 /** Os lançamentos da lista de um passo: nos de adicionar, os somados ficam dentro da soma. */
 function queueEntriesOf(stepKey, stepEntries) {
@@ -247,7 +249,13 @@ function UploadArea({ organizationId, accountId, compact = false, tip = null, on
   }
   return (
     <div style={{ flex: "999 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-      <StatementDropZone compact={compact} tip={tip} readingName={sending && file ? file.name : ""} onFile={pick} />
+      <StatementDropZone
+        compact={compact}
+        tip={tip}
+        readingName={sending && file ? file.name : ""}
+        onFile={pick}
+        onError={(message) => { setPreview(null); setInProgress(null); setError(message); }}
+      />
       <ErrorNote>{error}</ErrorNote>
       {inProgress ? (
         <DraftInProgressNotice
@@ -334,15 +342,26 @@ function OtherAccountNotice({ accountCheck, accountName }) {
 function AccountStatementsView({ organizationId, accountId, accountName, isMobile = false }) {
   const navigate = useNavigate();
   const [items, setItems] = useState(null);
+  // O detalhe de cada rascunho (são poucos): o quadro "Continue de onde parou" mede o progresso com a
+  // mesma função da conciliação aberta. `null` = não deu para ler aquele rascunho.
+  const [details, setDetails] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // Soltar o arquivo fora da área não pode fazer o navegador abrir o extrato e sair do Fincla.
+  usePreventFileDropOutside();
 
-  const load = useCallback(
-    () => listStatementImports(accountId, organizationId)
-      .then((list) => { setItems(list); setError(""); })
-      .catch((err) => setError(handleApiError(err))),
-    [accountId, organizationId],
-  );
+  const load = useCallback(async () => {
+    try {
+      const list = await listStatementImports(accountId, organizationId);
+      const openDrafts = list.filter((i) => i.status === "draft");
+      const read = await Promise.all(openDrafts.map((d) => getStatementImport(accountId, organizationId, d.id).catch(() => null)));
+      setDetails(Object.fromEntries(openDrafts.map((d, index) => [d.id, read[index]])));
+      setItems(list);
+      setError("");
+    } catch (err) {
+      setError(handleApiError(err));
+    }
+  }, [accountId, organizationId]);
   useEffect(() => { load(); }, [load]);
 
   const openImport = (item) => navigate({ to: statementReconciliationPath(accountId, item.id) });
@@ -355,7 +374,7 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
   };
   const onConcluded = () => {
     setNotice("Conciliação concluída. Se precisar, dá para desfazer pela linha dela em Extratos importados.");
-    load();
+    return load();
   };
 
   return (
@@ -376,9 +395,11 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
           key={draft.id}
           organizationId={organizationId}
           draft={draft}
+          detail={details[draft.id] ?? null}
           onContinue={openImport}
           onDiscarded={onDiscarded}
           onConcluded={onConcluded}
+          onRefused={load}
         />
       ))}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0 }}>
@@ -516,7 +537,7 @@ function ProgressPanel({ statementImport, passed, balanceNow, isMobile = false }
 }
 
 function ProgressCard({ statementImport, passed }) {
-  const done = STEPS.filter((s) => stepStatus(s.key, statementImport, passed.has(s.key)).tone === "done").length;
+  const { done } = stepProgress(statementImport, passed);
   const { summary } = statementImport;
   return (
     <Card style={{ padding: "12px 16px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center", flex: "3 1 320px", minWidth: 0 }}>
@@ -547,22 +568,7 @@ function EmptyStep({ children }) {
 
 function SummaryStep({ statementImport, check, checkLoading, checkError, concluding, error, onConclude, onClassify = null }) {
   const { summary, blockers } = statementImport;
-  const rows = [
-    ["Lançamentos no extrato", summary.total, "summary-total"],
-    ["Já estavam no Fincla", summary.to_pair, "summary-to-pair"],
-    ["Serão adicionados", summary.to_create, "summary-to-create"],
-    ["Somados em um lançamento", summary.grouped, "summary-grouped", summary.groups ? `em ${plural(summary.groups, "transação", "transações")}` : null],
-    ["Não serão registrados", summary.ignored, "summary-ignored", summary.left_out_before_start ? `${summary.left_out_before_start.toLocaleString("pt-BR")} antes do início` : null],
-    ...(summary.already_reconciled ? [["Já conferidos antes", summary.already_reconciled, "summary-already-reconciled", "não mudam"]] : []),
-  ];
-  // Só aparece com pagamento de fatura no extrato (fincla-api#512): é a fatura que fica paga.
-  if (summary.invoice_payments) rows.push(["Pagamentos de fatura", summary.invoice_payments, "summary-invoice-payments"]);
-  // Fatura já paga no Fincla (G3-3-01): só referência, nada muda nela. Conta pelo estado de AGORA
-  // (BUG-02), a mesma decisão do cartão: desmarcada depois da leitura, não é "já paga".
-  const alreadyPaidNow = statementImport.entries.filter(isPaidNow).length;
-  if (alreadyPaidNow) {
-    rows.push(["Pagamentos de fatura já paga no Fincla", alreadyPaidNow, "summary-invoices-already-paid-count", "nada muda"]);
-  }
+  const rows = summaryCountRows(statementImport);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* A diferença de saldo que fica, em destaque no topo (fincla-api#514). */}
@@ -592,7 +598,7 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
       </Card>
       {summary.unclassified ? (
         <div data-testid="unclassified-warning" role="note" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "baseline" }}>
-          <b>{plural(summary.unclassified, "transação vai", "transações vão")} para Não classificado.</b>
+          <b>{unclassifiedText(summary)}</b>
           <span>Dá para classificar agora ou depois, em Lançamentos.</span>
           {onClassify ? <Btn variant="outGray" small onClick={onClassify}>Classificar agora</Btn> : null}
         </div>

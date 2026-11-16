@@ -176,7 +176,7 @@ export function FinclaMatchBox({
         <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "8px 0 0" }}>
           Você já disse que esta é o lançamento do banco de <b style={NUM}>{bankDateLabel(takenBy.date)}</b> ({takenBy.bank_description}).{" "}
           {onUndoThere ? (
-            <Btn variant="outRed" small onClick={() => onUndoThere(takenBy)}>Desfazer lá</Btn>
+            <Btn variant="outGray" small onClick={() => onUndoThere(takenBy)}>Desfazer lá</Btn>
           ) : null}
         </p>
       </div>

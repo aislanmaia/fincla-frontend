@@ -462,7 +462,8 @@ describe("retomar a conciliação (fincla-api#518)", () => {
     const card = screen.getByTestId("resume-draft");
     expect(card).toHaveTextContent("Continue de onde parou");
     expect(card).toHaveTextContent("Extrato de 01/10/2026 a 31/10/2026 · você parou em Adicionar lançamentos novos");
-    expect(card).toHaveTextContent("6 de 6 lançamentos respondidos");
+    // O progresso vem do detalhe do rascunho, em passos conferidos (nenhum visto ainda).
+    expect(await within(card).findByTestId("resume-count")).toHaveTextContent("0 de 8 passos conferidos");
     expect(card).toHaveTextContent("Se ficar parada, é descartada em 14/12/2026.");
     await user.click(within(card).getByRole("button", { name: "Continuar conciliação" }));
 

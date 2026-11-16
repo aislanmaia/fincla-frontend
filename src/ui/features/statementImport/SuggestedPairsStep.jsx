@@ -197,7 +197,7 @@ function AnswerButtons({ entry, busy, onAnswer }) {
 /** "Desfazer escolha": vermelho no cartão; discreto (`inRow`) na linha minimizada, que já é clicável. */
 export function UndoChoiceButton({ entry, onUndoChoice, inRow = false }) {
   return (
-    <Btn variant={inRow ? "ghost" : "outRed"} small onClick={() => onUndoChoice(entry)}>
+    <Btn variant={inRow ? "ghost" : "outGray"} small onClick={() => onUndoChoice(entry)}>
       Desfazer escolha
     </Btn>
   );
@@ -328,7 +328,7 @@ export function SuggestedPairsStep({
         <div role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <Check size={14} aria-hidden="true" style={{ color: T.green }} />
           <span style={{ flex: 1 }}>{plural(lastBulk.length, "lançamento confirmado", "lançamentos confirmados")}</span>
-          <Btn variant="outRed" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
+          <Btn variant="outGray" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
         </div>
       ) : null}
       {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
