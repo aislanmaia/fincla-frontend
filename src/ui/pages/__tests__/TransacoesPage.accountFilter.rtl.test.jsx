@@ -58,7 +58,7 @@ const listTransfersMock = vi.fn();
 const exportMock = vi.fn();
 vi.mock("../../../api/transactions", async (importOriginal) => ({
   ...(await importOriginal()),
-  exportTransactionsCsv: (...args) => exportMock(...args),
+  exportTransactions: (...args) => exportMock(...args),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
 const listCreditCardsMock = vi.fn();
@@ -313,14 +313,11 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
 
   it("exportar CSV com conta filtrada vai ao export de Transações com account_id", async () => {
     routerSearch = { fc_account: ACC_B };
-    exportMock.mockResolvedValue(new Blob(["x"]));
+    exportMock.mockResolvedValue({ blob: new Blob(["x"]), fileName: "transacoes-2026-11-15.csv" });
     renderPage();
     await waitFor(() => expect(lastFilters().accountIds).toEqual([ACC_B]));
-    const exportar = screen.queryAllByRole("button", { name: /Exportar|CSV/i })[0];
-    expect(exportar).toBeTruthy();
-    await userEvent.click(exportar);
-    const csvItem = screen.queryAllByRole("menuitem", { name: /CSV/i })[0] ?? screen.queryAllByRole("button", { name: /CSV/i }).find((b) => b !== exportar);
-    if (csvItem) await userEvent.click(csvItem);
+    await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalled());
     expect(exportMock.mock.calls[0][0].account_id).toEqual([ACC_B]);
   });
@@ -575,13 +572,11 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     });
 
     it("exportar CSV com cartões filtrados vai ao export de Transações com credit_card_id", async () => {
-      exportMock.mockResolvedValue(new Blob(["x"]));
+      exportMock.mockResolvedValue({ blob: new Blob(["x"]), fileName: "transacoes-2026-11-15.csv" });
       await pickCards("Nubank Roxinho", "Itaú Azul");
       await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5", "7"]));
-      const exportar = screen.queryAllByRole("button", { name: /Exportar|CSV/i })[0];
-      await userEvent.click(exportar);
-      const csvItem = screen.queryAllByRole("menuitem", { name: /CSV/i })[0] ?? screen.queryAllByRole("button", { name: /CSV/i }).find((b) => b !== exportar);
-      if (csvItem) await userEvent.click(csvItem);
+      await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
       await waitFor(() => expect(exportMock).toHaveBeenCalled());
       expect(exportMock.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
     });

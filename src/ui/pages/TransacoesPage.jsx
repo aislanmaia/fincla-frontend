@@ -11,7 +11,6 @@ import { T } from "../tokens";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
-import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
 import {
@@ -91,11 +90,9 @@ import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../
 import { BulkMoveDialog } from "../features/transactions/bulkMove/BulkMoveDialog.jsx";
 import { mergeTransferRows, transfersToRows } from "../features/transactions/transferRows.js";
 import { listTransfers } from "../../api/transfers";
-import { exportTransactionsCsv } from "../../api/transactions";
-import { buildTransactionsQuery, transactionsDateRangeFor } from "../data/transactionsAdapter.js";
+import { buildTransactionsSummaryQuery, transactionsDateRangeFor } from "../data/transactionsAdapter.js";
 import {
   filtersToLegacyParams,
-  filtersToCsvOptions,
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { facetSentenceLabel } from "../features/transactions/filters/facetSentenceLabel.js";
@@ -103,7 +100,7 @@ import { getPaymentMethodLabel } from "../features/transactions/filters/paymentM
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
-import { saveBlob } from "../features/export/saveBlob.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
 import {
   CAT_COLORS,
   catColor,
@@ -2856,50 +2853,26 @@ function TransacoesPageBody({
     ],
   );
 
-  // ── CSV export ────────────────────────────────────────────────────────────
-  const exportCSV = () => {
-    const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    /* Recorte por conta (#268) ou cartão (#280): o export do servidor de Transações
-       aceita os MESMOS filtros da lista, inclusive `account_id` (fincla-api#446) e
-       `credit_card_id` (fincla-api#468) repetíveis. O CSV
-       legado de analytics não conhece conta — usá-lo aqui exportaria a organização
-       inteira com um chip de conta na tela. */
-    if (shouldUseRealData && organizationId && (effectiveAccountSel.length > 0 || effectiveCardSel.length > 0)) {
-      const { page: _page, limit: _limit, sort_by: _sortBy, sort_order: _sortOrder, ...query } =
-        buildTransactionsQuery({ organizationId, ...transactionsFilters });
-      exportTransactionsCsv(query)
-        .then((blob) => saveBlob(blob, "transacoes.csv"))
-        .catch(() => {});
-      return;
+  // ── Exportar ──────────────────────────────────────────────────────────────
+  /* Um caminho só (fincla-api#520/#521): o painel compartilhado pede o arquivo ao exportador do servidor com o
+     MESMO objeto de filtros que pediu o resumo — busca, categoria, etiquetas e modo, situação, faixa de valor,
+     recorrência, conta, cartão, tipo, forma e período —, então os totais do arquivo são os do card da tela. */
+  const [exportOpen, setExportOpen] = useState(false);
+  const closeExport = useCallback(() => setExportOpen(false), []);
+  const exportFilterParams = useMemo(
+    () => (organizationId ? buildTransactionsSummaryQuery({ organizationId, ...transactionsFilters }) : null),
+    [organizationId, transactionsFilters],
+  );
+  /* O período recorta sempre (mesmo o padrão, que não acende chip), então o arquivo o diz sempre. */
+  const exportFiltersText = useMemo(() => {
+    const periodo = allFacets.find((f) => f.key === "periodo");
+    const out = periodo ? [`${periodo.label}: ${periodo.value}`] : [];
+    for (const entry of activeFilterEntries) {
+      if (entry.key !== "periodo") out.push(`${entry.label}: ${entry.value}`);
     }
-    // A busca e o filtro por categoria não têm equivalente no endpoint de CSV,
-    // então esses casos caem no export client-side. Forma(s) de pagamento agora
-    // vão para o backend (param repetido), então não limitam mais o caminho remoto.
-    if (
-      shouldUseRealData &&
-      organizationId &&
-      !debouncedSearch &&
-      filter.cats.length === 0
-    ) {
-      downloadTransactionsCsvForUi(
-        organizationId,
-        filtersToCsvOptions({
-          type: filter.type,
-          method: filter.method,
-          period: filter.period,
-          customFrom: filter.customFrom,
-          customTo: filter.customTo,
-        }),
-      ).catch(() => {});
-      return;
-    }
-
-    const rows = filtered.map((t) =>
-      `${t.date},"${t.desc}","${t.cat}","${t.method}","${t.val > 0 ? "+" : ""}${t.val}","${t.status}","${(t.tags || []).join(";")}"`
-    );
-    const csv = [header, ...rows].join("\n");
-    saveBlob(new Blob([csv], { type:"text/csv;charset=utf-8;" }), "transacoes.csv");
-  };
+    return out;
+  }, [allFacets, activeFilterEntries]);
+  const canExport = shouldUseRealData && Boolean(organizationId) && !tagFilterBlocked;
 
   // ── Detail panel content ──────────────────────────────────────────────────
 
@@ -4232,23 +4205,36 @@ function TransacoesPageBody({
                     )}
                   </button>
                   <button type="button" role="menuitem"
-                    onClick={() => { setMobileMenuOpen(false); exportCSV(); }}
+                    disabled={!canExport}
+                    onClick={() => { setMobileMenuOpen(false); setExportOpen(true); }}
                     style={{ ...G, height:38, borderRadius:9, display:"flex", alignItems:"center",
                       gap:10, padding:"0 10px", fontSize:12.5, border:"none", background:"none",
                       color:T.inkMid, cursor:"pointer", textAlign:"left" }}>
-                    <Download size={13}/> Exportar CSV
+                    <Download size={13}/> Exportar
                   </button>
                 </div>
               </>
             )}
           </div>
         ) : (
-          <button onClick={exportCSV}
+          <button type="button" onClick={() => setExportOpen(true)} disabled={!canExport}
             style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
               border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
-              fontSize:12, fontWeight:600, color:T.inkMid, cursor:"pointer", flexShrink:0 }}>
-            <Download size={13}/> CSV
+              fontSize:12, fontWeight:600, color:T.inkMid, cursor: canExport ? "pointer" : "not-allowed",
+              opacity: canExport ? 1 : 0.5, flexShrink:0 }}>
+            <Download size={13}/> Exportar
           </button>
+        )}
+        {exportOpen && exportFilterParams && (
+          <ExportPanel
+            title="Transações"
+            filePrefix="transacoes"
+            filtersText={exportFiltersText}
+            filterParams={exportFilterParams}
+            count={transactionsData.summary?.total_transactions ?? transactionsData.total}
+            summary={transactionsData.summary}
+            onClose={closeExport}
+          />
         )}
       </div>
 
