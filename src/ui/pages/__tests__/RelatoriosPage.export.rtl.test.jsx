@@ -175,11 +175,30 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
     expect(panel).toHaveTextContent(/USD −US\$\s?100,00 \(2\)/);
   });
 
-  it("falha do resumo aparece no painel, nunca engolida", async () => {
+  it("falha do resumo aparece no painel, nunca engolida — e a contagem não vira 0 (G3-2-04)", async () => {
     withApi({ summary: () => HttpResponse.json({ detail: "boom" }, { status: 500 }) });
     const user = userEvent.setup();
     const panel = await openPanel(user);
     expect(await within(panel).findByText(/Não foi possível calcular os totais/)).toBeInTheDocument();
+    const scope = within(panel).getByRole("region", { name: "Lançamentos exportados" });
+    expect(scope).toHaveTextContent("contagem indisponível");
+    expect(scope).not.toHaveTextContent(/\b0 lançamentos/);
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+  });
+
+  it("enquanto o resumo carrega o painel diz 'contando…', nunca '0 lançamentos', e não deixa exportar (G3-2-04)", async () => {
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
+    withApi({ summary: async () => { await pending; return HttpResponse.json(MIXED_SUMMARY); } });
+    const user = userEvent.setup();
+    const panel = await openPanel(user);
+    const scope = within(panel).getByRole("region", { name: "Lançamentos exportados" });
+    expect(scope).toHaveTextContent("Sai o recorte inteiro: contando…");
+    expect(scope).not.toHaveTextContent(/\b0 lançamentos/);
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+    release();
+    expect(await within(scope).findByText("7 lançamentos")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
   });
 
   it("falha do exportador aparece no painel, que continua aberto", async () => {

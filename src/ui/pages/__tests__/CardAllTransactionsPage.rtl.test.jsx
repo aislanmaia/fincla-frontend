@@ -936,7 +936,10 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     // com os mesmos filtros que o arquivo leva.
     const screenSummary = summaries.at(-1).searchParams;
     expect(screenSummary.get("slice_currency")).toBe("true");
-    for (const [key, value] of screenSummary.entries()) if (!["include_breakdown", "slice_currency", "locale"].includes(key)) expect(asked.getAll(key)).toContain(value);
+    // Nos dois sentidos (G3-2-09): os filtros do arquivo são exatamente os do resumo da tela, nem um a mais.
+    const FILE_ONLY = ["format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"];
+    const filtersOf = (params, skip) => Object.fromEntries([...new Set(params.keys())].filter((key) => !skip.includes(key)).map((key) => [key, params.getAll(key)]));
+    expect(filtersOf(asked, FILE_ONLY)).toEqual(filtersOf(screenSummary, ["include_breakdown", "slice_currency", "locale"]));
     expect(within(dialog).getByTestId("export-totals")).toHaveTextContent(/-?R\$\s*10,00/);
   });
 
