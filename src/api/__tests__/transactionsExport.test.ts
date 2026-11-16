@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import apiClient from '../client';
 import { repeatArrayParams } from '../paramsSerializer';
-import { exportTransactions, exportTransactionsCsv, fileNameFromDisposition } from '../transactions';
+import { exportTransactions, fileNameFromDisposition } from '../transactions';
 
 vi.mock('../client', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -53,13 +53,6 @@ describe('exportTransactions', () => {
 
     await expect(exportTransactions({ organization_id: 'org-1', format: 'csv' })).rejects.toBe(error);
     expect(error.response.data).toBeUndefined();
-  });
-
-  it('exportTransactionsCsv (lançamentos do cartão) passa pela mesma porta, em CSV', async () => {
-    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: new TextEncoder().encode('x').buffer, headers: {} });
-
-    expect(await (await exportTransactionsCsv({ organization_id: 'org-1', credit_card_id: [5] })).text()).toBe('x');
-    expect(vi.mocked(apiClient.get).mock.calls[0][1]?.params).toEqual({ organization_id: 'org-1', credit_card_id: [5], format: 'csv' });
   });
 });
 

@@ -1,20 +1,7 @@
-import { humanizeDetailString, isLegacyError, isSafeError } from "../../../api/apiError";
+import { refusalReason } from "../../../api/apiError";
 import { bulkCategorizeTransactions, listTransactions } from "../../../api/transactions";
 import { moveInstallmentToInvoice } from "../../../api/creditCards";
 import { TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
-
-/**
- * Por que o servidor recusou: a mensagem do PRÓPRIO servidor, quando é regra de negócio (400/409/422), como
- * "Reabra a fatura paga antes de alterar seus lançamentos." Falha de rede, 5xx ou mensagem que o sanitizador
- * reprova não têm causa que o usuário resolva: ficam sem motivo (e com o convite a tentar de novo).
- */
-export function refusalReason(error) {
-  const status = error?.response?.status;
-  const detail = error?.response?.data?.detail;
-  if (![400, 409, 422].includes(status) || !(isSafeError(detail) || isLegacyError(detail))) return "";
-  const message = humanizeDetailString(detail.message, status);
-  return message && !/[.!?]$/.test(message) ? `${message}.` : message;
-}
 
 /**
  * Roda uma ação por linha sem parar na primeira falha; devolve quem passou, quem falhou e a causa das recusas

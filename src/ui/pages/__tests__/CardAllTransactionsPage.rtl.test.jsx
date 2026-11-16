@@ -820,9 +820,18 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(created).toHaveLength(1));
     expect(await created[0].text()).toContain("Linha 2");
     expect([...new Uint8Array(await created[0].arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    expect(names[0]).toBe(`lancamentos-${todayLocalYmd()}.csv`);
+    // G3-1-02: o arquivo descreve o PRÓPRIO recorte (título, filtros em texto, nome) — sem isso o servidor
+    // escrevia "Sem filtros: todos os lançamentos" num arquivo filtrado por cartão e busca.
+    expect(names[0]).toBe(`cartao-azul-7112-${todayLocalYmd()}.csv`);
     const listed = requests.at(-1).searchParams;
     const asked = exports[0].searchParams;
+    expect(asked.get("title")).toBe("Lançamentos · Azul •7112");
+    expect(asked.get("file_prefix")).toBe("cartao-azul-7112");
+    const filtersText = asked.getAll("filters_text");
+    expect(filtersText).toContain("Busca: Linha");
+    expect(filtersText.length).toBeGreaterThanOrEqual(2); // o recorte de fatura/período vem junto da busca
+    expect(filtersText.some((text) => /Sem filtros/.test(text))).toBe(false);
+    expect(asked.get("timezone")).toBeTruthy();
     expect(asked.get("organization_id")).toBe(ORG_ID);
     expect(asked.get("format")).toBe("csv");
     expect(asked.get("credit_card_id")).toBe("7");

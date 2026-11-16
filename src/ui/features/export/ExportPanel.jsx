@@ -8,7 +8,8 @@ import { currencyInfo } from "../../money/currencyRegistry.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
-import { EXPORT_MAX_ROWS, exportFailureMessage } from "../cardTransactions/ledgerExport.js";
+import { EXPORT_MAX_ROWS, exportFailureMessage } from "./exportFailure.js";
+import { userTimezone } from "./exportRequest.js";
 import {
   UNAVAILABLE,
   byCurrencyLine,
@@ -45,14 +46,6 @@ const PDF_CONTENT = [
   { key: "full", label: "Completo", hint: "Resumo, categorias e a lista de lançamentos" },
   { key: "summary", label: "Só o resumo", hint: "Uma página, sem a lista — bom para mostrar a alguém" },
 ];
-
-const userTimezone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const countText = (n) => Number(n ?? 0).toLocaleString("pt-BR");
 

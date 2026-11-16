@@ -32,7 +32,7 @@ import { ConfirmActionInline, ConfirmActionModal } from "../features/transaction
 import { settlementCopy } from "../features/transactions/settlementCopy.js";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
-import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { useFocusTrap } from "../components/useFocusTrap.js";
 import { describeFilterChange } from "../features/transactions/filters/describeFilterChange.js";
 import { flyToChip } from "../features/transactions/flyToChip.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";

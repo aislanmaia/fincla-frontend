@@ -260,10 +260,6 @@ export const exportTransactions = async (request: ExportTransactionsRequest): Pr
   }
 };
 
-/** O CSV do recorte, sem os textos da tela (lançamentos do cartão; migra para o painel na #524). */
-export const exportTransactionsCsv = async (filters: ExportTransactionsQuery): Promise<Blob> =>
-  (await exportTransactions({ ...filters, format: 'csv' })).blob;
-
 /**
  * Põe vários lançamentos (1 a 200) na mesma categoria, tudo ou nada: se algum for recusado, nada muda
  * e o `422` (`code: 'bulk_rejected'`) traz `failures` com o motivo de cada um.

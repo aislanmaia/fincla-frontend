@@ -665,3 +665,19 @@ describe("#293 — a consulta é identificada pelo CONTEÚDO dos filtros", () =>
   });
 });
 
+
+describe("moeda dos totais (fincla-api#520 D1, G3-1-01)", () => {
+  it("Transações pede o resumo com slice_currency=true, como o exportador calcula o arquivo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters({ ...BASE_STATE, settlement: "a-pagar" });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
+    expect(getTransactionsSummary.mock.calls[0][0]).toMatchObject({ slice_currency: true, settled: false });
+    // A listagem não tem regra de moeda: o parâmetro é só do resumo.
+    expect(listTransactions.mock.calls[0][0]).not.toHaveProperty("slice_currency");
+  });
+});
