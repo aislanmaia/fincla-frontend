@@ -699,6 +699,11 @@ export interface ListTransactionsQuery {
   recurring?: boolean;
   /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
   commitment_kind?: 'one_off' | 'installment';
+  /**
+   * A modalidade que a fatura do cartão mostra em cada linha (`items[].modality`, fincla-api#525): `refund` =
+   * estornos; `cash` = série à vista; `installment` = as demais linhas. É o filtro "Modalidade" de Lançamentos da fatura.
+   */
+  modality?: 'cash' | 'installment' | 'refund';
   page?: number;
   limit?: number;
   sort_by?: SortByField;
@@ -825,6 +830,11 @@ export interface TransactionsSummaryQuery {
   recurring?: boolean;
   /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
   commitment_kind?: 'one_off' | 'installment';
+  /**
+   * A modalidade que a fatura do cartão mostra em cada linha (`items[].modality`, fincla-api#525): `refund` =
+   * estornos; `cash` = série à vista; `installment` = as demais linhas. É o filtro "Modalidade" de Lançamentos da fatura.
+   */
+  modality?: 'cash' | 'installment' | 'refund';
   /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
   settled?: boolean;
   /**

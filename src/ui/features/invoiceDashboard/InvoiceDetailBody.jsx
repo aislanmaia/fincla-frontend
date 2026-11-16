@@ -181,9 +181,11 @@ export function InvoiceDetailBody({
           )}
           <div style={{ display: "flex", flexDirection: centered ? "column" : "row", gap: 10, alignItems: centered ? "stretch" : "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexDirection: centered ? "column" : "row" }}>
-              <Btn variant="outGray" small onClick={onExport} data-testid="export-csv" style={centered ? { justifyContent: "center" } : undefined}>
-                <Download size={12} /> Exportar CSV
-              </Btn>
+              {onExport && (
+                <Btn variant="outGray" small onClick={onExport} data-testid="export-invoice" style={centered ? { justifyContent: "center" } : undefined}>
+                  <Download size={12} /> Exportar
+                </Btn>
+              )}
               {onEditNote && (
                 <Btn variant="outGray" small onClick={onEditNote} disabled={note?.status !== "ok"} data-testid="invoice-note-cta" style={centered ? { justifyContent: "center" } : undefined}>
                   <Pencil size={12} /> {note?.text?.trim() ? "Editar anotação" : "Adicionar anotação"}
