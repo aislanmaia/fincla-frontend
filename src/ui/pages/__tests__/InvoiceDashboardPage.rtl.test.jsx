@@ -734,7 +734,7 @@ describe("InvoiceDashboardPage — exportar (painel compartilhado, fincla-api#52
       http.get("*/v1/transactions/summary", ({ request }) => { seen.summaries.push(new URL(request.url).searchParams); return summary(); }),
       http.get("*/v1/transactions/export", ({ request }) => {
         seen.exports.push(new URL(request.url).searchParams);
-        return new HttpResponse("\uFEFFData", { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="cartao-azul-fatura-2026-10-2026-10-04.csv"' } });
+        return new HttpResponse("%PDF-1.4", { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="cartao-azul-fatura-2026-10-2026-10-04.pdf"' } });
       }),
     );
     return seen;
@@ -779,19 +779,20 @@ describe("InvoiceDashboardPage — exportar (painel compartilhado, fincla-api#52
     expect(summary.get("slice_currency")).toBe("true");
     expect(await within(panel).findByTestId("export-totals")).toHaveTextContent(/8\.129,51/);
 
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(seen.exports).toHaveLength(1));
     const asked = seen.exports[0];
     expect(asked.get("organization_id")).toBe(ORG);
     expect(asked.get("credit_card_id")).toBe("1");
     expect(asked.getAll("invoice_id")).toEqual([invoiceId]);
-    expect(asked.get("format")).toBe("csv");
+    expect(asked.get("format")).toBe("pdf");
+    expect(asked.get("content")).toBe("full");
     expect(asked.get("file_prefix")).toBe(`cartao-azul-fatura-${ym}`);
     expect(asked.get("title")).toBe(`Azul •7112 · Fatura de ${label}`);
     expect(asked.getAll("filters_text")).toEqual([`Fatura: ${label}`]);
     // Exatamente os filtros do resumo vão ao arquivo: tela e arquivo descrevem o mesmo recorte.
     for (const [key, value] of summary.entries()) if (!["slice_currency", "locale"].includes(key)) expect(asked.getAll(key)).toContain(value);
-    await waitFor(() => expect(names).toEqual(["cartao-azul-fatura-2026-10-2026-10-04.csv"]));
+    await waitFor(() => expect(names).toEqual(["cartao-azul-fatura-2026-10-2026-10-04.pdf"]));
     restore();
   });
 

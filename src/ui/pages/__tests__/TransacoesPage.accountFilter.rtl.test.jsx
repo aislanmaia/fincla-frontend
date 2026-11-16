@@ -317,7 +317,7 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     renderPage();
     await waitFor(() => expect(lastFilters().accountIds).toEqual([ACC_B]));
     await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalled());
     expect(exportMock.mock.calls[0][0].account_id).toEqual([ACC_B]);
   });
@@ -576,7 +576,7 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
       await pickCards("Nubank Roxinho", "Itaú Azul");
       await waitFor(() => expect(lastFilters().creditCardIds).toEqual(["5", "7"]));
       await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
-      await userEvent.click(await screen.findByRole("button", { name: "Exportar CSV" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Exportar PDF" }));
       await waitFor(() => expect(exportMock).toHaveBeenCalled());
       expect(exportMock.mock.calls[0][0].credit_card_id).toEqual([5, 7]);
     });

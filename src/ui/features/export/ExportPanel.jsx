@@ -33,7 +33,7 @@ import { saveBlob } from "./saveBlob.js";
  * `summaryError` é o motivo de o resumo do recorte não ter vindo (a tela que pede o resumo só ao abrir o painel).
  * `selection` ({ ids, count, summary, error }) é a "Exportar seleção" (#524): troca o recorte pelos marcados. `summary` é
  * o resumo pedido com os mesmos `ids` (totais só dos marcados); `error`, o motivo de ele não ter vindo.
- * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado (senão, o CSV).
+ * `formats` diz quais formatos o servidor gera (PDF, XLSX e CSV, nessa ordem); o PDF vem selecionado.
  * `fullScreen` é o modo celular (#527): quem usa decide pelo limite de 700 px.
  * Abaixo de 700 px de largura a prévia lateral não aparece (não cabe ao lado dos passos); a tela cheia com
  * "Ver prévia do arquivo" é da #527.
@@ -46,9 +46,9 @@ export const FORMAT_OPTIONS = {
 };
 
 /** Os formatos que o exportador do servidor já gera, na ordem do protótipo. PDF (#523) entra aqui, na frente. */
-export const AVAILABLE_EXPORT_FORMATS = ["xlsx", "csv"];
+export const AVAILABLE_EXPORT_FORMATS = ["pdf", "xlsx", "csv"];
 
-/** O formato que abre selecionado: PDF quando houver; até lá, o CSV de sempre. */
+/** O formato que abre selecionado: PDF; sem ele (tela que restrinja os formatos), o CSV. */
 export const initialExportFormat = (formats) =>
   formats.includes("pdf") ? "pdf" : formats.includes("csv") ? "csv" : formats[0];
 
@@ -388,8 +388,131 @@ function XlsxPreview(props) {
   );
 }
 
-/** Uma prévia por formato; PDF (#523) acrescenta a sua aqui. */
-const PREVIEWS = { csv: CsvPreview, xlsx: XlsxPreview };
+/**
+ * O PDF que o servidor vai gerar (#523, variante D), bloco a bloco, com os mesmos dados do passo 3: cabeçalho,
+ * Resultado com as barras de receitas, estornos e despesas, o resultado por moeda e a nota de cotação, o resumo por
+ * categoria (marcador: o painel não tem as linhas) e, conforme `content`, a lista com o rodapé de totais ou a nota de
+ * "Só o resumo". Orienta; não é o arquivo final.
+ */
+export function buildPdfPreview({ title, filtersText, selection, totals, content = "full" }) {
+  const t = totals;
+  const currency = t?.currency ?? "";
+  const flow = t
+    ? [
+        { label: "Receitas", value: t.income, tone: "green" },
+        { label: "Estornos", value: t.refunds, tone: "green" },
+        { label: "Despesas", value: t.expenses, tone: "red" },
+      ]
+    : [];
+  const largest = Math.max(1, ...flow.map((item) => Math.abs(item.value ?? 0)));
+  const boxes = t
+    ? [
+        { label: "Resultado", text: signedOrUnavailable(t.result, currency) },
+        { label: "Receitas", text: moneyOrUnavailable(t.income, currency) },
+        { label: "Despesas", text: moneyOrUnavailable(t.expenses, currency) },
+        { label: "Estornos", text: moneyOrUnavailable(t.refunds, currency) },
+      ]
+    : [];
+  return {
+    title,
+    scope: selection ? [TEXTS.selected(selection.count)] : filtersText.length ? filtersText : [TEXTS.noFilters],
+    result: t ? signedOrUnavailable(t.result, currency) : null,
+    resultValue: t?.result ?? null,
+    countLine: t ? TEXTS.pdfCountLine(t.count, t.pending) : null,
+    flow: flow.map((item) => ({
+      ...item, text: moneyOrUnavailable(item.value, currency), share: item.value == null ? 0 : Math.abs(item.value) / largest,
+    })),
+    byCurrency: byCurrencyLine(t),
+    note: conversionNote(t),
+    noteWarning: Boolean(t?.unavailable),
+    list: content === "full" ? { placeholder: `… ${TEXTS.entries(t?.count)}, um por linha …`, boxes } : null,
+    summaryNote: content === "summary" ? TEXTS.summaryOnlyNote(t?.count) : null,
+  };
+}
+
+const PDF_TONE = { green: T.green, red: T.red };
+
+function PdfPreview(props) {
+  const pdf = buildPdfPreview(props);
+  const small = { ...G, fontSize: 11, color: T.inkMid };
+  const label = { ...G, fontSize: 11, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".05em" };
+  return (
+    <div
+      data-testid="export-preview-pdf"
+      style={{
+        ...G, background: "#fff", color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
+        display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 2px 10px rgba(0,0,0,.08)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={label}>Fincla · relatório de lançamentos</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{pdf.title}</div>
+          <div style={small}>Sua organização · gerado agora</div>
+        </div>
+        <div style={{ ...small, textAlign: "right" }}>
+          {pdf.scope.map((text) => <div key={text}>{text}</div>)}
+        </div>
+      </div>
+      {pdf.result !== null && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.3fr)", gap: 14, alignItems: "center" }}>
+          <div>
+            <div style={label}>Resultado do recorte</div>
+            <div style={{ ...NUM, fontSize: 22, fontWeight: 700, color: resultColor(pdf.resultValue) }}>{pdf.result}</div>
+            <div style={small}>{pdf.countLine}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {pdf.flow.map((item) => (
+              <div key={item.label} style={{ display: "grid", gridTemplateColumns: "62px minmax(0, 1fr) auto", gap: 6, alignItems: "center", fontSize: 11 }}>
+                <span>{item.label}</span>
+                <span style={{ height: 7, background: T.bg, borderRadius: 4 }}>
+                  <span style={{ display: "block", width: `${item.share * 100}%`, height: "100%", background: PDF_TONE[item.tone], borderRadius: 4 }} />
+                </span>
+                <span style={{ ...NUM, fontWeight: 700, textAlign: "right" }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {pdf.byCurrency && <div style={{ ...small, ...NUM }}>Por moeda: {pdf.byCurrency}</div>}
+      {pdf.note && <div style={{ ...small, color: pdf.noteWarning ? T.amber : T.inkMid }}>{pdf.note}</div>}
+      <div style={{ fontSize: 12, fontWeight: 700 }}>Por categoria</div>
+      <div style={{ ...small, color: T.inkGhost, fontStyle: "italic" }}>… uma linha por categoria e moeda: barra, quantidade e total líquido …</div>
+      {pdf.list && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 700 }}>Lançamentos</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 4, borderBottom: `1.5px solid ${T.ink}`, paddingBottom: 3 }}>
+            {["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor"].map((name) => (
+              <span key={name} style={{ ...label, textAlign: name === "Valor" ? "right" : "left" }}>{name}</span>
+            ))}
+          </div>
+          <div style={{ ...small, color: T.inkGhost, fontStyle: "italic" }}>{pdf.list.placeholder} (o cabeçalho se repete em cada página)</div>
+          <div style={{ borderTop: `1.5px solid ${T.ink}`, paddingTop: 6 }}>
+            <div style={label}>Totais do recorte</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, marginTop: 4 }}>
+              {pdf.list.boxes.map((box) => (
+                <div key={box.label} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 6px", minWidth: 0 }}>
+                  <div style={label}>{box.label}</div>
+                  <div style={{ ...NUM, fontSize: 11, fontWeight: 700 }}>{box.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      {pdf.summaryNote && (
+        <div style={{ ...small, color: T.inkLight, borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>{pdf.summaryNote}</div>
+      )}
+      <div style={{ ...small, color: T.inkLight, display: "flex", justifyContent: "space-between" }}>
+        <span>Fincla · Sua organização</span>
+        <span>Página 1 de N</span>
+      </div>
+    </div>
+  );
+}
+
+/** Uma prévia por formato. */
+const PREVIEWS = { pdf: PdfPreview, csv: CsvPreview, xlsx: XlsxPreview };
 
 function FilePreview({ format, data }) {
   const Preview = PREVIEWS[format];
@@ -502,7 +625,7 @@ export function ExportPanel({
           )}
         </div>
         {showPreview && PREVIEWS[format] && (
-          <FilePreview format={format} data={{ title, filtersText, selection, totals }} />
+          <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} />
         )}
       </div>
     </SideDrawer>

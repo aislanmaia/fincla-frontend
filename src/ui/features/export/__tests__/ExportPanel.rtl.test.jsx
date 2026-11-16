@@ -10,7 +10,7 @@ const saveBlobMock = vi.fn();
 vi.mock("../saveBlob.js", () => ({ saveBlob: (...args) => saveBlobMock(...args) }));
 
 import { setCurrencyRegistry } from "../../../money/currencyRegistry.js";
-import { ExportPanel, buildCsvPreview, buildXlsxPreview } from "../ExportPanel.jsx";
+import { ExportPanel, buildCsvPreview, buildPdfPreview, buildXlsxPreview } from "../ExportPanel.jsx";
 import { exportTotalsFromSummary } from "../exportTotals.js";
 
 /**
@@ -116,12 +116,13 @@ describe("<ExportPanel>", () => {
 
   it("exporta com os filtros da tela, o título, o prefixo, os filtros em texto e o fuso; salva com o nome do servidor", async () => {
     const { panel, onClose } = renderPanel();
-    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
 
     await waitFor(() => expect(saveBlobMock).toHaveBeenCalledWith(expect.any(Blob), "transacoes-2026-11-15.csv"));
     expect(exportMock).toHaveBeenCalledWith({
       ...FILTER_PARAMS,
-      format: "csv",
+      format: "pdf",
+      content: "full",
       title: "Transações",
       filters_text: ["Período: Este mês", "Busca: padaria"],
       file_prefix: "transacoes",
@@ -134,8 +135,8 @@ describe("<ExportPanel>", () => {
   it("sem nome no Content-Disposition, o arquivo leva o prefixo, o dia local e a extensão", async () => {
     exportMock.mockResolvedValue({ blob: new Blob(["x"]), fileName: null });
     const { panel } = renderPanel();
-    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
-    await waitFor(() => expect(saveBlobMock).toHaveBeenCalledWith(expect.any(Blob), expect.stringMatching(/^transacoes-\d{4}-\d{2}-\d{2}\.csv$/)));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(saveBlobMock).toHaveBeenCalledWith(expect.any(Blob), expect.stringMatching(/^transacoes-\d{4}-\d{2}-\d{2}\.pdf$/)));
   });
 
   it.each([
@@ -147,16 +148,16 @@ describe("<ExportPanel>", () => {
   ])("uma falha aparece no painel, que continua aberto: %#", async (error, message) => {
     exportMock.mockRejectedValue(error);
     const { panel, onClose } = renderPanel();
-    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
 
     expect(await within(panel).findByRole("alert")).toHaveTextContent(message);
     expect(onClose).not.toHaveBeenCalled();
     expect(saveBlobMock).not.toHaveBeenCalled();
-    expect(within(panel).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
   });
 
   it("acima de 20 mil lançamentos avisa antes e não pede o arquivo, em qualquer formato", async () => {
-    const { panel } = renderPanel({ count: 20001, formats: ["pdf", "xlsx", "csv"] });
+    const { panel } = renderPanel({ count: 20001 });
     expect(within(panel).getByRole("alert")).toHaveTextContent("O recorte tem 20.001 lançamentos e o limite por arquivo é 20.000.");
     for (const label of ["PDF", "XLSX", "CSV"]) {
       await userEvent.click(within(panel).getByRole("button", { name: label }));
@@ -165,23 +166,61 @@ describe("<ExportPanel>", () => {
     expect(exportMock).not.toHaveBeenCalled();
   });
 
-  it("com PDF disponível ele vem selecionado, e Completo/Só o resumo só aparece no PDF", async () => {
-    const { panel } = renderPanel({ formats: ["pdf", "xlsx", "csv"] });
-    expect(within(panel).getByRole("button", { name: "PDF" })).toHaveAttribute("aria-pressed", "true");
+  it("os três formatos na ordem PDF, XLSX, CSV, cada um com a frase de uso; o PDF vem selecionado", async () => {
+    const { panel } = renderPanel();
+    const group = within(panel).getByRole("group", { name: "Formato do arquivo" });
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["PDF", "XLSX", "CSV"]);
+    expect(within(group).getByRole("button", { name: "PDF" })).toHaveAttribute("aria-pressed", "true");
+    expect(panel).toHaveTextContent("Para ler e enviar.");
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole("button", { name: "CSV" }));
+    expect(panel).toHaveTextContent("Texto simples, para outros sistemas.");
+  });
+
+  it("Completo/Só o resumo só aparece no PDF, Completo é o padrão e o pedido leva a escolha", async () => {
+    const { panel } = renderPanel();
     const content = within(panel).getByRole("radiogroup", { name: "Conteúdo do PDF" });
+    expect(within(content).getByRole("radio", { name: /Completo/ })).toBeChecked();
     await userEvent.click(within(content).getByRole("radio", { name: /Só o resumo/ }));
     await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalledWith(expect.objectContaining({ format: "pdf", content: "summary" })));
 
-    await userEvent.click(within(panel).getByRole("button", { name: "CSV" }));
-    expect(within(panel).queryByRole("radiogroup", { name: "Conteúdo do PDF" })).toBeNull();
+    for (const label of ["XLSX", "CSV"]) {
+      await userEvent.click(within(panel).getByRole("button", { name: label }));
+      expect(within(panel).queryByRole("radiogroup", { name: "Conteúdo do PDF" })).toBeNull();
+    }
   });
 
-  it("nesta entrega o servidor gera XLSX e CSV; sem PDF, o CSV continua o padrão", () => {
-    const { panel } = renderPanel({ formats: undefined });
-    const group = within(panel).getByRole("group", { name: "Formato do arquivo" });
-    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["XLSX", "CSV"]);
-    expect(within(group).getByRole("button", { name: "CSV" })).toHaveAttribute("aria-pressed", "true");
+  it("CSV escolhido depois de 'Só o resumo': o pedido não leva `content` (só o PDF tem conteúdo)", async () => {
+    const { panel } = renderPanel();
+    await userEvent.click(within(panel).getByRole("radio", { name: /Só o resumo/ }));
+    await userEvent.click(within(panel).getByRole("button", { name: "CSV" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    const [params] = exportMock.mock.calls[0];
+    expect(params.format).toBe("csv");
+    expect(params).not.toHaveProperty("content");
+  });
+
+  it("a prévia do PDF acompanha o conteúdo: Completo traz a lista e o rodapé; Só o resumo, a nota", async () => {
+    const { panel } = renderPanel();
+    const preview = () => within(panel).getByTestId("export-preview");
+    expect(preview()).toHaveTextContent("Prévia do arquivo (PDF)");
+    const pdf = () => within(preview()).getByTestId("export-preview-pdf");
+    expect(pdf()).toHaveTextContent("Resultado do recorte");
+    expect(pdf()).toHaveTextContent(/\+US\$\s769,60/);
+    expect(pdf()).toHaveTextContent("Totais do recorte");
+    expect(pdf()).toHaveTextContent("… 3 lançamentos, um por linha …");
+    expect(pdf()).not.toHaveTextContent("Versão resumida");
+
+    await userEvent.click(within(panel).getByRole("radio", { name: /Só o resumo/ }));
+    expect(pdf()).toHaveTextContent("Versão resumida: a lista dos 3 lançamentos não está neste arquivo.");
+    expect(pdf()).not.toHaveTextContent("Totais do recorte");
+    expect(pdf()).not.toHaveTextContent("um por linha");
+
+    await userEvent.click(within(panel).getByRole("button", { name: "XLSX" }));
+    expect(preview()).toHaveTextContent("Prévia do arquivo (XLSX)");
+    expect(within(preview()).queryByTestId("export-preview-pdf")).toBeNull();
   });
 
   it("trocar para XLSX diz para que serve, mostra a planilha na prévia e pede format=xlsx (sem conteúdo de PDF)", async () => {
@@ -231,7 +270,7 @@ describe("<ExportPanel>", () => {
     const { panel } = renderPanel({ selection: { ids: [7, 9], count: 2, summary: ONE_CURRENCY } });
     expect(panel).toHaveTextContent("2 lançamentos selecionados");
     expect(within(panel).queryByRole("list", { name: "Filtros ativos" })).toBeNull();
-    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(exportMock).toHaveBeenCalledWith(expect.objectContaining({ ids: [7, 9], filters_text: [] })));
   });
 });
@@ -242,8 +281,10 @@ const ONE_ENTRY = {
 };
 
 describe("<ExportPanel> — singular e plural (QA BUG-03)", () => {
-  it("com 1 lançamento e 1 pendente: passo 1, passo 3 e prévia no singular", () => {
+  it("com 1 lançamento e 1 pendente: passo 1, passo 3 e prévia no singular", async () => {
     const { panel } = renderPanel({ count: 1, summary: ONE_ENTRY });
+    expect(within(panel).getByTestId("export-preview")).toHaveTextContent("1 lançamento · 1 pendente, incluído nos totais");
+    await userEvent.click(within(panel).getByRole("button", { name: "CSV" }));
     expect(within(panel).getByRole("region", { name: "Lançamentos exportados" }))
       .toHaveTextContent("Sai o recorte inteiro: 1 lançamento, não só o que está carregado na tela.");
     expect(panel).toHaveTextContent("1 lançamento · 1 pendente (incluído nos totais)");
@@ -253,14 +294,16 @@ describe("<ExportPanel> — singular e plural (QA BUG-03)", () => {
     expect(panel).not.toHaveTextContent(/1 lançamentos|1 pendentes/);
   });
 
-  it("com 2 lançamentos e 0 pendentes, plural", () => {
+  it("com 2 lançamentos e 0 pendentes, plural", async () => {
     const { panel } = renderPanel({ count: 2, summary: { ...ONE_ENTRY, total_transactions: 2, unsettled_count: 0 } });
+    await userEvent.click(within(panel).getByRole("button", { name: "CSV" }));
     expect(panel).toHaveTextContent("2 lançamentos · 0 pendentes (incluídos nos totais)");
     expect(within(panel).getByTestId("export-preview")).toHaveTextContent("LANÇAMENTOS: 2 (0 pendentes, incluídos nos totais)");
   });
 
-  it("seleção de 1 lançamento no singular, no painel e na prévia", () => {
+  it("seleção de 1 lançamento no singular, no painel e na prévia", async () => {
     const { panel } = renderPanel({ selection: { ids: [7], count: 1, summary: ONE_ENTRY } });
+    await userEvent.click(within(panel).getByRole("button", { name: "CSV" }));
     expect(panel).toHaveTextContent("1 lançamento selecionado. Saem só os que você marcou.");
     expect(within(panel).getByTestId("export-preview")).toHaveTextContent('"1 lançamento selecionado"');
   });
@@ -284,13 +327,13 @@ describe("<ExportPanel> — prévia lateral só com espaço (QA BUG-02)", () => 
     const { panel } = renderPanel();
     expect(within(panel).queryByTestId("export-preview")).toBeNull();
     expect(within(panel).getByRole("region", { name: "Totais do relatório" })).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
   });
 
   it.each([700, 1440])("com %i px a prévia continua ao lado dos passos", (width) => {
     stubViewport(width);
     const { panel } = renderPanel();
-    expect(within(panel).getByTestId("export-preview")).toHaveTextContent("Prévia do arquivo (CSV)");
+    expect(within(panel).getByTestId("export-preview")).toHaveTextContent("Prévia do arquivo (PDF)");
   });
 });
 
@@ -350,5 +393,39 @@ describe("buildXlsxPreview", () => {
   it("recorte vazio: totais fixos (não há linhas para a fórmula)", () => {
     const empty = { ...ONE_CURRENCY, total_transactions: 0, balance: 0, total_income: 0, total_expenses: 0, total_refunds: 0, unsettled_count: 0 };
     expect(sheet(empty).formulas).toBe(false);
+  });
+});
+
+describe("buildPdfPreview", () => {
+  const pdf = (summary, content = "full", extra = {}) =>
+    buildPdfPreview({ title: "Transações", filtersText: ["Busca: x"], selection: null, totals: exportTotalsFromSummary(summary), content, ...extra });
+
+  it("Completo: Resultado com sinal, barras proporcionais, a lista e as caixas de totais do resumo", () => {
+    const preview = pdf(ONE_CURRENCY);
+    expect(preview.result).toMatch(/^\+US\$\s769,60$/);
+    expect(preview.flow.map((item) => [item.label, item.share])).toEqual([["Receitas", 1], ["Estornos", 0.02], ["Despesas", 0.2504]]);
+    expect(preview.list.boxes.map((box) => box.label)).toEqual(["Resultado", "Receitas", "Despesas", "Estornos"]);
+    expect(preview.list.boxes[2].text).toMatch(/^US\$\s250,40$/);
+    expect(preview.summaryNote).toBeNull();
+    expect(preview.scope).toEqual(["Busca: x"]);
+  });
+
+  it("Só o resumo: sem lista, com a nota no singular para 1 lançamento", () => {
+    const preview = pdf(ONE_ENTRY, "summary");
+    expect(preview.list).toBeNull();
+    expect(preview.summaryNote).toBe("Versão resumida: o 1 lançamento do recorte não está listado neste arquivo. Exporte em “Completo” para vê-lo.");
+  });
+
+  it("cotação indisponível: 'indisponível' (nunca zero), o resultado de cada moeda e o aviso", () => {
+    const preview = pdf(UNAVAILABLE);
+    expect(preview.result).toBe("indisponível");
+    expect(preview.flow.map((item) => item.text)).toEqual(["indisponível", "indisponível", "indisponível"]);
+    expect(preview.byCurrency).toMatch(/^BRL \+R\$\s100,00 \(1\) · USD −US\$\s7,50 \(2\)$/);
+    expect(preview.noteWarning).toBe(true);
+    expect(preview.note).toContain("Cotação para R$ indisponível");
+  });
+
+  it("seleção troca os filtros pela contagem marcada", () => {
+    expect(pdf(ONE_CURRENCY, "full", { selection: { count: 2 } }).scope).toEqual(["2 lançamentos selecionados"]);
   });
 });

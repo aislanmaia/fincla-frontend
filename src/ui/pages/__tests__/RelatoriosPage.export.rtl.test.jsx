@@ -78,8 +78,8 @@ const withApi = ({ summary = () => HttpResponse.json(MIXED_SUMMARY), exported } 
     http.get("*/v1/transactions/summary", ({ request }) => { seen.summaries.push(new URL(request.url).searchParams); return summary(); }),
     http.get("*/v1/transactions/export", ({ request }) => {
       seen.exports.push(new URL(request.url).searchParams);
-      return exported ? exported() : new HttpResponse("﻿Data", {
-        headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="relatorios-2026-06-a-2026-11-2026-11-16.csv"' },
+      return exported ? exported() : new HttpResponse("%PDF-1.4", {
+        headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="relatorios-2026-06-a-2026-11-2026-11-16.pdf"' },
       });
     }),
     http.get("*/v1/analytics/export-csv", ({ request }) => { seen.legacy.push(new URL(request.url).searchParams); return new HttpResponse("x"); }),
@@ -145,20 +145,21 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
     // A contagem do painel é a do resumo do recorte inteiro.
     expect(await within(panel).findByText("7 lançamentos")).toBeInTheDocument();
 
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(seen.exports).toHaveLength(1));
     const asked = seen.exports[0];
     expect([...new Set(asked.keys())].sort()).toEqual(
-      [...ONLY_PERIOD, "format", "title", "filters_text", "file_prefix", "timezone", "locale"].sort(),
+      [...ONLY_PERIOD, "format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"].sort(),
     );
     expect(asked.get("organization_id")).toBe(ORG);
     expect(asked.get("date_start")).toBe(from);
     expect(asked.get("date_end")).toBe(to);
-    expect(asked.get("format")).toBe("csv");
+    expect(asked.get("format")).toBe("pdf");
+    expect(asked.get("content")).toBe("full");
     expect(asked.get("title")).toBe("Relatórios");
     expect(asked.getAll("filters_text")).toEqual([periodLine]);
     expect(asked.get("file_prefix")).toBe(prefix);
-    await waitFor(() => expect(downloads).toEqual(["relatorios-2026-06-a-2026-11-2026-11-16.csv"]));
+    await waitFor(() => expect(downloads).toEqual(["relatorios-2026-06-a-2026-11-2026-11-16.pdf"]));
     // O caminho antigo não é chamado.
     expect(seen.legacy).toEqual([]);
   });
@@ -186,7 +187,7 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
     const user = userEvent.setup();
     const panel = await openPanel(user);
     await within(panel).findByTestId("export-totals");
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(seen.exports).toHaveLength(1));
     expect(await within(panel).findAllByRole("alert")).not.toHaveLength(0);
     expect(screen.getByRole("dialog", { name: "Exportar" })).toBeInTheDocument();
