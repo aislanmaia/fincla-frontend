@@ -75,9 +75,16 @@ vi.mock("../../features/transactions/useTransactionsData.js", () => ({
 vi.mock("../../features/tags/useCategoryTagsData.js", () => ({
   useCategoryTagsData: () => ({ isLoading: false, categories: [{ id: "cat-alim", labelPt: "Alimentação", color: "#059669" }] }),
 }));
+let tagRows = [];
 vi.mock("../../features/transactions/filters/useTransactionsTagCatalog.js", () => ({
-  useTransactionsTagCatalog: () => ({ rows: [], loading: false, error: "" }),
+  useTransactionsTagCatalog: () => ({ rows: tagRows, loading: false, error: "" }),
 }));
+/** Estado inicial extra dos filtros (etiquetas e modo), entrando pelo mesmo caminho do deep link. */
+let deepLinkExtra = {};
+vi.mock("../../features/transactions/transactionsDeepLink.js", async (importOriginal) => {
+  const original = await importOriginal();
+  return { ...original, resolveTransactionsDeepLink: (...args) => ({ ...original.resolveTransactionsDeepLink(...args), ...deepLinkExtra }) };
+});
 vi.mock("../../features/transactions/useTransactionsFacetCounts.js", () => ({
   useTransactionsFacetCounts: () => ({ counts: null, isLoading: false, total: facetTotalMock, buckets: facetBucketsMock, optionCount: () => null, optionCountByLabel: () => null, binaryCount: () => null }),
 }));
@@ -111,6 +118,8 @@ import { TransacoesPage } from "../TransacoesPage.jsx";
 
 beforeEach(() => {
   legacyOverride = null;
+  tagRows = [];
+  deepLinkExtra = {};
   facetTotalMock = null;
   facetBucketsMock = null;
   transactionsDataMock.mockImplementation(defaultTransactionsData);
@@ -193,6 +202,44 @@ describe("<TransacoesPage> — Exportar (#521)", () => {
     expect(request).not.toHaveProperty("limit");
     expect(Array.isArray(request.filters_text)).toBe(true);
     expect(request.filters_text[0]).toMatch(/^Período: /);
+  });
+
+  it("o período sai nas datas do pedido, com ano — nunca o rótulo relativo do chip (QA BUG-04)", async () => {
+    legacyOverride = FULL_SLICE; // datas 2026-10-01 a 2026-10-31 no pedido, enquanto o chip diz "Este mês"
+    renderPage();
+    const request = await exportCsv();
+    expect(request.date_start).toBe("2026-10-01");
+    expect(request.filters_text[0]).toBe("Período: 01/10/2026 a 31/10/2026");
+    expect(request.filters_text.join(" | ")).not.toMatch(/Este mês|Mês anterior/);
+  });
+
+  it("sem filtro escolhido, o período padrão também sai em datas absolutas", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    const chips = within(within(panel).getByRole("list", { name: "Filtros ativos" })).getAllByRole("listitem").map((li) => li.textContent);
+    expect(chips[0]).toMatch(/^Período: \d{2}\/\d{2}\/\d{4} a \d{2}\/\d{2}\/\d{4}$/);
+  });
+
+  it.each([
+    ["all", "Tags · Todas juntas (E): #Farmácia, #Combustível", { tag_match: "all" }],
+    ["any", "Tags · Qualquer uma (OU): #Farmácia, #Combustível", {}],
+  ])("etiquetas no modo %s: o texto diz o modo, no painel e no pedido (QA BUG-01)", async (mode, line, matchParam) => {
+    tagRows = [{ id: "bbbbbbbb-1111-4111-8111-111111111111", name: "Farmácia" }, { id: "bbbbbbbb-2222-4222-8222-222222222222", name: "Combustível" }];
+    deepLinkExtra = { tags: ["Farmácia", "Combustível"], tagMode: mode };
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "Exportar" }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    const chips = within(within(panel).getByRole("list", { name: "Filtros ativos" })).getAllByRole("listitem").map((li) => li.textContent);
+    expect(chips).toContain(line);
+    expect(chips.filter((text) => text.startsWith("Tags"))).toEqual([line]);
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    const request = exportMock.mock.calls[0][0];
+    expect(request.filters_text).toContain(line);
+    expect(request.tag_id).toEqual(["bbbbbbbb-1111-4111-8111-111111111111", "bbbbbbbb-2222-4222-8222-222222222222"]);
+    if (matchParam.tag_match) expect(request.tag_match).toBe("all");
+    else expect(request).not.toHaveProperty("tag_match");
   });
 
   it("o arquivo é salvo com o nome que o servidor deu e o painel fecha", async () => {

@@ -17,6 +17,8 @@ import { saveBlob } from "../features/export/saveBlob.js";
 import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { exportFailureMessage } from "../features/export/exportFailure.js";
 import { filePrefixOf, userTimezone } from "../features/export/exportRequest.js";
+import { exportTexts } from "../features/export/exportTexts.js";
+import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -25,7 +27,7 @@ import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
 import { describeLedgerChange, weekEnd } from "../features/cardTransactions/ledgerHistory.js";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { HistoryButton } from "../features/transactions/TransactionsListHeader.jsx";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceExportLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { FacetCard } from "../features/transactions/filters/facetBar/FacetCard.jsx";
@@ -528,7 +530,15 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
   const exportTitle = () => `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`;
-  const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
+  /* Os filtros como o diálogo e o ARQUIVO os descrevem: o arquivo é lido depois e fora da tela, então o recorte de
+     tempo sai absoluto e com ano — faturas com mês/ano, período e semana nas datas do pedido (QA BUG-04) — e as
+     etiquetas numa linha só, com o modo no texto do painel de Tags (QA BUG-01). */
+  const filterSummary = () => {
+    const texts = exportTexts("pt-BR");
+    const time = scopeWaiting ? chipLabel : invoiceMode ? invoiceExportLabel(invoiceOpts, invoiceKeys ?? []) : texts.period(queryFilter.date_start, queryFilter.date_end);
+    const facetLines = activeFacets.map((facet) => (facet.key === "tag" ? texts.tags(filter.tags, TAG_MODE_LABELS[filter.tagMode] ?? TAG_MODE_LABELS.any) : `${facet.label}: ${facet.value}`));
+    return [time, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(activeWeek ? [texts.period(activeWeek.from, activeWeek.to)] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...facetLines].filter(Boolean);
+  };
   // CSV do recorte inteiro vem do servidor (todas as páginas, até 20.000); a seleção marcada e o PDF (impressão do
   // navegador) partem das linhas que já temos / lidas página a página.
   const submitExport = async (format, selectionRows = null) => {
