@@ -623,9 +623,16 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
       <PageTitle sans="Conciliar" serif="extrato" />
       <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.green, margin: 0 }}>Conciliação concluída</h2>
-        <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
-          {plural(created, "transação adicionada", "transações adicionadas")}
-          {accountName ? <> à conta <b>{accountName}</b></> : null}, {created === 1 ? "paga na data do banco" : "pagas nas datas do banco"}.
+        {/* Sem transação adicionada (só pares ou fatura), nada de "0 transações" (BUG-03). */}
+        <p data-testid="done-created" style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
+          {created ? (
+            <>
+              {plural(created, "transação adicionada", "transações adicionadas")}
+              {accountName ? <> à conta <b>{accountName}</b></> : null}, {created === 1 ? "paga na data do banco" : "pagas nas datas do banco"}.
+            </>
+          ) : (
+            accountName ? <>A conta <b>{accountName}</b> está conciliada com o extrato.</> : "A conta está conciliada com o extrato."
+          )}
         </p>
         <RecordedDifference statementImport={statementImport} />
         {invoicesPaid ? (

@@ -35,13 +35,18 @@ export function periodLabel(period) {
   return `${bankDateLabel(period.start)} a ${bankDateLabel(period.end)}`;
 }
 
+function addedLabel(count, status) {
+  if (status === "draft") return plural(count, "a adicionar", "a adicionar");
+  if (status === "undone") return plural(count, "adicionado e apagado ao desfazer", "adicionados e apagados ao desfazer");
+  return plural(count, "adicionado", "adicionados");
+}
+
 /** As contagens de uma importação, no tempo verbal do estado dela. */
 export function countsLabel(item) {
   const { summary, status } = item;
   const parts = [plural(summary.total, "lançamento", "lançamentos")];
-  if (status === "draft") parts.push(`${summary.to_create} a adicionar`);
-  else if (status === "undone") parts.push(plural(summary.to_create, "adicionado e apagado ao desfazer", "adicionados e apagados ao desfazer"));
-  else parts.push(plural(summary.to_create, "adicionado", "adicionados"));
+  // Com zero, a contagem de adicionados não aparece (BUG-03): "0 adicionados" não diz nada.
+  if (summary.to_create) parts.push(addedLabel(summary.to_create, status));
   if (summary.grouped) parts.push(`${plural(summary.grouped, "somado", "somados")} em ${plural(summary.groups, "lançamento", "lançamentos")}`);
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));

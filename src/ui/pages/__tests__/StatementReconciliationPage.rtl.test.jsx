@@ -333,7 +333,7 @@ describe("revisar e concluir", () => {
     await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
 
     expect(await screen.findByText("Conciliação concluída")).toBeInTheDocument();
-    expect(screen.getByText(/3 transações adicionadas/)).toHaveTextContent("3 transações adicionadas à conta Itaú, pagas nas datas do banco.");
+    expect(screen.getByTestId("done-created")).toHaveTextContent(/^3 transações adicionadas à conta Itaú, pagas nas datas do banco\.$/);
     expect(calls).toContainEqual({ conclude: IMPORT });
   });
 
@@ -356,7 +356,33 @@ describe("revisar e concluir", () => {
 
     await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
 
-    expect(await screen.findByText(/1 transação adicionada/)).toHaveTextContent("1 transação adicionada à conta Itaú, paga na data do banco.");
+    expect(await screen.findByTestId("done-created")).toHaveTextContent(/^1 transação adicionada à conta Itaú, paga na data do banco\.$/);
+  });
+
+  it("sem transação adicionada, a conclusão não fala em 0 transações e diz que a conta está conciliada (BUG-03)", async () => {
+    draft.entries[2].description = "Conta de luz";
+    draft.summary.missing_description = 0;
+    draft.blockers = [];
+    draft.can_conclude = true;
+    server.use(
+      http.post(`${BASE}/${IMPORT}/conclude`, () => {
+        const concluded = clone(draft);
+        concluded.status = "concluded";
+        concluded.concluded_at = "2026-11-14T10:30:00";
+        concluded.entries.forEach((e) => { e.created_transaction_id = null; });
+        concluded.groups = [];
+        return HttpResponse.json(concluded);
+      }),
+    );
+    const user = userEvent.setup();
+    await openSummary(user);
+
+    await user.click(screen.getByRole("button", { name: "Concluir conciliação" }));
+
+    const card = (await screen.findByText("Conciliação concluída")).parentElement;
+    expect(within(card).getByTestId("done-created")).toHaveTextContent(/^A conta Itaú está conciliada com o extrato\.$/);
+    expect(card).not.toHaveTextContent(/\b0 transaç/);
+    expect(card).not.toHaveTextContent("adicionada");
   });
 
   it("depois de concluir, abre as transações da conta no período do extrato", async () => {
@@ -649,6 +675,29 @@ describe("Extratos importados (fincla-api#518)", () => {
 
     const rows = screen.getAllByTestId("imported-statement");
     expect(rows[2]).toHaveTextContent("1 adicionado e apagado ao desfazer");
+  });
+
+  it("nenhuma contagem de adicionados com zero, em nenhum estado (BUG-03)", async () => {
+    imports = clone(contract.imports.imports);
+    imports.slice(0, 3).forEach((i) => { i.summary.to_create = 0; });
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(rows[0]).toHaveTextContent("6 lançamentos · 2 somados em 1 lançamento · 1 não registrado");
+    expect(rows[1]).toHaveTextContent("41 lançamentos · 8 somados em 1 lançamento · 3 não registrados");
+    expect(rows[2]).toHaveTextContent(/41 lançamentos(?! · 0)/);
+    rows.slice(0, 3).forEach((r) => expect(r).not.toHaveTextContent(/\b0 (a adicionar|adicionad)/));
+  });
+
+  it("com um a adicionar no rascunho, a contagem sai igual (1 a adicionar)", async () => {
+    imports = clone(contract.imports.imports);
+    imports[0].summary.to_create = 1;
+    imports[1].summary.to_create = 1;
+    await openAccount();
+
+    const rows = screen.getAllByTestId("imported-statement");
+    expect(rows[0]).toHaveTextContent("6 lançamentos · 1 a adicionar · 2 somados");
+    expect(rows[1]).toHaveTextContent("41 lançamentos · 1 adicionado · 8 somados");
   });
 
   it("diferença não registrada aparece como travessão, nunca como zero", async () => {
