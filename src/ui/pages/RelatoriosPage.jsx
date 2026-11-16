@@ -21,7 +21,6 @@ import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 import { PageTitle } from "../components/primitives";
 import {
-  downloadReportsCsvForUi,
   buildReportKpis,
   velocityPressureVsIdealAtDay,
 } from "../data/reportsAdapter.js";
@@ -32,6 +31,9 @@ import { formatMoney } from "../features/accounts/accountMeta.js";
 import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import { listRecurringSeries } from "../../api/recurringSeries";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { reportsExportScope } from "../features/export/reportsExport.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
 
 /**
  * Insight da composição — cópia de DEMONSTRAÇÃO, com números inventados ("R$ 3.300",
@@ -366,6 +368,14 @@ export function RelatoriosPage({
     enabled: shouldUseRealData,
     refreshKey: transactionsRefreshToken,
   });
+  // "Exportar" abre o painel compartilhado com os lançamentos do período do relatório, de todas as contas
+  // (fincla-api#526). Os gráficos não vão para o arquivo; os totais vêm do resumo do mesmo recorte.
+  const canExport = shouldUseRealData && !!organizationId;
+  const [exportScope, setExportScope] = useState(null);
+  const exportParams = exportScope
+    ? { organization_id: organizationId, date_start: exportScope.dateStart, date_end: exportScope.dateEnd }
+    : null;
+  const exportSummary = useExportSummary(exportParams);
   const activeData = shouldUseRealData ? reportsData.monthlyData : (dataMode === "mock" ? mockScoreData : []);
   const scoreData = activeData;
   const activeDrift = shouldUseRealData
@@ -1065,17 +1075,28 @@ export function RelatoriosPage({
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <PeriodSelector />
           <button
-            onClick={() => {
-              if (shouldUseRealData && organizationId) {
-                downloadReportsCsvForUi(organizationId, periodo).catch(() => {});
-              }
-            }}
+            type="button"
+            disabled={!canExport}
+            title={canExport ? undefined : "Disponível com os dados da sua organização"}
+            onClick={() => setExportScope(reportsExportScope(periodo))}
             style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:8,
-            border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600, cursor:"pointer" }}>
+            border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600,
+            cursor:canExport ? "pointer" : "not-allowed", opacity:canExport ? 1 : 0.5 }}>
             <Download size={11} /> Exportar
           </button>
         </div>
       </div>
+      {exportScope && exportParams && (
+        <ExportPanel
+          title={exportScope.title}
+          filePrefix={exportScope.filePrefix}
+          filtersText={exportScope.filtersText}
+          filterParams={exportParams}
+          summary={exportSummary.data}
+          summaryError={exportSummary.error}
+          onClose={() => setExportScope(null)}
+        />
+      )}
 
       {/* KPI strip — último mês da série (alinhado a cascata / composição / velocidade); totais do período em insights */}
       {shouldUseRealData && reportsData.error && (
