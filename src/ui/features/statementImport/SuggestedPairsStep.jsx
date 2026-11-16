@@ -98,7 +98,7 @@ export function Connector({ answer, isMobile }) {
  * A transação (ou transferência, fincla-api#511) do Fincla como ela está hoje, com o selo e o que
  * muda ao concluir.
  */
-function FinclaSide({ entry, accountName }) {
+function FinclaSide({ entry, accountName, onConfirm = null }) {
   const match = entry.fincla_match;
   if (!match) {
     return (
@@ -114,7 +114,14 @@ function FinclaSide({ entry, accountName }) {
     ? match.transfer_id === entry.suggested_transfer_id
     : match.transaction_id === entry.suggested_transaction_id;
   return (
-    <FinclaMatchBox entry={entry} match={match} accountName={accountName} suggested={suggested} consequences={entry.answer === "pair"} />
+    <FinclaMatchBox
+      entry={entry}
+      match={match}
+      accountName={accountName}
+      suggested={suggested}
+      consequences={entry.answer === "pair"}
+      onConfirm={entry.answer === "pair" ? onConfirm : null}
+    />
   );
 }
 
@@ -206,7 +213,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
   } else if (entry.answer === "ignore") {
     right = <IgnoredSide />;
   } else {
-    right = <FinclaSide entry={entry} accountName={accountName} />;
+    right = <FinclaSide entry={entry} accountName={accountName} onConfirm={busy ? null : () => onAnswer(entry, "pair")} />;
   }
   return (
     <article

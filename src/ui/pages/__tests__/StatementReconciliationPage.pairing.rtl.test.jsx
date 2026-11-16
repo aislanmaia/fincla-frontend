@@ -143,6 +143,17 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(rows()).toHaveLength(1);
   });
 
+  it("clicar na transação sugerida confirma o par, como o Sim, é esta", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(padariaCard()).getByRole("button", { name: /^Confirmar que é Padaria do bairro/ }));
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(calls).toContainEqual({ patch: PADARIA, body: { answer: "pair" } });
+    expect(screen.queryByRole("article", { name: /PIX QRS PADARIA/ })).not.toBeInTheDocument();
+  });
+
   it("Não registrar minimiza o item com o selo próprio, e Desfazer escolha devolve a sugestão", async () => {
     const user = userEvent.setup();
     await openDraft();
