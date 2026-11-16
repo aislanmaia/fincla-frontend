@@ -6,7 +6,7 @@
 // recalcula nada).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Check, FileUp } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -70,12 +70,14 @@ import {
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { InvoicePaymentStep, invoiceLabel, isPaidNow } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
-import { ErrorNote, ImportUndoneCard, LINK } from "../features/statementImport/StatementImportNotes.jsx";
+import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
 import {
   DiscardDraftControl,
-  DraftInProgressCard,
   ImportedStatementsList,
+  ResumeDraftCard,
+  continueTip,
 } from "../features/statementImport/ImportedStatements.jsx";
+import { StatementDropZone } from "../features/statementImport/StatementDropZone.jsx";
 
 /** Os lançamentos da lista de um passo: nos de adicionar, os somados ficam dentro da soma. */
 function queueEntriesOf(stepKey, stepEntries) {
@@ -181,9 +183,12 @@ function useCategories(organizationId) {
 // Enviar o extrato
 // --------------------------------------------------------------------------------------------
 
-const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
-
-function UploadView({ organizationId, accountId, accountName, beforeUpload = null, onDraftInProgress = null }) {
+/**
+ * O envio do extrato (primeira tela aprovada em 2026-11-16): a área de soltar, que envia ao escolher.
+ * Planilha não reconhecida: "Indique as colunas" ocupa o lugar da área e reenvia o mesmo arquivo. O
+ * mesmo arquivo com conciliação em andamento (fincla-api#516): aviso e a lista da conta recarregada.
+ */
+function UploadArea({ organizationId, accountId, compact = false, tip = null, onDraftInProgress = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -193,13 +198,13 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
   // O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516): continuar nela.
   const [inProgress, setInProgress] = useState(null);
 
-  const send = async (columnMapping = null) => {
-    if (!file) return;
+  const send = async (chosen, columnMapping = null) => {
+    if (!chosen) return;
     setSending(true);
     setError("");
     setInProgress(null);
     try {
-      const draft = await uploadStatement(accountId, organizationId, file, columnMapping);
+      const draft = await uploadStatement(accountId, organizationId, chosen, columnMapping);
       navigate({ to: statementReconciliationPath(accountId, draft.id) });
     } catch (err) {
       const asked = columnMappingPreviewOf(err);
@@ -209,69 +214,47 @@ function UploadView({ organizationId, accountId, accountName, beforeUpload = nul
         setPreview(null);
         setInProgress(running);
         // O rascunho pode ter nascido por outro caminho (outra aba, resposta perdida): a lista da
-        // conta é buscada de novo, para o quadro "Conciliação em andamento" aparecer na hora (D1).
+        // conta é buscada de novo, para o quadro "Continue de onde parou" aparecer na hora (D1).
         onDraftInProgress?.();
       } else setError(handleApiError(err));
       setSending(false);
     }
   };
 
+  // Escolher (ou soltar) o arquivo já envia: a leitura começa na hora.
   const pick = (chosen) => {
     setFile(chosen);
     setError("");
     setPreview(null);
     setInProgress(null);
+    send(chosen);
   };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <PageTitle sans="Importar" serif="extrato" />
-      <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
-        {accountName ? <>Conta <b>{accountName}</b>. </> : null}
-        Envie o extrato da conta corrente exportado pelo banco: OFX, planilha (XLS ou XLSX) ou CSV. O Fincla lê
-        os lançamentos e você confere cada um antes de qualquer coisa entrar.
-      </p>
-      {beforeUpload}
-      {preview && file ? (
+  if (preview && file) {
+    return (
+      <div style={{ flex: "999 1 460px", minWidth: 0 }}>
         <ColumnMappingCard
           key={file.name}
           preview={preview}
           fileName={file.name}
           sending={sending}
           error={error}
-          onSubmit={(mapping) => send(mapping)}
-          onCancel={() => pick(null)}
+          onSubmit={(mapping) => send(file, mapping)}
+          onCancel={() => { setFile(null); setPreview(null); setError(""); }}
         />
-      ) : (
-        <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <label htmlFor="statement-file" style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>
-            Arquivo do extrato (OFX, XLS, XLSX ou CSV, até 5 MB)
-          </label>
-          <input
-            id="statement-file"
-            type="file"
-            accept={ACCEPTED_FILES}
-            onChange={(e) => pick(e.target.files?.[0] ?? null)}
-            style={{ ...G, fontSize: 13 }}
-          />
-          <ErrorNote>{error}</ErrorNote>
-          {inProgress ? (
-            <DraftInProgressNotice
-              message={inProgress.message}
-              onContinue={() => navigate({ to: statementReconciliationPath(accountId, inProgress.importId) })}
-            />
-          ) : null}
-          <div>
-            <Btn variant="dark" onClick={() => send()} disabled={!file || sending}>
-              <FileUp size={14} aria-hidden="true" style={{ marginRight: 6 }} />
-              {sending ? "Enviando…" : "Enviar extrato"}
-            </Btn>
-          </div>
-        </Card>
-      )}
-      <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0 }}>
-        {NOTHING_CHANGES} O arquivo não fica guardado: só os lançamentos lidos.
-      </p>
+      </div>
+    );
+  }
+  return (
+    <div style={{ flex: "999 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+      <StatementDropZone compact={compact} tip={tip} readingName={sending && file ? file.name : ""} onFile={pick} />
+      <ErrorNote>{error}</ErrorNote>
+      {inProgress ? (
+        <DraftInProgressNotice
+          message={inProgress.message}
+          onContinue={() => navigate({ to: statementReconciliationPath(accountId, inProgress.importId) })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -282,7 +265,7 @@ function DraftInProgressNotice({ message, onContinue }) {
     <div data-testid="draft-in-progress-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <span>
         <b>{message || "Você já tem uma conciliação em andamento deste arquivo nesta conta."}</b>{" "}
-        Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Conciliação em andamento”.
+        Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Continue de onde parou”.
       </span>
       <div>
         <Btn variant="outGray" small onClick={onContinue}>Continuar conciliação</Btn>
@@ -348,7 +331,7 @@ function OtherAccountNotice({ accountCheck, accountName }) {
 // A conta: conciliação em andamento e Extratos importados (fincla-api#518)
 // --------------------------------------------------------------------------------------------
 
-function AccountStatementsView({ organizationId, accountId, accountName }) {
+function AccountStatementsView({ organizationId, accountId, accountName, isMobile = false }) {
   const navigate = useNavigate();
   const [items, setItems] = useState(null);
   const [error, setError] = useState("");
@@ -363,32 +346,58 @@ function AccountStatementsView({ organizationId, accountId, accountName }) {
   useEffect(() => { load(); }, [load]);
 
   const openImport = (item) => navigate({ to: statementReconciliationPath(accountId, item.id) });
-  const drafts = (items ?? []).filter((i) => i.status === "draft");
+  const loaded = items ?? [];
+  const drafts = loaded.filter((i) => i.status === "draft");
+  const tip = continueTip(loaded);
   const onDiscarded = () => {
     setNotice("Rascunho descartado. Nada mudou nas suas transações.");
     load();
   };
-
-  const inProgress = (
-    <>
-      {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
-      {drafts.map((draft) => (
-        <DraftInProgressCard key={draft.id} organizationId={organizationId} draft={draft} onContinue={openImport} onDiscarded={onDiscarded} />
-      ))}
-    </>
-  );
+  const onConcluded = () => {
+    setNotice("Conciliação concluída. Se precisar, dá para desfazer pela linha dela em Extratos importados.");
+    load();
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <UploadView organizationId={organizationId} accountId={accountId} accountName={accountName} beforeUpload={inProgress} onDraftInProgress={load} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
+          <PageTitle sans="Conciliar" serif="extrato" />
+          {accountName ? <span style={{ ...G, fontSize: 13, color: T.inkMid }}>{accountName}</span> : null}
+        </div>
+        <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0, maxWidth: 680 }}>
+          Compare o extrato do banco com o Fincla quando quiser conferir o saldo. Você vê cada lançamento antes de qualquer coisa mudar.
+        </p>
+      </div>
+      {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
       {error ? <ErrorNote>{error}</ErrorNote> : null}
-      {items ? (
-        <ImportedStatementsList
-          items={items}
-          onOpen={openImport}
-          onUndo={(item) => navigate({ to: statementImportUndoPath(accountId, item.id) })}
+      {drafts.map((draft) => (
+        <ResumeDraftCard
+          key={draft.id}
+          organizationId={organizationId}
+          draft={draft}
+          onContinue={openImport}
+          onDiscarded={onDiscarded}
+          onConcluded={onConcluded}
         />
-      ) : null}
+      ))}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0 }}>
+        <UploadArea
+          organizationId={organizationId}
+          accountId={accountId}
+          compact={drafts.length > 0}
+          tip={tip}
+          onDraftInProgress={load}
+        />
+        {items ? (
+          <ImportedStatementsList
+            items={items}
+            isMobile={isMobile}
+            onOpen={openImport}
+            onUndo={(item) => navigate({ to: statementImportUndoPath(accountId, item.id) })}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -585,7 +594,7 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
         <div data-testid="unclassified-warning" role="note" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "baseline" }}>
           <b>{plural(summary.unclassified, "transação vai", "transações vão")} para Não classificado.</b>
           <span>Dá para classificar agora ou depois, em Lançamentos.</span>
-          {onClassify ? <button type="button" onClick={onClassify} style={{ ...LINK, fontSize: 13, color: T.blue }}>Classificar agora</button> : null}
+          {onClassify ? <Btn variant="outGray" small onClick={onClassify}>Classificar agora</Btn> : null}
         </div>
       ) : null}
       <ConcludeWithDifferenceNote check={check} />
@@ -654,13 +663,9 @@ function DoneView({ statementImport, accountName, onOpenAccountTransactions }) {
         {/* Só a concluída mais recente da conta pode ser desfeita: as outras não ganham o caminho. */}
         {statementImport.latest_concluded ? (
           <div>
-            <button
-              type="button"
-              onClick={() => navigate({ to: statementImportUndoPath(statementImport.account_id, statementImport.id) })}
-              style={{ ...LINK, color: T.red }}
-            >
+            <Btn variant="outRed" small onClick={() => navigate({ to: statementImportUndoPath(statementImport.account_id, statementImport.id) })}>
               Desfazer importação
-            </button>
+            </Btn>
           </div>
         ) : null}
       </Card>
@@ -1266,7 +1271,7 @@ export function StatementReconciliationPage({ organizationId, isMobile = false, 
           onOpenAccountTransactions={onOpenAccountTransactions}
         />
       ) : (
-        <AccountStatementsView organizationId={organizationId} accountId={accountId} accountName={accountName} />
+        <AccountStatementsView organizationId={organizationId} accountId={accountId} accountName={accountName} isMobile={isMobile} />
       )}
     </div>
   );

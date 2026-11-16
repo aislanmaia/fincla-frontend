@@ -121,10 +121,10 @@ describe("enviar o extrato", () => {
     const user = userEvent.setup();
     render(<StatementReconciliationPage organizationId={ORG} />);
 
-    expect(await screen.findByText(/Nada muda no Fincla até você concluir a conciliação/)).toBeInTheDocument();
+    expect(await screen.findByText(/Você vê cada lançamento antes de qualquer coisa mudar/)).toBeInTheDocument();
     const file = new File(["<OFX>"], "extrato-outubro.ofx", { type: "application/x-ofx" });
+    // Escolher o arquivo já envia: não há segundo botão.
     await user.upload(screen.getByLabelText(/Arquivo do extrato/), file);
-    await user.click(screen.getByRole("button", { name: "Enviar extrato" }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${IMPORT}` }));
     expect(calls).toContainEqual({ upload: "file" });
@@ -144,7 +144,6 @@ describe("enviar o extrato", () => {
     render(<StatementReconciliationPage organizationId={ORG} />);
 
     await user.upload(await screen.findByLabelText(/Arquivo do extrato/), new File(["x"], "e.ofx"));
-    await user.click(screen.getByRole("button", { name: "Enviar extrato" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("O extrato está em USD e a conta em BRL");
     expect(navigate).not.toHaveBeenCalled();
@@ -460,12 +459,11 @@ describe("retomar a conciliação (fincla-api#518)", () => {
     const user = userEvent.setup();
     await openAccount();
 
-    const card = screen.getByTestId("draft-in-progress");
-    expect(card).toHaveTextContent("Conciliação em andamento");
-    expect(card).toHaveTextContent("Extrato de 01/10/2026 a 31/10/2026");
-    expect(card).toHaveTextContent("6 lançamentos · 3 a adicionar · 2 somados em 1 lançamento · 1 não registrado");
-    expect(card).toHaveTextContent("Última alteração em 14/11/2026");
-    expect(card).toHaveTextContent("descartada em 14/12/2026");
+    const card = screen.getByTestId("resume-draft");
+    expect(card).toHaveTextContent("Continue de onde parou");
+    expect(card).toHaveTextContent("Extrato de 01/10/2026 a 31/10/2026 · você parou em Adicionar lançamentos novos");
+    expect(card).toHaveTextContent("6 de 6 lançamentos respondidos");
+    expect(card).toHaveTextContent("Se ficar parada, é descartada em 14/12/2026.");
     await user.click(within(card).getByRole("button", { name: "Continuar conciliação" }));
 
     expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${IMPORT}` });
@@ -475,8 +473,8 @@ describe("retomar a conciliação (fincla-api#518)", () => {
     imports = clone(contract.imports.imports).filter((i) => i.status !== "draft");
     await openAccount();
 
-    expect(screen.queryByTestId("draft-in-progress")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enviar extrato" })).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Solte aqui o extrato do banco/ })).toBeInTheDocument();
   });
 
   it("volta no passo em que parou, com os passos já vistos conferidos e as respostas do servidor", async () => {
@@ -593,13 +591,13 @@ describe("descartar o rascunho (fincla-api#518)", () => {
     const user = userEvent.setup();
     await openAccount();
 
-    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
     const ask = screen.getByRole("group", { name: "Confirmar descarte do rascunho" });
     expect(ask).toHaveTextContent("Descartar esta conciliação? As respostas que você deu serão apagadas");
     await user.click(within(ask).getByRole("button", { name: "Manter rascunho" }));
 
     expect(screen.queryByRole("group", { name: "Confirmar descarte do rascunho" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("draft-in-progress")).toBeInTheDocument();
+    expect(screen.getByTestId("resume-draft")).toBeInTheDocument();
     expect(calls.some((c) => c.discard)).toBe(false);
     expect(confirmSpy).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
@@ -610,11 +608,11 @@ describe("descartar o rascunho (fincla-api#518)", () => {
     const user = userEvent.setup();
     await openAccount();
 
-    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
     await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Rascunho descartado. Nada mudou nas suas transações.");
-    await waitFor(() => expect(screen.queryByTestId("draft-in-progress")).not.toBeInTheDocument());
+    expect(await screen.findByText("Rascunho descartado. Nada mudou nas suas transações.")).toHaveAttribute("role", "status");
+    await waitFor(() => expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument());
     expect(calls).toContainEqual({ discard: IMPORT });
     expect(screen.getAllByTestId("imported-statement").map((r) => within(r).getByTestId("import-status").textContent)).toEqual([
       "Concluída",
@@ -644,11 +642,11 @@ describe("descartar o rascunho (fincla-api#518)", () => {
     const user = userEvent.setup();
     await openAccount();
 
-    await user.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
     await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Esta conciliação já foi concluída");
-    expect(screen.getByTestId("draft-in-progress")).toBeInTheDocument();
+    expect(screen.getByTestId("resume-draft")).toBeInTheDocument();
   });
 });
 
@@ -658,14 +656,15 @@ describe("Extratos importados (fincla-api#518)", () => {
     await openAccount();
 
     const rows = screen.getAllByTestId("imported-statement");
-    expect(rows.map((r) => within(r).getByTestId("import-status").textContent)).toEqual(["Rascunho", "Concluída", "Desfeita", "Concluída"]);
+    // O rascunho no topo ("Em andamento"); as demais pelo fim do período, do mais novo.
+    expect(rows.map((r) => within(r).getByTestId("import-status").textContent)).toEqual(["Em andamento", "Concluída", "Desfeita", "Concluída"]);
     expect(rows[0]).toHaveTextContent("01/10/2026 a 31/10/2026");
     expect(rows[0]).toHaveTextContent("6 lançamentos · 3 a adicionar · 2 somados em 1 lançamento · 1 não registrado");
     expect(within(rows[0]).queryByTestId("import-difference")).not.toBeInTheDocument();
     expect(rows[1]).toHaveTextContent("41 lançamentos · 30 adicionados · 8 somados em 1 lançamento · 3 não registrados");
-    expect(rows[1]).toHaveTextContent("Importado em 03/10/2026 · concluída em 03/10/2026");
+    expect(rows[1]).toHaveTextContent("01/09/2026 a 30/09/2026");
     expect(rows[2]).toHaveTextContent("41 adicionados e apagados ao desfazer");
-    expect(rows[2]).toHaveTextContent("desfeita em 02/10/2026");
+    expect(rows[3]).toHaveTextContent("01/08/2026 a 31/08/2026");
   });
 
   it("uma importação desfeita com uma transação só fala no singular (BUG-02)", async () => {

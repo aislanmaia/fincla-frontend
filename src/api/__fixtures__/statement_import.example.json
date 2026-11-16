@@ -905,7 +905,12 @@
         "expires_at": "2026-12-14T10:25:00",
         "concluded_at": null,
         "undone_at": null,
-        "latest_concluded": false
+        "latest_concluded": false,
+        "current_step": "new",
+        "balance_now": {"date": "2026-10-31", "bank": {"amount": "1834.10", "currency": "BRL"}, "fincla": {"amount": "1857.16", "currency": "BRL"}, "difference": {"amount": "-23.06", "currency": "BRL"}},
+        "can_conclude": false,
+        "blockers": [{"code": "missing_description", "count": 1}],
+        "balance_check_actions": {"delete": 1, "change_date": 0}
       },
       {
         "id": "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
@@ -920,7 +925,12 @@
         "expires_at": null,
         "concluded_at": "2026-10-03T08:40:00",
         "undone_at": null,
-        "latest_concluded": true
+        "latest_concluded": true,
+        "current_step": null,
+        "balance_now": null,
+        "can_conclude": false,
+        "blockers": [],
+        "balance_check_actions": null
       },
       {
         "id": "3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f",
@@ -935,7 +945,12 @@
         "expires_at": null,
         "concluded_at": "2026-10-02T21:15:00",
         "undone_at": "2026-10-02T21:30:00",
-        "latest_concluded": false
+        "latest_concluded": false,
+        "current_step": null,
+        "balance_now": null,
+        "can_conclude": false,
+        "blockers": [],
+        "balance_check_actions": null
       },
       {
         "id": "4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f8a",
@@ -950,7 +965,12 @@
         "expires_at": null,
         "concluded_at": "2026-09-02T19:45:00",
         "undone_at": null,
-        "latest_concluded": false
+        "latest_concluded": false,
+        "current_step": null,
+        "balance_now": null,
+        "can_conclude": false,
+        "blockers": [],
+        "balance_check_actions": null
       }
     ]
   },
