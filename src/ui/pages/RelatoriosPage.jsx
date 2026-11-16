@@ -886,6 +886,23 @@ export function RelatoriosPage({
     { id:"composicao", icon:"🥧", label:"Composição" },
   ];
 
+  /* O painel é o mesmo nos dois layouts (no celular ele mesmo vira tela cheia abaixo de 700 px, #527). É um
+     elemento, não um componente definido aqui dentro: componente aninhado remontaria a cada render e perderia
+     o formato escolhido e o foco. */
+  const exportUnavailableHint = "Disponível com os dados da sua organização";
+  const openExport = () => setExportScope(reportsExportScope(periodo));
+  const exportPanel = exportScope && exportParams ? (
+    <ExportPanel
+      title={exportScope.title}
+      filePrefix={exportScope.filePrefix}
+      filtersText={exportScope.filtersText}
+      filterParams={exportParams}
+      summary={exportSummary.data}
+      summaryError={exportSummary.error}
+      onClose={() => setExportScope(null)}
+    />
+  ) : null;
+
   if (isMobile) {
     const saldoPositivo = kpis.saldo >= 0;
     return (
@@ -905,7 +922,21 @@ export function RelatoriosPage({
               <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:2 }}>Meus</div>
               <div style={{ ...S, fontSize:22, fontStyle:"italic", color:"#fff", lineHeight:1.1 }}>Relatórios</div>
             </div>
-            <PeriodSelector compact />
+            {/* Ações do cabeçalho no celular: período e Exportar (ícone com nome acessível, como a barra do cartão). */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+              <PeriodSelector compact />
+              <button
+                type="button"
+                aria-label="Exportar"
+                disabled={!canExport}
+                title={canExport ? undefined : exportUnavailableHint}
+                onClick={openExport}
+                style={{ display:"grid", placeItems:"center", width:36, height:36, borderRadius:10, flexShrink:0,
+                  border:"1px solid rgba(255,255,255,0.18)", background:"rgba(255,255,255,0.06)", color:"#fff",
+                  cursor:canExport ? "pointer" : "not-allowed", opacity:canExport ? 1 : 0.45 }}>
+                <Download size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
           {/* Saldo hero */}
           <div style={{ marginBottom:14 }}>
@@ -1059,6 +1090,7 @@ export function RelatoriosPage({
           </>)}
 
         </div>
+        {exportPanel}
       </div>
     );
   }
@@ -1077,8 +1109,8 @@ export function RelatoriosPage({
           <button
             type="button"
             disabled={!canExport}
-            title={canExport ? undefined : "Disponível com os dados da sua organização"}
-            onClick={() => setExportScope(reportsExportScope(periodo))}
+            title={canExport ? undefined : exportUnavailableHint}
+            onClick={openExport}
             style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:8,
             border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600,
             cursor:canExport ? "pointer" : "not-allowed", opacity:canExport ? 1 : 0.5 }}>
@@ -1086,17 +1118,7 @@ export function RelatoriosPage({
           </button>
         </div>
       </div>
-      {exportScope && exportParams && (
-        <ExportPanel
-          title={exportScope.title}
-          filePrefix={exportScope.filePrefix}
-          filtersText={exportScope.filtersText}
-          filterParams={exportParams}
-          summary={exportSummary.data}
-          summaryError={exportSummary.error}
-          onClose={() => setExportScope(null)}
-        />
-      )}
+      {exportPanel}
 
       {/* KPI strip — último mês da série (alinhado a cascata / composição / velocidade); totais do período em insights */}
       {shouldUseRealData && reportsData.error && (

@@ -14,6 +14,11 @@ import { G } from "../typography";
  * fechar), Esc, ✕ e o fundo fecham. O corpo rola por dentro; o rodapé fica fixo embaixo.
  *
  * `fullScreen` ocupa a tela inteira (celular). Quem decide o limite é quem usa: o painel de exportação usa 700 px.
+ * Em tela cheia o cabeçalho e o rodapé respeitam a área segura do aparelho (entalhe e barra de gestos), como os
+ * outros painéis em tela cheia do app; a altura vem do contêiner fixo (`inset: 0`), nunca de `vh`.
+ *
+ * `view` troca o que o painel mostra sem desmontá-lo (ex.: os passos ↔ a prévia): a cada troca o foco volta ao
+ * painel, para não ficar num controle que saiu da tela. `closeIcon` troca o ✕ (ex.: uma seta de "voltar").
  */
 export function SideDrawer({
   title,
@@ -23,7 +28,9 @@ export function SideDrawer({
   fullScreen = false,
   footer = null,
   closeLabel = "Fechar",
+  closeIcon: CloseIcon = X,
   testId = "side-drawer",
+  view = null,
   children,
 }) {
   const panelRef = useRef(null);
@@ -39,7 +46,7 @@ export function SideDrawer({
 
   useEffect(() => {
     panelRef.current?.focus();
-  }, []);
+  }, [view]);
 
   return createPortal(
     <div
@@ -62,6 +69,7 @@ export function SideDrawer({
         aria-label={ariaLabel}
         tabIndex={-1}
         data-testid={testId}
+        data-full-screen={fullScreen ? "true" : undefined}
         onClick={(event) => event.stopPropagation()}
         style={{
           ...G,
@@ -69,7 +77,7 @@ export function SideDrawer({
           width: fullScreen ? "100%" : `min(100%, ${width}px)`,
           height: "100%",
           boxSizing: "border-box",
-          boxShadow: T.lg,
+          boxShadow: fullScreen ? "none" : T.lg,
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
@@ -77,13 +85,16 @@ export function SideDrawer({
         }}
       >
         <div
+          data-testid={`${testId}-header`}
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
             padding: "16px 20px",
+            ...(fullScreen ? { paddingTop: "calc(16px + env(safe-area-inset-top, 0px))" } : {}),
             borderBottom: `1px solid ${T.border}`,
+            flex: "none",
           }}
         >
           <h2 style={{ ...G, margin: 0, fontSize: 16, fontWeight: 700, color: T.ink }}>{title}</h2>
@@ -93,14 +104,24 @@ export function SideDrawer({
             onClick={onClose}
             style={{ border: 0, background: "none", cursor: "pointer", color: T.inkMid, display: "flex", padding: 4 }}
           >
-            <X size={18} />
+            <CloseIcon size={18} />
           </button>
         </div>
-        <div className="fincla-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20 }}>
+        <div className="fincla-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 20 }}>
           {children}
         </div>
         {footer && (
-          <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8 }}>
+          <div
+            data-testid={`${testId}-footer`}
+            style={{
+              padding: "14px 20px",
+              ...(fullScreen ? { paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))" } : {}),
+              borderTop: `1px solid ${T.border}`,
+              display: "flex",
+              gap: 8,
+              flex: "none",
+            }}
+          >
             {footer}
           </div>
         )}

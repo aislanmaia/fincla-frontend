@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { FileSpreadsheet, FileText, FileType2 } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { ArrowLeft, FileSpreadsheet, FileText, FileType2 } from "lucide-react";
 
 import { exportTransactions } from "../../../api/transactions";
 import { Btn } from "../../components/primitives.jsx";
@@ -34,9 +34,10 @@ import { saveBlob } from "./saveBlob.js";
  * `selection` ({ ids, count, summary, error }) é a "Exportar seleção" (#524): troca o recorte pelos marcados. `summary` é
  * o resumo pedido com os mesmos `ids` (totais só dos marcados); `error`, o motivo de ele não ter vindo.
  * `formats` diz quais formatos o servidor gera (PDF, XLSX e CSV, nessa ordem); o PDF vem selecionado.
- * `fullScreen` é o modo celular (#527): quem usa decide pelo limite de 700 px.
- * Abaixo de 700 px de largura a prévia lateral não aparece (não cabe ao lado dos passos); a tela cheia com
- * "Ver prévia do arquivo" é da #527.
+ * Modo celular (#527): abaixo de 700 px de largura (o limite do próprio painel, D4 da #520) o painel ocupa a tela
+ * inteira, só com os três passos — a prévia lateral não cabe. O link "Ver prévia do arquivo" troca os passos pela
+ * prévia, também em tela cheia; voltar (botão, seta do cabeçalho ou Esc) devolve os passos. Formato e conteúdo vivem
+ * no estado do painel, que não desmonta na troca, então a escolha se mantém. Acima de 700 px nada muda.
  */
 
 export const FORMAT_OPTIONS = {
@@ -514,12 +515,12 @@ function PdfPreview(props) {
 /** Uma prévia por formato. */
 const PREVIEWS = { pdf: PdfPreview, csv: CsvPreview, xlsx: XlsxPreview };
 
-function FilePreview({ format, data }) {
+function FilePreview({ format, data, ownScroll = true }) {
   const Preview = PREVIEWS[format];
   return (
     <div
       data-testid="export-preview"
-      style={{ background: T.grayLight, borderRadius: 10, padding: 12, minWidth: 0, minHeight: 0, overflow: "auto" }}
+      style={{ background: T.grayLight, borderRadius: 10, padding: 12, minWidth: 0, minHeight: 0, overflow: ownScroll ? "auto" : "visible" }}
     >
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>
         Prévia do arquivo ({FORMAT_OPTIONS[format].label})
@@ -539,14 +540,27 @@ export function ExportPanel({
   summaryError = null,
   selection = null,
   formats = AVAILABLE_EXPORT_FORMATS,
-  fullScreen = false,
   onClose,
 }) {
   const [format, setFormat] = useState(() => initialExportFormat(formats));
   const [content, setContent] = useState("full");
   const [status, setStatus] = useState({ busy: false, error: "" });
-  const narrow = useIsNarrow(PREVIEW_MIN_WIDTH - 1);
-  const showPreview = !fullScreen && !narrow;
+  const fullScreen = useIsNarrow(PREVIEW_MIN_WIDTH - 1);
+  const showPreview = !fullScreen;
+  // A prévia em tela cheia só existe no modo celular: se a tela alargar, os passos voltam com a prévia ao lado.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewScreen = fullScreen && previewOpen;
+  const previewLinkRef = useRef(null);
+  const wasPreviewScreen = useRef(false);
+  useEffect(() => {
+    if (!fullScreen && previewOpen) setPreviewOpen(false);
+  }, [fullScreen, previewOpen]);
+  // Ao voltar da prévia, o foco volta ao link que a abriu (depois do foco que o drawer põe nele mesmo na troca).
+  useEffect(() => {
+    if (wasPreviewScreen.current && !previewScreen) previewLinkRef.current?.focus();
+    wasPreviewScreen.current = previewScreen;
+  }, [previewScreen]);
+  const closePreview = () => setPreviewOpen(false);
 
   const totals = exportTotalsFromSummary(selection ? selection.summary : summary);
   const sliceCount = selection ? selection.count : (count ?? totals?.count ?? 0);
@@ -577,7 +591,9 @@ export function ExportPanel({
 
   const footer = (
     <>
-      <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
+      {previewScreen
+        ? <Btn variant="outGray" onClick={closePreview}>Voltar ao painel</Btn>
+        : <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>}
       <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
@@ -586,13 +602,19 @@ export function ExportPanel({
 
   return (
     <SideDrawer
-      title={selection ? "Exportar seleção" : "Exportar"}
-      onClose={onClose}
+      title={previewScreen ? "Prévia do arquivo" : selection ? "Exportar seleção" : "Exportar"}
+      onClose={previewScreen ? closePreview : onClose}
+      closeLabel={previewScreen ? "Voltar ao painel" : "Fechar"}
+      closeIcon={previewScreen ? ArrowLeft : undefined}
+      view={previewScreen ? "preview" : "steps"}
       width={820}
       fullScreen={fullScreen}
       footer={footer}
       testId="export-panel"
     >
+      {previewScreen ? (
+        <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} ownScroll={false} />
+      ) : (
       <div
         style={{
           display: "grid",
@@ -620,6 +642,19 @@ export function ExportPanel({
           <ExportStep n={3} title="Totais do relatório">
             <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError} />
           </ExportStep>
+          {fullScreen && (
+            <button
+              ref={previewLinkRef}
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              style={{
+                ...G, alignSelf: "flex-start", background: "none", border: 0, color: T.blue, fontWeight: 700,
+                fontSize: 13, padding: 0, minHeight: 44, cursor: "pointer",
+              }}
+            >
+              Ver prévia do arquivo<span aria-hidden="true"> →</span>
+            </button>
+          )}
           {status.error && (
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>
           )}
@@ -628,6 +663,10 @@ export function ExportPanel({
           <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} />
         )}
       </div>
+      )}
+      {previewScreen && status.error && (
+        <p role="alert" style={{ ...G, margin: "12px 0 0", fontSize: 12, color: T.red }}>{status.error}</p>
+      )}
     </SideDrawer>
   );
 }
