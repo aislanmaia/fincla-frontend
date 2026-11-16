@@ -21,7 +21,6 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { plural } from "../../plural.js";
-import { LINK } from "./StatementImportNotes.jsx";
 
 /**
  * Respondido = tem resposta; a sugestão só depois que a pessoa confirma (como no protótipo). Um
@@ -288,7 +287,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
       {hiddenText ? (
         <p data-testid="queue-hidden" style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0, padding: "8px 12px", border: `1px dashed ${T.border}`, borderRadius: 12 }}>
           {hiddenText} com este filtro ·{" "}
-          <button type="button" onClick={() => queue.setFilter("all")} style={{ ...LINK, fontSize: 12, color: T.blue }}>Mostrar todos</button>
+          <Btn variant="outGray" small onClick={() => queue.setFilter("all")}>Mostrar todos</Btn>
         </p>
       ) : null}
     </div>

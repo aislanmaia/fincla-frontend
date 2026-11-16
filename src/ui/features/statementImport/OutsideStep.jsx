@@ -17,7 +17,6 @@ import { formatMoney } from "../../money/formatMoney.js";
 import { StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 
-const LINK_BTN = { ...G, fontSize: 13, fontWeight: 600, color: T.blue, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 };
 const ROW = { ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface };
 
 /** Os lançamentos do passo, separados pelas seções. */
@@ -125,7 +124,7 @@ function BroughtBackBar({ entry, onUndo }) {
     <div role="status" data-testid="brought-back-bar" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
       <Check size={14} aria-hidden="true" style={{ color: T.green }} />
       <span style={{ flex: 1 }}>“{entry.bank_description}” trazido de volta: entra no Fincla ao concluir.</span>
-      <button type="button" onClick={onUndo} style={LINK_BTN}>Desfazer</button>
+      <Btn variant="outRed" small onClick={onUndo}>Desfazer</Btn>
     </div>
   );
 }

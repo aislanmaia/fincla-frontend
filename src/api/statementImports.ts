@@ -323,6 +323,22 @@ export interface StatementImportListItem {
   undone_at: string | null;
   /** A concluída mais recente da conta: a única que pode ser desfeita. */
   latest_concluded: boolean;
+  /** Só em rascunho: o passo em que a pessoa parou; `null` = nunca gravado, ou fora de rascunho. */
+  current_step: ReconciliationStep | null;
+  /** Só em rascunho: o mesmo `balance_now` do detalhe. `null` = o arquivo não informa saldo (nunca zero). */
+  balance_now: BalancePoint | null;
+  /** Rascunho sem pendência (o mesmo do detalhe); `false` fora de rascunho. */
+  can_conclude: boolean;
+  /** O que impede concluir agora (o mesmo do detalhe); vazio fora de rascunho. */
+  blockers: { code: ConcludeBlockerCode; count: number }[];
+  /** Só em rascunho: quantas transações do Fincla a conferência de saldo exclui e muda de data ao concluir. */
+  balance_check_actions: BalanceCheckActions | null;
+}
+
+/** O que as respostas da conferência de saldo fazem ao concluir (fincla-api#514). */
+export interface BalanceCheckActions {
+  delete: number;
+  change_date: number;
 }
 
 export interface UpdateStatementEntryRequest {
@@ -446,14 +462,30 @@ export const normalizeStatementImport = ({ final_difference, balance_now, ...raw
   })),
 });
 
-type RawListItem = Omit<StatementImportListItem, 'final_difference' | 'final_difference_currency'> & {
+type RawListItem = Omit<
+  StatementImportListItem,
+  'final_difference' | 'final_difference_currency' | 'balance_now' | 'current_step' | 'can_conclude' | 'blockers' | 'balance_check_actions'
+> & {
   final_difference: WireMoney;
+  balance_now?: RawPoint | null;
+  current_step?: string | null;
+  can_conclude?: boolean;
+  blockers?: { code: string; count: number }[];
+  balance_check_actions?: BalanceCheckActions | null;
 };
 
-export const normalizeStatementImportListItem = ({ final_difference, ...raw }: RawListItem): StatementImportListItem => ({
+export const normalizeStatementImportListItem = ({
+  final_difference, balance_now, current_step, can_conclude, blockers, balance_check_actions, ...raw
+}: RawListItem): StatementImportListItem => ({
   ...raw,
   final_difference: final_difference == null ? null : toFiniteNumber(final_difference),
   final_difference_currency: toCurrency(final_difference),
+  current_step: (current_step ?? null) as ReconciliationStep | null,
+  // Sem saldo no arquivo (ou fora de rascunho) fica null: nunca vira zero.
+  balance_now: balance_now ? normalizePoint(balance_now) : null,
+  can_conclude: Boolean(can_conclude),
+  blockers: (blockers ?? []) as StatementImportListItem['blockers'],
+  balance_check_actions: balance_check_actions ?? null,
 });
 
 const base = (accountId: string) => `/accounts/${accountId}/statement-imports`;

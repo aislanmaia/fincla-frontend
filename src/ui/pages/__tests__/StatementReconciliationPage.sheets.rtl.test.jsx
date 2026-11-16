@@ -68,8 +68,8 @@ afterEach(() => {
 const sendFile = async (user, name = "extrato.csv") => {
   params = { accountId: ACCOUNT };
   render(<StatementReconciliationPage organizationId={ORG} />);
+  // A leitura começa ao escolher o arquivo: não há segundo botão.
   await user.upload(await screen.findByLabelText(/Arquivo do extrato/), new File(["x"], name));
-  await user.click(screen.getByRole("button", { name: "Enviar extrato" }));
 };
 
 describe("formatos aceitos", () => {
@@ -182,7 +182,8 @@ describe("indique as colunas", () => {
 
     expect(screen.queryByTestId("column-mapping")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Arquivo do extrato/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enviar extrato" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Solte aqui o extrato do banco/ })).toBeInTheDocument();
+    expect(uploads).toHaveLength(1);
   });
 });
 

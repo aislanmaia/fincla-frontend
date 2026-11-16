@@ -8,10 +8,9 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge } from "../../components/primitives";
+import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
-import { LINK } from "./StatementImportNotes.jsx";
 import { InlineFields, useCompact } from "./entryQueue.jsx";
 
 export const MATCH_BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
@@ -177,7 +176,7 @@ export function FinclaMatchBox({
         <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "8px 0 0" }}>
           Você já disse que esta é o lançamento do banco de <b style={NUM}>{bankDateLabel(takenBy.date)}</b> ({takenBy.bank_description}).{" "}
           {onUndoThere ? (
-            <button type="button" onClick={() => onUndoThere(takenBy)} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer lá</button>
+            <Btn variant="outRed" small onClick={() => onUndoThere(takenBy)}>Desfazer lá</Btn>
           ) : null}
         </p>
       </div>

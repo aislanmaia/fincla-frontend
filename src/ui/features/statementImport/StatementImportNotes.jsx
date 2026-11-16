@@ -5,9 +5,6 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn, Card } from "../../components/primitives";
 
-/** Botão com cara de link (ações secundárias da conciliação). */
-export const LINK = { ...G, fontSize: 13, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" };
-
 export function ErrorNote({ children }) {
   if (!children) return null;
   return (

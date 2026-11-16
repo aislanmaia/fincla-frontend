@@ -20,7 +20,6 @@ import {
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, useStableCallback } from "./entryQueue.jsx";
 
-const LINK_BTN = { ...G, fontSize: 12, color: T.inkMid, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 };
 
 const signed = (amount, currency) => `${amount > 0 ? "+" : ""}${formatMoney(amount, currency)}`;
 
@@ -39,7 +38,7 @@ function UndoBar({ bulk, onUndo }) {
     <div role="status" data-testid="undo-bar" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
       <Check size={14} aria-hidden="true" style={{ color: T.green }} />
       <span style={{ flex: 1 }}>{bulk.label}</span>
-      <button type="button" onClick={onUndo} style={{ ...LINK_BTN, color: T.blue, fontSize: 13, fontWeight: 600 }}>Desfazer</button>
+      <Btn variant="outRed" small onClick={onUndo}>Desfazer</Btn>
     </div>
   );
 }
@@ -163,7 +162,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
         </span>
         <span style={{ flex: 1 }} />
         <b style={{ ...NUM, fontSize: 14, color: moneyIn ? T.green : T.ink }}>{signed(group.amount, group.currency)}</b>
-        <button type="button" onClick={() => onUngroup(group)} style={LINK_BTN}>Desfazer soma</button>
+        <Btn variant="outRed" small onClick={() => onUngroup(group)}>Desfazer soma</Btn>
       </header>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
         <div style={{ gridColumn: "1 / -1" }}>

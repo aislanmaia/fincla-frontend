@@ -285,7 +285,6 @@ describe("o mesmo arquivo de novo", () => {
     render(<StatementReconciliationPage organizationId={ORG} />);
 
     await user.upload(await screen.findByLabelText(/Arquivo do extrato/), new File(["<OFX>"], "extrato.ofx", { type: "application/x-ofx" }));
-    await user.click(screen.getByRole("button", { name: "Enviar extrato" }));
 
     const notice = await screen.findByTestId("draft-in-progress-notice");
     expect(notice).toHaveTextContent(contract.draft_in_progress.message);
@@ -294,7 +293,7 @@ describe("o mesmo arquivo de novo", () => {
     expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${contract.draft_in_progress.import_id}` });
   });
 
-  it("o 409 traz o quadro Conciliação em andamento na hora, sem recarregar a página (smoke em dev, D1)", async () => {
+  it("o 409 traz o quadro Continue de onde parou na hora, sem recarregar a página (smoke em dev, D1)", async () => {
     // O rascunho nasceu por outro caminho (outra aba, ou um envio cuja resposta se perdeu): a lista
     // carregada ao abrir a página está vazia; o servidor já o tem quando o envio volta com 409.
     const theDraft = contract.imports.imports.find((i) => i.id === contract.draft_in_progress.import_id);
@@ -306,14 +305,13 @@ describe("o mesmo arquivo de novo", () => {
     const user = userEvent.setup();
     render(<StatementReconciliationPage organizationId={ORG} />);
     await screen.findByText("Nenhum extrato importado nesta conta ainda.");
-    expect(screen.queryByTestId("draft-in-progress")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument();
 
     await user.upload(await screen.findByLabelText(/Arquivo do extrato/), new File(["<OFX>"], "extrato.ofx", { type: "application/x-ofx" }));
-    await user.click(screen.getByRole("button", { name: "Enviar extrato" }));
 
-    const card = await screen.findByTestId("draft-in-progress");
-    expect(within(card).getByRole("heading", { name: "Conciliação em andamento" })).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "Descartar rascunho" })).toBeInTheDocument();
+    const card = await screen.findByTestId("resume-draft");
+    expect(within(card).getByRole("heading", { name: "Continue de onde parou" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Descartar" })).toBeInTheDocument();
     // A lista "Extratos importados" também já o mostra, e o aviso continua.
     expect(screen.getAllByTestId("imported-statement")).toHaveLength(1);
     expect(screen.getByTestId("draft-in-progress-notice")).toHaveTextContent(contract.draft_in_progress.message);
