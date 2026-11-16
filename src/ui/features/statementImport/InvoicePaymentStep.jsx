@@ -114,7 +114,8 @@ export const isPaidNow = (entry) => isAlreadyPaid(entry) && !invoiceUnavailable(
 
 function unavailableText(entry) {
   if (!entry.invoice) return "A fatura deste pagamento não existe mais no Fincla.";
-  if (isAlreadyPaid(entry)) return "Esta fatura foi desmarcada como paga depois da leitura do extrato.";
+  // Nomeia a fatura (OBS-16): no resumo de "Revisar e concluir" o aviso aparece sem o cartão acima.
+  if (isAlreadyPaid(entry)) return `A ${invoiceLabel(entry.invoice)} foi desmarcada como paga depois da leitura do extrato.`;
   return `A ${invoiceLabel(entry.invoice)} já foi marcada como paga depois da leitura do extrato.`;
 }
 

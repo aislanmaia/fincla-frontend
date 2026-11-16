@@ -467,7 +467,8 @@ function SelectionBar({ items, busy, onClear, onBatch }) {
       <span style={{ flex: 1 }} />
       <Btn variant="green" small disabled={busy} onClick={() => onBatch(items, "keep")}>Está certa assim (todas)</Btn>
       <Btn variant="outRed" small disabled={busy || !deletable.length} onClick={() => onBatch(deletable, "delete")} style={{ background: "#fff" }}>
-        {deletable.length === items.length ? "Excluir as marcadas" : `Excluir ${plural(deletable.length, "das marcadas", "das marcadas")}`}
+        {/* Nenhuma excluível: o botão fica desligado e a nota ao lado diz por quê, sem "Excluir 0" (BUG-03). */}
+        {deletable.length === items.length || !deletable.length ? "Excluir as marcadas" : `Excluir ${plural(deletable.length, "das marcadas", "das marcadas")}`}
       </Btn>
       {deletable.length < items.length ? (
         <span style={{ fontSize: 11 }}>{plural(items.length - deletable.length, "não pode ser excluída", "não podem ser excluídas")} (aporte de meta ou estorno).</span>

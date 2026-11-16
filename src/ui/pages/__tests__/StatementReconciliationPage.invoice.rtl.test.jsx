@@ -240,7 +240,7 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
     expect(within(card).getByTestId("invoice-side").textContent).toContain("SituaçãoFechada");
     // O aviso e a instrução são os mesmos da recusa do Concluir (backend, invoice_no_longer_paid).
     expect(within(card).getByTestId("invoice-unavailable").textContent).toBe(
-      "Esta fatura foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta conciliação e "
+      "A Fatura Nubank · setembro foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta conciliação e "
       + "envie o extrato de novo, para o Fincla ler a fatura como está agora.",
     );
     expect(within(card).getByTestId("invoice-outcome").textContent).toBe(
@@ -263,7 +263,8 @@ describe("fatura já paga no Fincla (G3-3-01)", () => {
   });
 
   describe("desmarcada no app depois da leitura (BUG-02): nenhum outro passo diz que ela está paga", () => {
-    const UNMARKED = "Esta fatura foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta "
+    // OBS-16: nomeia a fatura (cartão e mês), como o aviso da fatura a pagar.
+    const UNMARKED = "A Fatura Nubank · setembro foi desmarcada como paga depois da leitura do extrato. Para conciliar, descarte esta "
       + "conciliação e envie o extrato de novo, para o Fincla ler a fatura como está agora.";
     const unmark = ({ backendSaysPaid = false } = {}) => {
       const paid = draft.entries.find((e) => e.answer === "invoice_already_paid");

@@ -46,6 +46,8 @@ function UndoBar({ bulk, onUndo }) {
 
 /** "Aplicar aos 3 marcados" / "Aplicar ao 1 marcado"; só os que vão ser adicionados quando há "Não registrar" entre eles. */
 function applyLabel(addable, selected) {
+  // Nenhum a adicionar: o botão fica desligado e a nota diz por quê, sem "Aplicar aos 0" (BUG-03).
+  if (!addable) return "Aplicar categoria";
   const n = addable.toLocaleString("pt-BR");
   if (addable === selected) return addable === 1 ? "Aplicar ao 1 marcado" : `Aplicar aos ${n} marcados`;
   return addable === 1 ? "Aplicar ao 1 a adicionar" : `Aplicar aos ${n} a adicionar`;
