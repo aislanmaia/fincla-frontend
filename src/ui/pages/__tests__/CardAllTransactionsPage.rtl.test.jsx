@@ -111,17 +111,58 @@ describe("CardAllTransactionsPage", () => {
   });
 
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {
-    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
+    // Id diferente da chave do sistema: a API recebe o id da etiqueta, não `system_key` nem o rótulo.
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "tag-food-1", label: "Alimentação", system_key: "food", color: "#059669" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     expect(await screen.findByRole("button", { name: /Abrir filtros/ })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     expect(screen.getByRole("region", { name: "Filtros" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: /Categoria/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Alimentação" }));
-    await waitFor(() => expect(requests.at(-1).searchParams.get("category")).toBe("food"));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("category")).toBe("tag-food-1"));
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
     await userEvent.setup().click(screen.getByRole("button", { name: "Remover filtro Categoria" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("category")).toBe(false));
+  });
+
+  it("categoria personalizada renomeada vai pelo id em lista, resumo e arquivo (e nunca pelo rótulo), com os mesmos filtros", async () => {
+    // Criada pela pessoa (sem chave do sistema) e renomeada: o catálogo mostra o nome personalizado, que o filtro
+    // `category` da API não conhece. Antes a tela mandava esse rótulo e voltava vazia.
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "tag-custom-9", label: "Mercado da esquina", system_key: null, color: "#059669" }] })));
+    const summaries = [];
+    const facets = [];
+    const exports = [];
+    server.use(
+      http.get("*/v1/transactions/summary", ({ request }) => { summaries.push(new URL(request.url).searchParams); return HttpResponse.json({ total_transactions: 2, total_income: null, total_expenses: { amount: "10.00", currency: "BRL" }, total_refunds: { amount: "0.00", currency: "BRL" }, balance: { amount: "-10.00", currency: "BRL" }, unsettled_count: 0, breakdown: { by_category: [], by_month: [] } }); }),
+      http.get("*/v1/transactions/facets", ({ request }) => { facets.push(new URL(request.url).searchParams); return HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] }); }),
+      http.get("*/v1/transactions/export", ({ request }) => { exports.push(new URL(request.url).searchParams); return new HttpResponse("x", { headers: { "Content-Type": "text/csv" } }); }),
+    );
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Abrir filtros/ }));
+    await user.click(screen.getByRole("button", { name: /Categoria/ }));
+    await user.click(screen.getByRole("button", { name: "Mercado da esquina" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.getAll("category")).toEqual(["tag-custom-9"]));
+    await waitFor(() => expect(summaries.at(-1)?.getAll("category")).toEqual(["tag-custom-9"]));
+    // As facetas que levam a categoria (as das outras facetas) levam o id; nenhuma leva o rótulo.
+    for (const url of facets) if (url.has("category")) expect(url.getAll("category")).toEqual(["tag-custom-9"]);
+    for (const params of [requests.at(-1).searchParams, summaries.at(-1), ...facets]) expect(params.toString()).not.toMatch(/Mercado/);
+
+    await user.click(screen.getByRole("button", { name: /Exportar/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Exportar" });
+    await within(dialog).findByTestId("export-totals");
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exports).toHaveLength(1));
+    // Comparação exata: lista, resumo e arquivo levam os MESMOS filtros (fora paginação, ordem e o que é só do arquivo).
+    const filtersOf = (params, skip) => Object.fromEntries([...new Set(params.keys())].filter((key) => !skip.includes(key)).map((key) => [key, params.getAll(key)]));
+    const listed = filtersOf(requests.at(-1).searchParams, ["page", "limit", "sort_by", "sort_order"]);
+    expect(listed.category).toEqual(["tag-custom-9"]);
+    expect(filtersOf(summaries.at(-1), ["include_breakdown", "slice_currency", "locale"])).toEqual(listed);
+    expect(filtersOf(exports[0], ["format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"])).toEqual(listed);
+    click.mockRestore();
   });
 
   it("filtra todos os cartões pela faceta Cartão sem reutilizar o id selecionado", async () => {

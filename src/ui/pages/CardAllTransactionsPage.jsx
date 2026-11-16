@@ -263,8 +263,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const tagOptions = useMemo(() => buildTagOptions(tagCatalog.rows, categoryLabels), [tagCatalog.rows, categoryLabels]);
   const tagIdByLabel = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
   const tagStatus = resolveTagFilterStatuses({ selectedLabels: filter.tags, loading: tagCatalog.loading, error: tagCatalog.error, displayToId: tagIdByLabel });
-  const unresolvedCategory = filter.cats.length > 0 && (categoryCatalog.isLoading || categoryCatalog.error || filter.cats.some((id) => !categoriesById[id]?.apiName));
-  const catalogBlocked = isTagFilterBlocked(tagStatus) || Boolean(unresolvedCategory);
+  const catalogBlocked = isTagFilterBlocked(tagStatus);
   const bounds = resolvePeriodDisplayBounds(filter.period, filter.customFrom, filter.customTo);
   const invoiceMode = timeMode === "invoice" && cardScope === "current";
   const invoiceOpts = useMemo(() => {
@@ -298,7 +297,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     ...(kind === "refund" ? { type: "refund" } : filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
     ...(kind === "one_off" || kind === "installment" ? { commitment_kind: kind } : kind === "recurring" ? { recurring: true } : {}),
     ...(filter.settlement === "pagas" ? { settled: true } : filter.settlement === "a-pagar" ? { settled: false } : {}),
-    ...(filter.cats.length && !unresolvedCategory ? { category: filter.cats.map((id) => categoriesById[id]?.apiName) } : {}),
+    // Pelo id da etiqueta de categoria, que a API casa exatamente. O nome do catálogo é rótulo de tela (tradução ou
+    // nome personalizado) e o `system_key` falta nas categorias criadas pela pessoa (G3-2-01).
+    ...(filter.cats.length ? { category: filter.cats.map(String) } : {}),
     ...(tagStatus.kind === "resolved" ? { tag_id: tagStatus.ids, tag_match: filter.tagMode } : {}),
     ...(cardScope === "all" ? { payment_method: "credit_card" } : {}),
     sort_by: sortField,
