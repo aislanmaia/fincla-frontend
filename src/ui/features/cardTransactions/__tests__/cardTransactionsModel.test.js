@@ -91,11 +91,23 @@ describe("invoiceExportFilter: os filtros de Lançamentos da fatura como parâme
     expect(invoiceExportFilter({ ...base, items, tags: ["ana"], tagMode: "all" }).params).toMatchObject({ tag_id: ["t3"], tag_match: "all" });
   });
 
-  it("categoria vai pelo nome; duas categorias da fatura com o mesmo nome e só uma marcada recusa", () => {
-    const categories = [{ id: "c1", name: "Casa" }, { id: "c2", name: "Lazer" }, { id: "c9", name: "casa" }];
-    expect(invoiceExportFilter({ ...base, items, categories, cats: ["c2"] }).params.category).toEqual(["Lazer"]);
-    expect(invoiceExportFilter({ ...base, items, categories, cats: ["c1"] }).blocked).toMatch(/mesmo nome/);
-    expect(invoiceExportFilter({ ...base, items, categories, cats: ["c1", "c9"] }).params.category).toEqual(["Casa", "casa"]);
+  it("categoria vai pelo id da categoria, nunca pelo rótulo traduzido ou personalizado (G3-2-01)", () => {
+    // O que a fatura devolve: o rótulo de tela ("Transporte" é a tradução da semente `Transport`; "Mercado" é o
+    // nome que a pessoa deu). O filtro `category` da API não conhece esses rótulos — só o nome interno ou o id.
+    const categories = [
+      { id: "8f0c1a2e-0000-4000-8000-000000000001", name: "Transporte" },
+      { id: "8f0c1a2e-0000-4000-8000-000000000002", name: "Mercado" },
+      { id: "8f0c1a2e-0000-4000-8000-000000000009", name: "mercado" },
+    ];
+    expect(invoiceExportFilter({ ...base, items, categories, cats: ["8f0c1a2e-0000-4000-8000-000000000001"] }).params.category)
+      .toEqual(["8f0c1a2e-0000-4000-8000-000000000001"]);
+    // Rótulos repetidos não atrapalham: o id separa as duas categorias.
+    const one = invoiceExportFilter({ ...base, items, categories, cats: ["8f0c1a2e-0000-4000-8000-000000000002"] });
+    expect(one.blocked).toBeNull();
+    expect(one.params.category).toEqual(["8f0c1a2e-0000-4000-8000-000000000002"]);
+    const params = invoiceExportFilter({ ...base, items, categories, cats: ["8f0c1a2e-0000-4000-8000-000000000002", "8f0c1a2e-0000-4000-8000-000000000009"] }).params;
+    expect(params.category).toEqual(["8f0c1a2e-0000-4000-8000-000000000002", "8f0c1a2e-0000-4000-8000-000000000009"]);
+    expect(JSON.stringify(params)).not.toMatch(/Transporte|Mercado|mercado/);
     expect(invoiceExportFilter({ ...base, items, categories, cats: ["uncategorized"] }).blocked).toMatch(/Sem Categoria/);
   });
 

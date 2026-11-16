@@ -306,17 +306,22 @@ describe("Lançamentos da fatura — exportar com os filtros da tela (fincla-api
     await waitFor(() => expect(seen.summaries).toHaveLength(1));
     const summary = seen.summaries[0];
     const expected = {
-      organization_id: [ORG_ID], credit_card_id: ["1"], invoice_id: ["410"], category: ["Transporte"],
+      // A categoria vai pelo id da fatura (`category_id`), não pelo rótulo "Transporte" (tradução da semente
+      // `Transport`), que a API não conhece: com o rótulo, resumo e arquivo voltavam vazios (G3-2-01).
+      organization_id: [ORG_ID], credit_card_id: ["1"], invoice_id: ["410"], category: ["fuel"],
       tag_id: ["fuel-tag"], tag_match: ["any"], modality: ["refund"], value_min: ["10"], description: ["posto"],
     };
     for (const [key, values] of Object.entries(expected)) expect(summary.getAll(key), key).toEqual(values);
     expect(summary.get("slice_currency")).toBe("true");
-    for (const key of ["date_start", "date_end", "value_max", "commitment_kind", "type"]) expect(summary.has(key), key).toBe(false);
+    // Nos dois sentidos: nada além dos filtros da tela (um `type` ou `date_start` velho também quebraria a paridade).
+    expect([...new Set(summary.keys())].sort()).toEqual([...Object.keys(expected), "locale", "slice_currency"].sort());
 
     await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(seen.exports).toHaveLength(1));
     const asked = seen.exports[0];
     for (const [key, values] of Object.entries(expected)) expect(asked.getAll(key), key).toEqual(values);
+    const fileKeys = ["content", "file_prefix", "filters_text", "format", "locale", "timezone", "title"];
+    expect([...new Set(asked.keys())].sort()).toEqual([...Object.keys(expected), ...fileKeys].sort());
     expect(asked.get("file_prefix")).toBe("cartao-azul-fatura-2026-10");
     expect(asked.get("title")).toBe("Lançamentos da fatura · Azul •7112 · Fatura de Out/2026");
     const filtersText = asked.getAll("filters_text");
