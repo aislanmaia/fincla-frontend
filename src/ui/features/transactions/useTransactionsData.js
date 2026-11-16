@@ -9,6 +9,7 @@ import {
   mapApiTransactionToUi,
   setTransactionSettledForUi,
 } from "../../data/transactionsAdapter.js";
+import { withSliceCurrency } from "../export/sliceCurrency.js";
 
 const EMPTY_STATE = {
   isLoading: false,
@@ -70,7 +71,10 @@ export function useTransactionsData({
      chegando, a lista de cartões chegando) mesmo que a pergunta seja a mesma — e
      cada referência nova era uma lista + um resumo pedidos de novo (#293). */
   const queryKey = JSON.stringify(organizationId ? buildTransactionsQuery({ organizationId, ...filters }) : null);
-  const summaryQueryKey = JSON.stringify(organizationId ? buildTransactionsSummaryQuery({ organizationId, ...filters }) : null);
+  /* Transações abre o painel de exportação: o resumo segue a regra de moeda do arquivo (fincla-api#520, D1). */
+  const summaryQueryKey = JSON.stringify(
+    organizationId ? withSliceCurrency(buildTransactionsSummaryQuery({ organizationId, ...filters })) : null,
+  );
   const query = useMemo(() => JSON.parse(queryKey), [queryKey]);
   const summaryQuery = useMemo(() => JSON.parse(summaryQueryKey), [summaryQueryKey]);
 

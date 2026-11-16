@@ -827,6 +827,12 @@ export interface TransactionsSummaryQuery {
   commitment_kind?: 'one_off' | 'installment';
   /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
   settled?: boolean;
+  /**
+   * Moeda do recorte (fincla-api#520, D1): `true` -> se todas as linhas estão numa moeda só, os totais vêm nela.
+   * Só as telas que abrem o painel de exportação mandam (`withSliceCurrency`), para tela e arquivo baterem.
+   * A Visão Geral e os demais NÃO mandam: eles escrevem os totais com o símbolo da moeda base.
+   */
+  slice_currency?: boolean;
 }
 
 export interface PeriodInfo {
