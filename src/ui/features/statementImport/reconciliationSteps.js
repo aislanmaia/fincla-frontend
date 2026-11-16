@@ -108,7 +108,9 @@ export function firstStepWithWork(entries) {
  * "Conferido" depois que ela passa por ele, mesmo que não haja nada a responder.
  */
 export function stepStatus(stepKey, statementImport, passed) {
-  if (stepKey === "balance") return { tone: "neutral", text: passed ? "Conferido" : "Depois dos lançamentos" };
+  // Conferido conta como conferido também aqui (G3): antes o trilho dizia "Conferido" sem o visto, e o
+  // progresso nunca passava de 6 de 8.
+  if (stepKey === "balance") return passed ? { tone: "done", text: "Conferido" } : { tone: "neutral", text: "Depois dos lançamentos" };
   if (stepKey === "summary") return { tone: "neutral", text: "Último passo" };
   const entries = entriesOfStep(stepKey, statementImport.entries);
   if (stepKey === "new") {
@@ -149,4 +151,39 @@ export function blockerText(blocker) {
     return `${plural(blocker.count, "lançamento novo sem descrição", "lançamentos novos sem descrição")}. Escreva a descrição em Adicionar lançamentos novos.`;
   }
   return `${plural(blocker.count, "lançamento sem resposta", "lançamentos sem resposta")}. Responda todos para concluir (em Decidir casos com dúvida).`;
+}
+
+/** Os passos que a pessoa já passou, como o servidor guardou (fincla-api#518). */
+export const passedStepsOf = (statementImport) => new Set(statementImport.reviewed_steps ?? []);
+
+/**
+ * O progresso da conciliação em PASSOS CONFERIDOS: a mesma conta do "Seu progresso: N de 8 passos
+ * conferidos" do rascunho e do quadro "Continue de onde parou" (G3, decisão de 2026-11-16).
+ * `allPassed` = a pessoa já passou por todos os passos antes de "Revisar e concluir" (um passo com
+ * pendência, como lançamento sem descrição, foi visto mas não conta como conferido em `done`).
+ */
+export function stepProgress(statementImport, passed) {
+  const done = STEPS.filter((s) => stepStatus(s.key, statementImport, passed.has(s.key)).tone === "done").length;
+  return {
+    done,
+    total: STEPS.length,
+    allPassed: STEPS.every((s) => s.key === "summary" || passed.has(s.key)),
+  };
+}
+
+/**
+ * O selo pela faixa de passos conferidos: 0 → "Pronta para começar"; < 50% → "Em andamento";
+ * 50–79% → "Passou da metade"; ≥ 80% → "Quase lá · falta pouco!". Todos os passos antes de
+ * "Revisar e concluir" vistos: dá para concluir → "Tudo conferido · só falta concluir" (`ready`, o
+ * único estado com "Concluir agora"); bloqueado (ex.: lançamento sem descrição) → "Quase lá".
+ * Com `can_conclude`, nenhum passo tem pendência: visto é o mesmo que conferido.
+ */
+export function progressBadge({ done, total, allPassed }, canConclude) {
+  if (allPassed && canConclude) return { badge: "Tudo conferido · só falta concluir", ready: true };
+  if (allPassed) return { badge: "Quase lá · falta pouco!", ready: false };
+  const ratio = total ? done / total : 0;
+  if (done === 0) return { badge: "Pronta para começar", ready: false };
+  if (ratio < 0.5) return { badge: "Em andamento", ready: false };
+  if (ratio < 0.8) return { badge: "Passou da metade", ready: false };
+  return { badge: "Quase lá · falta pouco!", ready: false };
 }

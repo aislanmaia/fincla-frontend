@@ -26,7 +26,19 @@ const [DRAFT, CONCLUDED, UNDONE, OLDER] = contract.imports.imports;
 const calls = [];
 let imports = [];
 let listReads = 0;
+// O detalhe de cada rascunho (o quadro mede o progresso nele) e a conferência de saldo da confirmação.
+let details = {};
+let detailReads = 0;
+let check = clone(contract.balance_check);
 const server = setupServer(
+  http.get(`${BASE}/:importId/balance-check`, () => HttpResponse.json(check)),
+  http.get(`${BASE}/:importId`, ({ params: p }) => {
+    detailReads += 1;
+    const found = details[p.importId];
+    return found ? HttpResponse.json(found) : HttpResponse.json({ detail: { code: "not_found", message: "Não encontrado." } }, { status: 404 });
+  }),
+  http.get("*/v1/users/me/preferences", () => HttpResponse.json({ statement_reconciliation_view: "detailed" })),
+  http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get("*/v1/accounts", () =>
     HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true, initial_balance: { amount: "0.00", currency: "BRL" } }]),
   ),
@@ -36,6 +48,7 @@ const server = setupServer(
   }),
   http.post(`${BASE}/:importId/conclude`, ({ params: p }) => {
     calls.push({ conclude: p.importId });
+    delete details[p.importId];
     imports = imports.map((i) => (i.id === p.importId ? { ...i, status: "concluded", can_conclude: false, latest_concluded: true, concluded_at: "2026-11-16T10:00:00", current_step: null, balance_now: null, balance_check_actions: null } : { ...i, latest_concluded: false }));
     return HttpResponse.json({ ...clone(contract.draft), id: p.importId, status: "concluded" });
   }),
@@ -56,6 +69,9 @@ afterEach(() => {
   calls.length = 0;
   imports = [];
   listReads = 0;
+  details = {};
+  detailReads = 0;
+  check = clone(contract.balance_check);
   server.resetHandlers();
   navigate.mockReset();
 });
@@ -66,23 +82,30 @@ const openAccount = async () => {
   await screen.findByRole("heading", { name: "Extratos importados" });
 };
 
-/** Um rascunho com `answered` de `total` lançamentos respondidos. */
-const draftWith = (answered, total, extra = {}) => ({
-  ...clone(DRAFT),
-  summary: { ...clone(DRAFT.summary), total, unanswered: total - answered, missing_description: 0 },
-  can_conclude: false,
-  blockers: total - answered ? [{ code: "unanswered", count: total - answered }] : [],
-  ...extra,
-});
+const BEFORE_SUMMARY = ["suggested", "doubt", "invoice", "yield", "new", "outside", "balance"];
 
-/** Pronto para concluir: tudo respondido, sem pendência. */
-const readyDraft = (summary = {}, extra = {}) => ({
-  ...clone(DRAFT),
-  summary: { ...clone(DRAFT.summary), missing_description: 0, unanswered: 0, ...summary },
-  can_conclude: true,
-  blockers: [],
-  ...extra,
-});
+/**
+ * Um rascunho aberto: a linha da lista e o detalhe (o mesmo que a conciliação abre), com os passos
+ * que a pessoa já viu. Parte do rascunho canônico do backend, com a descrição em branco preenchida
+ * (dá para concluir). `detail` muda o detalhe; `item` muda a linha.
+ */
+const openDraft = (reviewed, { detail = {}, item = {} } = {}) => {
+  const base = clone(contract.draft);
+  details[DRAFT.id] = {
+    ...base,
+    id: DRAFT.id,
+    entries: base.entries.map((e) => (e.answer === "create" && !e.description ? { ...e, description: "Mercado" } : e)),
+    summary: { ...base.summary, missing_description: 0 },
+    can_conclude: true,
+    blockers: [],
+    reviewed_steps: reviewed,
+    ...detail,
+  };
+  return { ...clone(DRAFT), ...item };
+};
+
+/** Tudo visto e nada bloqueando: o único estado com "Concluir agora". */
+const readyDraft = (detail = {}, item = {}) => openDraft(BEFORE_SUMMARY, { detail, item });
 
 describe("a tela inicial, sem rascunho", () => {
   it("tem o texto neutro, a área de soltar e nenhuma cobrança de tempo", async () => {
@@ -114,6 +137,17 @@ describe("a tela inicial, sem rascunho", () => {
     expect(screen.getByText("Dica: a última conciliação foi até 30/09/2026. Um extrato a partir de 01/10 continua de onde ela parou.")).toBeInTheDocument();
   });
 
+  it("a dica usa a concluída de maior fim de período, não a concluída por último", async () => {
+    // Outubro foi concluído antes; setembro, que tinha ficado para trás, depois.
+    imports = [
+      { ...clone(CONCLUDED), id: "outubro", period: { start: "2026-10-01", end: "2026-10-31" }, concluded_at: "2026-11-02T09:00:00" },
+      { ...clone(CONCLUDED), concluded_at: "2026-11-10T09:00:00" },
+    ];
+    await openAccount();
+
+    expect(screen.getByText("Dica: a última conciliação foi até 31/10/2026. Um extrato a partir de 01/11 continua de onde ela parou.")).toBeInTheDocument();
+  });
+
   it("a dica vira o mês e o ano sem fuso: fim em 31/12 → a partir de 01/01", async () => {
     imports = [{ ...clone(CONCLUDED), period: { start: "2026-12-01", end: "2026-12-31" } }];
     await openAccount();
@@ -133,7 +167,12 @@ describe("a tela inicial, sem rascunho", () => {
 
     await user.upload(screen.getByLabelText(/Arquivo do extrato/), new File(["<OFX>"], "extrato-outubro.ofx"));
 
-    expect(await screen.findByText("Lendo extrato-outubro.ofx…")).toBeInTheDocument();
+    // Anunciado por uma região viva FORA do botão (os filhos de um botão não são lidos).
+    const status = await screen.findByTestId("drop-zone-status");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveTextContent("Lendo extrato-outubro.ofx…");
+    const zone = screen.getByRole("button", { name: "Lendo extrato-outubro.ofx…" });
+    expect(zone).not.toContainElement(status);
     expect(calls).toEqual([{ upload: true }]);
     release();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${contract.draft.id}` }));
@@ -149,6 +188,55 @@ describe("a tela inicial, sem rascunho", () => {
 
     await waitFor(() => expect(calls).toEqual([{ upload: true }]));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${contract.draft.id}` }));
+  });
+
+  it("soltar mais de um arquivo não envia nenhum e avisa", async () => {
+    await openAccount();
+
+    const zone = screen.getByRole("button", { name: /Solte aqui o extrato do banco/ });
+    const files = [new File(["<OFX>"], "a.ofx"), new File(["<OFX>"], "b.ofx")];
+    fireEvent.drop(zone, { dataTransfer: { files, types: ["Files"] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Solte um arquivo por vez.");
+    expect(calls).toEqual([]);
+  });
+
+  it("soltar o arquivo fora da área não deixa o navegador abrir o arquivo; ao sair da tela, isso para", async () => {
+    await openAccount();
+    const file = new File(["<OFX>"], "fora.ofx");
+
+    // `fireEvent` devolve false quando o evento foi cancelado (preventDefault).
+    expect(fireEvent.dragOver(document.body, { dataTransfer: { files: [file], types: ["Files"] } })).toBe(false);
+    expect(fireEvent.drop(document.body, { dataTransfer: { files: [file], types: ["Files"] } })).toBe(false);
+    // Arrastar texto (não arquivo) continua com o comportamento do navegador.
+    expect(fireEvent.drop(document.body, { dataTransfer: { files: [], types: ["text/plain"] } })).toBe(true);
+    expect(calls).toEqual([]);
+
+    cleanup();
+    expect(fireEvent.drop(document.body, { dataTransfer: { files: [file], types: ["Files"] } })).toBe(true);
+  });
+
+  it("o destaque não apaga ao passar o arquivo sobre o ícone e os textos da área", async () => {
+    await openAccount();
+    const zone = screen.getByRole("button", { name: /Solte aqui o extrato do banco/ });
+    const child = within(zone).getByText("Solte aqui o extrato do banco");
+    const drag = { dataTransfer: { files: [], types: ["Files"] } };
+
+    fireEvent.dragEnter(zone, drag);
+    expect(zone).toHaveAttribute("data-dragging", "true");
+    // Entrar num filho: o navegador dispara dragenter no filho e dragleave na área.
+    fireEvent.dragEnter(child, drag);
+    fireEvent.dragLeave(zone, drag);
+    expect(zone).toHaveAttribute("data-dragging", "true");
+    // Sair do filho de volta para a área, e depois sair da área de fato.
+    fireEvent.dragLeave(child, drag);
+    expect(zone).not.toHaveAttribute("data-dragging");
+  });
+
+  it("o campo de arquivo escondido fica fora da árvore de acessibilidade", async () => {
+    await openAccount();
+
+    expect(screen.getByLabelText(/Arquivo do extrato/)).toHaveAttribute("aria-hidden", "true");
   });
 
   it("Enter e Espaço na área abrem o seletor de arquivo", async () => {
@@ -221,29 +309,62 @@ describe("a tela inicial, sem rascunho", () => {
 });
 
 describe("Continue de onde parou (rascunho aberto)", () => {
+  // O progresso é em PASSOS CONFERIDOS (G3): a mesma conta do "Seu progresso" da conciliação.
   it.each([
-    [0, 13, "Pronta para começar", "0 de 13 lançamentos respondidos · faltam 13"],
-    [6, 13, "Em andamento", "6 de 13 lançamentos respondidos · faltam 7"],
-    [7, 13, "Passou da metade", "7 de 13 lançamentos respondidos · faltam 6"],
-    [10, 13, "Passou da metade", "10 de 13 lançamentos respondidos · faltam 3"],
-    [11, 13, "Quase lá · falta pouco!", "11 de 13 lançamentos respondidos · faltam 2"],
-    [12, 13, "Quase lá · falta pouco!", "12 de 13 lançamentos respondidos · falta 1"],
-  ])("%i de %i respondidos: selo %s", async (answered, total, badge, count) => {
-    imports = [draftWith(answered, total)];
+    [[], 0, "Pronta para começar"],
+    [["suggested"], 1, "Em andamento"],
+    [["suggested", "doubt", "invoice"], 3, "Em andamento"],
+    // 4 de 8 = 50% exatos: já "Passou da metade".
+    [["suggested", "doubt", "invoice", "yield"], 4, "Passou da metade"],
+    [["suggested", "doubt", "invoice", "yield", "new", "outside"], 6, "Passou da metade"],
+  ])("passos vistos %j: %i de 8 conferidos, selo %s, sem Concluir agora", async (reviewed, done, badge) => {
+    imports = [openDraft(reviewed)];
     await openAccount();
 
-    const card = screen.getByTestId("resume-draft");
+    const card = await screen.findByTestId("resume-badge").then(() => screen.getByTestId("resume-draft"));
     expect(within(card).getByTestId("resume-badge")).toHaveTextContent(badge);
-    expect(card).toHaveTextContent(count);
-    const bar = within(card).getByRole("progressbar", { name: "Lançamentos respondidos" });
-    expect(bar).toHaveAttribute("aria-valuenow", String(answered));
-    expect(bar).toHaveAttribute("aria-valuemax", String(total));
+    expect(within(card).getByTestId("resume-count")).toHaveTextContent(`${done} de 8 passos conferidos`);
+    const bar = within(card).getByRole("progressbar", { name: "Passos conferidos" });
+    expect(bar).toHaveAttribute("aria-valuenow", String(done));
+    expect(bar).toHaveAttribute("aria-valuemax", "8");
     expect(within(card).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
   });
 
+  it("recém-enviado, sem dúvida nem pendência (o servidor deixaria concluir): Pronta para começar, nunca Concluir agora", async () => {
+    // O rascunho canônico como sai do envio: lançamentos novos já marcados para adicionar, nada visto.
+    imports = [openDraft([], { detail: { current_step: null } })];
+    await openAccount();
+
+    const card = await screen.findByTestId("resume-draft");
+    expect(await within(card).findByTestId("resume-badge")).toHaveTextContent("Pronta para começar");
+    expect(card).toHaveTextContent("0 de 8 passos conferidos");
+    expect(card).not.toHaveTextContent("Tudo conferido");
+    expect(within(card).queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
+  });
+
+  it("os números do quadro são os mesmos do Seu progresso da conciliação aberta", async () => {
+    // O rascunho canônico, com um lançamento novo sem descrição: tudo visto, mas bloqueado.
+    imports = [clone(DRAFT)];
+    details[DRAFT.id] = { ...clone(contract.draft), id: DRAFT.id, reviewed_steps: BEFORE_SUMMARY, current_step: "summary" };
+    await openAccount();
+    const card = await screen.findByTestId("resume-draft");
+    const count = (await within(card).findByTestId("resume-count")).textContent;
+    expect(count).toBe("6 de 8 passos conferidos");
+    // Tudo visto, mas bloqueado: "Quase lá", o motivo, e nada de concluir.
+    expect(within(card).getByTestId("resume-badge")).toHaveTextContent("Quase lá · falta pouco!");
+    expect(within(card).getByTestId("resume-blockers")).toHaveTextContent("1 lançamento novo sem descrição. Escreva a descrição em Adicionar lançamentos novos.");
+    expect(within(card).queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
+    cleanup();
+
+    params = { accountId: ACCOUNT, importId: DRAFT.id };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByText(/Seu progresso:/)).toHaveTextContent(`Seu progresso: ${count}`);
+  });
+
   it("mostra o período, o passo em que parou e quando é descartado; a área de soltar fica menor", async () => {
-    imports = [draftWith(5, 6, { current_step: "balance" }), clone(CONCLUDED)];
+    imports = [openDraft(["suggested"], { item: { current_step: "balance" } }), clone(CONCLUDED)];
     const user = userEvent.setup();
     await openAccount();
 
@@ -259,7 +380,7 @@ describe("Continue de onde parou (rascunho aberto)", () => {
   });
 
   it("sem passo gravado, não diz onde parou", async () => {
-    imports = [draftWith(5, 6, { current_step: null })];
+    imports = [openDraft(["suggested"], { item: { current_step: null } })];
     await openAccount();
 
     const card = screen.getByTestId("resume-draft");
@@ -267,56 +388,91 @@ describe("Continue de onde parou (rascunho aberto)", () => {
     expect(card).not.toHaveTextContent("você parou em");
   });
 
-  it("um quadro por rascunho", async () => {
-    imports = [draftWith(1, 6), { ...draftWith(2, 4), id: "outro-rascunho", period: { start: "2026-11-01", end: "2026-11-10" } }];
+  it("um quadro por rascunho, cada um com o seu progresso", async () => {
+    const first = openDraft(["suggested"]);
+    details["outro-rascunho"] = { ...details[DRAFT.id], id: "outro-rascunho", reviewed_steps: ["suggested", "doubt", "invoice", "yield"] };
+    imports = [first, { ...clone(DRAFT), id: "outro-rascunho", period: { start: "2026-11-01", end: "2026-11-10" } }];
     await openAccount();
 
-    expect(screen.getAllByTestId("resume-draft")).toHaveLength(2);
+    const cards = screen.getAllByTestId("resume-draft");
+    expect(cards).toHaveLength(2);
+    expect(cards.map((c) => within(c).getByTestId("resume-count").textContent)).toEqual(["1 de 8 passos conferidos", "4 de 8 passos conferidos"]);
   });
 
-  it("tudo respondido mas com pendência: não oferece concluir e diz o que falta", async () => {
-    imports = [{ ...draftWith(6, 6), summary: { ...clone(DRAFT.summary), total: 6, unanswered: 0, missing_description: 1 }, blockers: [{ code: "missing_description", count: 1 }] }];
+  it("sem conseguir ler o rascunho, o quadro aparece sem progresso e só oferece continuar", async () => {
+    imports = [clone(DRAFT)];
     await openAccount();
 
     const card = screen.getByTestId("resume-draft");
+    expect(within(card).queryByTestId("resume-badge")).not.toBeInTheDocument();
+    expect(card).toHaveTextContent("Não deu para ler o progresso agora.");
+    expect(within(card).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
-    expect(card).toHaveTextContent("1 lançamento novo sem descrição");
-    expect(within(card).getByTestId("resume-badge")).not.toHaveTextContent("Tudo respondido");
   });
 
-  it("Descartar pede confirmação no quadro e, confirmado, some com o rascunho", async () => {
-    imports = [draftWith(3, 6)];
+  it("Descartar pede confirmação no quadro (com o foco nela) e, confirmado, some com o rascunho", async () => {
+    imports = [openDraft(["suggested"])];
     const user = userEvent.setup();
     await openAccount();
 
     await user.click(within(screen.getByTestId("resume-draft")).getByRole("button", { name: "Descartar" }));
+    expect(screen.getByRole("group", { name: "Confirmar descarte do rascunho" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
 
     expect(await screen.findByText("Rascunho descartado. Nada mudou nas suas transações.")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument());
     expect(calls).toEqual([{ discard: DRAFT.id }]);
   });
+
+  it("Manter rascunho devolve o foco a Descartar", async () => {
+    imports = [openDraft(["suggested"])];
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(within(screen.getByTestId("resume-draft")).getByRole("button", { name: "Descartar" }));
+    await user.click(screen.getByRole("button", { name: "Manter rascunho" }));
+
+    expect(within(screen.getByTestId("resume-draft")).getByRole("button", { name: "Descartar" })).toHaveFocus();
+  });
 });
 
-describe("Concluir agora (nada falta)", () => {
+/** As linhas da confirmação, com o espaço inseparável do Intl trocado por espaço comum. */
+const confirmLines = (ask) => within(within(ask).getByTestId("conclude-counts")).getAllByRole("listitem").map((li) => li.textContent.replace(/ /g, " "));
+const effectTexts = (root) => within(within(root).getByTestId("summary-pair-changes")).getAllByRole("listitem").map((li) => li.textContent.replace(/ /g, " "));
+
+/** Um rascunho com todos os efeitos de "Revisar e concluir": valor e conta que mudam, fatura paga e já paga. */
+const withAllEffects = () => {
+  const base = clone(contract.draft);
+  const doubts = clone(contract.doubt_draft.entries);
+  const invoices = clone(contract.invoice_draft.entries);
+  return {
+    entries: [
+      ...base.entries.map((e) => (e.answer === "create" && !e.description ? { ...e, description: "Mercado" } : e)),
+      doubts[2], // par com valor diferente
+      doubts[4], // par de outra conta
+      invoices[0], // fatura que fica paga
+      invoices[2], // fatura já paga
+    ],
+    summary: { ...base.summary, missing_description: 0, to_pair: 2, invoice_payments: 1, invoices_already_paid: 1 },
+  };
+};
+
+describe("Concluir agora (tudo conferido)", () => {
   it("o selo fica verde e os botões viram Concluir agora, Abrir conciliação e Descartar", async () => {
     imports = [readyDraft()];
     const user = userEvent.setup();
     await openAccount();
 
     const card = screen.getByTestId("resume-draft");
-    expect(within(card).getByTestId("resume-badge")).toHaveTextContent("Tudo respondido · só falta concluir");
-    expect(card).toHaveTextContent("6 de 6 lançamentos respondidos");
+    expect(await within(card).findByTestId("resume-badge")).toHaveTextContent("Tudo conferido · só falta concluir");
+    expect(card).toHaveTextContent("7 de 8 passos conferidos");
     expect(within(card).getAllByRole("button").map((b) => b.textContent)).toEqual(["Concluir agora", "Abrir conciliação", "Descartar"]);
     await user.click(within(card).getByRole("button", { name: "Abrir conciliação" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${DRAFT.id}` });
   });
 
-  it("a confirmação no quadro resume o que vai acontecer, com os números do servidor", async () => {
-    imports = [readyDraft(
-      { to_create: 3, groups: 1, to_pair: 2, ignored: 3, unclassified: 1 },
-      { balance_check_actions: { delete: 2, change_date: 1 } },
-    )];
+  it("a confirmação mostra as contagens de Revisar e concluir, Não classificado e a diferença, com o foco nela", async () => {
+    imports = [readyDraft()];
     const confirmSpy = vi.spyOn(window, "confirm");
     const user = userEvent.setup();
     await openAccount();
@@ -324,15 +480,16 @@ describe("Concluir agora (nada falta)", () => {
     await user.click(screen.getByRole("button", { name: "Concluir agora" }));
 
     const ask = screen.getByRole("group", { name: "Confirmar a conclusão" });
+    expect(ask).toHaveFocus();
     expect(ask).toHaveTextContent("Concluir a conciliação de 01/10/2026 a 31/10/2026?");
-    // O dinheiro sai do Intl, com espaço inseparável depois do símbolo.
-    expect(within(ask).getAllByRole("listitem").map((li) => li.textContent.replace(/\u00a0/g, " "))).toEqual([
-      "4 transações novas entram no Fincla, pagas na data do banco.",
-      "2 que já estavam no Fincla ficam pagas na data do banco.",
-      "3 lançamentos não serão registrados.",
-      "1 transação vai para Não classificado.",
-      "2 transações do Fincla serão excluídas.",
-      "1 transação do Fincla muda de data.",
+    await within(ask).findByText(/Diferença de saldo que fica registrada/);
+    // As linhas com zero ("Já estavam no Fincla: 0") não aparecem.
+    expect(confirmLines(ask)).toEqual([
+      "Lançamentos no extrato: 6",
+      "Serão adicionados: 3",
+      "Somados em um lançamento: 2 · em 1 transação",
+      "Não serão registrados: 1",
+      "3 transações vão para Não classificado.",
       "Diferença de saldo que fica registrada: −R$ 23,06.",
     ]);
     expect(ask).toHaveTextContent("Dá para desfazer depois, em Extratos importados.");
@@ -340,36 +497,76 @@ describe("Concluir agora (nada falta)", () => {
     confirmSpy.mockRestore();
   });
 
-  it("frases com zero não aparecem; singular certo; sem saldo no arquivo a diferença é —, nunca zero", async () => {
-    imports = [readyDraft(
-      { to_create: 1, groups: 0, to_pair: 1, ignored: 1, unclassified: 0 },
-      { balance_now: null, balance_check_actions: { delete: 1, change_date: 0 } },
-    )];
+  it("os efeitos são os mesmos do passo Revisar e concluir: valor, conta, fatura paga e já paga, exclusão e data", async () => {
+    imports = [readyDraft({ ...withAllEffects(), current_step: "summary" })];
     const user = userEvent.setup();
     await openAccount();
 
     await user.click(screen.getByRole("button", { name: "Concluir agora" }));
+    const ask = screen.getByRole("group", { name: "Confirmar a conclusão" });
+    const inCard = await waitFor(() => effectTexts(ask));
+    const tags = Array.from(within(ask).getByTestId("summary-pair-changes").querySelectorAll("li > span:first-child")).map((t) => t.textContent);
+    expect(tags).toEqual(["Valor muda", "Conta muda", "Fatura paga", "Fatura já paga", "Exclusão", "Data muda"]);
+    expect(confirmLines(ask)).toContain("Pagamentos de fatura: 1");
+    expect(confirmLines(ask)).toContain("Já estavam no Fincla: 2");
+    cleanup();
 
-    expect(within(screen.getByRole("group", { name: "Confirmar a conclusão" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-      "1 transação nova entra no Fincla, paga na data do banco.",
-      "1 que já estava no Fincla fica paga na data do banco.",
-      "1 lançamento não será registrado.",
-      "1 transação do Fincla será excluída.",
+    // A mesma conciliação aberta no passo Revisar e concluir: as mesmas frases, na mesma ordem.
+    params = { accountId: ACCOUNT, importId: DRAFT.id };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+    await screen.findByTestId("summary-pair-changes");
+    expect(effectTexts(document.body)).toEqual(inCard);
+  });
+
+  it("frases com zero não aparecem; sem saldo no arquivo a diferença é —, nunca zero", async () => {
+    imports = [readyDraft({ summary: { ...clone(contract.draft.summary), missing_description: 0, to_create: 1, grouped: 0, groups: 0, ignored: 0, unclassified: 0, total: 1 } })];
+    check = { ...clone(contract.balance_check), final_difference: null, points: [], effects: { value_changes: 0, account_moves: 0, invoices_paid: 0, deletions: 0, date_changes: 0 } };
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(screen.getByRole("button", { name: "Concluir agora" }));
+    const ask = screen.getByRole("group", { name: "Confirmar a conclusão" });
+    await within(ask).findByText(/Diferença de saldo que fica registrada/);
+
+    expect(confirmLines(ask)).toEqual([
+      "Lançamentos no extrato: 1",
+      "Serão adicionados: 1",
       "Diferença de saldo que fica registrada: —.",
     ]);
+    expect(within(ask).queryByTestId("summary-pair-changes")).not.toBeInTheDocument();
   });
 
   it("diferença zero aparece como R$ 0,00, sem sinal", async () => {
-    imports = [readyDraft({}, { balance_now: { ...clone(DRAFT.balance_now), difference: { amount: "0.00", currency: "BRL" } } })];
+    imports = [readyDraft()];
+    check = { ...clone(contract.balance_check), final_difference: { amount: "0.00", currency: "BRL" } };
     const user = userEvent.setup();
     await openAccount();
 
     await user.click(screen.getByRole("button", { name: "Concluir agora" }));
 
-    expect(screen.getByRole("group", { name: "Confirmar a conclusão" })).toHaveTextContent("Diferença de saldo que fica registrada: R$ 0,00.");
+    expect(await screen.findByText(/Diferença de saldo que fica registrada/)).toHaveTextContent("Diferença de saldo que fica registrada: R$ 0,00.");
   });
 
-  it("Agora não fecha a confirmação sem concluir", async () => {
+  it("Sim, concluir só fica disponível depois de calcular o que muda", async () => {
+    let release;
+    server.use(http.get(`${BASE}/:importId/balance-check`, async () => {
+      await new Promise((resolve) => { release = resolve; });
+      return HttpResponse.json(check);
+    }));
+    imports = [readyDraft()];
+    const user = userEvent.setup();
+    await openAccount();
+
+    await user.click(screen.getByRole("button", { name: "Concluir agora" }));
+
+    expect(screen.getByText("Calculando o que muda ao concluir…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sim, concluir" })).toBeDisabled();
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    release();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sim, concluir" })).toBeEnabled());
+  });
+
+  it("Agora não fecha a confirmação sem concluir e devolve o foco a Concluir agora", async () => {
     imports = [readyDraft()];
     const user = userEvent.setup();
     await openAccount();
@@ -378,22 +575,34 @@ describe("Concluir agora (nada falta)", () => {
     await user.click(screen.getByRole("button", { name: "Agora não" }));
 
     expect(screen.queryByRole("group", { name: "Confirmar a conclusão" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Concluir agora" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Concluir agora" })).toHaveFocus();
     expect(calls).toEqual([]);
   });
 
-  it("Sim, concluir chama o concluir do rascunho, recarrega a lista e o Desfazer fica na linha dela", async () => {
+  it("Sim, concluir chama o concluir, fica desabilitado até a lista recarregada chegar, e o Desfazer fica na linha dela", async () => {
     imports = [readyDraft(), clone(CONCLUDED)];
     const user = userEvent.setup();
     await openAccount();
     const readsBefore = listReads;
+    let releaseList;
+    server.use(http.get(BASE, async () => {
+      listReads += 1;
+      await new Promise((resolve) => { releaseList = resolve; });
+      return HttpResponse.json({ imports });
+    }));
 
     await user.click(screen.getByRole("button", { name: "Concluir agora" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sim, concluir" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Sim, concluir" }));
 
-    expect(await screen.findByText(/Conciliação concluída\./)).toBeInTheDocument();
+    await waitFor(() => expect(listReads).toBeGreaterThan(readsBefore));
     expect(calls).toEqual([{ conclude: DRAFT.id }]);
-    expect(listReads).toBeGreaterThan(readsBefore);
+    // A lista ainda não chegou: nada de "Concluir agora"/"Sim, concluir" clicável (um 2º clique daria 409).
+    expect(screen.getByRole("button", { name: "Concluindo…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
+    releaseList();
+
+    expect(await screen.findByText(/Conciliação concluída\./)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument());
     const rows = screen.getAllByTestId("imported-statement");
     const undoable = rows.filter((r) => within(r).queryByRole("button", { name: "Desfazer importação" }));
@@ -401,18 +610,30 @@ describe("Concluir agora (nada falta)", () => {
     expect(undoable[0]).toHaveTextContent("01/10/2026 a 31/10/2026");
   });
 
-  it("erro do servidor ao concluir aparece no quadro", async () => {
-    server.use(http.post(`${BASE}/:importId/conclude`, () =>
-      HttpResponse.json({ detail: { code: "business_rule", message: "Ainda falta responder 1 lançamento." } }, { status: 422 }),
-    ));
+  it("recusa do servidor ao concluir: mostra o motivo, recarrega a lista e o quadro deixa de oferecer concluir", async () => {
+    server.use(http.post(`${BASE}/:importId/conclude`, () => {
+      // Em outra aba, a pessoa desfez uma resposta: o rascunho já não está todo conferido.
+      details[DRAFT.id] = { ...details[DRAFT.id], reviewed_steps: ["suggested", "doubt"], can_conclude: false, blockers: [{ code: "unanswered", count: 1 }], summary: { ...details[DRAFT.id].summary, unanswered: 1 } };
+      return HttpResponse.json({ detail: { code: "business_rule", message: "Ainda falta responder 1 lançamento." } }, { status: 422 });
+    }));
     imports = [readyDraft()];
     const user = userEvent.setup();
     await openAccount();
+    const readsBefore = listReads;
+    const detailsBefore = detailReads;
 
     await user.click(screen.getByRole("button", { name: "Concluir agora" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sim, concluir" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "Sim, concluir" }));
 
-    expect(await within(screen.getByTestId("resume-draft")).findByRole("alert")).toHaveTextContent("Ainda falta responder 1 lançamento.");
+    const card = screen.getByTestId("resume-draft");
+    expect(await within(card).findByRole("alert")).toHaveTextContent("Ainda falta responder 1 lançamento.");
+    await waitFor(() => expect(within(card).getByTestId("resume-count")).toHaveTextContent("2 de 8 passos conferidos"));
+    expect(listReads).toBeGreaterThan(readsBefore);
+    expect(detailReads).toBeGreaterThan(detailsBefore);
+    expect(within(card).getByTestId("resume-badge")).toHaveTextContent("Em andamento");
+    expect(within(card).queryByRole("button", { name: "Concluir agora" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
   });
 });
 
@@ -425,7 +646,7 @@ describe("Extratos importados, agrupados por ano", () => {
     imports = [
       item("a", "concluded", "2025-12-15", "2026-01-10", { latest_concluded: true }),
       item("b", "concluded", "2025-11-01", "2025-11-30"),
-      draftWith(1, 6),
+      openDraft(["suggested"]),
       item("c", "undone", "2024-03-01", "2024-03-31"),
       item("d", "concluded", "2025-12-01", "2025-12-14"),
     ];
