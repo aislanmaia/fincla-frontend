@@ -83,7 +83,7 @@ function ExportStep({ n, title, children }) {
   );
 }
 
-function ScopeStep({ selection, count, filtersText }) {
+function ScopeStep({ selection, count, countFailed, filtersText }) {
   if (selection) {
     return (
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
@@ -94,7 +94,8 @@ function ScopeStep({ selection, count, filtersText }) {
   return (
     <>
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
-        Sai o recorte inteiro: <b>{TEXTS.entries(count)}</b>, não só o que está carregado na tela.
+        {/* Sem a contagem (a tela não a tem e o resumo ainda não chegou): "contando…", nunca 0 (ausência ≠ zero). */}
+        Sai o recorte inteiro: <b>{count != null ? TEXTS.entries(count) : countFailed ? "contagem indisponível" : "contando…"}</b>, não só o que está carregado na tela.
       </p>
       <ul aria-label="Filtros ativos" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
         {(filtersText.length ? filtersText : [TEXTS.noFilters]).map((text) => (
@@ -563,16 +564,17 @@ export function ExportPanel({
   const closePreview = () => setPreviewOpen(false);
 
   const totals = exportTotalsFromSummary(selection ? selection.summary : summary);
-  const sliceCount = selection ? selection.count : (count ?? totals?.count ?? 0);
+  const sliceCount = selection ? selection.count : (count ?? totals?.count ?? null);
   const selectionTooLarge = Boolean(selection) && sliceCount > SELECTION_MAX_IDS;
-  const tooLarge = !selection && sliceCount > EXPORT_MAX_ROWS;
+  const tooLarge = !selection && sliceCount != null && sliceCount > EXPORT_MAX_ROWS;
+  const totalsError = selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError;
 
   const runExport = async () => {
     setStatus({ busy: true, error: "" });
     try {
       const { blob, fileName } = await exportTransactions({
-        ...filterParams,
-        ...(selection ? { ids: selection.ids } : {}),
+        // Na seleção o servidor ignora os filtros do recorte; mandá-los só ocuparia a URL (16 KiB, G3-2-07).
+        ...(selection ? { organization_id: filterParams.organization_id, ids: selection.ids } : filterParams),
         format,
         ...(format === "pdf" ? { content } : {}),
         title,
@@ -594,7 +596,7 @@ export function ExportPanel({
       {previewScreen
         ? <Btn variant="outGray" onClick={closePreview}>Voltar ao painel</Btn>
         : <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>}
-      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge} onClick={runExport}>
+      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
     </>
@@ -625,7 +627,7 @@ export function ExportPanel({
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <ExportStep n={1} title="Lançamentos exportados">
-            <ScopeStep selection={selection} count={sliceCount} filtersText={filtersText} />
+            <ScopeStep selection={selection} count={sliceCount} countFailed={Boolean(totalsError)} filtersText={filtersText} />
             {tooLarge && (
               <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>
                 O recorte tem {countText(sliceCount)} lançamentos e o limite por arquivo é {countText(EXPORT_MAX_ROWS)}.
@@ -640,7 +642,7 @@ export function ExportPanel({
             <FormatStep formats={formats} format={format} onFormat={setFormat} content={content} onContent={setContent} />
           </ExportStep>
           <ExportStep n={3} title="Totais do relatório">
-            <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError} />
+            <TotalsStep totals={totals} error={totalsError} />
           </ExportStep>
           {fullScreen && (
             <button

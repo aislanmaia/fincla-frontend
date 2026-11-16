@@ -17,6 +17,7 @@ import { ExportPanel } from "../features/export/ExportPanel.jsx";
 import { SELECTION_MAX_IDS, exportFailureMessage } from "../features/export/exportFailure.js";
 import { filePrefixOf } from "../features/export/exportRequest.js";
 import { withSliceCurrency } from "../features/export/sliceCurrency.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
 import { exportTexts } from "../features/export/exportTexts.js";
 import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
@@ -149,7 +150,6 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [inspected, setInspected] = useState(null);
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
-  const [selectionSummaryState, setSelectionSummaryState] = useState({ key: null, data: null, error: null });
   // Contagens já buscadas, por pedido exato: voltar a uma faceta com os mesmos filtros mostra os números na hora (sem apagar).
   // O Map é a única fonte; o tick só força o render quando uma resposta chega.
   const facetCacheRef = useRef(new Map());
@@ -389,8 +389,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       locale: "pt-BR",
     })).then((data) => {
       if (active) { setSummaryState({ key: summaryKey, data, loading: false, error: false }); if (cardScope === "current") rememberInvoices(state.card.id, data); }
-    }).catch(() => {
-      if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true });
+    }).catch((error) => {
+      // A mensagem vai ao painel de exportar (nenhum erro engolido); o card da tela só precisa saber que falhou.
+      if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true, message: exportFailureMessage(error) });
     });
     return () => { active = false; };
   // summaryKey carries queryFilter and cardScope.
@@ -399,21 +400,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
 
   // "Exportar seleção": os totais SÓ dos marcados, pelo mesmo resumo que o servidor usa no arquivo (`ids`, #524).
   const selectionIds = dialog?.kind === "export" && dialog.selection ? dialog.selection.ids : null;
-  const selectionKey = selectionIds ? `${organizationId}:${selectionIds.join(",")}` : null;
-  useEffect(() => {
-    if (!selectionKey || selectionIds.length > SELECTION_MAX_IDS) return undefined;
-    let active = true;
-    setSelectionSummaryState({ key: selectionKey, data: null, error: null });
-    getTransactionsSummary(withSliceCurrency({ organization_id: organizationId, ids: selectionIds, locale: "pt-BR" })).then((data) => {
-      if (active) setSelectionSummaryState({ key: selectionKey, data, error: null });
-    }).catch((error) => {
-      if (active) setSelectionSummaryState({ key: selectionKey, data: null, error: exportFailureMessage(error) });
-    });
-    return () => { active = false; };
-  // selectionKey carries the organization and the ids.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectionKey]);
-  const selectionSummary = selectionSummaryState.key === selectionKey ? selectionSummaryState : { data: null, error: null };
+  // O mesmo hook das outras telas: pedido com `slice_currency`, erro como mensagem do painel.
+  const selectionSummary = useExportSummary(selectionIds && selectionIds.length <= SELECTION_MAX_IDS ? { organization_id: organizationId, ids: selectionIds } : null);
 
   // Várias faturas: a escada tira o recorte de fatura. Uma semana marcada: tira o recorte de datas, para as outras semanas continuarem no gráfico.
   const needsLadder = invoiceMode && (selectedInvoiceIds.length >= 2 || Boolean(activeWeek));
@@ -586,6 +574,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
+  const currentSummaryErrorMessage = currentSummaryError ? summaryState.message : null;
   const currentFacets = facetCacheRef.current.get(facetKey) ?? null;
   const facetCounts = {
     counts: currentFacets,
@@ -756,7 +745,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids, { allowUnloaded: Boolean(dialog.fromAssistant) })} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
-    {dialog?.kind === "export" && card && <ExportPanel title={exportTitle()} filePrefix={exportFilePrefix()} filtersText={filterSummary()} filterParams={exportFilterParams} count={state.total} summary={currentSummary} selection={dialog.selection ? { ids: dialog.selection.ids, count: dialog.selection.ids.length, summary: selectionSummary.data, error: selectionSummary.error } : null} onClose={closeDialog} />}
+    {dialog?.kind === "export" && card && <ExportPanel title={exportTitle()} filePrefix={exportFilePrefix()} filtersText={filterSummary()} filterParams={exportFilterParams} count={state.total} summary={currentSummary} summaryError={currentSummaryErrorMessage} selection={dialog.selection ? { ids: dialog.selection.ids, count: dialog.selection.ids.length, summary: selectionSummary.data, error: selectionSummary.error } : null} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights} loading={!assistant.current} error={assistant.current && assistant.error ? assistantFailureMessage(assistant.error) : null} onRetry={assistant.retry} categoryLabelOf={(id) => categoriesById[id]?.label} onApply={applySuggestion} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { const loaded = ids.filter((id) => state.rows.some((row) => row.id === id)); setSelectedRows(loaded); setDialog(null); if (loaded.length < ids.length) setNotice(`${ids.length - loaded.length} de ${ids.length} lançamentos deste alerta ainda não estão carregados na lista; carregue mais ou filtre para vê-los.`); }} onCategorize={(ids) => { setDialog({ kind: "categorize", ids, fromAssistant: true }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>

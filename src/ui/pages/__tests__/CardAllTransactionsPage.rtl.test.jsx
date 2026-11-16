@@ -940,6 +940,23 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(within(dialog).getByTestId("export-totals")).toHaveTextContent(/-?R\$\s*10,00/);
   });
 
+  it("resumo do recorte que falha aparece no painel e o Exportar fica parado, sem 'carregando' para sempre (G3-2-03)", async () => {
+    withTwoPages();
+    server.use(http.get("*/v1/transactions/summary", () => new HttpResponse(null, { status: 500 })));
+    let asked = 0;
+    server.use(http.get("*/v1/transactions/export", () => { asked += 1; return new HttpResponse("x"); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    const totals = within(dialog).getByRole("region", { name: "Totais do relatório" });
+    expect(await within(totals).findByRole("alert")).toHaveTextContent(/Não foi possível calcular os totais: .+/);
+    expect(totals).not.toHaveTextContent("Os totais ainda estão carregando.");
+    const button = within(dialog).getByRole("button", { name: "Exportar PDF" });
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(asked).toBe(0);
+  });
+
   it("o recorte acima do limite diz o tamanho e pede para estreitar os filtros", async () => {
     withTwoPages();
     server.use(http.get("*/v1/transactions/export", () => HttpResponse.json({ detail: { code: "export_too_large", message: "Too large", total: 25000, limit: 20000 } }, { status: 422 })));
@@ -1512,7 +1529,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(summaries.some((url) => url.searchParams.has("ids"))).toBe(false);
   });
 
-  it("um lançamento marcado que sumiu (404) diz o motivo nos totais e na exportação", async () => {
+  it("um lançamento marcado que sumiu (404) diz o motivo nos totais e não deixa exportar", async () => {
     withLedger();
     const gone = { detail: { error: "TRANSACTION_NOT_FOUND", message: "x", type: "not_found" } };
     server.use(
@@ -1528,9 +1545,9 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const panel = await screen.findByRole("dialog", { name: "Exportar seleção" });
     const text = "Um ou mais lançamentos marcados não existem mais. Atualize a lista e selecione de novo.";
     expect(await within(panel).findByText(new RegExp(text))).toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
-    await waitFor(() => expect(within(panel).getAllByRole("alert").map((node) => node.textContent).join(" ")).toContain(`${text}`));
-    expect(within(panel).getAllByRole("alert")).toHaveLength(2);
+    expect(within(panel).getAllByRole("alert")).toHaveLength(1);
+    // Sem os totais da seleção não há arquivo a pedir: o botão fica parado com o motivo à vista (G3-2-03).
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
   });
 
   it("no celular a faixa de chips mostra que rola: seta e esmaecido só quando há mais chips, e a seta avança a faixa", async () => {
