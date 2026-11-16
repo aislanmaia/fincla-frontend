@@ -197,6 +197,8 @@ export type ExportTransactionsRequest = ExportTransactionsQuery & {
   timezone?: string;
   locale?: string;
   content?: 'full' | 'summary';
+  /** "Exportar seleção" (#524): só estes lançamentos (até 1.000); os filtros do recorte são ignorados. */
+  ids?: number[];
 };
 
 export type ExportedFile = { blob: Blob; fileName: string | null };
