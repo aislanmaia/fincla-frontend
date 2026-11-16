@@ -313,7 +313,7 @@ describe("Lançamentos da fatura — exportar com os filtros da tela (fincla-api
     expect(summary.get("slice_currency")).toBe("true");
     for (const key of ["date_start", "date_end", "value_max", "commitment_kind", "type"]) expect(summary.has(key), key).toBe(false);
 
-    await user.click(within(panel).getByRole("button", { name: "Exportar CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
     await waitFor(() => expect(seen.exports).toHaveLength(1));
     const asked = seen.exports[0];
     for (const [key, values] of Object.entries(expected)) expect(asked.getAll(key), key).toEqual(values);
@@ -324,7 +324,7 @@ describe("Lançamentos da fatura — exportar com os filtros da tela (fincla-api
     expect(filtersText).toEqual(expect.arrayContaining(["Busca: posto", "Categoria: Transporte", "Tags: #combustível", "Modalidade: Estorno"]));
     expect(filtersText.some((text) => /^Valor/.test(text))).toBe(true);
     await waitFor(() => expect(names).toHaveLength(1));
-    expect(names[0]).toMatch(/^cartao-azul-fatura-2026-10-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(names[0]).toMatch(/^cartao-azul-fatura-2026-10-\d{4}-\d{2}-\d{2}\.pdf$/);
     spy.mockRestore();
   });
 
