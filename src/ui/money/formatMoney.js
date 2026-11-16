@@ -128,6 +128,17 @@ export function formatMoneyPlainSpace(value, currency = MOEDA_PADRAO) {
 }
 
 /**
+ * Só o número, nas casas da moeda pelo registro e no agrupamento pt-BR, sem símbolo — para onde a moeda é dita ao
+ * lado (a coluna "Moeda" da planilha exportada). `null` quando não há valor, nunca 0.
+ */
+export function formatMoneyNumber(value, currency = MOEDA_PADRAO) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return numeroDe(currencyInfo(currency).decimalPlaces).format(n);
+}
+
+/**
  * Compacto para eixo de gráfico — "R$1,2k".
  *
  * Sem espaço e sem centavos de propósito: é rótulo de eixo, onde a largura é de

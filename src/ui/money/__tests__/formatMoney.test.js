@@ -22,6 +22,7 @@ import {
   formatMoney,
   formatMoneyAbs,
   formatMoneyCompact,
+  formatMoneyNumber,
   formatMoneySigned,
 } from "../formatMoney.js";
 
@@ -172,5 +173,25 @@ describe("o registro é quem diz o que a tela pode oferecer", () => {
   it("sem código nenhum, a moeda é o real", () => {
     expect(currencyInfo(undefined).code).toBe("BRL");
     expect(currencyInfo("  ").code).toBe("BRL");
+  });
+});
+
+
+describe("formatMoneyNumber: só o número, nas casas da moeda pelo registro (a planilha põe a moeda ao lado)", () => {
+  it("sem símbolo, com as casas do registro e o agrupamento pt-BR", () => {
+    setCurrencyRegistry([
+      ...REGISTRO,
+      { code: "JPY", name: "Iene", symbol: "¥", decimal_places: 0, is_active: true },
+      { code: "KWD", name: "Dinar", symbol: "KD", decimal_places: 3, is_active: true },
+    ]);
+    expect(formatMoneyNumber(1234.5, "BRL")).toBe("1.234,50");
+    expect(formatMoneyNumber(-1500, "JPY")).toBe("-1.500");
+    expect(formatMoneyNumber(1.5, "KWD")).toBe("1,500");
+    expect(formatMoneyNumber("0", "EUR")).toBe("0,00");
+  });
+
+  it("ausência é null, nunca 0", () => {
+    setCurrencyRegistry(REGISTRO);
+    for (const absent of [null, undefined, "", "abc"]) expect(formatMoneyNumber(absent, "BRL")).toBeNull();
   });
 });

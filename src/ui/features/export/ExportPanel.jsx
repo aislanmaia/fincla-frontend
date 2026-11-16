@@ -5,6 +5,7 @@ import { exportTransactions } from "../../../api/transactions";
 import { Btn } from "../../components/primitives.jsx";
 import { SideDrawer } from "../../components/SideDrawer.jsx";
 import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyNumber } from "../../money/formatMoney.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
@@ -58,7 +59,6 @@ const PDF_CONTENT = [
   { key: "summary", label: "Só o resumo", hint: "Uma página, sem a lista — bom para mostrar a alguém" },
 ];
 
-const countText = (n) => Number(n ?? 0).toLocaleString("pt-BR");
 const TEXTS = exportTexts("pt-BR");
 /** Abaixo de 700 px (o limite do painel, D4 da #520) a prévia lateral sai. */
 export const PREVIEW_MIN_WIDTH = 700;
@@ -69,7 +69,7 @@ function ExportStep({ n, title, children }) {
       <span
         aria-hidden="true"
         style={{
-          ...G, flex: "0 0 22px", height: 22, borderRadius: 999, background: T.ink, color: "#fff",
+          ...G, flex: "0 0 22px", height: 22, borderRadius: 999, background: T.ink, color: T.surface,
           fontSize: 11, fontWeight: 700, display: "grid", placeItems: "center",
         }}
       >
@@ -264,11 +264,7 @@ const SHEET_COLUMNS = ["A", "B", "C", "D", "E", "F", "G"];
 const TABLE_HEADER = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
 
 /** Um número como a planilha o mostra em pt-BR: casas da moeda pelo registro, sem símbolo (a moeda vai na coluna F). */
-const sheetNumber = (value, currency) => {
-  if (value == null) return UNAVAILABLE;
-  const places = currencyInfo(currency).decimalPlaces;
-  return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: places, maximumFractionDigits: places });
-};
+const sheetNumber = (value, currency) => formatMoneyNumber(value, currency) ?? UNAVAILABLE;
 
 /**
  * A planilha que o servidor vai gerar (#522), linha a linha, com os mesmos dados do passo 3: topo, bloco de totais,
@@ -442,8 +438,8 @@ function PdfPreview(props) {
     <div
       data-testid="export-preview-pdf"
       style={{
-        ...G, background: "#fff", color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
-        display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 2px 10px rgba(0,0,0,.08)",
+        ...G, background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
+        display: "flex", flexDirection: "column", gap: 10, boxShadow: T.md,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
@@ -630,7 +626,7 @@ export function ExportPanel({
             <ScopeStep selection={selection} count={sliceCount} countFailed={Boolean(totalsError)} filtersText={filtersText} />
             {tooLarge && (
               <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>
-                O recorte tem {countText(sliceCount)} lançamentos e o limite por arquivo é {countText(EXPORT_MAX_ROWS)}.
+                O recorte tem {TEXTS.number(sliceCount)} lançamentos e o limite por arquivo é {TEXTS.number(EXPORT_MAX_ROWS)}.
                 Estreite os filtros e exporte de novo.
               </p>
             )}
