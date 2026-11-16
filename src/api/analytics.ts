@@ -5,7 +5,6 @@
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
 import { unwrapMoney } from './money';
-import { repeatArrayParams } from './paramsSerializer';
 import type {
   MonthlyEvolutionResponse,
   ByCategoryResponse,
@@ -116,59 +115,4 @@ export const getPeriodComparison = async (
     }
   );
   return unwrapMoney(response.data);
-};
-
-/**
- * Exporta transações filtradas em formato CSV.
- * Retorna o arquivo diretamente como Blob.
- */
-export const exportTransactionsCsv = async (
-  organizationId: string,
-  options?: {
-    dateStart?: string;
-    dateEnd?: string;
-    type?: string;
-    paymentMethod?: string | string[];
-    statusFilter?: string;
-    tagId?: string;
-  }
-): Promise<Blob> => {
-  const response = await apiClient.get('/analytics/export-csv', {
-    params: {
-      organization_id: organizationId,
-      date_start: options?.dateStart,
-      date_end: options?.dateEnd,
-      type: options?.type,
-      payment_method: options?.paymentMethod,
-      status_filter: options?.statusFilter,
-      tag_id: options?.tagId,
-    },
-    paramsSerializer: repeatArrayParams,
-    responseType: 'blob',
-  });
-  return unwrapMoney(response.data);
-};
-
-/**
- * Utilitário: baixa o CSV como arquivo no navegador
- */
-export const downloadTransactionsCsv = async (
-  organizationId: string,
-  options?: {
-    dateStart?: string;
-    dateEnd?: string;
-    type?: string;
-    paymentMethod?: string | string[];
-    statusFilter?: string;
-    tagId?: string;
-  },
-  filename = 'transactions.csv'
-): Promise<void> => {
-  const blob = await exportTransactionsCsv(organizationId, options);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 };
