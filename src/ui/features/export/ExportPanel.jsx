@@ -5,6 +5,7 @@ import { exportTransactions } from "../../../api/transactions";
 import { Btn } from "../../components/primitives.jsx";
 import { SideDrawer } from "../../components/SideDrawer.jsx";
 import { currencyInfo } from "../../money/currencyRegistry.js";
+import { formatMoneyNumber } from "../../money/formatMoney.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
@@ -58,7 +59,6 @@ const PDF_CONTENT = [
   { key: "summary", label: "Só o resumo", hint: "Uma página, sem a lista — bom para mostrar a alguém" },
 ];
 
-const countText = (n) => Number(n ?? 0).toLocaleString("pt-BR");
 const TEXTS = exportTexts("pt-BR");
 /** Abaixo de 700 px (o limite do painel, D4 da #520) a prévia lateral sai. */
 export const PREVIEW_MIN_WIDTH = 700;
@@ -69,7 +69,7 @@ function ExportStep({ n, title, children }) {
       <span
         aria-hidden="true"
         style={{
-          ...G, flex: "0 0 22px", height: 22, borderRadius: 999, background: T.ink, color: "#fff",
+          ...G, flex: "0 0 22px", height: 22, borderRadius: 999, background: T.ink, color: T.surface,
           fontSize: 11, fontWeight: 700, display: "grid", placeItems: "center",
         }}
       >
@@ -83,7 +83,7 @@ function ExportStep({ n, title, children }) {
   );
 }
 
-function ScopeStep({ selection, count, filtersText }) {
+function ScopeStep({ selection, count, countFailed, filtersText }) {
   if (selection) {
     return (
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
@@ -94,7 +94,8 @@ function ScopeStep({ selection, count, filtersText }) {
   return (
     <>
       <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>
-        Sai o recorte inteiro: <b>{TEXTS.entries(count)}</b>, não só o que está carregado na tela.
+        {/* Sem a contagem (a tela não a tem e o resumo ainda não chegou): "contando…", nunca 0 (ausência ≠ zero). */}
+        Sai o recorte inteiro: <b>{count != null ? TEXTS.entries(count) : countFailed ? "contagem indisponível" : "contando…"}</b>, não só o que está carregado na tela.
       </p>
       <ul aria-label="Filtros ativos" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
         {(filtersText.length ? filtersText : [TEXTS.noFilters]).map((text) => (
@@ -263,11 +264,7 @@ const SHEET_COLUMNS = ["A", "B", "C", "D", "E", "F", "G"];
 const TABLE_HEADER = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
 
 /** Um número como a planilha o mostra em pt-BR: casas da moeda pelo registro, sem símbolo (a moeda vai na coluna F). */
-const sheetNumber = (value, currency) => {
-  if (value == null) return UNAVAILABLE;
-  const places = currencyInfo(currency).decimalPlaces;
-  return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: places, maximumFractionDigits: places });
-};
+const sheetNumber = (value, currency) => formatMoneyNumber(value, currency) ?? UNAVAILABLE;
 
 /**
  * A planilha que o servidor vai gerar (#522), linha a linha, com os mesmos dados do passo 3: topo, bloco de totais,
@@ -441,8 +438,8 @@ function PdfPreview(props) {
     <div
       data-testid="export-preview-pdf"
       style={{
-        ...G, background: "#fff", color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
-        display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 2px 10px rgba(0,0,0,.08)",
+        ...G, background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
+        display: "flex", flexDirection: "column", gap: 10, boxShadow: T.md,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
@@ -563,16 +560,17 @@ export function ExportPanel({
   const closePreview = () => setPreviewOpen(false);
 
   const totals = exportTotalsFromSummary(selection ? selection.summary : summary);
-  const sliceCount = selection ? selection.count : (count ?? totals?.count ?? 0);
+  const sliceCount = selection ? selection.count : (count ?? totals?.count ?? null);
   const selectionTooLarge = Boolean(selection) && sliceCount > SELECTION_MAX_IDS;
-  const tooLarge = !selection && sliceCount > EXPORT_MAX_ROWS;
+  const tooLarge = !selection && sliceCount != null && sliceCount > EXPORT_MAX_ROWS;
+  const totalsError = selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError;
 
   const runExport = async () => {
     setStatus({ busy: true, error: "" });
     try {
       const { blob, fileName } = await exportTransactions({
-        ...filterParams,
-        ...(selection ? { ids: selection.ids } : {}),
+        // Na seleção o servidor ignora os filtros do recorte; mandá-los só ocuparia a URL (16 KiB, G3-2-07).
+        ...(selection ? { organization_id: filterParams.organization_id, ids: selection.ids } : filterParams),
         format,
         ...(format === "pdf" ? { content } : {}),
         title,
@@ -594,7 +592,7 @@ export function ExportPanel({
       {previewScreen
         ? <Btn variant="outGray" onClick={closePreview}>Voltar ao painel</Btn>
         : <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>}
-      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge} onClick={runExport}>
+      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
     </>
@@ -625,10 +623,10 @@ export function ExportPanel({
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
           <ExportStep n={1} title="Lançamentos exportados">
-            <ScopeStep selection={selection} count={sliceCount} filtersText={filtersText} />
+            <ScopeStep selection={selection} count={sliceCount} countFailed={Boolean(totalsError)} filtersText={filtersText} />
             {tooLarge && (
               <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>
-                O recorte tem {countText(sliceCount)} lançamentos e o limite por arquivo é {countText(EXPORT_MAX_ROWS)}.
+                O recorte tem {TEXTS.number(sliceCount)} lançamentos e o limite por arquivo é {TEXTS.number(EXPORT_MAX_ROWS)}.
                 Estreite os filtros e exporte de novo.
               </p>
             )}
@@ -640,7 +638,7 @@ export function ExportPanel({
             <FormatStep formats={formats} format={format} onFormat={setFormat} content={content} onContent={setContent} />
           </ExportStep>
           <ExportStep n={3} title="Totais do relatório">
-            <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError} />
+            <TotalsStep totals={totals} error={totalsError} />
           </ExportStep>
           {fullScreen && (
             <button

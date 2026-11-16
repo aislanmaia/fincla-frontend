@@ -149,7 +149,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const [exportOpen, setExportOpen] = useState(false);
   // O recorte da tela como parâmetros da API (#525): o arquivo e os totais do painel saem do servidor com eles.
   const exportFilter = state.card && detail ? invoiceExportFilter({
-    organizationId, cardId: state.card.id, invoiceId: detail.invoice_id ?? null, items: detail.items, categories,
+    organizationId, cardId: state.card.id, invoiceId: detail.invoice_id ?? null, items: detail.items,
     search: filter.search, cats: filter.cats, tags: filter.tags, tagMode: filter.tagMode, modality,
     from: bounds.from, to: bounds.to, valueMin: filter.valueMin, valueMax: filter.valueMax, valueCurrency: currency,
   }) : { params: null, blocked: null };

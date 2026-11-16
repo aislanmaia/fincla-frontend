@@ -791,7 +791,10 @@ describe("InvoiceDashboardPage — exportar (painel compartilhado, fincla-api#52
     expect(asked.get("title")).toBe(`Azul •7112 · Fatura de ${label}`);
     expect(asked.getAll("filters_text")).toEqual([`Fatura: ${label}`]);
     // Exatamente os filtros do resumo vão ao arquivo: tela e arquivo descrevem o mesmo recorte.
-    for (const [key, value] of summary.entries()) if (!["slice_currency", "locale"].includes(key)) expect(asked.getAll(key)).toContain(value);
+    // Nos dois sentidos (G3-2-09): um filtro A MAIS no arquivo (um `type` velho) também quebraria a paridade.
+    const FILE_ONLY = ["format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"];
+    const filtersOf = (params, skip) => Object.fromEntries([...new Set(params.keys())].filter((key) => !skip.includes(key)).map((key) => [key, params.getAll(key)]));
+    expect(filtersOf(asked, FILE_ONLY)).toEqual(filtersOf(summary, ["slice_currency", "locale"]));
     await waitFor(() => expect(names).toEqual(["cartao-azul-fatura-2026-10-2026-10-04.pdf"]));
     restore();
   });

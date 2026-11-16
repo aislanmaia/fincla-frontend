@@ -16,6 +16,10 @@ const counted = (n, one, many, locale) => {
 const PT_BR = {
   locale: "pt-BR",
   noFilters: "Sem filtros: todos os lançamentos",
+  /** Uma contagem com o agrupamento do idioma ("25.000"). */
+  number(n) {
+    return Number(n).toLocaleString(this.locale);
+  },
   entries(n) {
     return counted(n, "{n} lançamento", "{n} lançamentos", this.locale);
   },

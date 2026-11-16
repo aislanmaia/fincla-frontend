@@ -844,7 +844,7 @@ export interface TransactionsSummaryQuery {
    */
   slice_currency?: boolean;
   /**
-   * "Exportar seleção" (fincla-api#524): os totais só destes lançamentos (até 1.000). Substitui o recorte: os
+   * "Exportar seleção" (fincla-api#524): os totais só destes lançamentos (até 500). Substitui o recorte: os
    * demais filtros são ignorados. Id fora da organização -> 404 `TRANSACTION_NOT_FOUND`.
    */
   ids?: number[];

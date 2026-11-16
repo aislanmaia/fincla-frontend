@@ -84,16 +84,16 @@ const UNCATEGORIZED = "uncategorized";
  * - fatura → `credit_card_id` + `invoice_id` (as linhas da fatura são os lançamentos com esse `invoice_id`);
  * - busca → `description` (a busca da tela olha só a descrição gravada, como a da API);
  * - período → `date_start`/`date_end` (a data da linha é a do lançamento, a mesma que a API compara);
- * - categoria → `category` pelo nome da categoria (a API casa o nome da etiqueta de categoria);
+ * - categoria → `category` pelo id da etiqueta de categoria (o `category_id` da fatura; o nome é só rótulo de tela);
  * - etiquetas → `tag_id` (os ids das etiquetas com esses nomes, tirados das próprias linhas) + `tag_match`;
  * - modalidade → `modality` (a mesma modalidade que a fatura informa em cada linha);
  * - valor → `value_min`/`value_max`, lidos na moeda da fatura como a tela lê (os valores gravados são positivos).
  *
  * Quando um filtro NÃO tem tradução exata, devolve `blocked` com o motivo em vez de mandar um recorte diferente
- * do que a tela mostra: linhas "Sem Categoria" (sem etiqueta de categoria), duas categorias desta fatura com o
- * mesmo nome e só uma marcada, ou uma etiqueta com nome repetido no modo "todas".
+ * do que a tela mostra: linhas "Sem Categoria" (sem etiqueta de categoria) ou uma etiqueta com nome repetido no
+ * modo "todas".
  */
-export function invoiceExportFilter({ organizationId, cardId, invoiceId, items, categories = [], search = "", cats = [], tags = [], tagMode = "any", modality = "all", from = "", to = "", valueMin = "", valueMax = "", valueCurrency = null }) {
+export function invoiceExportFilter({ organizationId, cardId, invoiceId, items, search = "", cats = [], tags = [], tagMode = "any", modality = "all", from = "", to = "", valueMin = "", valueMax = "", valueCurrency = null }) {
   if (invoiceId == null) return { params: null, blocked: "Esta fatura ainda não tem lançamentos para exportar." };
   const params = { organization_id: organizationId, credit_card_id: cardId, invoice_id: [invoiceId] };
   const query = search.trim();
@@ -102,14 +102,9 @@ export function invoiceExportFilter({ organizationId, cardId, invoiceId, items, 
   if (to) params.date_end = to;
   if (cats.length) {
     if (cats.includes(UNCATEGORIZED)) return { params: null, blocked: "O filtro \"Sem Categoria\" ainda não pode ser exportado. Tire-o para exportar." };
-    const byId = new Map(categories.map((row) => [String(row.id), row]));
-    const names = cats.map((id) => byId.get(String(id))?.name).filter(Boolean);
-    const lower = new Set(names.map((name) => name.toLocaleLowerCase("pt-BR")));
-    const ambiguous = categories.some((row) => !cats.includes(String(row.id)) && lower.has(String(row.name).toLocaleLowerCase("pt-BR")));
-    if (names.length !== cats.length || ambiguous) {
-      return { params: null, blocked: "Há categorias com o mesmo nome nesta fatura; o arquivo não as separa. Ajuste o filtro de categoria para exportar." };
-    }
-    params.category = names;
+    // Pelo id da etiqueta de categoria (o `category_id` da fatura), que a API casa exatamente (G3-2-01). O nome
+    // que a fatura mostra é o rótulo de tela — tradução da semente ou nome personalizado — e a API não o conhece.
+    params.category = cats.map(String);
   }
   if (tags.length) {
     const idsByName = new Map();
