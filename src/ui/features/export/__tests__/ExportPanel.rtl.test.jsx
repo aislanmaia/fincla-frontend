@@ -609,3 +609,60 @@ describe("buildPdfPreview", () => {
     expect(pdf(ONE_CURRENCY, "full", { selection: { count: 2 } }).scope).toEqual(["2 lançamentos selecionados"]);
   });
 });
+
+/**
+ * QA etapa 2, BUG-02: a 390 px (prévia em tela cheia) e a 700 px (prévia lateral) os textos da prévia do PDF se
+ * sobrepunham — o Resultado invadia os rótulos das barras, os cabeçalhos da tabela se encavalavam e as caixas de
+ * totais extravasavam. jsdom não mede layout; o teste prende a estrutura que impede a sobreposição em qualquer
+ * largura: blocos que quebram linha (flex-wrap com base mínima), cabeçalho da tabela que não encolhe abaixo do
+ * texto e rola dentro da prévia, e valores que podem quebrar em vez de vazar.
+ */
+describe("<ExportPanel> — a prévia do PDF se adapta à largura sem sobrepor texto (QA etapa 2, BUG-02)", () => {
+  const pdfPreview = () => within(renderPanel().panel).getByTestId("export-preview-pdf");
+
+  it("o Resultado e as barras ficam lado a lado só com espaço; sem ele, as barras descem para baixo do Resultado", () => {
+    const flow = within(pdfPreview()).getByTestId("export-preview-pdf-result");
+    expect(flow.style.display).toBe("flex");
+    expect(flow.style.flexWrap).toBe("wrap");
+    const [result, bars] = flow.children;
+    // Cada lado tem uma base mínima: abaixo da soma, o segundo quebra para a linha de baixo em vez de espremer.
+    for (const side of [result, bars]) {
+      expect(side.style.flexGrow).toBe("1");
+      expect(side.style.flexBasis).toMatch(/^\d+px$/);
+      expect(side.style.minWidth).toBe("0px");
+    }
+    // O valor do Resultado pode quebrar dentro do seu lado, nunca invade o vizinho.
+    expect(within(result).getByText(/769,60/).style.overflowWrap).toBe("anywhere");
+    // Rótulo da barra com a largura do próprio texto (não uma coluna fixa que o texto vaza).
+    const row = within(bars).getByText("Receitas").parentElement;
+    expect(row.style.gridTemplateColumns.split(" ")[0]).toBe("max-content");
+  });
+
+  it("o cabeçalho da tabela não encolhe abaixo do texto: rola na horizontal dentro da prévia", () => {
+    const table = within(pdfPreview()).getByTestId("export-preview-pdf-table");
+    expect(table.style.overflowX).toBe("auto");
+    const header = within(table).getByText("Descrição").parentElement;
+    expect(header.style.display).toBe("flex");
+    for (const cell of header.children) {
+      expect(cell.style.flexShrink).toBe("0");
+      expect(cell.style.whiteSpace).toBe("nowrap");
+    }
+  });
+
+  it("as caixas de totais quebram em linhas conforme a largura, e o valor quebra dentro da caixa", () => {
+    const boxes = within(pdfPreview()).getByTestId("export-preview-pdf-boxes");
+    expect(boxes.style.display).toBe("flex");
+    expect(boxes.style.flexWrap).toBe("wrap");
+    expect(boxes.children).toHaveLength(4);
+    for (const box of boxes.children) {
+      expect(box.style.flexBasis).toMatch(/^\d+px$/);
+      expect(box.style.minWidth).toBe("0px");
+      expect(box.lastElementChild.style.overflowWrap).toBe("anywhere");
+    }
+  });
+
+  it("o título e o recorte do topo também quebram linha em vez de se espremer", () => {
+    const top = within(pdfPreview()).getByText("Transações").parentElement.parentElement;
+    expect(top.style.flexWrap).toBe("wrap");
+  });
+});

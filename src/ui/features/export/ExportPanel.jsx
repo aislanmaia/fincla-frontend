@@ -442,26 +442,27 @@ function PdfPreview(props) {
         display: "flex", flexDirection: "column", gap: 10, boxShadow: T.md,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
-        <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
+        <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
           <div style={label}>Fincla · relatório de lançamentos</div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{pdf.title}</div>
           <div style={small}>Sua organização · gerado agora</div>
         </div>
-        <div style={{ ...small, textAlign: "right" }}>
+        <div style={{ ...small, textAlign: "right", marginLeft: "auto", minWidth: 0, overflowWrap: "anywhere" }}>
           {pdf.scope.map((text) => <div key={text}>{text}</div>)}
         </div>
       </div>
       {pdf.result !== null && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.3fr)", gap: 14, alignItems: "center" }}>
-          <div>
+        // Sem largura para os dois lados, as barras descem para baixo do Resultado (nada se sobrepõe).
+        <div data-testid="export-preview-pdf-result" style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center" }}>
+          <div style={{ flex: "1 1 150px", minWidth: 0 }}>
             <div style={label}>Resultado do recorte</div>
-            <div style={{ ...NUM, fontSize: 22, fontWeight: 700, color: resultColor(pdf.resultValue) }}>{pdf.result}</div>
+            <div style={{ ...NUM, fontSize: 22, fontWeight: 700, color: resultColor(pdf.resultValue), overflowWrap: "anywhere" }}>{pdf.result}</div>
             <div style={small}>{pdf.countLine}</div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div style={{ flex: "1 1 190px", minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
             {pdf.flow.map((item) => (
-              <div key={item.label} style={{ display: "grid", gridTemplateColumns: "62px minmax(0, 1fr) auto", gap: 6, alignItems: "center", fontSize: 11 }}>
+              <div key={item.label} style={{ display: "grid", gridTemplateColumns: "max-content minmax(24px, 1fr) auto", gap: 6, alignItems: "center", fontSize: 11 }}>
                 <span>{item.label}</span>
                 <span style={{ height: 7, background: T.bg, borderRadius: 4 }}>
                   <span style={{ display: "block", width: `${item.share * 100}%`, height: "100%", background: PDF_TONE[item.tone], borderRadius: 4 }} />
@@ -479,19 +480,22 @@ function PdfPreview(props) {
       {pdf.list && (
         <>
           <div style={{ fontSize: 12, fontWeight: 700 }}>Lançamentos</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 4, borderBottom: `1.5px solid ${T.ink}`, paddingBottom: 3 }}>
-            {["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor"].map((name) => (
-              <span key={name} style={{ ...label, textAlign: name === "Valor" ? "right" : "left" }}>{name}</span>
-            ))}
+          {/* O cabeçalho nunca encolhe abaixo do texto: sem largura, rola na horizontal dentro da prévia. */}
+          <div data-testid="export-preview-pdf-table" style={{ overflowX: "auto", borderBottom: `1.5px solid ${T.ink}`, paddingBottom: 3 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              {["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor"].map((name) => (
+                <span key={name} style={{ ...label, flex: "1 0 auto", whiteSpace: "nowrap", textAlign: name === "Valor" ? "right" : "left" }}>{name}</span>
+              ))}
+            </div>
           </div>
           <div style={{ ...small, color: T.inkGhost, fontStyle: "italic" }}>{pdf.list.placeholder} (o cabeçalho se repete em cada página)</div>
           <div style={{ borderTop: `1.5px solid ${T.ink}`, paddingTop: 6 }}>
             <div style={label}>Totais do recorte</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, marginTop: 4 }}>
+            <div data-testid="export-preview-pdf-boxes" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
               {pdf.list.boxes.map((box) => (
-                <div key={box.label} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 6px", minWidth: 0 }}>
+                <div key={box.label} style={{ flex: "1 1 104px", border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 6px", minWidth: 0 }}>
                   <div style={label}>{box.label}</div>
-                  <div style={{ ...NUM, fontSize: 11, fontWeight: 700 }}>{box.text}</div>
+                  <div style={{ ...NUM, fontSize: 11, fontWeight: 700, overflowWrap: "anywhere" }}>{box.text}</div>
                 </div>
               ))}
             </div>
