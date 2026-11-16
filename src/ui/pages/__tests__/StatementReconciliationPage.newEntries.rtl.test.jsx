@@ -484,7 +484,9 @@ describe("adicionar lançamentos novos", () => {
     await user.click(markBox("20/10/2026"));
 
     expect(screen.getByLabelText("Categoria", { selector: "#bulk-category" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Aplicar aos 0 a adicionar" })).toBeDisabled();
+    // BUG-03: nenhum "Aplicar aos 0"; o botão fica desligado e a nota diz por quê.
+    expect(screen.getByRole("button", { name: "Aplicar categoria" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /\b0\b/ })).toBeNull();
     expect(screen.getByTestId("bulk-category-note")).toHaveTextContent("Os marcados estão como “Não registrar”: a categoria só vale para lançamentos que vão ser adicionados.");
     expect(calls.some((c) => c.batch)).toBe(false);
   });

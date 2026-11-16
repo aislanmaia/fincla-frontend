@@ -280,6 +280,17 @@ describe("Conferir o saldo: transações sem par", () => {
     expect(lastChecks()).toEqual([{ transaction_id: 97, action: "change_date", new_date: "2026-10-21" }]);
   });
 
+  it("em lote: marcada só a que não pode ser excluída, o botão não fala em 0 (BUG-03)", async () => {
+    const user = await openPage();
+
+    await user.click(screen.getByRole("checkbox", { name: "Marcar Farmácia" }));
+    const bar = screen.getByTestId("balance-selection");
+    expect(bar).toHaveTextContent("1 marcada");
+    expect(bar).toHaveTextContent("1 não pode ser excluída");
+    expect(within(bar).getByRole("button", { name: "Excluir as marcadas" })).toBeDisabled();
+    expect(bar).not.toHaveTextContent(/\b0 das marcadas/);
+  });
+
   it("em lote: exclui as marcadas que podem ser excluídas, e o Desfazer devolve o que cada uma tinha", async () => {
     const user = await openPage();
 
