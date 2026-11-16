@@ -195,6 +195,46 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
     expect(seen.legacy).toEqual([]);
   });
 
+  describe("no celular (#527)", () => {
+    const original = window.matchMedia;
+    afterEach(() => { window.matchMedia = original; });
+    const stubViewport = (width) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+    };
+
+    it("o layout do celular tem o botão Exportar, que abre o painel em tela cheia e baixa o período do relatório", async () => {
+      stubViewport(390);
+      withApi();
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/R\$\s?100/));
+      await user.click(screen.getByRole("button", { name: "3m" }));
+      await user.click(screen.getByRole("button", { name: "Exportar" }));
+      const panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(panel).toHaveAttribute("data-full-screen", "true");
+      expect(within(panel).queryByTestId("export-preview")).toBeNull();
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/09/2026 a 30/11/2026");
+      expect(await within(panel).findByText("7 lançamentos")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2026-09-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].get("file_prefix")).toBe("relatorios-2026-09-a-2026-11");
+    });
+
+    it("em demonstração o botão do celular aparece desativado, com o motivo", async () => {
+      withApi();
+      render(<RelatoriosPage dataMode="mock" organizationId={null} isMobile />);
+      const button = screen.getByRole("button", { name: "Exportar" });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", "Disponível com os dados da sua organização");
+    });
+  });
+
   it("a tela não usa mais o cliente antigo de exportação", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");

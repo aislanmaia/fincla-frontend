@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const exportMock = vi.fn();
@@ -334,6 +334,140 @@ describe("<ExportPanel> — prévia lateral só com espaço (QA BUG-02)", () => 
     stubViewport(width);
     const { panel } = renderPanel();
     expect(within(panel).getByTestId("export-preview")).toHaveTextContent("Prévia do arquivo (PDF)");
+  });
+});
+
+describe("<ExportPanel> — modo celular: tela cheia e prévia em tela cheia (#527)", () => {
+  const stubViewport = (width) => {
+    window.matchMedia = vi.fn((query) => {
+      const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+      return {
+        matches: Number.isFinite(max) ? width <= max : false,
+        media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      };
+    });
+  };
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  const steps = (panel) => ["Lançamentos exportados", "Formato do arquivo", "Totais do relatório"]
+    .map((name) => within(panel).queryByRole("region", { name }));
+
+  it.each([390, 699])("com %i px o painel ocupa a tela inteira, só com os três passos e o link da prévia", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    expect(panel).toHaveAttribute("data-full-screen", "true");
+    expect(panel.style.width).toBe("100%");
+    expect(panel.style.height).toBe("100%");
+    // Sem `vh` (o app-shell não usa): a altura vem do contêiner fixo.
+    expect(panel.getAttribute("style")).not.toMatch(/vh/);
+    // A área segura do aparelho fica fora do cabeçalho e do rodapé.
+    expect(screen.getByTestId("export-panel-header").style.paddingTop).toContain("safe-area-inset-top");
+    expect(screen.getByTestId("export-panel-footer").style.paddingBottom).toContain("safe-area-inset-bottom");
+    expect(steps(panel).every(Boolean)).toBe(true);
+    expect(within(panel).queryByTestId("export-preview")).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Ver prévia do arquivo" })).toBeInTheDocument();
+  });
+
+  it.each([700, 1440])("com %i px nada muda: drawer lateral com a prévia ao lado e sem o link", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    expect(panel).not.toHaveAttribute("data-full-screen", "true");
+    // jsdom descarta `min(100%, 820px)` no CSSOM; basta provar que não virou a tela inteira.
+    expect(panel.style.width).not.toBe("100%");
+    expect(screen.getByTestId("export-panel-header").style.paddingTop).not.toContain("safe-area");
+    expect(within(panel).getByTestId("export-preview")).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Ver prévia do arquivo" })).toBeNull();
+  });
+
+  it("o link abre a prévia em tela cheia; voltar devolve o painel com formato e conteúdo mantidos", async () => {
+    stubViewport(390);
+    const user = userEvent.setup();
+    const { panel, onClose } = renderPanel();
+    await user.click(within(panel).getByRole("radio", { name: /Só o resumo/ }));
+    await user.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+
+    const preview = within(panel).getByTestId("export-preview");
+    expect(preview).toHaveTextContent("Prévia do arquivo (PDF)");
+    // A prévia é do conteúdo escolhido: "Só o resumo" (sem a lista).
+    expect(within(preview).getByTestId("export-preview-pdf")).toHaveTextContent("Versão resumida");
+    expect(within(preview).queryByText("Lançamentos")).toBeNull();
+    // Em tela cheia a prévia substitui os passos (não fica espremida ao lado).
+    expect(steps(panel).some(Boolean)).toBe(false);
+    expect(panel).toHaveAttribute("data-full-screen", "true");
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    await user.click(within(panel).getAllByRole("button", { name: "Voltar ao painel" })[0]);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(steps(panel).every(Boolean)).toBe(true);
+    expect(within(panel).queryByTestId("export-preview")).toBeNull();
+    expect(within(panel).getByRole("button", { name: "PDF" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(panel).getByRole("radio", { name: /Só o resumo/ })).toBeChecked();
+    // O foco volta para o link que abriu a prévia.
+    expect(within(panel).getByRole("button", { name: "Ver prévia do arquivo" })).toHaveFocus();
+  });
+
+  it("Esc na prévia volta ao painel (com o formato mantido); Esc no painel fecha", async () => {
+    stubViewport(699);
+    const user = userEvent.setup();
+    const { panel, onClose } = renderPanel();
+    await user.click(within(panel).getByRole("button", { name: "XLSX" }));
+    await user.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+    expect(within(panel).getByTestId("export-preview-sheet")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(within(panel).queryByTestId("export-preview")).toBeNull();
+    expect(within(panel).getByRole("button", { name: "XLSX" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("o ✕ da prévia volta ao painel, não fecha a exportação", async () => {
+    stubViewport(390);
+    const user = userEvent.setup();
+    const { panel, onClose } = renderPanel();
+    await user.click(within(panel).getByRole("button", { name: "CSV" }));
+    await user.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+    expect(within(panel).queryByRole("button", { name: "Fechar" })).toBeNull();
+    const back = within(panel).getAllByRole("button", { name: "Voltar ao painel" });
+    expect(back.length).toBeGreaterThanOrEqual(1);
+    await user.click(back[back.length - 1]);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(within(panel).getByRole("button", { name: "CSV" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("dá para exportar direto da prévia, com o formato e o conteúdo escolhidos", async () => {
+    stubViewport(390);
+    const user = userEvent.setup();
+    const { panel, onClose } = renderPanel();
+    await user.click(within(panel).getByRole("radio", { name: /Só o resumo/ }));
+    await user.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(exportMock).toHaveBeenCalledWith(expect.objectContaining({ format: "pdf", content: "summary" }));
+  });
+
+  it("se a tela alargar para 700 px com a prévia aberta, volta o drawer com os passos e a prévia ao lado", () => {
+    let width = 390;
+    const listeners = new Set();
+    window.matchMedia = vi.fn((query) => {
+      const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+      return {
+        get matches() { return width <= max; },
+        media: query,
+        addEventListener: (_t, fn) => listeners.add(fn),
+        removeEventListener: (_t, fn) => listeners.delete(fn),
+      };
+    });
+    const { panel } = renderPanel();
+    within(panel).getByRole("button", { name: "Ver prévia do arquivo" }).click();
+    width = 700;
+    act(() => listeners.forEach((fn) => fn({ matches: false })));
+    expect(steps(panel).every(Boolean)).toBe(true);
+    expect(within(panel).getByTestId("export-preview")).toBeInTheDocument();
+    expect(panel).not.toHaveAttribute("data-full-screen", "true");
   });
 });
 
