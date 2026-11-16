@@ -20,7 +20,6 @@ export function confirmAllLabel(count) {
 }
 import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
-import { LINK } from "./StatementImportNotes.jsx";
 import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
   CurrentEntryFrame, EntryQueueHeader, InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact, useStableCallback,
@@ -195,11 +194,12 @@ function AnswerButtons({ entry, busy, onAnswer }) {
   );
 }
 
-export function UndoChoiceButton({ entry, onUndoChoice }) {
+/** "Desfazer escolha": vermelho no cartão; discreto (`inRow`) na linha minimizada, que já é clicável. */
+export function UndoChoiceButton({ entry, onUndoChoice, inRow = false }) {
   return (
-    <button type="button" onClick={() => onUndoChoice(entry)} style={{ ...LINK, fontSize: 12, color: T.inkMid }}>
+    <Btn variant={inRow ? "ghost" : "outRed"} small onClick={() => onUndoChoice(entry)}>
       Desfazer escolha
-    </button>
+    </Btn>
   );
 }
 
@@ -264,21 +264,22 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
   useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
     <div data-testid="pair-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
-      <button
+      <Btn
         ref={alterRef}
-        type="button"
+        variant="ghost"
+        small
         onClick={() => onOpen(entry)}
         aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
-        style={{ ...LINK, fontSize: 12, color: T.blue, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 2 }}
+        style={{ color: T.blue, gap: 2 }}
       >
         <ChevronRight size={13} aria-hidden="true" />Alterar
-      </button>
+      </Btn>
       <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(entry.date)}</span>
       <span style={{ color: T.ink, fontWeight: 600, minWidth: 0, wordBreak: "break-word" }}>{entry.bank_description}</span>
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       <StatusBadge entry={entry} />
       <span style={{ flex: 1, minWidth: 160 }}>{rowSummary(entry)}</span>
-      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
+      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
 });
@@ -327,7 +328,7 @@ export function SuggestedPairsStep({
         <div role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <Check size={14} aria-hidden="true" style={{ color: T.green }} />
           <span style={{ flex: 1 }}>{plural(lastBulk.length, "lançamento confirmado", "lançamentos confirmados")}</span>
-          <button type="button" onClick={onUndoConfirmAll} disabled={busy} style={{ ...LINK, color: T.ink }}>Desfazer</button>
+          <Btn variant="outRed" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
         </div>
       ) : null}
       {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (

@@ -3,7 +3,7 @@ import { Ban, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge, Select } from "../../components/primitives";
+import { Badge, Btn, Select } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
 import { InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact } from "./entryQueue.jsx";
@@ -128,9 +128,9 @@ function AnswerSegment({ entry, onChange, onSearch = null }) {
         </button>
       </div>
       {onSearch ? (
-        <button type="button" onClick={() => onSearch(entry)} style={{ ...G, fontSize: 12, color: T.blue, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+        <Btn variant="outGray" small onClick={() => onSearch(entry)} style={{ alignSelf: "flex-start" }}>
           Está no Fincla com outros dados…
-        </button>
+        </Btn>
       ) : null}
     </div>
   );
@@ -176,9 +176,9 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
       <span style={{ ...NUM, fontSize: 13, color: T.inkMid, opacity: 0.7 }}>{formatMoney(entry.amount, entry.currency)}</span>
       <SkipBadge />
       <span style={{ fontSize: 12, color: T.inkLight }}>fica fora do Fincla</span>
-      <button type="button" onClick={() => onUndo(entry.id)} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+      <Btn variant="ghost" small onClick={() => onUndo(entry.id)}>
         Desfazer
-      </button>
+      </Btn>
     </div>
   );
 });

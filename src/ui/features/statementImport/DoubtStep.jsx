@@ -17,7 +17,6 @@ import { plural } from "../../plural.js";
 import { SKIP_BG, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
-import { LINK } from "./StatementImportNotes.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, openOnRowClick, useStableCallback } from "./entryQueue.jsx";
 
 const QUESTION = "Este lançamento do banco já está no Fincla?";
@@ -98,9 +97,9 @@ function Answers({ entry, busy, wantPair, onYes, onAnswer, onSearch }) {
           </button>
         ))}
       </div>
-      <button type="button" onClick={() => onSearch(entry)} disabled={busy} style={{ ...LINK, fontSize: 12, color: T.blue }}>
+      <Btn variant="outGray" small onClick={() => onSearch(entry)} disabled={busy} style={{ alignSelf: "flex-start" }}>
         Está no Fincla com outros dados…
-      </button>
+      </Btn>
     </div>
   );
 }
@@ -237,21 +236,22 @@ export const DoubtRow = memo(function DoubtRowView({ entry, canUndo, focus = fal
   useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
   return (
     <div data-testid="doubt-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", background: entry.answer === "ignore" ? SKIP_BG : T.surface, border: `1px solid ${T.border}`, borderRadius: 12, ...G, fontSize: 12, color: T.inkMid }}>
-      <button
+      <Btn
         ref={alterRef}
-        type="button"
+        variant="ghost"
+        small
         onClick={() => onOpen(entry)}
         aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
-        style={{ ...LINK, fontSize: 12, color: T.blue, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 2 }}
+        style={{ color: T.blue, gap: 2 }}
       >
         <ChevronRight size={13} aria-hidden="true" />Alterar
-      </button>
+      </Btn>
       <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(entry.date)}</span>
       <span style={{ color: T.ink, fontWeight: 600, minWidth: 0, wordBreak: "break-word" }}>{entry.bank_description}</span>
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       {entry.answer === null ? <Badge color={T.amber} bg={T.amberLight}>Falta responder</Badge> : <StatusBadge entry={entry} />}
       <span style={{ flex: 1, minWidth: 160 }}>{entry.answer === null ? <span style={{ color: T.inkLight }}>{doubtHint(entry)}</span> : rowSummary(entry)}</span>
-      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
+      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
 });

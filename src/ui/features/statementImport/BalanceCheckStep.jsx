@@ -21,7 +21,6 @@ const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : fo
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
-import { LINK } from "./StatementImportNotes.jsx";
 import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
@@ -217,12 +216,14 @@ const REFUSAL_TEXT = {
   refunded: "Tem um estorno ligado a ela: cuide do estorno em Lançamentos para poder excluir.",
 };
 
-function CheckState({ item, periodEnd, onUndo, busy }) {
+/** O estado da resposta, com o desfazer: vermelho no cartão; discreto (`inRow`) na linha minimizada, já clicável. */
+function CheckState({ item, periodEnd, onUndo, busy, inRow = false }) {
+  const undoVariant = inRow ? "ghost" : "outRed";
   if (item.check === "delete") {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <Badge color={T.red} bg={T.redLight}>Será excluída ao concluir</Badge>
-        <button type="button" disabled={busy} onClick={onUndo} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer exclusão</button>
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer exclusão</Btn>
       </span>
     );
   }
@@ -235,7 +236,7 @@ function CheckState({ item, periodEnd, onUndo, busy }) {
           <s style={{ color: T.inkLight }}>{bankDateLabel(item.day)}</s> → <b>{bankDateLabel(item.new_date)}</b>
           {out ? " · sai desta conferência" : ""}
         </span>
-        <button type="button" disabled={busy} onClick={onUndo} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer</button>
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer</Btn>
       </span>
     );
   }
@@ -243,7 +244,7 @@ function CheckState({ item, periodEnd, onUndo, busy }) {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <Badge color={T.green} bg={T.greenLight}>Você disse que está certa</Badge>
-        <button type="button" disabled={busy} onClick={onUndo} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer</button>
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer</Btn>
       </span>
     );
   }
@@ -292,9 +293,9 @@ function HintNote({ item, entry, busy, onPairHint }) {
       <span>
         Parece o lançamento do banco de <b style={NUM}>{bankDateLabel(entry.date)}</b> “{entry.bank_description}” (
         <span style={NUM}>{signed(entry.amount, entry.currency)}</span>), que está marcado para adicionar ao Fincla.{" "}
-        <button type="button" disabled={busy} onClick={() => onPairHint(item, entry)} style={{ ...LINK, fontSize: 13, color: T.blue }}>
+        <Btn variant="outGray" small disabled={busy} onClick={() => onPairHint(item, entry)}>
           É este lançamento do banco
-        </button>
+        </Btn>
       </span>
     </div>
   );
@@ -388,10 +389,10 @@ const UnmatchedRow = memo(function UnmatchedRowView({ item, periodEnd, selected,
   return (
     <div data-testid="unmatched-transaction" onClick={openOnRowClick(() => onOpen(item))} style={{ ...ROW, ...ROW_CLICKABLE, flexDirection: "column", alignItems: "stretch" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <button type="button" onClick={() => onOpen(item)} style={{ ...LINK, fontSize: 12, color: T.blue, marginTop: 2 }}>Alterar</button>
+        <Btn variant="ghost" small onClick={() => onOpen(item)} style={{ color: T.blue }}>Alterar</Btn>
         <UnmatchedSummary item={item} selected={selected} onSelect={onSelect} busy={busy} />
       </div>
-      <CheckState item={item} periodEnd={periodEnd} onUndo={() => onUndo(item)} busy={busy} />
+      <CheckState item={item} periodEnd={periodEnd} onUndo={() => onUndo(item)} busy={busy} inRow />
     </div>
   );
 });
@@ -445,7 +446,7 @@ function LinkedRow({ link, busy, onUndo }) {
         </span>
         <span style={{ fontSize: 12, color: T.inkLight }}>
           Você disse que é o lançamento “{link.bankDescription}”. Não entra mais na diferença.{" "}
-          <button type="button" disabled={busy} onClick={() => onUndo(link)} style={{ ...LINK, fontSize: 12, color: T.blue }}>Desfazer</button>
+          <Btn variant="outRed" small disabled={busy} onClick={() => onUndo(link)}>Desfazer</Btn>
         </span>
       </div>
       <span style={{ ...NUM, fontSize: 13, color: T.inkMid }}>{signed(link.amount, link.currency)}</span>
@@ -459,9 +460,9 @@ function SelectionBar({ items, busy, onClear, onBatch }) {
   const currency = items[0]?.currency;
   return (
     <div data-testid="balance-selection" role="region" aria-label="Transações marcadas" style={{ ...G, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "8px 12px", borderRadius: 12, background: T.ink, color: "#fff" }}>
-      <button type="button" onClick={onClear} aria-label="Desmarcar todas" style={{ ...LINK, color: "#fff", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <Btn variant="ghost" small onClick={onClear} aria-label="Desmarcar todas" style={{ color: "#fff", gap: 4 }}>
         <X size={12} aria-hidden="true" />Desmarcar
-      </button>
+      </Btn>
       <b style={{ fontSize: 13 }}>{plural(items.length, "marcada", "marcadas")}</b>
       <span style={{ ...NUM, fontSize: 12 }}>soma {signed(sum, currency)}</span>
       <span style={{ flex: 1 }} />
@@ -491,7 +492,7 @@ function PendingNotes({ check, onGoToPending }) {
           <span>
             {plural(check.unanswered_entries, "lançamento do banco ainda está", "lançamentos do banco ainda estão")} sem decisão. Eles
             também entram na diferença até você decidir.{" "}
-            <button type="button" onClick={onGoToPending} style={{ ...LINK, fontSize: 13, color: T.blue }}>Ir para eles</button>
+            <Btn variant="outGray" small onClick={onGoToPending}>Ir para eles</Btn>
           </span>
         </div>
       ) : null}
@@ -500,7 +501,7 @@ function PendingNotes({ check, onGoToPending }) {
           <Info size={15} aria-hidden="true" style={{ color: T.amber, flexShrink: 0, marginTop: 2 }} />
           <span>
             <WaitingText check={check} />{" "}
-            <button type="button" onClick={onGoToPending} style={{ ...LINK, fontSize: 13, color: T.blue }}>Responder agora</button>
+            <Btn variant="outGray" small onClick={onGoToPending}>Responder agora</Btn>
           </span>
         </div>
       ) : null}
@@ -610,7 +611,7 @@ function LeftOutEntries({ entries, onRedecide }) {
             <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>
               {bankDateLabel(e.date)} · {e.kind === "brought_back" ? "anterior ao início, mas você trouxe de volta" : "aconteceu no banco e não vai para o Fincla"}
             </span>
-            <button type="button" onClick={() => onRedecide(e)} style={{ ...LINK, fontSize: 12, color: T.blue, alignSelf: "flex-start" }}>Voltar a decidir</button>
+            <Btn variant="outGray" small onClick={() => onRedecide(e)} style={{ alignSelf: "flex-start" }}>Voltar a decidir</Btn>
           </div>
           <span style={{ ...NUM, fontSize: 13, color: e.amount > 0 ? T.green : T.inkMid }}>{signed(e.amount, e.currency)}</span>
         </div>
@@ -717,7 +718,7 @@ export function BalanceCheckStep({
             <div data-testid="balance-batch-undo" role="status" style={{ ...G, display: "flex", gap: 8, alignItems: "center", fontSize: 13, padding: "8px 12px", borderRadius: 12, background: T.greenLight, border: `1px solid ${T.greenBorder}` }}>
               <Check size={14} aria-hidden="true" style={{ color: T.green }} />
               <span style={{ flex: 1 }}>{lastBatch.label}</span>
-              <button type="button" disabled={busy} onClick={undoBatch} style={{ ...LINK, fontSize: 13, color: T.blue }}>Desfazer</button>
+              <Btn variant="outRed" small disabled={busy} onClick={undoBatch}>Desfazer</Btn>
             </div>
           ) : null}
           {chosen.length ? <SelectionBar items={chosen} busy={busy} onClear={() => setSelected(new Set())} onBatch={batch} /> : null}

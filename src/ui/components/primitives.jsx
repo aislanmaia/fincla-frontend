@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { forwardRef, useState, useEffect, useRef } from "react";
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 
@@ -291,7 +291,8 @@ export function CollapsibleSection({ open, children }) {
   );
 }
 
-export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }) {
+// `ref` chega ao <button> (foco movido pela tela, ex.: o "Alterar" de uma linha da conciliação).
+export const Btn = forwardRef(function BtnView({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }, ref) {
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
     blue: { bg: T.blue, txt: "#fff", brd: T.blue },
@@ -307,6 +308,7 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
   const s = styles[variant] || styles.outGray;
   return (
     <button
+      ref={ref}
       {...buttonProps}
       type={type}
       disabled={disabled}
@@ -337,7 +339,7 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
       {children}
     </button>
   );
-}
+});
 
 export function Select({ children, style, disabled = false, ...selectProps }) {
   return <select
