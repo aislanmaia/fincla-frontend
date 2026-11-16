@@ -4,8 +4,8 @@ import { X } from "lucide-react";
 import { Btn, Select } from "../../components/primitives.jsx";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
-import { useFocusTrap } from "../transactions/useFocusTrap.js";
-import { EXPORT_MAX_ROWS } from "./ledgerExport.js";
+import { useFocusTrap } from "../../components/useFocusTrap.js";
+import { EXPORT_MAX_ROWS } from "../export/exportFailure.js";
 import { installmentOf } from "./ledgerModel.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];

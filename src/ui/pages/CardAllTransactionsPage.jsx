@@ -3,7 +3,7 @@ import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-ro
 import { ArrowLeft, Download, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
-import { exportTransactionsCsv, getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
+import { exportTransactions, getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { dayKey, groupSubtotal, installmentOf } from "../features/cardTransactions/ledgerModel.js";
@@ -14,7 +14,9 @@ import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, 
 import { useLedgerAssistant } from "../features/cardTransactions/useLedgerAssistant.js";
 import { categorizeRows, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
 import { saveBlob } from "../features/export/saveBlob.js";
-import { buildPdfParts, buildPrintHtml, downloadCsv, exportFailureMessage, exportFileName, printHtml } from "../features/cardTransactions/ledgerExport.js";
+import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
+import { exportFailureMessage } from "../features/export/exportFailure.js";
+import { filePrefixOf, userTimezone } from "../features/export/exportRequest.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -36,12 +38,12 @@ import { useTransactionsFilterState } from "../features/transactions/filters/use
 import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
 import { buildTagOptions, isTagFilterBlocked, resolveTagFilterStatuses, tagFilterStatusMessage, tagOptionsToDisplayMap } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
-import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { useFocusTrap } from "../components/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
 import { parseMoneyInputFor } from "../money/moneyInput.js";
 import { useOrganizationBaseCurrency } from "../money/useOrganizationBaseCurrency.js";
-import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../data/transactionsAdapter.js";
+import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction, todayLocalYmd } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
@@ -525,19 +527,33 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     onRefund({ transactionId: row.id, cardId: state.card?.id, description: row.description, amount, dateLabel: formatYmdToBrDisplay(String(row.date ?? "").slice(0, 10)), category: pickCategoryTagFromApiTransaction(row)?.label || row.category || undefined });
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
+  const exportTitle = () => `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`;
   const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
   // CSV do recorte inteiro vem do servidor (todas as páginas, até 20.000); a seleção marcada e o PDF (impressão do
   // navegador) partem das linhas que já temos / lidas página a página.
   const submitExport = async (format, selectionRows = null) => {
     try {
       if (format === "csv" && !selectionRows) {
-        saveBlob(await exportTransactionsCsv({ organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}), ...aggregateFilter }), exportFileName("csv"));
+        // O arquivo descreve o próprio recorte (fincla-api#520, história 8): título, filtros em texto e nome do cartão.
+        const filePrefix = cardScope === "all" ? filePrefixOf("cartoes") : filePrefixOf("cartao", cardLabel(state.card));
+        const { blob, fileName } = await exportTransactions({
+          organization_id: organizationId,
+          ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}),
+          ...aggregateFilter,
+          format: "csv",
+          title: exportTitle(),
+          filters_text: filterSummary(),
+          file_prefix: filePrefix,
+          timezone: userTimezone(),
+          locale: "pt-BR",
+        });
+        saveBlob(blob, fileName || `${filePrefix}-${todayLocalYmd()}.csv`);
         return null;
       }
       const all = selectionRows ?? await exportRowsOf();
       if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
       printHtml(buildPrintHtml({
-        title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
+        title: exportTitle(),
         subtitle: selectionRows ? `${all.length} lançamento${all.length === 1 ? "" : "s"} selecionado${all.length === 1 ? "" : "s"}` : `${plural(all.length, "lançamento", "lançamentos")} · ${filterSummary().join(" · ")}`,
         ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
       }));

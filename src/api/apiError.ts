@@ -280,3 +280,19 @@ export const errorCode = (error: unknown): SafeErrorCode | undefined => {
   const detail = (error.response?.data as ApiErrorBody | undefined)?.detail;
   return isSafeError(detail) ? detail.code : undefined;
 };
+
+/**
+ * Por que o servidor recusou: a mensagem do PRÓPRIO servidor, quando é regra de negócio (400/409/422), como
+ * "Reabra a fatura paga antes de alterar seus lançamentos." Falha de rede, 5xx ou mensagem que o sanitizador
+ * reprova não têm causa que o usuário resolva: ficam sem motivo (e com o convite a tentar de novo).
+ */
+export function refusalReason(error: unknown): string {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response;
+  const status = response?.status;
+  const detail = response?.data?.detail;
+  if (status === undefined || ![400, 409, 422].includes(status) || !(isSafeError(detail) || isLegacyError(detail))) {
+    return '';
+  }
+  const message = humanizeDetailString(detail.message, status);
+  return message && !/[.!?]$/.test(message) ? `${message}.` : message;
+}
