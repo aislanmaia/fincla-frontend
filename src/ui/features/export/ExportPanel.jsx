@@ -30,6 +30,7 @@ import { saveBlob } from "./saveBlob.js";
  * os parâmetros de filtro da listagem (o MESMO objeto que pediu o resumo), a contagem do recorte e o resumo que ela
  * já tem. O painel não filtra e não soma: o arquivo sai do exportador do servidor, com os totais do mesmo resumo.
  *
+ * `summaryError` é o motivo de o resumo do recorte não ter vindo (a tela que pede o resumo só ao abrir o painel).
  * `selection` ({ ids, count, summary, error }) é a "Exportar seleção" (#524): troca o recorte pelos marcados. `summary` é
  * o resumo pedido com os mesmos `ids` (totais só dos marcados); `error`, o motivo de ele não ter vindo.
  * `formats` diz quais formatos o servidor já gera; PDF, quando presente, vem selecionado (senão, o CSV).
@@ -412,6 +413,7 @@ export function ExportPanel({
   filterParams,
   count,
   summary,
+  summaryError = null,
   selection = null,
   formats = AVAILABLE_EXPORT_FORMATS,
   fullScreen = false,
@@ -493,7 +495,7 @@ export function ExportPanel({
             <FormatStep formats={formats} format={format} onFormat={setFormat} content={content} onContent={setContent} />
           </ExportStep>
           <ExportStep n={3} title="Totais do relatório">
-            <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection?.error} />
+            <TotalsStep totals={totals} error={selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError} />
           </ExportStep>
           {status.error && (
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>
