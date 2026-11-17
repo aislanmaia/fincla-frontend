@@ -1011,11 +1011,14 @@ export async function listTransactionsForUi(query) {
   const wantRaw = query.limit ?? 10;
   const want = Math.max(1, wantRaw);
 
-  if (want <= TRANSACTIONS_API_MAX_LIMIT && page === 1) {
+  /* Até o teto do servidor, a página pedida vai como está — o scroll infinito
+     das Transações pede page 2, 3… com o mesmo `limit` (fincla-api#535). Só
+     acima do teto (e na página 1) os lotes de 100 são juntados aqui. */
+  if (want <= TRANSACTIONS_API_MAX_LIMIT) {
     return listTransactions({
       ...query,
       limit: want,
-      page: 1,
+      page,
     });
   }
 
