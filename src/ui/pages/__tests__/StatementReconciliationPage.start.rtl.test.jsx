@@ -160,6 +160,85 @@ describe("a tela inicial, sem rascunho", () => {
     expect(screen.getByTestId("start-upload-row").style.flexGrow).not.toBe("1");
   });
 
+  it("a altura chega à linha: página, conta e linha esticam em cadeia (G3 achado 10)", async () => {
+    await openAccount();
+    await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+    const page = screen.getByTestId("statement-reconciliation-page");
+    expect(page.style.flexGrow).toBe("1");
+    expect(page.style.display).toBe("flex");
+    expect(page.style.flexDirection).toBe("column");
+    const view = screen.getByTestId("account-statements-view");
+    expect(view.parentElement).toBe(page);
+    expect(view.style.flexGrow).toBe("1");
+    expect(view.style.display).toBe("flex");
+    expect(view.style.flexDirection).toBe("column");
+    const row = screen.getByTestId("start-upload-row");
+    expect(row.parentElement).toBe(view);
+    expect(row.style.flexGrow).toBe("1");
+  });
+
+  it("linha esticada: a lista de extratos ocupa a coluna inteira (G3 achado 3); com rascunho, volta a medir o conteúdo até 480px", async () => {
+    imports = [clone(CONCLUDED)];
+    await openAccount();
+    await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+    expect(screen.getByTestId("imported-statements-scroll").style.position).toBe("absolute");
+    cleanup();
+
+    imports = [openDraft(["suggested"])];
+    await openAccount();
+    await screen.findByRole("button", { name: /Ou solte aqui outro extrato/ });
+    const scroll = screen.getByTestId("imported-statements-scroll");
+    expect(scroll.style.position).not.toBe("absolute");
+    expect(scroll.style.maxHeight).toBe("480px");
+  });
+
+  it("no celular a linha não estica e a lista mede o conteúdo", async () => {
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Extratos importados" });
+    expect(screen.getByTestId("imported-statements-scroll").style.position).not.toBe("absolute");
+  });
+
+  describe("linha que quebra (768–1030px: área e lista não cabem lado a lado)", () => {
+    let rowWidth = 0;
+    beforeAll(() => {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        configurable: true,
+        get() { return this.dataset?.testid === "start-upload-row" ? rowWidth : 0; },
+      });
+    });
+    // A propriedade original mora em Element.prototype: apagar a cópia devolve a original.
+    afterAll(() => { delete HTMLElement.prototype.clientWidth; });
+    afterEach(() => { rowWidth = 0; });
+
+    it("quebrou (700px): não estica — sem meia altura extra na área nem faixa vazia na lista", async () => {
+      rowWidth = 700;
+      await openAccount();
+      await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+      expect(screen.getByTestId("start-upload-row").style.flexGrow).toBe("0");
+      const scroll = screen.getByTestId("imported-statements-scroll");
+      expect(scroll.style.position).not.toBe("absolute");
+      expect(scroll.style.maxHeight).toBe("480px");
+    });
+
+    it("cabe lado a lado (776px): estica", async () => {
+      rowWidth = 776;
+      await openAccount();
+      await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+      expect(screen.getByTestId("start-upload-row").style.flexGrow).toBe("1");
+    });
+
+    it("a janela estreita depois de aberta: deixa de esticar", async () => {
+      rowWidth = 1000;
+      await openAccount();
+      await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+      expect(screen.getByTestId("start-upload-row").style.flexGrow).toBe("1");
+      rowWidth = 760;
+      fireEvent(window, new Event("resize"));
+      await waitFor(() => expect(screen.getByTestId("start-upload-row").style.flexGrow).toBe("0"));
+    });
+  });
+
   it("no celular a área fala em tocar, não em soltar nem clicar (G4 OBS)", async () => {
     params = { accountId: ACCOUNT };
     render(<StatementReconciliationPage organizationId={ORG} isMobile />);

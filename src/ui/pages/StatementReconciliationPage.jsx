@@ -16,6 +16,7 @@ import { formatMoney } from "../money/formatMoney.js";
 import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
 import { listTags } from "../../api/tags";
+import { ROW_GAP, UPLOAD_BASIS, useStartRowWraps } from "../features/statementImport/startRowLayout.js";
 import {
   columnMappingPreviewOf,
   concludeStatementImport,
@@ -234,7 +235,7 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
 
   if (preview && file) {
     return (
-      <div style={{ flex: "999 1 460px", minWidth: 0 }}>
+      <div style={{ flex: `999 1 ${UPLOAD_BASIS}px`, minWidth: 0 }}>
         <ColumnMappingCard
           key={file.name}
           preview={preview}
@@ -248,7 +249,7 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
     );
   }
   return (
-    <div style={{ flex: "999 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ flex: `999 1 ${UPLOAD_BASIS}px`, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
       <StatementDropZone
         compact={compact}
         touch={touch}
@@ -368,6 +369,9 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
   const openImport = (item) => navigate({ to: statementReconciliationPath(accountId, item.id) });
   const loaded = items ?? [];
   const drafts = loaded.filter((i) => i.status === "draft");
+  const rowRef = useRef(null);
+  const rowWraps = useStartRowWraps(rowRef);
+  const stretch = !isMobile && drafts.length === 0 && !rowWraps;
   const tip = continueTip(loaded);
   const onDiscarded = () => {
     setNotice("Rascunho descartado. Nada mudou nas suas transações.");
@@ -379,7 +383,7 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0, flex: 1 }}>
+    <div data-testid="account-statements-view" style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0, flex: 1 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
           <PageTitle sans="Conciliar" serif="extrato" />
@@ -404,8 +408,10 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
         />
       ))}
       {/* Sem rascunho, a linha ocupa a altura que sobra (a área grande estica; a página só ganha
-          altura no computador, ver `fillsAvailableHeight`). Com rascunho a área é compacta e não estica. */}
-      <div data-testid="start-upload-row" style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0, flexGrow: drafts.length ? 0 : 1 }}>
+          altura no computador, ver `fillsAvailableHeight`) e a lista ocupa a coluna inteira. Com
+          rascunho a área é compacta e não estica. Linha quebrada (área e lista não cabem lado a lado):
+          não estica — esticar dividiria a sobra entre as duas linhas (G3 achado 3). */}
+      <div ref={rowRef} data-testid="start-upload-row" style={{ display: "flex", flexWrap: "wrap", gap: ROW_GAP, alignItems: "stretch", minHeight: 0, flexGrow: stretch ? 1 : 0 }}>
         {/* A área só aparece depois da lista (G4 OBS-12): o tamanho depende de haver rascunho, e
             nascer grande para encolher em seguida faz a tela pular. Lista com erro: aparece mesmo assim. */}
         {items || error ? (
@@ -422,6 +428,7 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
           <ImportedStatementsList
             items={items}
             isMobile={isMobile}
+            fill={stretch}
             onOpen={openImport}
             onUndo={(item) => navigate({ to: statementImportUndoPath(accountId, item.id) })}
           />
@@ -1273,7 +1280,7 @@ export function StatementReconciliationPage({ organizationId, isMobile = false, 
   const accountName = useAccountName(organizationId, accountId);
   if (!organizationId || !accountId) return null;
   return (
-    <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
+    <div data-testid="statement-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
       {importId ? (
         <DraftView
           key={importId}

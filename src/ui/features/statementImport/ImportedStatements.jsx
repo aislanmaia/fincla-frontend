@@ -21,6 +21,7 @@ import { SummaryEffects } from "./BalanceCheckStep.jsx";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
 import { ErrorNote } from "./StatementImportNotes.jsx";
 import { latestConcludedEnd } from "./reconcileShortcut.js";
+import { LIST_BASIS } from "./startRowLayout.js";
 import { STEPS, blockerText, passedStepsOf, progressBadge, stepProgress } from "./reconciliationSteps.js";
 import { summaryCountRows, unclassifiedText } from "./summaryRows.js";
 
@@ -383,13 +384,18 @@ function ImportedStatementRow({ item, first, onOpen, onUndo }) {
   );
 }
 
-export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false }) {
+/**
+ * @param fill a linha estica (tela inicial sem rascunho, no computador, lado a lado com a área): a
+ *   lista ocupa a coluna inteira e rola dentro dela (G3 achado 3). Sem `fill`, ela mede o próprio
+ *   conteúdo até um teto (G4 BUG-03: lista curta nunca cortada ao lado da área compacta).
+ */
+export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false, fill = false }) {
   const { drafts, years } = groupImports(items);
   return (
     <section
       aria-labelledby="imported-statements-title"
       style={{
-        ...G, flex: isMobile ? "1 1 100%" : "1 1 300px", maxWidth: isMobile ? "none" : 360, minWidth: 0, minHeight: isMobile ? 0 : 280,
+        ...G, flex: isMobile ? "1 1 100%" : `1 1 ${LIST_BASIS}px`, maxWidth: isMobile ? "none" : 360, minWidth: 0, minHeight: isMobile ? 0 : 280,
         background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden",
       }}
     >
@@ -402,11 +408,16 @@ export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false
       {/* A lista mede o próprio conteúdo até um teto e só então rola dentro da coluna. No computador é
           ela que dá a altura da linha e a área de soltar estica junto; presa à altura da área, uma
           lista curta ficava cortada ao lado da área compacta (G4 BUG-03). */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      {/* Esticada, o conteúdo sai do fluxo (absolute): a altura da coluna vem da linha, nunca da lista. */}
+      <div style={{ flex: 1, minHeight: 0, ...(fill ? { position: "relative" } : null) }}>
         <div
           data-testid="imported-statements-scroll"
           className="fincla-scroll"
-          style={{ maxHeight: isMobile ? 420 : 480, overflowY: "auto", padding: "0 16px 8px" }}
+          style={{
+            ...(fill ? { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 } : { maxHeight: isMobile ? 420 : 480 }),
+            overflowY: "auto",
+            padding: "0 16px 8px",
+          }}
         >
           {items.length ? (
             <>
