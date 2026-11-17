@@ -1025,14 +1025,6 @@ function TransacoesPageBody({
   /** Snapshot imediatamente anterior à aplicação da view ativa (para desaplicar). */
   const snapshotBeforeViewRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
-  const loadMoreCooldownRef = useRef(false);
-  // fincla-frontend#109 rodada 4, achado 2: uma falha ao "carregar mais" não
-  // tem NENHUM gatilho de retentativa hoje — `refreshToken` (prop, global)
-  // não muda por causa disso. Este token LOCAL, só combinado no
-  // `refreshToken` composto abaixo, dá à pessoa uma ação explícita
-  // ("Tentar novamente") sem reusar o token global (que também dispara
-  // outros efeitos da página, ex.: âncoras de saldo).
-  const [loadMoreRetryToken, setLoadMoreRetryToken] = useState(0);
   /* §29: recarregar a lista SEM recarregar a página.
      Uma falha de rede deixava a lista parada com um aviso e nenhuma saída: o
      único caminho de volta era o F5, que descarta filtro, rolagem e a linha
@@ -1536,7 +1528,9 @@ function TransacoesPageBody({
           cardSel: effectiveCardSel,
         },
         {
-          limit: visible,
+          /* O tamanho da PÁGINA, fixo: o scroll infinito pede page 2, 3… com
+             este mesmo `limit` (fincla-api#535). */
+          limit: PAGE_SIZE,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
           catLabelById: categoryApiNameById,
@@ -1561,7 +1555,7 @@ function TransacoesPageBody({
       filter.settlement,
       filter.rec,
       filter.tagMode,
-      visible,
+      PAGE_SIZE,
       totalCategoriesForBackend,
       /* O MAPA, não só a contagem. Renomear uma categoria não muda quantas
          existem, então `totalCategoriesForBackend` não se mexe — e o memo
@@ -1579,11 +1573,7 @@ function TransacoesPageBody({
     // do que mostrar a lista inteira se passando por filtrada.
     enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
-    // Composto com `loadMoreRetryToken`: o hook só compara por `!==`
-    // (nunca faz aritmética), então uma chave composta funciona igual a um
-    // número — e mantém o retry de paginação isolado do token GLOBAL (que
-    // também dispara outros efeitos da página).
-    refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
+    refreshToken: transactionsRefreshToken,
   });
   transactionsDataRef.current = transactionsData;
   /* Cartão/conta do filtro apagado em outra aba (#280, #296): a API responde 404
@@ -1686,7 +1676,7 @@ function TransacoesPageBody({
         ...estado,
       },
       {
-        limit: visible,
+        limit: PAGE_SIZE,
         debouncedSearch,
         totalCategories: totalCategoriesForBackend,
         catLabelById: categoryApiNameById,
@@ -1696,7 +1686,7 @@ function TransacoesPageBody({
   }, [NEUTRO_POR_FACETA, facetaComContadoresAVista, transactionsFilters, filter.type, filter.method,
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
+      PAGE_SIZE, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
       effectiveAccountSel, rangeCurrency, valueReadCurrency, effectiveCardSel]);
 
   const facetCounts = useTransactionsFacetCounts({
@@ -2190,7 +2180,12 @@ function TransacoesPageBody({
      depois de intercalar perdia as últimas transações mesmo sem mais páginas.
      Transferência só faz sentido na ordenação por data. */
   const sortedByDate = !filter.sort?.length || filter.sort[0]?.field === "date";
-  const transactionsWindow = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  /* Com dados reais a janela É o que o hook já leu: cada página chega pela
+     rolagem (fincla-api#535). `visible` só recorta o modo demonstração. */
+  const transactionsWindow = useMemo(
+    () => (shouldUseRealData ? filtered : filtered.slice(0, visible)),
+    [shouldUseRealData, filtered, visible],
+  );
   /* Seleção em lote: "todos" = os lançamentos já carregados (como no cartão);
      transferências do extrato não entram. */
   const selectableLoadedIds = useMemo(
@@ -2227,7 +2222,7 @@ function TransacoesPageBody({
   const displayedRows = useMemo(() => {
     if (!transferRows.length || !sortedByDate) return transactionsWindow;
     return mergeTransferRows(transactionsWindow, transferRows, {
-      hasMore: (shouldUseRealData && transactionsData.hasMore) || visible < filtered.length,
+      hasMore: shouldUseRealData ? transactionsData.hasMore : visible < filtered.length,
       ascending: filter.sort?.[0]?.dir === "asc",
     });
   }, [transactionsWindow, transferRows, sortedByDate, shouldUseRealData, transactionsData.hasMore,
@@ -2272,34 +2267,32 @@ function TransacoesPageBody({
       ? transactionsData.hasMore && !transactionsData.pageError
       : visible < filtered.length);
 
-  // fincla-frontend#109 rodada 4, achado 2: bumpa o token LOCAL de retry
-  // (definido acima, perto de `loadMoreSentinelRef`) — é a ÚNICA forma de
-  // re-disparar a MESMA consulta que falhou (organização/filtros/limit
-  // idênticos, então só um `refreshToken` novo força o efeito a rodar de
-  // novo).
-  const retryLoadMore = useCallback(() => {
-    setLoadMoreRetryToken((t) => t + 1);
-  }, []);
+  // "Tentar novamente": pede de novo a MESMA página que falhou (fincla-api#535),
+  // sem reler as anteriores nem sacudir o resto da tela.
+  const retryLoadMore = transactionsData.retryPage;
 
+  const loadNextPage = transactionsData.loadMore;
+  const loadedRows = shouldUseRealData ? transactionsData.transactions.length : visible;
   const tryLoadMore = useCallback(() => {
     if (searchAwaitingCommit) return;
     if (!hasMore) return;
-    if (shouldUseRealData && transactionsData.isLoading) return;
-    if (loadMoreCooldownRef.current) return;
-    loadMoreCooldownRef.current = true;
-    /* `visible` É o `limit` da API, que rejeita acima de 100 com 422 — e o
-       "Tentar novamente" reenviava a MESMA query estourada, deixando a pessoa
-       presa sem saída. Com PAGE_SIZE fixo em 10 a sequência batia exatamente em
-       100; dimensionado pela viewport ela passava do teto. */
-    setVisible((v) => Math.min(TX_PAGE_MAX, v + PAGE_SIZE));
-    window.setTimeout(() => {
-      loadMoreCooldownRef.current = false;
-    }, 400);
+    /* Dados reais: o hook pede a página seguinte com o mesmo `limit` e soma as
+       linhas; a guarda de "já tem uma página em voo" é dele, síncrona — uma
+       segunda entrada da sentinela antes do próximo render não pede de novo.
+       Antes isto só aumentava `limit` e parava em 100, o teto do servidor. */
+    if (shouldUseRealData) {
+      if (transactionsData.isLoading) return;
+      loadNextPage?.();
+      return;
+    }
+    setVisible((v) => v + PAGE_SIZE);
   }, [
     searchAwaitingCommit,
     hasMore,
     shouldUseRealData,
     transactionsData.isLoading,
+    loadNextPage,
+    PAGE_SIZE,
   ]);
 
   useEffect(() => {
@@ -2318,7 +2311,10 @@ function TransacoesPageBody({
     );
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [hasMore, isMobile, tryLoadMore]);
+    /* `loadedRows`: cada página que chega recria o observador, e a entrega
+       inicial dele pede a próxima se a sentinela continua à vista — numa tela
+       alta uma página não basta para rolar, e sem isto a lista parava ali. */
+  }, [hasMore, isMobile, tryLoadMore, loadedRows]);
 
   const listFiltersActive =
     searchInput.trim() !== "" || filter.hasAnyActive;
@@ -3998,6 +3994,15 @@ function TransacoesPageBody({
               fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
             Tentar novamente
           </button>
+        </div>
+      )}
+      {/* O fim de uma lista que veio em páginas precisa ser dito: sem isto, uma
+          lista que parou por limite e uma que acabou têm a mesma cara. */}
+      {shouldUseRealData && transactionsData.hasLoaded && !transactionsData.hasMore
+        && !transactionsData.pageError && !transactionsData.error
+        && transactionsData.transactions.length > PAGE_SIZE && (
+        <div style={{ ...G, textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
+          Fim da lista
         </div>
       )}
     </div>
