@@ -338,6 +338,26 @@ function ComposicaoDonutSection({ compositionData, compact = false, fmtBase, des
   );
 }
 
+/** "Exportar" sobre fundo claro: com nome no desktop, só o ícone (nome acessível) no celular. Componente de
+ *  módulo, não da página: definido lá dentro, remontaria a cada render. */
+function ExportButton({ compact = false, enabled, hint, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={compact ? "Exportar" : undefined}
+      disabled={!enabled}
+      title={enabled ? undefined : hint}
+      onClick={onClick}
+      style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexShrink:0,
+        ...(compact ? { width:36, height:36, borderRadius:10 } : { padding:"7px 12px", borderRadius:8 }),
+        border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600,
+        cursor:enabled ? "pointer" : "not-allowed", opacity:enabled ? 1 : 0.5 }}>
+      <Download size={compact ? 16 : 11} aria-hidden={compact ? "true" : undefined} />
+      {compact ? null : " Exportar"}
+    </button>
+  );
+}
+
 /* ─── RELATÓRIOS PAGE ────────────────────────────────────── */
 export function RelatoriosPage({
   onNav,
@@ -376,6 +396,23 @@ export function RelatoriosPage({
     ? { organization_id: organizationId, date_start: exportScope.dateStart, date_end: exportScope.dateEnd }
     : null;
   const exportSummary = useExportSummary(exportParams);
+  /* O painel é o mesmo nos dois layouts (no celular ele mesmo vira tela cheia abaixo de 700 px, #527). É um
+     elemento, não um componente definido aqui dentro: componente aninhado remontaria a cada render e perderia
+     o formato escolhido e o foco. Vale também para a tela sem cotação (BUG-01 dos smokes): os gráficos
+     somem, mas a exportação continua, com "indisponível" e o Resultado de cada moeda. */
+  const exportUnavailableHint = "Disponível com os dados da sua organização";
+  const openExport = () => setExportScope(reportsExportScope(periodo));
+  const exportPanel = exportScope && exportParams ? (
+    <ExportPanel
+      title={exportScope.title}
+      filePrefix={exportScope.filePrefix}
+      filtersText={exportScope.filtersText}
+      filterParams={exportParams}
+      summary={exportSummary.data}
+      summaryError={exportSummary.error}
+      onClose={() => setExportScope(null)}
+    />
+  ) : null;
   const activeData = shouldUseRealData ? reportsData.monthlyData : (dataMode === "mock" ? mockScoreData : []);
   const scoreData = activeData;
   const activeDrift = shouldUseRealData
@@ -598,7 +635,11 @@ export function RelatoriosPage({
   if (shouldUseRealData && reportsData.currencyUnavailable) {
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-        <PageTitle sans="Relatórios &" serif="Análises"/>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+          <PageTitle sans="Relatórios &" serif="Análises"/>
+          <ExportButton compact={isMobile} enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
+        </div>
+        {exportPanel}
         <div style={{ ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"24px" }}>
           <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink, marginBottom:6 }}>
             Não foi possível converter para uma moeda só
@@ -886,22 +927,6 @@ export function RelatoriosPage({
     { id:"composicao", icon:"🥧", label:"Composição" },
   ];
 
-  /* O painel é o mesmo nos dois layouts (no celular ele mesmo vira tela cheia abaixo de 700 px, #527). É um
-     elemento, não um componente definido aqui dentro: componente aninhado remontaria a cada render e perderia
-     o formato escolhido e o foco. */
-  const exportUnavailableHint = "Disponível com os dados da sua organização";
-  const openExport = () => setExportScope(reportsExportScope(periodo));
-  const exportPanel = exportScope && exportParams ? (
-    <ExportPanel
-      title={exportScope.title}
-      filePrefix={exportScope.filePrefix}
-      filtersText={exportScope.filtersText}
-      filterParams={exportParams}
-      summary={exportSummary.data}
-      summaryError={exportSummary.error}
-      onClose={() => setExportScope(null)}
-    />
-  ) : null;
 
   if (isMobile) {
     const saldoPositivo = kpis.saldo >= 0;
@@ -1106,16 +1131,7 @@ export function RelatoriosPage({
         <PageTitle sans="Meus" serif="Relatórios" />
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <PeriodSelector />
-          <button
-            type="button"
-            disabled={!canExport}
-            title={canExport ? undefined : exportUnavailableHint}
-            onClick={openExport}
-            style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:8,
-            border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600,
-            cursor:canExport ? "pointer" : "not-allowed", opacity:canExport ? 1 : 0.5 }}>
-            <Download size={11} /> Exportar
-          </button>
+          <ExportButton enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
         </div>
       </div>
       {exportPanel}
