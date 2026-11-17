@@ -96,8 +96,14 @@ function normalize(text) {
 function sortValue(clientItem, sortKey) {
   // `null` em `patrimonio` vira `null` (ordenado por último), não 0 — senão o
   // cliente que não consolidou aparece como o mais pobre da carteira.
+  //
+  // Ordena pelo patrimônio CONVERTIDO para a moeda de leitura do consultor
+  // (fincla-api#537): o número cru de cada cliente está na moeda dele, e US$ 10 mil
+  // ficava "abaixo" de R$ 20 mil. Sem cotação o convertido vem `null` e o cliente
+  // vai para o fim. Resposta antiga, sem o campo: o cru, como antes.
   if (sortKey === "patrimonio") {
-    const valor = Number.parseFloat(clientItem.patrimonio);
+    const bruto = "patrimonio_converted" in clientItem ? clientItem.patrimonio_converted : clientItem.patrimonio;
+    const valor = Number.parseFloat(bruto);
     return Number.isFinite(valor) ? valor : null;
   }
   if (sortKey === "name") return normalize(clientItem.client_name || clientItem.organization_name);
