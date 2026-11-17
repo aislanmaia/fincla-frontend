@@ -200,6 +200,12 @@ const CATEGORY_COLOR_BY_LABEL_PT = {
   Renda: "#059669",
   Outros: "#374151",
   Vestuário: "#BE185D",
+  // Atalhos dos dados de demonstração (Transações e cartões).
+  Streaming: "#7C3AED",
+  Compras: "#0891B2",
+  Casa: "#64748B",
+  Eletrônicos: "#0891B2",
+  Viagem: "#0D9488",
 };
 
 /** Busca de cor sem depender de caixa, acento ou "e" × "&" — a cor é da categoria, não da grafia. */
@@ -212,6 +218,18 @@ function colorLookupKey(value) {
     .split(" ")
     .filter((word) => word && word !== "e")
     .join(" ");
+}
+
+/**
+ * A cor de uma categoria pelo rótulo, ou `null` se ela não está no mapa. O mapa
+ * ÚNICO de cores (G3-P-10): Transações, cartões e a resolução por tag leem
+ * daqui — um nome novo do catálogo entra num lugar só.
+ * @param {string | null | undefined} label
+ * @returns {string | null}
+ */
+export function categoryColorForLabel(label) {
+  if (label == null || label === "") return null;
+  return CATEGORY_COLOR_BY_LOOKUP_KEY[colorLookupKey(label)] ?? null;
 }
 
 const CATEGORY_COLOR_PALETTE = [

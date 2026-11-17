@@ -366,3 +366,36 @@ describe("categoryLabels: catálogo de categorias do backend", () => {
     expect(untranslated).toEqual([]);
   });
 });
+
+// G3-P-10: UM mapa de cores. Transações, cartões e a resolução por tag liam
+// três mapas de busca exata que já divergiam ("Lazer e entretenimento" era
+// âmbar nas Transações e roxo no cartão).
+describe("categoryColorForLabel — mapa único e busca tolerante", () => {
+  it("a mesma categoria tem a mesma cor em qualquer grafia (caixa, acento, 'e' × '&')", async () => {
+    const { categoryColorForLabel } = await import("../categoryLabels.js");
+    for (const [a, b] of [
+      ["Lazer e entretenimento", "Lazer & Entretenimento"],
+      ["Assinaturas e software", "Assinaturas & Software"],
+      ["Compras pessoais", "Compras Pessoais"],
+      ["Impostos e taxas", "Impostos & Taxas"],
+      ["Alimentação", "alimentacao"],
+    ]) {
+      expect(categoryColorForLabel(a)).toMatch(/^#[0-9A-F]{6}$/i);
+      expect(categoryColorForLabel(b)).toBe(categoryColorForLabel(a));
+    }
+    expect(categoryColorForLabel("Inexistente")).toBeNull();
+    expect(categoryColorForLabel(null)).toBeNull();
+  });
+
+  it("Transações (catColor), cartões (cardCategoryColor) e a tag (resolveCategoryColorForTag) concordam", async () => {
+    const { categoryColorForLabel, resolveCategoryColorForTag } = await import("../categoryLabels.js");
+    const { catColor } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    for (const label of ["Lazer e entretenimento", "Assinaturas & Software", "Alimentação", "Moradia", "Compras Pessoais"]) {
+      const color = categoryColorForLabel(label);
+      expect(catColor(label)).toBe(color);
+      expect(cardCategoryColor(label)).toBe(color);
+      expect(resolveCategoryColorForTag({ name: label })).toBe(color);
+    }
+  });
+});

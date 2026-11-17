@@ -107,7 +107,6 @@ import { ExportPanel } from "../features/export/ExportPanel.jsx";
 import { SELECTION_MAX_IDS } from "../features/export/exportFailure.js";
 import { useExportSummary } from "../features/export/useExportSummary.js";
 import {
-  CAT_COLORS,
   catColor,
   fmtBRL,
   fmtValorDaLinha,
@@ -1860,7 +1859,7 @@ function TransacoesPageBody({
       return categoryTagsData.categories.map((c) => ({
         id: c.id,
         label: c.labelPt,
-        color: c.color || CAT_COLORS[c.labelPt] || T.inkMid,
+        color: c.color || catColor(c.labelPt),
         icon: "●",
       }));
     }
@@ -1869,7 +1868,7 @@ function TransacoesPageBody({
       .map((label) => ({
         id: label,
         label,
-        color: CAT_COLORS[label] || T.inkMid,
+        color: catColor(label),
         icon: "●",
       }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
