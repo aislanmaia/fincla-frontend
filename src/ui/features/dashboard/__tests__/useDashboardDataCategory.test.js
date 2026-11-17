@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardCategoryRows,
   mapCategory,
+  mapTransaction,
   mapUpcomingDebits,
   pickCategoryName,
 } from "../useDashboardData.js";
@@ -330,5 +331,64 @@ describe("buildDashboardCategoryRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("Health");
     expect(rows[0].color).toBe("#ABCDEF");
+  });
+});
+
+/**
+ * BUG-05: com R$ 190,40 e US$ 225,60 na mesma categoria, o card somava as
+ * transações e escrevia "R$ 416,00". Fora da moeda base, vale o total que a API
+ * converteu pela cotação.
+ */
+describe("buildDashboardCategoryRows — moedas (BUG-05)", () => {
+  const food = { categoria: [{ id: "cat-food", name: "Food & Groceries", icon_key: "shopping-cart", is_default: true }] };
+  const tx = (value, currency) => ({ type: "expense", value, value_currency: currency, tags: food });
+  const api = (total) => [
+    { tag_id: "cat-food", tag_name: "Food & Groceries", tag_icon_key: "shopping-cart", tag_color: "#059669", total },
+  ];
+
+  it("despesas em R$ e US$: usa o total convertido da API, na moeda base", () => {
+    const rows = buildDashboardCategoryRows([tx(190.4, "BRL"), tx(225.6, "USD")], "2026-11-01", "2026-11-30", api(1496.58), new Map(), "BRL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(expect.objectContaining({ value: 1496.58, currency: "BRL" }));
+  });
+
+  it("mês só com despesas em US$ numa base BRL: total convertido, não US$ escrito como R$", () => {
+    const rows = buildDashboardCategoryRows([tx(50, "USD")], "2026-11-01", "2026-11-30", api(289.49), new Map(), "BRL");
+    expect(rows[0]).toEqual(expect.objectContaining({ value: 289.49, currency: "BRL" }));
+  });
+
+  it("sem cotação a API manda `null`: a linha fica, com valor desconhecido", () => {
+    const rows = buildDashboardCategoryRows([tx(190.4, "BRL"), tx(225.6, "USD")], "2026-11-01", "2026-11-30", api(null), new Map(), "BRL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toBeNull();
+  });
+
+  it("API fora do ar e duas moedas: indisponível (`null`), nunca a soma nominal", () => {
+    expect(buildDashboardCategoryRows([tx(190.4, "BRL"), tx(225.6, "USD")], "2026-11-01", "2026-11-30", null, new Map(), null)).toBeNull();
+  });
+
+  it("API fora do ar e uma moeda só: soma das transações, escrita nessa moeda", () => {
+    const rows = buildDashboardCategoryRows([tx(20, "USD"), tx(30, "USD")], "2026-11-01", "2026-11-30", null, new Map(), null);
+    expect(rows[0]).toEqual(expect.objectContaining({ value: 50, currency: "USD" }));
+  });
+
+  it("tudo na moeda base: segue somando as transações, como antes", () => {
+    const rows = buildDashboardCategoryRows([tx(20, "BRL"), tx(30, "BRL")], "2026-11-01", "2026-11-30", api(999), new Map(), "BRL");
+    expect(rows[0]).toEqual(expect.objectContaining({ value: 50, currency: "BRL" }));
+  });
+});
+
+describe("mapTransaction / mapUpcomingDebits — moeda da linha (BUG-05)", () => {
+  it("a linha leva a moeda da transação", () => {
+    expect(mapTransaction({ id: 1, type: "expense", value: 50, value_currency: "USD", tags: {} }).currency).toBe("USD");
+    expect(mapTransaction({ id: 2, type: "expense", value: 50, tags: {} }).currency).toBeNull();
+  });
+
+  it("o débito previsto leva a moeda da série", () => {
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 2);
+    const ymd = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, "0")}-${String(soon.getDate()).padStart(2, "0")}`;
+    const [d] = mapUpcomingDebits({ series: [{ id: "s1", type: "expense", description: "Netflix", value: 20, value_currency: "USD", next_occurrence: ymd, tags: [] }] });
+    expect(d.currency).toBe("USD");
   });
 });

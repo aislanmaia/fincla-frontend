@@ -20,6 +20,7 @@ import {
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
+import { fmtAbs as fmtAbsIn, fmtSgn as fmtSgnIn } from "../formatters.js";
 import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
   AnimNum,
@@ -95,6 +96,14 @@ export function DashboardPage({
    */
   const money = useBaseCurrencyMoney(organizationId, { live: apiDataEnabled });
   const { fmtAbs, fmtSgn, fmtK } = money;
+  /**
+   * Uma LINHA (lançamento, débito, categoria) se escreve na moeda dela; só sem
+   * moeda declarada cai na base. Um gasto de US$ 50 na lista não é "R$ 50,00".
+   * `null` no valor = não sabemos (ex.: sem cotação) → travessão, nunca zero.
+   */
+  const fmtRowAbs = (v, currency) =>
+    v == null ? UNKNOWN_MONEY : currency ? fmtAbsIn(v, currency) : fmtAbs(v);
+  const fmtRowSgn = (v, currency) => (currency ? fmtSgnIn(v, currency) : fmtSgn(v));
 
   /** Primeira pintura já alinhada ao localStorage (evita useEffect gravar "este mês" antes da hidratação). */
   const periodBootstrapRef = useRef(null);
@@ -200,10 +209,22 @@ export function DashboardPage({
    * apaga o total inteiro, enquanto ausência que vira zero erra só a própria parcela.
    * O contrário do que vale num saldo, onde zero é afirmação e ausência não é.
    */
-  const upcomingDebitsTotal = useMemo(
-    () => upcomingDebits.reduce((acc, d) => acc + toAmount(d?.value), 0),
-    [upcomingDebits],
-  );
+  /**
+   * Total por moeda: um débito de US$ 20 e outro de R$ 100 não somam "R$ 120,00".
+   * Uma moeda só → um valor; várias → "R$ 100,00 · US$ 20,00". `null` na chave = a base.
+   */
+  const upcomingDebitsTotals = useMemo(() => {
+    const byCurrency = new Map();
+    for (const d of upcomingDebits) {
+      const key = d?.currency ?? null;
+      byCurrency.set(key, (byCurrency.get(key) ?? 0) + toAmount(d?.value));
+    }
+    if (byCurrency.size === 0) byCurrency.set(null, 0);
+    // A base (chave `null`) primeiro; as outras em ordem de código, para a linha não mudar de lugar.
+    return [...byCurrency.entries()]
+      .sort(([a], [b]) => (a == null ? -1 : b == null ? 1 : a.localeCompare(b)))
+      .map(([currency, total]) => ({ currency, total }));
+  }, [upcomingDebits]);
   const {
     dim,
     today: calendarDay,
@@ -747,10 +768,10 @@ export function DashboardPage({
     const s = dashboardData.summary;
     if (!s) {
       return [
-        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        { key: "cmt", label: "Comprometido a vencer", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        { key: "left", label: "Sobra depois das recorrências", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: UNKNOWN_MONEY, delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: UNKNOWN_MONEY, delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "cmt", label: "Comprometido a vencer", value: UNKNOWN_MONEY, delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "left", label: "Sobra depois das recorrências", value: UNKNOWN_MONEY, delta: "Carregando resumo…", up: null, emptyCta: false },
       ];
     }
     return [
@@ -1862,7 +1883,11 @@ export function DashboardPage({
                 ))}
               </div>
             )}
-            {categoryData.length === 0 ? (
+            {categoryData.length === 0 && dashboardData.categoriesUnavailable ? (
+              <div style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.6, padding: "12px 0" }}>
+                Gastos em mais de uma moeda e o total convertido não carregou. Tente de novo em instantes.
+              </div>
+            ) : categoryData.length === 0 ? (
               <div style={{ flex: isMobile ? undefined : 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: isMobile ? undefined : 0 }}>
                 <CardEmptyWithCta
                   icon="📭"
@@ -1874,14 +1899,14 @@ export function DashboardPage({
                 />
               </div>
             ) : (() => {
-              const maxVal = Math.max(...categoryData.map((c) => Math.max(c.value, c.avg ?? 0)));
+              const maxVal = Math.max(...categoryData.map((c) => Math.max(c.value ?? 0, c.avg ?? 0))) || 1;
               return (
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
                   {categoryData.map((c) => {
                     const hasRowComparison = typeof c.avg === "number" && c.avg > 0;
-                    const barPct = (c.value / maxVal) * 100;
+                    const barPct = ((c.value ?? 0) / maxVal) * 100;
                     const avgPct = hasRowComparison ? (c.avg / maxVal) * 100 : 0;
-                    const isOver = hasRowComparison && c.value > c.avg;
+                    const isOver = hasRowComparison && c.value != null && c.value > c.avg;
                     const safePct = hasRowComparison ? Math.min(barPct, avgPct) : barPct;
                     const overPct = isOver ? barPct - avgPct : 0;
                     return (
@@ -1893,7 +1918,7 @@ export function DashboardPage({
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {isOver && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
-                            <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtAbs(c.value)}</span>
+                            <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtRowAbs(c.value, c.currency)}</span>
                           </div>
                         </div>
                         <div style={{ position: "relative", height: 6, background: T.grayLight, borderRadius: 99 }}>
@@ -1941,7 +1966,7 @@ export function DashboardPage({
                   <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 1 }}>{t.cat} · {t.date}</div>
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: t.val > 0 ? T.green : T.ink }}>
-                  {fmtSgn(t.val)}
+                  {fmtRowSgn(t.val, t.currency)}
                 </div>
               </div>
             ))
@@ -1996,7 +2021,7 @@ export function DashboardPage({
                   </div>
                 </div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 14, fontWeight: 700, color: mood.headlineColor, transition: "color 0.18s" }}>
-                  {fmtAbs(upcomingDebits[0].value)}
+                  {fmtRowAbs(upcomingDebits[0].value, upcomingDebits[0].currency)}
                 </div>
               </div>
 
@@ -2009,7 +2034,7 @@ export function DashboardPage({
                       <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{d.cat}</div>
                     </div>
                   </div>
-                  <span style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 600, color: T.ink }}>{fmtAbs(d.value)}</span>
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 600, color: T.ink }}>{fmtRowAbs(d.value, d.currency)}</span>
                 </div>
               ))}
             </>
@@ -2017,7 +2042,7 @@ export function DashboardPage({
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Total · próx. 14 dias</span>
-            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{fmtAbs(upcomingDebitsTotal)}</span>
+            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{upcomingDebitsTotals.map((p) => fmtRowAbs(p.total, p.currency)).join(" · ")}</span>
           </div>
         </Card>
       </div>

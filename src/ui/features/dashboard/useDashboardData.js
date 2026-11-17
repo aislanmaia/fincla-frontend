@@ -40,6 +40,11 @@ const EMPTY_STATE = {
   balanceSummary: null,
   transactions: [],
   categories: [],
+  /**
+   * `true` quando os gastos do período estão em mais de uma moeda e não há total
+   * convertido para mostrar: o card diz que não sabe, em vez de somar moedas.
+   */
+  categoriesUnavailable: false,
   rhythmChart: [],
   rhythmMeta: {
     dim: 31,
@@ -127,7 +132,7 @@ function pickTransactionIcon(transaction) {
   return "🧾";
 }
 
-function mapTransaction(transaction) {
+export function mapTransaction(transaction) {
   const dateRaw = pickTransactionListDateRawForDisplay(transaction);
   const expenseAmt =
     transaction.type === "expense" ? pickDisplayAmount(transaction) : 0;
@@ -135,6 +140,9 @@ function mapTransaction(transaction) {
     id: transaction.id,
     desc: transaction.description,
     cat: pickCategoryName(transaction),
+    // A moeda DESTA linha (a da conta). A lista não é um total: um gasto de
+    // US$ 50 é escrito "US$ 50,00", nunca na moeda base da organização.
+    currency: transaction.value_currency ?? null,
     date: formatShortDate(dateRaw),
     val:
       transaction.type === "income"
@@ -205,14 +213,44 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
   return Array.from(map.values());
 }
 
+/** As moedas declaradas pelas despesas do período (sem as que não declaram). */
+export function expenseCurrencies(rawTx) {
+  const set = new Set();
+  for (const tx of rawTx ?? []) {
+    if (tx?.type === "expense" && tx.value_currency) set.add(tx.value_currency);
+  }
+  return set;
+}
+
+/**
+ * Linhas do card "Gastos por Categoria".
+ *
+ * Somar as transações do período só vale quando todas estão na MESMA moeda: com
+ * R$ 190,40 e US$ 225,60 na mesma categoria, a soma nominal escrevia "R$ 416,00",
+ * número e unidade errados. Quando há despesa fora da moeda base (`baseCurrency`,
+ * a `consolidation.target_currency` da API), as linhas vêm do total que a API já
+ * converteu pela cotação; sem cotação esse total é `null` e a linha mostra "—".
+ *
+ * `apiCategories` `null` = a API falhou. Aí, com mais de uma moeda, não há o que
+ * mostrar sem somar moedas: devolve `null` e o card diz que está indisponível.
+ * Com uma moeda só, a soma das transações é honesta e cada linha leva essa moeda.
+ */
 export function buildDashboardCategoryRows(
   rawTx,
   rangeStartYmd,
   rangeEndYmd,
   apiCategories,
   prevTotalByTagId,
+  baseCurrency = null,
 ) {
-  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx);
+  const currencies = expenseCurrencies(rawTx);
+  const apiOk = Array.isArray(apiCategories);
+  const foreign = [...currencies].some((c) => baseCurrency == null || c !== baseCurrency);
+  const useApi = apiOk && currencies.size > 0 && foreign && baseCurrency != null;
+  if (!apiOk && currencies.size > 1) return null;
+  const rowCurrency = useApi ? baseCurrency : currencies.size === 1 ? [...currencies][0] : baseCurrency;
+
+  const fromTx = useApi ? [] : aggregateExpenseCategoriesFromTransactions(rawTx);
   const apiList = apiCategories ?? [];
 
   const apiColorByTagId = new Map(
@@ -257,8 +295,9 @@ export function buildDashboardCategoryRows(
         }));
 
   return sourceRows
-    .filter((r) => r.total > 0)
-    .sort((a, b) => b.total - a.total)
+    // `null` = a API não soube converter (sem cotação): a linha fica, com "—".
+    .filter((r) => r.total === null || r.total > 0)
+    .sort((a, b) => (b.total ?? -1) - (a.total ?? -1))
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
       // Mesma chamada de `apiJoinKey` acima — de propósito SEM `is_default`
@@ -285,12 +324,17 @@ export function buildDashboardCategoryRows(
           is_default: row.isDefault ?? null,
           total: row.total,
         },
-        prevTotalByTagId,
+        // O comparativo vem da API, na moeda base: comparar com uma linha em
+        // outra moeda seria comparar números de unidades diferentes.
+        rowCurrency != null && baseCurrency != null && rowCurrency !== baseCurrency
+          ? new Map()
+          : prevTotalByTagId,
+        rowCurrency,
       );
     });
 }
 
-export function mapCategory(category, prevTotalByTagId) {
+export function mapCategory(category, prevTotalByTagId, currency = null) {
   const prev = category.tag_id ? prevTotalByTagId.get(category.tag_id) : undefined;
   const avg = typeof prev === "number" && prev > 0 ? prev : null;
 
@@ -306,6 +350,8 @@ export function mapCategory(category, prevTotalByTagId) {
       is_default: category.is_default ?? null,
     }),
     value: category.total,
+    /** Moeda de `value`/`avg`; `null` = a base da organização. */
+    currency,
     avg,
     color: pickCategoryColor(category),
   };
@@ -597,6 +643,7 @@ export function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         id: r.id,
         name: r.description,
         value: r.value,
+        currency: r.value_currency ?? null,
         day: occ.getDate(),
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
@@ -766,7 +813,7 @@ export function useDashboardData({
       const transactionsResponse =
         transactionsRes.status === "fulfilled" ? transactionsRes.value : { data: [] };
       const categoriesResponse =
-        categoriesRes.status === "fulfilled" ? categoriesRes.value : { categories: [] };
+        categoriesRes.status === "fulfilled" ? categoriesRes.value : { categories: null };
       const prevCategoriesResponse =
         prevCategoriesRes.status === "fulfilled"
           ? prevCategoriesRes.value
@@ -792,8 +839,9 @@ export function useDashboardData({
         rawTx,
         start,
         end,
-        categoriesResponse.categories,
+        categoriesResponse.categories ?? null,
         prevTotalByTagId,
+        categoriesResponse.consolidation?.target_currency ?? null,
       );
 
       setState({
@@ -801,7 +849,8 @@ export function useDashboardData({
         error: "",
         summary,
         transactions: recent,
-        categories,
+        categories: categories ?? [],
+        categoriesUnavailable: categories === null,
         rhythmChart: rhythm.series,
         rhythmMeta: {
           dim: rhythm.dim,
