@@ -404,14 +404,18 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
         />
       ))}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0 }}>
-        <UploadArea
-          organizationId={organizationId}
-          accountId={accountId}
-          compact={drafts.length > 0}
-          touch={isMobile}
-          tip={tip}
-          onDraftInProgress={load}
-        />
+        {/* A área só aparece depois da lista (G4 OBS-12): o tamanho depende de haver rascunho, e
+            nascer grande para encolher em seguida faz a tela pular. Lista com erro: aparece mesmo assim. */}
+        {items || error ? (
+          <UploadArea
+            organizationId={organizationId}
+            accountId={accountId}
+            compact={drafts.length > 0}
+            touch={isMobile}
+            tip={tip}
+            onDraftInProgress={load}
+          />
+        ) : null}
         {items ? (
           <ImportedStatementsList
             items={items}

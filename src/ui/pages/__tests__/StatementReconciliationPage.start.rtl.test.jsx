@@ -122,6 +122,32 @@ describe("a tela inicial, sem rascunho", () => {
     expect(screen.queryByRole("button", { name: "Enviar extrato" })).not.toBeInTheDocument();
   });
 
+  it("com rascunho, a área já nasce menor: não aparece grande enquanto a lista carrega (G4 OBS-12)", async () => {
+    imports = [openDraft(["suggested"])];
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    server.use(http.get(BASE, async () => { await gate; return HttpResponse.json({ imports }); }));
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    // Lista ainda carregando: nenhuma área de envio (nem a grande, que pularia de tamanho depois).
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("button", { name: /Solte aqui o extrato do banco/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ou solte aqui outro extrato/ })).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("button", { name: /Ou solte aqui outro extrato/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Solte aqui o extrato do banco/ })).not.toBeInTheDocument();
+  });
+
+  it("se a lista não carrega, a área de envio aparece mesmo assim, com o erro", async () => {
+    server.use(http.get(BASE, () => HttpResponse.json({ detail: { code: "internal", message: "Falhou" } }, { status: 500 })));
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ })).toBeInTheDocument();
+  });
+
   it("no celular a área fala em tocar, não em soltar nem clicar (G4 OBS)", async () => {
     params = { accountId: ACCOUNT };
     render(<StatementReconciliationPage organizationId={ORG} isMobile />);
