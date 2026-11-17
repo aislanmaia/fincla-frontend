@@ -15,6 +15,10 @@ vi.mock("../../../data/budgetsAdapter.js", async (importOriginal) => ({
   ...(await importOriginal()),
   listBudgetsForUi: () => Promise.resolve({ budgets: [] }),
 }));
+// Recibo de conversão do período (#331): fora do escopo deste teste.
+vi.mock("../../../data/periodConsolidation.js", () => ({
+  fetchExpenseConsolidation: () => Promise.resolve({ target_currency: "BRL", rates: [] }),
+}));
 import { useSpendingPaceData } from "../useSpendingPaceData.js";
 
 afterEach(() => {
