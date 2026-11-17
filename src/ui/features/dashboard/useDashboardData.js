@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBalanceSummary } from "../../../api/balances";
 import { linearProjection } from "./periodYardstick.js";
-import { convertByQuote } from "../../money/quoteDirection.js";
+import { convertToBase, expensesInBase } from "../../money/convertToBase.js";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -220,15 +220,6 @@ function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) 
   return Array.from(map.values());
 }
 
-/** A taxa para levar `from` a `target`, na direção em que a API a mandou, ou `null`. */
-function rateTo(target, from, rates) {
-  for (const r of rates ?? []) {
-    if (r?.base === from && r?.quote === target) return { rate: r.rate, op: "multiply" };
-    if (r?.base === target && r?.quote === from) return { rate: r.rate, op: "divide" };
-  }
-  return null;
-}
-
 /**
  * O valor de uma linha somada por moeda (`parts`: moeda → soma).
  *
@@ -250,13 +241,12 @@ export function resolveRowMoney(parts, target, rates) {
         sum += amount;
         continue;
       }
-      const q = currency ? rateTo(target, currency, rates) : null;
-      const converted = q ? convertByQuote(amount.toFixed(2), q.rate, q.op) : null;
+      const converted = currency ? convertToBase(amount, currency, target, rates) : null;
       if (converted == null) {
         ok = false;
         break;
       }
-      sum += Number(converted);
+      sum += converted;
     }
     if (ok) return { value: Math.round(sum * 100) / 100, currency: target, byCurrency: null };
   }
@@ -422,7 +412,13 @@ const RITMO_VAZIO = {
   rhythmMode: "daily",
 };
 
-export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
+/**
+ * A curva de ritmo soma as despesas dia a dia e depois é escalada para o total do
+ * período. Somar US$ e R$ no mesmo dia distorce a forma (#331), então as
+ * estrangeiras entram convertidas pelas taxas do mesmo total (`expensesInBase`).
+ * Sem taxa → a curva não é desenhada.
+ */
+export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd, baseCurrency = null, rates = null) {
   const startD = parseLocalYmd(rangeStartYmd);
   const endD = parseLocalYmd(rangeEndYmd);
   if (!startD || !endD) return { ...RITMO_VAZIO };
@@ -440,6 +436,8 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   if (summary && (summary.total_expenses == null || summary.total_income == null)) {
     return { ...RITMO_VAZIO };
   }
+  const expenses = expensesInBase(transactions, baseCurrency, rates, pickDisplayAmount);
+  if (expenses === null) return { ...RITMO_VAZIO };
 
   const D = daysInclusive(startD, endD);
   const now = new Date();
@@ -450,10 +448,10 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   ).getTime();
 
   if (D <= RHYTHM_MAX_DAILY_POINTS) {
-    return buildRhythmDaily(transactions, summary, startD, D, todayStartMs);
+    return buildRhythmDaily(expenses, summary, startD, D, todayStartMs);
   }
   return buildRhythmWeekly(
-    transactions,
+    expenses,
     summary,
     startD,
     endD,
@@ -881,8 +879,23 @@ export function useDashboardData({
         balanceRes.status === "fulfilled" ? balanceRes.value : null;
 
       const rawTx = transactionsResponse.data ?? [];
+      // Base e taxas: as do recibo do TOTAL do período (`/transactions/summary`), que
+      // cobre também despesa sem categoria; as de `/analytics/by-category` completam
+      // um par que faltar ali. A base é a do resumo.
+      const consolidation = {
+        target_currency:
+          summary?.consolidation?.target_currency ?? categoriesResponse.consolidation?.target_currency ?? null,
+        rates: [...(summary?.consolidation?.rates ?? []), ...(categoriesResponse.consolidation?.rates ?? [])],
+      };
       const recent = rawTx.slice(0, 5).map(mapTransaction);
-      const rhythm = buildRhythmChart(rawTx, summary, start, end);
+      const rhythm = buildRhythmChart(
+        rawTx,
+        summary,
+        start,
+        end,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
+      );
 
       const prevTotalByTagId = new Map(
         (prevCategoriesResponse.categories ?? []).map((c) => [
@@ -896,8 +909,8 @@ export function useDashboardData({
         end,
         categoriesResponse.categories,
         prevTotalByTagId,
-        categoriesResponse.consolidation?.target_currency ?? null,
-        categoriesResponse.consolidation?.rates ?? null,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
       );
 
       setState({

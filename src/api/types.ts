@@ -2089,6 +2089,11 @@ export interface ConsultantClient {
    * patrimônio, quando nós é que não sabemos lê-lo.
    */
   patrimonio: number | null;
+  /**
+   * `patrimonio` convertido para a moeda de leitura do consultor (fincla-api#537),
+   * para comparar clientes de moedas diferentes. `null` sem patrimônio ou sem cotação.
+   */
+  patrimonio_converted?: number | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
   /**

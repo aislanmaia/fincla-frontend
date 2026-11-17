@@ -158,3 +158,23 @@ describe("buildClientsCsv", () => {
     expect(buildClientsCsv(null).split("\n")).toHaveLength(1);
   });
 });
+
+/**
+ * fincla-api#537: ordenar por patrimônio comparava o número cru de cada cliente,
+ * cada um na sua moeda — US$ 10 mil ficava "abaixo" de R$ 20 mil.
+ */
+describe("selectConsultantClients — patrimônio em moedas diferentes (#537)", () => {
+  const usd = { organization_id: "a", client_name: "Ana", currency: "USD", patrimonio: 10000, patrimonio_converted: 52500, health: 50 };
+  const brl = { organization_id: "b", client_name: "Bia", currency: "BRL", patrimonio: 20000, patrimonio_converted: 20000, health: 50 };
+  const semCotacao = { organization_id: "c", client_name: "Caio", currency: "EUR", patrimonio: 90000, patrimonio_converted: null, health: 50 };
+
+  it("ordena pelo valor convertido para a moeda de leitura", () => {
+    const desc = selectConsultantClients([brl, usd], { sortKey: "patrimonio", sortDir: "desc" });
+    expect(desc.map((c) => c.client_name)).toEqual(["Ana", "Bia"]);
+  });
+
+  it("sem cotação (convertido null) vai para o fim, mesmo com o cru maior", () => {
+    const desc = selectConsultantClients([semCotacao, brl, usd], { sortKey: "patrimonio", sortDir: "desc" });
+    expect(desc.map((c) => c.client_name)).toEqual(["Ana", "Bia", "Caio"]);
+  });
+});
