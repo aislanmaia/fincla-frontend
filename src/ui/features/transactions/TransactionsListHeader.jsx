@@ -110,7 +110,9 @@ export function TransactionsListHeader({
         color: T.inkMid,
       }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      {/* Com a ação (o atalho "Conciliar extrato"), quem cede espaço é ela, cortando o rótulo com
+          "…": a contagem não encolhe e o bloco da direita pode ficar menor que o rótulo (G3). */}
+      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, ...(action ? { flexShrink: 0 } : null) }}>
         {leading}
         {/* "17 de 20 transações": o filtro sozinho não diz nada sem o total de
             onde ele saiu. Só "17" deixa a pessoa sem saber se cortou muito ou
@@ -185,7 +187,7 @@ export function TransactionsListHeader({
         ) : null}
       </span>
 
-      <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", ...(action ? { minWidth: 0, flex: "0 1 auto" } : null) }}>
         {/* Desfazer o último recorte. Sem ele, um clique acidental na categoria
             de uma linha (um gesto de UM toque) obrigaria a reconstruir o filtro
             à mão — e a tela puniria a exploração que ela quer incentivar. */}
