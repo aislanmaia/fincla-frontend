@@ -96,6 +96,29 @@ describe("pickCategoryName", () => {
     expect(catalog).toBe("Assinaturas e software");
   });
 
+  // G3-P-02: categoria do SISTEMA renomeada. Uma API que ainda manda a tradução
+  // em `label` (ou nenhum `label`) e o nome da org em `custom_name` não pode
+  // fazer a Visão Geral mostrar o nome do catálogo — Transações mostra o da org.
+  it("categoria do sistema renomeada: o nome da organização vence a tradução nos DOIS cards da Visão Geral", () => {
+    const renamedTag = {
+      id: "cat-shop", name: "Personal Shopping", label: "Compras pessoais", custom_name: "Minhas compras",
+      icon_key: "shopping-bag", is_default: true, tag_type: { name: "categoria" },
+    };
+    const tx = { type: "expense", value: 80, value_currency: "BRL", tags: { categoria: [renamedTag] } };
+    // Últimas transações.
+    expect(pickCategoryName(tx)).toBe("Minhas compras");
+    expect(mapTransaction(tx).cat).toBe("Minhas compras");
+    // Gastos por categoria — o rótulo atual da API (label = nome da org) também.
+    const rows = buildDashboardCategoryRows([tx], "2026-06-01", "2026-06-30", [], new Map(), "BRL", []);
+    expect(rows.map((r) => r.name)).toEqual(["Minhas compras"]);
+    const labelOnly = { ...tx, tags: { categoria: [{ ...renamedTag, label: "Minhas compras", custom_name: undefined }] } };
+    expect(buildDashboardCategoryRows([labelOnly], "2026-06-01", "2026-06-30", [], new Map(), "BRL", [])[0].name)
+      .toBe("Minhas compras");
+    // A moeda da linha (PR #330) continua a da transação.
+    expect(rows[0].currency).toBe("BRL");
+    expect(rows[0].value).toBe(80);
+  });
+
   // Regressão #100 (rodada 3, achado 2c): `??` deixava passar string vazia
   // como nome "válido" — `transaction.category` vazio virava o literal ""
   // e o tradutor devolvia o genérico "Categoria" em vez de "Sem categoria".
