@@ -2115,9 +2115,12 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
     // a coluna já não existe. (Era 2100 px até a coluna sair do fim da linha e
     // ir para o vão, colada na categoria.) E o texto perdeu o `#` — o fundo e o
     // formato já dizem que é tag, e o `#` roubava dois dos 78 px úteis.
+    // Painel de filtros FECHADO, de propósito: em 1500 px ele se ancora (≥ 1280) e ocupa 396 px, a lista cai para
+    // ~770 px e a coluna de tags sai por desenho (< 1000 px). Este teste abria o painel e só passava quando um teste
+    // anterior do arquivo deixava o ambiente num estado em que a abertura não estreitava a lista — rodado sozinho,
+    // falhava também na origin/main.
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1500 });
     renderPage();
-    await openFilters();
 
     const chip = await screen.findByText("trabalho");
     expect(chip).toHaveAttribute("title", "trabalho");

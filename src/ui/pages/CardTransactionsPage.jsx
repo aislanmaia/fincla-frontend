@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 
 import { getCreditCardInvoice, listCreditCards } from "../../api/creditCards";
 import { T } from "../tokens";
+import { fmtCount } from "../formatters.js";
 import { plural } from "../plural.js";
 import { G, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
@@ -213,7 +214,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           <label style={{ ...G, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.inkMid, minHeight: 38 }}><input type="checkbox" checked={prefs.grouped && filter.sort[0]?.field === "date"} disabled={filter.sort[0]?.field !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
           </div>
         </Card>
-        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {plural(detail.items_count, "lançamento", "lançamentos")}. Os filtros não alteram o resumo da fatura.</div>
+        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {fmtCount(rows.length)} de {plural(detail.items_count, "lançamento", "lançamentos")}. Os filtros não alteram o resumo da fatura.</div>
         <TransactionList rows={rows} grouped={prefs.grouped && filter.sort[0]?.field === "date"} density={prefs.density} isMobile={isMobile} currency={currency} />
       </>}
       {exportOpen && exportFilter.params && <ExportPanel title={`Lançamentos da fatura · ${exportNames.title}`} filePrefix={exportNames.filePrefix} filtersText={exportFiltersText()} filterParams={exportFilter.params} count={rows.length} summary={exportSummary.data} summaryError={exportSummary.error} onClose={() => setExportOpen(false)} />}

@@ -20,7 +20,7 @@ import {
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
-import { fmtAbs as fmtAbsIn, fmtSgn as fmtSgnIn } from "../formatters.js";
+import { fmtAbs as fmtAbsIn, fmtCount, fmtSgn as fmtSgnIn } from "../formatters.js";
 import { fmtTotals, sumByCurrency } from "../features/consultant/consultantCurrency.js";
 import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
@@ -741,7 +741,7 @@ export function DashboardPage({
     if (isPeriodWithoutActivity) {
       const n = txCount ?? 0;
       return [
-        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
+        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${fmtCount(n)} lançamentos no período`, up: null, emptyCta: true },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
         // Uma org que configurou recorrências mas ainda não lançou nada cai aqui com
         // total_income e total_expenses zerados — e a projeção pode estar cheia. Não
@@ -775,7 +775,7 @@ export function DashboardPage({
         key: "inc",
         label: `Receitas · ${kpiPeriodPhrase}`,
         value: fmtAbs(s?.total_income ?? 0),
-        delta: `${s?.total_transactions ?? 0} lançamentos no período`,
+        delta: `${fmtCount(s?.total_transactions ?? 0)} lançamentos no período`,
         up: s ? s.total_income > 0 : null,
         emptyCta: false,
       },
@@ -1810,8 +1810,9 @@ export function DashboardPage({
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: mood.bar, transition: "background 0.18s", flexShrink: 0 }} />
                 <span style={{ ...G, fontSize: 12, color: mood.kicker, fontWeight: 700, transition: "color 0.18s" }}>
                   {spendPct <= timePct
-                    ? `${money.symbol ?? UNKNOWN_MONEY} ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente do ritmo`
-                    : `${money.symbol ?? UNKNOWN_MONEY} ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima do ritmo`}
+                    /* Dinheiro com as casas da moeda base (o formatador da base), não um inteiro arredondado. */
+                    ? `${fmtAbs((envelope * (timePct - spendPct)) / 100)} à frente do ritmo`
+                    : `${fmtAbs((envelope * (spendPct - timePct)) / 100)} acima do ritmo`}
                 </span>
                 <span style={{ ...G, fontSize: 11, color: T.inkMid, marginLeft: "auto" }}>
                   {progressSuffix || `dia ${day}/${dim} · ${timePct}%`}

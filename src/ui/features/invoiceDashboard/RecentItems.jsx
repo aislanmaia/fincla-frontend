@@ -2,6 +2,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
 import { mapInvoiceItemToUi } from "../../data/creditCardsAdapter.js";
+import { fmtCount } from "../../formatters.js";
 import { plural } from "./invoiceFormat.js";
 
 const LIMIT = 5;
@@ -22,7 +23,7 @@ export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }
       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: isMobile ? 16 : 20, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <h3 style={{ ...G, margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>🧾 Itens recentes</h3>
-        {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, padding: "6px 0", cursor: "pointer", whiteSpace: "nowrap" }}>{viewAllCount === 1 ? "ver o lançamento" : `ver os ${viewAllCount}`} →</button>}
+        {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, padding: "6px 0", cursor: "pointer", whiteSpace: "nowrap" }}>{viewAllCount === 1 ? "ver o lançamento" : `ver os ${fmtCount(viewAllCount)}`} →</button>}
       </div>
       {rows.length === 0 ? (
         <div style={{ ...G, fontSize: 12, color: T.inkMid }}>Nenhum lançamento nesta fatura.</div>
@@ -46,7 +47,7 @@ export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }
       )}
       {totalCount > rows.length && (
         <div style={{ ...G, fontSize: 11, color: T.inkLight, textAlign: "center", paddingTop: 2 }}>
-          mostrando {rows.length} de {plural(totalCount, "lançamento", "lançamentos")}
+          mostrando {fmtCount(rows.length)} de {plural(totalCount, "lançamento", "lançamentos")}
         </div>
       )}
     </section>

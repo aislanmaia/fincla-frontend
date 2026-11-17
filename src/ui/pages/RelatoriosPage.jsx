@@ -705,11 +705,12 @@ export function RelatoriosPage({
     );
   }
 
+  /* Casas da moeda pelo registro, sempre completas: "US$ 2.499,60", nunca "US$ 2.499,6" (fincla-api#534). */
   const fmtBase = (v) => {
-    if (!money.symbol) return UNKNOWN_MONEY;
+    if (!money.currency) return UNKNOWN_MONEY;
     const n = Number(v);
     if (!Number.isFinite(n)) return `${money.symbol}\u00a0—`;
-    return `${money.symbol}\u00a0` + Math.abs(n).toLocaleString("pt-BR",{minimumFractionDigits:0});
+    return formatMoney(Math.abs(n), money.currency);
   };
   const fmtK = (v) => {
     const n = Number(v);

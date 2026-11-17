@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { T } from "../tokens";
+import { fmtCount } from "../formatters.js";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
@@ -106,7 +107,6 @@ import { ExportPanel } from "../features/export/ExportPanel.jsx";
 import { SELECTION_MAX_IDS } from "../features/export/exportFailure.js";
 import { useExportSummary } from "../features/export/useExportSummary.js";
 import {
-  CAT_COLORS,
   catColor,
   fmtBRL,
   fmtValorDaLinha,
@@ -514,12 +514,12 @@ const DetailPanel = ({
                   gap:6, background:"none", border:"none", padding:0, cursor:"pointer",
                   fontSize:12, fontWeight:600, color:T.ink, textAlign:"left" }}>
                 <span style={{ width:8, height:8, borderRadius:"50%",
-                  background:catColor(tx.cat), flexShrink:0 }}/>
+                  background:catColor(tx.cat, tx.categorySystemKey, tx.categoryColor), flexShrink:0 }}/>
                 {tx.cat}
               </button>
             ) : (
               <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat, tx.categorySystemKey, tx.categoryColor), flexShrink:0 }}/>
                 {tx.cat}
               </span>
             )},
@@ -1025,20 +1025,13 @@ function TransacoesPageBody({
   /** Snapshot imediatamente anterior à aplicação da view ativa (para desaplicar). */
   const snapshotBeforeViewRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
-  const loadMoreCooldownRef = useRef(false);
-  // fincla-frontend#109 rodada 4, achado 2: uma falha ao "carregar mais" não
-  // tem NENHUM gatilho de retentativa hoje — `refreshToken` (prop, global)
-  // não muda por causa disso. Este token LOCAL, só combinado no
-  // `refreshToken` composto abaixo, dá à pessoa uma ação explícita
-  // ("Tentar novamente") sem reusar o token global (que também dispara
-  // outros efeitos da página, ex.: âncoras de saldo).
-  const [loadMoreRetryToken, setLoadMoreRetryToken] = useState(0);
   /* §29: recarregar a lista SEM recarregar a página.
      Uma falha de rede deixava a lista parada com um aviso e nenhuma saída: o
      único caminho de volta era o F5, que descarta filtro, rolagem e a linha
      aberta — preço absurdo para um problema que costuma durar dois segundos.
 
-     Reusa o token LOCAL de retentativa em vez do global (`transactionsRefreshToken`,
+     Chama o `reload()` do próprio hook da lista (recarga EXPLÍCITA, que acende
+     carregamento) em vez de bumpar o token global (`transactionsRefreshToken`,
      que é prop e dispara outros efeitos da página, como as âncoras de saldo).
      O que se quer aqui é refazer ESTA busca, não sacudir a tela inteira. */
   /* Ref e não a variável direta: `transactionsData` nasce ~250 linhas abaixo,
@@ -1536,7 +1529,9 @@ function TransacoesPageBody({
           cardSel: effectiveCardSel,
         },
         {
-          limit: visible,
+          /* O tamanho da PÁGINA, fixo: o scroll infinito pede page 2, 3… com
+             este mesmo `limit` (fincla-api#535). */
+          limit: PAGE_SIZE,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
           catLabelById: categoryApiNameById,
@@ -1561,7 +1556,7 @@ function TransacoesPageBody({
       filter.settlement,
       filter.rec,
       filter.tagMode,
-      visible,
+      PAGE_SIZE,
       totalCategoriesForBackend,
       /* O MAPA, não só a contagem. Renomear uma categoria não muda quantas
          existem, então `totalCategoriesForBackend` não se mexe — e o memo
@@ -1579,11 +1574,7 @@ function TransacoesPageBody({
     // do que mostrar a lista inteira se passando por filtrada.
     enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
-    // Composto com `loadMoreRetryToken`: o hook só compara por `!==`
-    // (nunca faz aritmética), então uma chave composta funciona igual a um
-    // número — e mantém o retry de paginação isolado do token GLOBAL (que
-    // também dispara outros efeitos da página).
-    refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
+    refreshToken: transactionsRefreshToken,
   });
   transactionsDataRef.current = transactionsData;
   /* Cartão/conta do filtro apagado em outra aba (#280, #296): a API responde 404
@@ -1686,7 +1677,7 @@ function TransacoesPageBody({
         ...estado,
       },
       {
-        limit: visible,
+        limit: PAGE_SIZE,
         debouncedSearch,
         totalCategories: totalCategoriesForBackend,
         catLabelById: categoryApiNameById,
@@ -1696,7 +1687,7 @@ function TransacoesPageBody({
   }, [NEUTRO_POR_FACETA, facetaComContadoresAVista, transactionsFilters, filter.type, filter.method,
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
+      PAGE_SIZE, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
       effectiveAccountSel, rangeCurrency, valueReadCurrency, effectiveCardSel]);
 
   const facetCounts = useTransactionsFacetCounts({
@@ -1868,7 +1859,7 @@ function TransacoesPageBody({
       return categoryTagsData.categories.map((c) => ({
         id: c.id,
         label: c.labelPt,
-        color: c.color || CAT_COLORS[c.labelPt] || T.inkMid,
+        color: c.color || catColor(c.labelPt),
         icon: "●",
       }));
     }
@@ -1877,7 +1868,7 @@ function TransacoesPageBody({
       .map((label) => ({
         id: label,
         label,
-        color: CAT_COLORS[label] || T.inkMid,
+        color: catColor(label),
         icon: "●",
       }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
@@ -2190,17 +2181,30 @@ function TransacoesPageBody({
      depois de intercalar perdia as últimas transações mesmo sem mais páginas.
      Transferência só faz sentido na ordenação por data. */
   const sortedByDate = !filter.sort?.length || filter.sort[0]?.field === "date";
-  const transactionsWindow = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  /* Com dados reais a janela É o que o hook já leu: cada página chega pela
+     rolagem (fincla-api#535). `visible` só recorta o modo demonstração. */
+  const transactionsWindow = useMemo(
+    () => (shouldUseRealData ? filtered : filtered.slice(0, visible)),
+    [shouldUseRealData, filtered, visible],
+  );
   /* Seleção em lote: "todos" = os lançamentos já carregados (como no cartão);
      transferências do extrato não entram. */
   const selectableLoadedIds = useMemo(
     () => (selectionEnabled ? txList.filter((t) => t.kind !== "transfer").map((t) => String(t.id)) : []),
     [selectionEnabled, txList],
   );
-  const allLoadedSelected = selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelected.includes(id));
+  const selectableLoadedSet = useMemo(() => new Set(selectableLoadedIds), [selectableLoadedIds]);
+  /* G3-P-06: a lista não tem mais teto de 100 linhas. As consultas "está
+     marcado?" usam conjuntos — com `includes` em array eram O(n·m) por render
+     (milhões de comparações com 2.000 linhas e todas marcadas). */
+  const bulkSelectedSet = useMemo(() => new Set(bulkSelected), [bulkSelected]);
+  const allLoadedSelected = useMemo(
+    () => selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelectedSet.has(id)),
+    [selectableLoadedIds, bulkSelectedSet],
+  );
   const bulkSelectedRows = useMemo(
-    () => txList.filter((t) => bulkSelected.includes(String(t.id))),
-    [txList, bulkSelected],
+    () => txList.filter((t) => bulkSelectedSet.has(String(t.id))),
+    [txList, bulkSelectedSet],
   );
   /* Seleção velha não sobrevive (mesma regra dos Lançamentos do cartão): outro
      recorte (filtro, período, busca, conta) ou uma releitura por transação salva
@@ -2227,7 +2231,7 @@ function TransacoesPageBody({
   const displayedRows = useMemo(() => {
     if (!transferRows.length || !sortedByDate) return transactionsWindow;
     return mergeTransferRows(transactionsWindow, transferRows, {
-      hasMore: (shouldUseRealData && transactionsData.hasMore) || visible < filtered.length,
+      hasMore: shouldUseRealData ? transactionsData.hasMore : visible < filtered.length,
       ascending: filter.sort?.[0]?.dir === "asc",
     });
   }, [transactionsWindow, transferRows, sortedByDate, shouldUseRealData, transactionsData.hasMore,
@@ -2272,34 +2276,32 @@ function TransacoesPageBody({
       ? transactionsData.hasMore && !transactionsData.pageError
       : visible < filtered.length);
 
-  // fincla-frontend#109 rodada 4, achado 2: bumpa o token LOCAL de retry
-  // (definido acima, perto de `loadMoreSentinelRef`) — é a ÚNICA forma de
-  // re-disparar a MESMA consulta que falhou (organização/filtros/limit
-  // idênticos, então só um `refreshToken` novo força o efeito a rodar de
-  // novo).
-  const retryLoadMore = useCallback(() => {
-    setLoadMoreRetryToken((t) => t + 1);
-  }, []);
+  // "Tentar novamente": pede de novo a MESMA página que falhou (fincla-api#535),
+  // sem reler as anteriores nem sacudir o resto da tela.
+  const retryLoadMore = transactionsData.retryPage;
 
+  const loadNextPage = transactionsData.loadMore;
+  const loadedRows = shouldUseRealData ? transactionsData.transactions.length : visible;
   const tryLoadMore = useCallback(() => {
     if (searchAwaitingCommit) return;
     if (!hasMore) return;
-    if (shouldUseRealData && transactionsData.isLoading) return;
-    if (loadMoreCooldownRef.current) return;
-    loadMoreCooldownRef.current = true;
-    /* `visible` É o `limit` da API, que rejeita acima de 100 com 422 — e o
-       "Tentar novamente" reenviava a MESMA query estourada, deixando a pessoa
-       presa sem saída. Com PAGE_SIZE fixo em 10 a sequência batia exatamente em
-       100; dimensionado pela viewport ela passava do teto. */
-    setVisible((v) => Math.min(TX_PAGE_MAX, v + PAGE_SIZE));
-    window.setTimeout(() => {
-      loadMoreCooldownRef.current = false;
-    }, 400);
+    /* Dados reais: o hook pede a página seguinte com o mesmo `limit` e soma as
+       linhas; a guarda de "já tem uma página em voo" é dele, síncrona — uma
+       segunda entrada da sentinela antes do próximo render não pede de novo.
+       Antes isto só aumentava `limit` e parava em 100, o teto do servidor. */
+    if (shouldUseRealData) {
+      if (transactionsData.isLoading) return;
+      loadNextPage?.();
+      return;
+    }
+    setVisible((v) => v + PAGE_SIZE);
   }, [
     searchAwaitingCommit,
     hasMore,
     shouldUseRealData,
     transactionsData.isLoading,
+    loadNextPage,
+    PAGE_SIZE,
   ]);
 
   useEffect(() => {
@@ -2318,7 +2320,10 @@ function TransacoesPageBody({
     );
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [hasMore, isMobile, tryLoadMore]);
+    /* `loadedRows`: cada página que chega recria o observador, e a entrega
+       inicial dele pede a próxima se a sentinela continua à vista — numa tela
+       alta uma página não basta para rolar, e sem isto a lista parava ali. */
+  }, [hasMore, isMobile, tryLoadMore, loadedRows]);
 
   const listFiltersActive =
     searchInput.trim() !== "" || filter.hasAnyActive;
@@ -3652,7 +3657,7 @@ function TransacoesPageBody({
           <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
             onChange={(e) => setBulkSelected(e.target.checked
               ? [...new Set([...bulkSelected, ...selectableLoadedIds])]
-              : bulkSelected.filter((id) => !selectableLoadedIds.includes(id)))} />
+              : bulkSelected.filter((id) => !selectableLoadedSet.has(id)))} />
         ) : null}
         total={filteredCount}
         /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
@@ -3792,7 +3797,7 @@ function TransacoesPageBody({
               iconSize={28}
               title="Nenhuma transação neste filtro"
               sub={`O filtro “${narrowest.label}” é o que mais restringe: sem ele ${
-                narrowest.total === 1 ? "volta 1 transação" : `voltam ${narrowest.total} transações`
+                narrowest.total === 1 ? "volta 1 transação" : `voltam ${fmtCount(narrowest.total)} transações`
               }.`}
               primaryLabel={`Remover “${narrowest.label}”`}
               onPrimary={() => clearFacetAndResetPage(narrowest.key)}
@@ -3867,9 +3872,9 @@ function TransacoesPageBody({
                          coluna da caixa (a saída já anima o item inteiro). */
                       className={settledFlashId === tx.id ? "fincla-tx-settled" : undefined}
                       style={{ flex: "none", width: selectionGutterPx, alignSelf: "stretch", display: "grid", placeItems: "center",
-                        background: selected?.id === tx.id ? `${catColor(tx.cat)}08` : "transparent" }}>
+                        background: selected?.id === tx.id ? `${catColor(tx.cat, tx.categorySystemKey, tx.categoryColor)}08` : "transparent" }}>
                       {tx.kind === "transfer" ? null : (
-                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelected.includes(String(tx.id))}
+                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelectedSet.has(String(tx.id))}
                           onChange={() => toggleBulk(String(tx.id))} />
                       )}
                     </span>
@@ -4000,6 +4005,15 @@ function TransacoesPageBody({
           </button>
         </div>
       )}
+      {/* O fim de uma lista que veio em páginas precisa ser dito: sem isto, uma
+          lista que parou por limite e uma que acabou têm a mesma cara. */}
+      {shouldUseRealData && transactionsData.hasLoaded && !transactionsData.hasMore
+        && !transactionsData.pageError && !transactionsData.error
+        && transactionsData.transactions.length > PAGE_SIZE && (
+        <div style={{ ...G, textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
+          Fim da lista
+        </div>
+      )}
     </div>
   );
 
@@ -4102,6 +4116,20 @@ function TransacoesPageBody({
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
+        </div>
+      )}
+      {/* G3-P-01: a atualização em segundo plano falhou. A lista continua a
+          que estava e a rolagem segue — por isso é um aviso discreto, não a
+          faixa vermelha de erro. */}
+      {shouldUseRealData && transactionsData.refreshError && !transactionsData.error && (
+        <div role="status" style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          fontSize:12, color:T.inkLight, padding:"0 2px" }}>
+          <span>Não foi possível atualizar a lista. Mostrando o que já estava carregado.</span>
+          <button type="button" onClick={recarregarLista}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Atualizar
+          </button>
         </div>
       )}
 
@@ -4563,7 +4591,7 @@ function TransacoesPageBody({
                   fontSize:15, fontWeight:800, cursor:"pointer",
                   opacity: filterBarApplyProps.resultsLoading ? 0.7 : 1,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
+                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {fmtCount(filteredCount)} transaç{filteredCount!==1?"ões":"ão"}</>}
               </button>
             </div>
           </div>

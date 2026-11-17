@@ -466,6 +466,12 @@ function pickCategoryColor(item) {
   return tag?.color || null;
 }
 
+/** Chave estável da categoria do sistema, quando a resposta a traz (reserva da cor, depois de `color`). */
+function pickCategorySystemKey(item) {
+  const tag = pickFirstTag(item);
+  return typeof tag?.system_key === "string" && tag.system_key.trim() ? tag.system_key : null;
+}
+
 function pickIcon(labelPt) {
   const n = String(labelPt || "").toLowerCase();
   if (n.includes("alimenta") || n.includes("food")) return "🛒";
@@ -529,6 +535,7 @@ export function mapInvoiceItemToUi(item) {
     desc: cleanDesc,
     cat: category,
     catColor: pickCategoryColor(item),
+    catSystemKey: pickCategorySystemKey(item),
     tags: invoiceItemTagNames(item),
     val: item.amount,
     data: formatShortDate(displayDateRaw),
@@ -609,6 +616,8 @@ function aggregateInstallments(currentInvoice) {
       id: key,
       desc: item.description,
       cat: pickCategory(item),
+      catColor: pickCategoryColor(item),
+      catSystemKey: pickCategorySystemKey(item),
       vParcela: item.amount,
       pago: Math.max(0, item.installment_number - (isPaidInvoice ? 0 : 1)),
       total: item.total_installments,

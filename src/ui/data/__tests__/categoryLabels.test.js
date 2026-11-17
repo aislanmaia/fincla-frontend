@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  categoryColorForCategory,
+  categoryColorForLabel,
   categoryLabelPtForTag,
   DETAIL_LABEL_PT_BY_EN_NAME,
   detailLabelPtForTag,
@@ -26,9 +28,24 @@ describe("categoryLabels", () => {
     expect(categoryLabelPtForTag({ name: "Custom PT", icon_key: null })).toBe("Custom PT");
   });
 
-  it("normaliza nomes PT sem acento/caixa baixa", () => {
-    expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("Alimentação");
+  // fincla-api#534: vale o nome exato que a API entrega. Um nome já em pt-BR
+  // (o rótulo do catálogo ou o da organização) nunca é reescrito pela tela.
+  it("nome PT vindo da API passa como veio, sem normalizar caixa ou acento", () => {
+    expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("alimentacao");
   });
+
+  it.each(["Compras pessoais", "Assinaturas e software", "Lazer e entretenimento", "Impostos e taxas", "Renda", "outros"])(
+    "rótulo pt-BR da API (%s) aparece idêntico em qualquer shape",
+    (label) => {
+      // Listagem: `label` + linha do seed com system_key.
+      expect(categoryLabelPtForTag({ label, name: "x", is_default: true, system_key: "k", icon_key: "shopping-bag" })).toBe(label);
+      // Listagem sem system_key (o adapter só repassa name/label/icon_key/is_default).
+      expect(categoryLabelPtForTag({ label, is_default: true, icon_key: "shopping-bag" })).toBe(label);
+      // Facetas, resumo, fatura: só o nome, sem is_default.
+      expect(categoryLabelPtForTag({ name: label })).toBe(label);
+      expect(categoryLabelPtForTag({ category_name: label })).toBe(label);
+    },
+  );
 
   // Regressão do review adversarial da PR #97 (rodada 1): nome é a chave
   // primária; sem `is_default` no payload (shape do endpoint de agregação do
@@ -65,10 +82,12 @@ describe("categoryLabels", () => {
   // true`) cujo nome não bate com o mapa (ex.: dado legado de uma migração
   // de categoria antiga). Sem `icon_key` nem `tag_id` nos dois endpoints de
   // agregação do consultor, essa rede nunca entra em jogo lá.
-  it("icon_key é rede de segurança só quando is_default é true e o nome não bate com o mapa", () => {
+  // fincla-api#534: com nome presente, o icon_key não reescreve mais nada — o
+  // nome da API é o da organização (renomeado) ou o do catálogo.
+  it("icon_key não sobrepõe um nome que veio da API, mesmo com is_default true", () => {
     expect(
       categoryLabelPtForTag({ name: "Categoria Legada X", icon_key: "home", is_default: true }),
-    ).toBe("Moradia");
+    ).toBe("Categoria Legada X");
   });
 
   it("icon_key sem nome nenhum também exige is_default true (payload de agregação nunca manda icon_key)", () => {
@@ -85,10 +104,13 @@ describe("categoryLabels", () => {
   // (handleUpdateCat) garante que o PATCH em si nunca reescreve o nome sem
   // necessidade — este é só o caso em que o usuário renomeia de propósito
   // para um texto que não é nenhum nome canônico.
-  it("[trade-off conhecido] categoria com is_default:true renomeada pro usuário ainda cai no icon_key", () => {
+  it("categoria do seed renomeada pela organização aparece com o nome da organização", () => {
     expect(
       categoryLabelPtForTag({ name: "Mercado do Zé", icon_key: "shopping-cart", is_default: true }),
-    ).toBe("Alimentação");
+    ).toBe("Mercado do Zé");
+    expect(
+      categoryLabelPtForTag({ label: "Mercado do Zé", name: "Food & Groceries", icon_key: "shopping-cart", is_default: true }),
+    ).toBe("Mercado do Zé");
   });
 
   // Shape real dos endpoints de agregação do consultor (`tag_name` sem
@@ -219,6 +241,14 @@ describe("resolveCategoryIconKey", () => {
     expect(resolveCategoryIconKey(null, "Moradia")).toBe("home");
   });
 
+  it("resolve pelo rótulo do catálogo (o que a API e o fallback EN entregam) e pela grafia antiga", () => {
+    expect(resolveCategoryIconKey(null, "Compras pessoais")).toBe("shopping-bag");
+    expect(resolveCategoryIconKey(null, "Assinaturas e software")).toBe("smartphone");
+    expect(resolveCategoryIconKey(null, "Lazer e entretenimento")).toBe("party-popper");
+    expect(resolveCategoryIconKey(null, "Impostos e taxas")).toBe("receipt");
+    expect(resolveCategoryIconKey(null, "Compras Pessoais")).toBe("shopping-bag");
+  });
+
   it("atalhos do mock (protótipo)", () => {
     expect(resolveCategoryIconKey(null, "Lazer")).toBe("party-popper");
     expect(resolveCategoryIconKey(null, "Outros")).toBe(null);
@@ -232,6 +262,13 @@ describe("resolveCategoryColorForTag", () => {
 
   it("usa a cor canônica quando a API não envia cor", () => {
     expect(resolveCategoryColorForTag({ name: "alimentacao" })).toBe("#059669");
+  });
+
+  it("a cor canônica segue o rótulo do catálogo (sem depender da grafia antiga)", () => {
+    expect(resolveCategoryColorForTag({ name: "Compras pessoais" })).toBe("#DC2626");
+    expect(resolveCategoryColorForTag({ name: "Assinaturas e software" })).toBe("#0891B2");
+    expect(resolveCategoryColorForTag({ name: "Lazer e entretenimento" })).toBe("#D97706");
+    expect(resolveCategoryColorForTag({ name: "Personal Shopping" })).toBe("#DC2626");
   });
 
   it("nunca cai no cinza neutro para nomes conhecidos e sem cor", () => {
@@ -317,21 +354,11 @@ const SYSTEM_CATEGORY_CATALOG_PT_BR = [
   ["Uncategorized", "Não classificado"],
 ];
 
-// Divergência conhecida, pré-existente: o mapa do FE usa "&" e caixa alta onde
-// o catálogo usa "e" e caixa baixa. Fica registrada aqui (não corrigida neste
-// PR) para que uma mudança de qualquer lado apareça como falha.
-const KNOWN_FE_LABEL_DIVERGENCES = {
-  "Leisure & Entertainment": "Lazer & Entretenimento",
-  "Personal Shopping": "Compras Pessoais",
-  "Subscriptions & Software": "Assinaturas & Software",
-  "Taxes & Fees": "Impostos & Taxas",
-};
-
 describe("categoryLabels: catálogo de categorias do backend", () => {
   it.each(SYSTEM_CATEGORY_CATALOG_PT_BR)("traduz %s para o rótulo pt-BR do catálogo", (en, pt) => {
-    const expected = KNOWN_FE_LABEL_DIVERGENCES[en] ?? pt;
-    expect(categoryLabelPtForTag({ name: en })).toBe(expected);
-    expect(categoryLabelPtForTag({ name: en, is_default: true })).toBe(expected);
+    // Reserva para resposta que não localizou: o rótulo do catálogo, letra por letra (fincla-api#534).
+    expect(categoryLabelPtForTag({ name: en })).toBe(pt);
+    expect(categoryLabelPtForTag({ name: en, is_default: true })).toBe(pt);
   });
 
   it("nenhuma categoria do catálogo sai em inglês", () => {
@@ -339,5 +366,117 @@ describe("categoryLabels: catálogo de categorias do backend", () => {
       ([en]) => categoryLabelPtForTag({ name: en }) === en,
     ).map(([en]) => en);
     expect(untranslated).toEqual([]);
+  });
+});
+
+// G3-P-10: UM mapa de cores. Transações, cartões e a resolução por tag liam
+// três mapas de busca exata que já divergiam ("Lazer e entretenimento" era
+// âmbar nas Transações e roxo no cartão).
+describe("categoryColorForLabel — mapa único e busca tolerante", () => {
+  it("a mesma categoria tem a mesma cor em qualquer grafia (caixa, acento, 'e' × '&')", async () => {
+    for (const [a, b] of [
+      ["Lazer e entretenimento", "Lazer & Entretenimento"],
+      ["Assinaturas e software", "Assinaturas & Software"],
+      ["Compras pessoais", "Compras Pessoais"],
+      ["Impostos e taxas", "Impostos & Taxas"],
+      ["Alimentação", "alimentacao"],
+    ]) {
+      expect(categoryColorForLabel(a)).toMatch(/^#[0-9A-F]{6}$/i);
+      expect(categoryColorForLabel(b)).toBe(categoryColorForLabel(a));
+    }
+    expect(categoryColorForLabel("Inexistente")).toBeNull();
+    expect(categoryColorForLabel(null)).toBeNull();
+  });
+
+  it("Transações (catColor), cartões (cardCategoryColor) e a tag (resolveCategoryColorForTag) concordam", async () => {
+    const { catColor } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    for (const label of ["Lazer e entretenimento", "Assinaturas & Software", "Alimentação", "Moradia", "Compras Pessoais"]) {
+      const color = categoryColorForLabel(label);
+      expect(catColor(label)).toBe(color);
+      expect(cardCategoryColor(label)).toBe(color);
+      expect(resolveCategoryColorForTag({ name: label })).toBe(color);
+    }
+  });
+});
+
+// QA display-and-pagination BUG-02: a categoria do sistema renomeada ("Saúde" →
+// "Saude da Familia QA") era cinza nas Transações, azul no cartão e vermelha na
+// Visão Geral — a cor saía do rótulo, e o nome da organização não está no mapa.
+// A cor sai da chave estável (`system_key`), a mesma em toda tela.
+describe("categoryColorForCategory — cor pela chave estável da categoria do sistema", () => {
+  const RENAMED = "Saude da Familia QA";
+  const HEALTH = "#DC2626";
+
+  it("a renomeada tem a cor da categoria do sistema, não a do rótulo", () => {
+    expect(categoryColorForLabel(RENAMED)).toBeNull();
+    expect(categoryColorForCategory({ systemKey: "health", label: RENAMED })).toBe(HEALTH);
+    expect(categoryColorForCategory({ systemKey: "health", label: RENAMED })).toBe(categoryColorForLabel("Saúde"));
+  });
+
+  it("a chave decide mesmo quando o rótulo é de outra categoria do mapa", () => {
+    // Uma organização que renomeou Saúde para "Transporte" continua vendo a cor de Saúde.
+    expect(categoryColorForCategory({ systemKey: "health", label: "Transporte" })).toBe(HEALTH);
+  });
+
+  it("sem chave (categoria criada pela organização, dado de demonstração) segue o rótulo", () => {
+    expect(categoryColorForCategory({ systemKey: null, label: "Alimentação" })).toBe("#059669");
+    expect(categoryColorForCategory({ label: "Inexistente" })).toBeNull();
+    expect(categoryColorForCategory({ systemKey: "chave_que_nao_existe", label: "Moradia" })).toBe(categoryColorForLabel("Moradia"));
+  });
+
+  it("toda categoria do catálogo do sistema tem cor própria por chave", () => {
+    for (const key of [
+      "food_groceries", "housing", "transport", "health", "education", "leisure_entertainment",
+      "personal_shopping", "services", "subscriptions_software", "taxes_fees", "financing_debt",
+      "donations", "pets", "travel", "work_personal_business", "work_salary", "services_provided",
+      "sales", "benefits", "rental_income", "investment_returns", "received_transfers",
+      "received_reimbursements",
+    ]) {
+      expect(categoryColorForCategory({ systemKey: key, label: "Nome qualquer da org" })).toMatch(/^#[0-9A-F]{6}$/i);
+    }
+  });
+
+  it("as categorias já no mapa mantêm a cor de antes (nada muda para quem não renomeou)", () => {
+    for (const [key, label] of [
+      ["food_groceries", "Alimentação"],
+      ["transport", "Transporte"],
+      ["health", "Saúde"],
+      ["leisure_entertainment", "Lazer e entretenimento"],
+      ["personal_shopping", "Compras pessoais"],
+      ["subscriptions_software", "Assinaturas e software"],
+      ["taxes_fees", "Impostos e taxas"],
+      ["housing", "Moradia"],
+      ["services", "Serviços"],
+    ]) {
+      expect(categoryColorForCategory({ systemKey: key, label: "x" })).toBe(categoryColorForLabel(label));
+    }
+  });
+
+  it("Transações, cartões e a tag concordam com a chave na categoria renomeada", async () => {
+    const { catColor, catBg } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    expect(catColor(RENAMED, "health")).toBe(HEALTH);
+    expect(catBg(RENAMED, "health")).toBe(`${HEALTH}18`);
+    expect(cardCategoryColor(RENAMED, "health")).toBe(HEALTH);
+    // Sem cor da API, a chave decide em qualquer formato de tag.
+    expect(resolveCategoryColorForTag({ name: "Health", label: RENAMED, system_key: "health" })).toBe(HEALTH);
+    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_label: RENAMED, tag_system_key: "health" })).toBe(HEALTH);
+  });
+
+  // Orquestrador 2026-11-17: a pessoa edita a cor em Configurações → Categorias,
+  // e a edição vale em toda tela. Regra: cor da API > chave do sistema > rótulo.
+  it("a cor da própria categoria na API (a editada) vence a chave e o rótulo, em toda função", async () => {
+    const EDITED = "#7E22CE";
+    const { catColor, catBg } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    expect(categoryColorForCategory({ color: EDITED, systemKey: "health", label: "Saúde" })).toBe(EDITED);
+    expect(catColor(RENAMED, "health", EDITED)).toBe(EDITED);
+    expect(catBg(RENAMED, "health", EDITED)).toBe(`${EDITED}18`);
+    expect(cardCategoryColor(RENAMED, "health", EDITED)).toBe(EDITED);
+    expect(resolveCategoryColorForTag({ name: "Health", system_key: "health", color: EDITED })).toBe(EDITED);
+    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_system_key: "health", tag_color: EDITED })).toBe(EDITED);
+    // Cor em branco conta como ausente: cai na chave.
+    expect(categoryColorForCategory({ color: "  ", systemKey: "health" })).toBe(HEALTH);
   });
 });

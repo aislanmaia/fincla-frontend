@@ -12,7 +12,7 @@ export async function listCategoryTagsForUi(organizationId) {
 /**
  * Uma linha por nome de tag API (dedupe), ordenada por sort_order e nome.
  * @param {import("../../api/types").Tag[] | undefined | null} tags
- * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; color: string; sortOrder: number }[]}
+ * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; systemKey: string | null; color: string; sortOrder: number }[]}
  */
 export function mapCategoryTagsForUi(tags) {
   const list = (tags ?? []).filter((t) => t?.name && t?.id);
@@ -35,6 +35,7 @@ export function mapCategoryTagsForUi(tags) {
       apiName: t.name,
       labelPt: t.label || categoryLabelPtForTag(t),
       iconKey: t.icon_key ?? null,
+      systemKey: t.system_key ?? null,
       color: resolveCategoryColorForTag(t),
       sortOrder: t.sort_order ?? 1e9,
     }));
@@ -44,7 +45,7 @@ export function mapCategoryTagsForUi(tags) {
  * Maps the localized catalog contract to the transaction selector shape.
  * Labels come from the API locale resolver, never from an icon heuristic.
  * @param {import("../../api/types").CategoryCatalogItem[] | undefined | null} categories
- * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; color: string; sortOrder: number; details: object[]; isFallback: boolean }[]}
+ * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; systemKey: string | null; color: string; sortOrder: number; details: object[]; isFallback: boolean }[]}
  */
 export function mapCategoryCatalogForUi(categories) {
   return [...(categories ?? [])]
@@ -54,7 +55,9 @@ export function mapCategoryCatalogForUi(categories) {
       apiName: category.system_key ?? category.label,
       labelPt: category.label,
       iconKey: category.icon_key ?? null,
-      color: category.color ?? resolveCategoryColorForTag(category),
+      systemKey: category.system_key ?? null,
+      // Chave do sistema primeiro, depois a cor da API: a mesma regra das outras telas (BUG-02).
+      color: resolveCategoryColorForTag(category),
       sortOrder: index,
       details: category.details ?? [],
       isFallback: category.is_fallback === true,

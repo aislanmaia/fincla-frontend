@@ -205,6 +205,13 @@ describe("Lançamentos de um cartão", () => {
     expect(screen.getByText(/Exibindo 0 de 3 lançamentos/)).toBeInTheDocument();
   });
 
+  it("fatura com mais de mil lançamentos usa separador de milhar nas duas contagens (fincla-api#534)", async () => {
+    const many = Array.from({ length: 1050 }, (_, i) => item(i + 1, `Compra ${i + 1}`, "1.00", "2026-10-12", "Alimentação"));
+    serve({ invoice: { ...detail, items: many, items_count: 1050 } });
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText(/Exibindo 1\.050 de 1\.050 lançamentos/)).toBeInTheDocument();
+  });
+
   it("não consulta fatura de cartão fora da organização", async () => {
     const calls = serve({ cardList: [] });
     render(<CardTransactionsPage organizationId={ORG_ID} />);

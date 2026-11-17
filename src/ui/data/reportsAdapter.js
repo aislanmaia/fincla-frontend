@@ -14,11 +14,17 @@ import {
 import { expandExpenseTxToAttributedParts, pickDisplayAmount } from "./transactionsAdapter.js";
 
 /**
- * Rótulo PT para pontos de analytics (nome EN/PT da API + icon_key opcional).
- * @param {{ tag_name?: string | null; tag_icon_key?: string | null; tagIconKey?: string | null } | null | undefined} category
+ * O nome de uma categoria de analytics. `tag_label` é o nome que o resto do app
+ * mostra, já resolvido pela API (nome da organização > tradução > nome) e
+ * exibido como veio: uma categoria do sistema renomeada não volta ao nome do
+ * catálogo (QA display-and-pagination, BUG-01). `tag_name` é o nome cru, só
+ * traduzido como reserva para uma resposta sem `tag_label`.
+ * @param {{ tag_name?: string | null; tag_label?: string | null; tag_icon_key?: string | null; tagIconKey?: string | null } | null | undefined} category
  */
 function analyticsCategoryLabelPt(category) {
   if (!category) return "Categoria";
+  const label = typeof category.tag_label === "string" ? category.tag_label.trim() : "";
+  if (label) return label;
   return categoryLabelPtForTag({
     tag_name: category.tag_name,
     name: category.tag_name,

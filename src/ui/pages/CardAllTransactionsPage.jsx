@@ -23,6 +23,7 @@ import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
+import { categoryColorResolver } from "../features/cardTransactions/cardTransactionsModel.js";
 import { CardTimeScopePanel } from "../features/cardTransactions/CardTimeScopePanel.jsx";
 import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
 import { describeLedgerChange, weekEnd } from "../features/cardTransactions/ledgerHistory.js";
@@ -52,6 +53,7 @@ import { FC, editTransactionSearch } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
 import { T } from "../tokens.js";
 import { plural } from "../plural.js";
+import { fmtCount } from "../formatters.js";
 
 const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
@@ -257,7 +259,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     return () => clearTimeout(timer);
   }, [filter.search]);
 
-  const categories = useMemo(() => (categoryCatalog.categories ?? []).map((row) => ({ id: String(row.id), label: row.labelPt, apiName: row.apiName, color: row.color })), [categoryCatalog.categories]);
+  const categories = useMemo(() => (categoryCatalog.categories ?? []).map((row) => ({ id: String(row.id), label: row.labelPt, apiName: row.apiName, systemKey: row.systemKey ?? null, color: row.color })), [categoryCatalog.categories]);
   const categoriesById = useMemo(() => Object.fromEntries(categories.map((row) => [row.id, row])), [categories]);
   const categoryLabels = useMemo(() => new Map(categories.map((row) => [row.id, row.label])), [categories]);
   const tagOptions = useMemo(() => buildTagOptions(tagCatalog.rows, categoryLabels), [tagCatalog.rows, categoryLabels]);
@@ -501,7 +503,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const closeDialog = () => { setDialog(null); if (dirtyRef.current) { dirtyRef.current = false; setReload((value) => value + 1); } };
   const finishAction = (message) => { dirtyRef.current = false; setDialog(null); setSelectedRows([]); setInspected(null); setNotice(message); setReload((value) => value + 1); };
   // Com causa (ex.: fatura paga), repetir não adianta: diz o motivo em vez de pedir para tentar de novo.
-  const failureText = (result, total) => `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. ${result.reason || "Tente novamente."}`;
+  const failureText = (result, total) => `${fmtCount(result.failed.length)} de ${fmtCount(total)} não puderam ser alterados${result.done.length ? `; ${fmtCount(result.done.length)} já foram` : ""}. ${result.reason || "Tente novamente."}`;
   const outcome = (result, total, message) => {
     if (result.failed.length === 0) { finishAction(message); return null; }
     if (result.done.length > 0) dirtyRef.current = true;
@@ -515,7 +517,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     const result = await categorizeRows({ rows, categoryId: suggestion.categoryTagId, organizationId });
     if (result.failed.length === 0) {
       const changed = Math.max(result.updated, rows.length);
-      finishAction(`${changed} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"} como ${categoriesById[suggestion.categoryTagId]?.label ?? suggestion.categoryName}.`);
+      finishAction(`${fmtCount(changed)} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"} como ${categoriesById[suggestion.categoryTagId]?.label ?? suggestion.categoryName}.`);
       return null;
     }
     // O que passou já mudou: o Assistente é relido, e a sugestão volta só com o que ainda falta.
@@ -527,9 +529,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     const result = await categorizeRows({ rows, categoryId, organizationId });
     // Compra parcelada é reetiquetada inteira: o aviso conta o que o servidor alterou, não só o que foi marcado.
     const changed = Math.max(result.updated, rows.length);
-    return outcome(result, rows.length, `${changed} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"}.`);
+    return outcome(result, rows.length, `${fmtCount(changed)} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"}.`);
   };
-  const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${rows.length} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
+  const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${fmtCount(rows.length)} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
   /** Entrega a compra ao painel oficial de Nova transação; parcelada leva o total da compra, não a parcela. */
   const requestRefund = (row) => {
     const part = installmentOf(row);
@@ -612,6 +614,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     return labelled;
   };
   const hasActiveFilters = activeFacets.length > 0 || facets.some((facet) => facet.key === "periodo" && facet.active) || Boolean(kind) || Boolean(activeWeek) || Boolean(filter.search.trim());
+  const colorForCategory = useMemo(() => categoryColorResolver(categories), [categories]);
   const categoryIdByName = (name) => categories.find((row) => row.label === name || row.apiName === name)?.id ?? null;
   // Rótulo das categorias marcadas; com o catálogo ainda carregando (ou id desconhecido) cai na contagem, nunca some.
   const selectedLabels = filter.cats.map((id) => categoriesById[id]?.label);
@@ -698,7 +701,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {state.error && !card && <Card role="alert" style={{ padding: 18 }}>Não foi possível carregar o cartão.</Card>}
     {card && <>
       {!isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,3fr) minmax(0,7fr)", gap: 12, minWidth: 0 }}>
-        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
+        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} colorForCategory={colorForCategory} />
         {/* Foco: o botão do aviso some ao voltar para o cartão; o foco vai para este espaço, não para o body. */}
         <div ref={outflowsSlotRef} tabIndex={-1} style={{ minWidth: 0, outline: "none", display: "flex", flexDirection: "column" }}>
           {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} /> : allCardsNotice}
@@ -747,12 +750,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids, { allowUnloaded: Boolean(dialog.fromAssistant) })} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
     {dialog?.kind === "export" && card && <ExportPanel title={exportTitle()} filePrefix={exportFilePrefix()} filtersText={filterSummary()} filterParams={exportFilterParams} count={state.total} summary={currentSummary} summaryError={currentSummaryErrorMessage} selection={dialog.selection ? { ids: dialog.selection.ids, count: dialog.selection.ids.length, summary: selectionSummary.data, error: selectionSummary.error } : null} onClose={closeDialog} />}
-    {dialog?.kind === "assistant" && <AssistantDrawer insights={insights} loading={!assistant.current} error={assistant.current && assistant.error ? assistantFailureMessage(assistant.error) : null} onRetry={assistant.retry} categoryLabelOf={(id) => categoriesById[id]?.label} onApply={applySuggestion} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { const loaded = ids.filter((id) => state.rows.some((row) => row.id === id)); setSelectedRows(loaded); setDialog(null); if (loaded.length < ids.length) setNotice(`${ids.length - loaded.length} de ${ids.length} lançamentos deste alerta ainda não estão carregados na lista; carregue mais ou filtre para vê-los.`); }} onCategorize={(ids) => { setDialog({ kind: "categorize", ids, fromAssistant: true }); }} />}
+    {dialog?.kind === "assistant" && <AssistantDrawer insights={insights} loading={!assistant.current} error={assistant.current && assistant.error ? assistantFailureMessage(assistant.error) : null} onRetry={assistant.retry} categoryLabelOf={(id) => categoriesById[id]?.label} onApply={applySuggestion} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { const loaded = ids.filter((id) => state.rows.some((row) => row.id === id)); setSelectedRows(loaded); setDialog(null); if (loaded.length < ids.length) setNotice(`${fmtCount(ids.length - loaded.length)} de ${fmtCount(ids.length)} lançamentos deste alerta ainda não estão carregados na lista; carregue mais ou filtre para vê-los.`); }} onCategorize={(ids) => { setDialog({ kind: "categorize", ids, fromAssistant: true }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
-        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} isMobile selectedLabel={selectedCategoriesLabel} onClearSelection={clearCategorySelection} />
+        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} colorForCategory={colorForCategory} isMobile selectedLabel={selectedCategoriesLabel} onClearSelection={clearCategorySelection} />
         {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile /> : allCardsNotice}
       </div>
     </div>}

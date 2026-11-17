@@ -1853,7 +1853,12 @@ export interface MonthlyEvolutionResponse {
 
 export interface CategoryDataPoint {
   tag_id: string;
+  /** Nome cru do sistema ("Health"): só chave de junção, não exibir. */
   tag_name: string;
+  /** Nome exibido: o da organização, senão a tradução, senão o nome (`tag_display_label`). */
+  tag_label: string;
+  /** Chave estável da categoria do sistema (`null` se criada pela organização): a cor sai dela. */
+  tag_system_key?: string | null;
   /** Quando o backend enviar, melhora o mapa PT + Lucide */
   tag_icon_key?: string | null;
   total: number;
@@ -1871,7 +1876,11 @@ export interface ByCategoryResponse {
 
 export interface SpendingRhythmCategory {
   tag_id: string;
+  /** Nome cru do sistema: só chave de junção, não exibir. */
   tag_name: string;
+  /** Nome exibido (`tag_display_label`), como em `CategoryDataPoint`. */
+  tag_label: string;
+  tag_system_key?: string | null;
   tag_icon_key?: string | null;
   monthly_totals: number[];
   average: number;

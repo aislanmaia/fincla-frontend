@@ -7,6 +7,7 @@ import { getCategoryLucideIcon } from "../../data/categoryLucideIcons.js";
 import { fmtMoney0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
 import { selectClientCategories } from "./consultantClientCategories";
+import { fmtCount } from "../../formatters.js";
 
 function CatIcon({ iconKey, color }) {
   const Lucide = getCategoryLucideIcon(iconKey);
@@ -42,7 +43,7 @@ function CategoryRow({ row, max, narrow, currency }) {
         <IconBox row={row} />
         <div style={{ minWidth: 0 }}>
           <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</div>
-          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6 }}>{row.pct}% do total · {row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6 }}>{row.pct}% do total · {fmtCount(row.count)} transaç{row.count === 1 ? "ão" : "ões"}</div>
           <ProgBar pct={barPct} color={row.color} h={7} />
         </div>
         {value}
@@ -60,7 +61,7 @@ function CategoryRow({ row, max, narrow, currency }) {
       </div>
       <div>
         <ProgBar pct={barPct} color={row.color} h={8} />
-        <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 5 }}>{row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 5 }}>{fmtCount(row.count)} transaç{row.count === 1 ? "ão" : "ões"}</div>
       </div>
       {value}
     </div>

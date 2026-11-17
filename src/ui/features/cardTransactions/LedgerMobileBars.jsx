@@ -5,6 +5,7 @@ import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
 import { alertsLabel } from "./assistantModel.js";
 import { G, NUM } from "../../typography.js";
+import { fmtCount } from "../../formatters.js";
 
 const iconButton = { width: 44, height: 44, flex: "none", border: 0, padding: 0, borderRadius: 12, background: "none", color: T.ink, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" };
 const barStyle = { ...G, height: 56, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 2, padding: "0 8px 0 4px", background: T.surface, borderBottom: `1px solid ${T.border}` };
@@ -57,7 +58,7 @@ export function LedgerAlertStrip({ label, summary, onOpen }) {
 /** Resumo do recorte em uma linha; toca para abrir o sheet com gráficos. */
 export function LedgerSummaryRow({ summary, loading, error, onOpen }) {
   const totals = (summary?.by_currency ?? []).filter((row) => row?.currency && row.amount != null && row.amount !== "" && Number.isFinite(Number(row.amount)));
-  const count = summary ? `${summary.total_transactions} lançamento${summary.total_transactions === 1 ? "" : "s"}` : null;
+  const count = summary ? `${fmtCount(summary.total_transactions)} lançamento${summary.total_transactions === 1 ? "" : "s"}` : null;
   const headline = totals.length === 1 ? formatMoneyAbs(totals[0].amount, totals[0].currency) : count;
   const sub = totals.length === 1 ? count : loading ? "Carregando resumo…" : error ? "Resumo indisponível" : totals.length > 1 ? "mais de uma moeda" : null;
   return <button type="button" onClick={onOpen} aria-label="Resumo e saídas do recorte" style={{ ...G, display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 56, boxSizing: "border-box", padding: "0 16px", border: 0, borderBottom: `1px solid ${T.border}`, background: T.surface, color: T.ink, textAlign: "left", cursor: "pointer" }}>

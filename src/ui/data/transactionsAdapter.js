@@ -122,7 +122,7 @@ function pickCategoryTag(transaction) {
  * que coincide de texto com um nome canônico do seed (ex. "Health") de uma
  * linha do seed de verdade — sequestra o nome pela tradução por engano.
  * @param {import("../../api/types").Transaction} transaction
- * @returns {{ id: string | null; name: string | null; label: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
+ * @returns {{ id: string | null; name: string | null; label: string | null; custom_name: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
  */
 export function pickCategoryTagFromApiTransaction(transaction) {
   const t = pickCategoryTag(transaction);
@@ -131,7 +131,12 @@ export function pickCategoryTagFromApiTransaction(transaction) {
     id: t.id != null && t.id !== "" ? t.id : null,
     name: t.name ?? null,
     label: t.label ?? null,
+    // G3-P-02: o nome da organização para uma categoria do sistema renomeada.
+    // `categoryLabelPtForTag` o põe acima de `label` (regra `tag_display_label`).
+    custom_name: typeof t.custom_name === "string" && t.custom_name.trim() ? t.custom_name : null,
     icon_key: t.icon_key ?? null,
+    // Chave estável da categoria do sistema: a cor sai dela (BUG-02).
+    system_key: typeof t.system_key === "string" && t.system_key.trim() ? t.system_key : null,
     is_active: t.is_active !== false,
     color:
       typeof t.color === "string" && t.color.trim() ? t.color : null,
@@ -579,6 +584,10 @@ export function mapApiTransactionToUi(transaction) {
     categoryTagId: catTag?.id ?? null,
     categoryTagIsActive: catTag?.is_active !== false,
     categoryIconKey: catTag?.icon_key ?? null,
+    // Chave estável da categoria do sistema: a cor sai dela, não do nome (renomear não muda a cor).
+    categorySystemKey: catTag?.system_key ?? null,
+    // A cor da própria categoria (a que a pessoa edita em Configurações): vence a chave e o rótulo.
+    categoryColor: typeof catTag?.color === "string" && catTag.color.trim() ? catTag.color : null,
     date: dateLabel,
     dateIsoForEdit: pickDateIsoForEditTransaction(transaction),
     purchaseDateIso: pickPurchaseDateIsoForEdit(transaction),
@@ -1006,17 +1015,24 @@ export async function fetchAllTransactionsPages(baseQuery) {
   return { data: all, pagination: lastRes?.pagination };
 }
 
-export async function listTransactionsForUi(query) {
+export async function listTransactionsForUi(query, options = {}) {
   const page = query.page ?? 1;
   const wantRaw = query.limit ?? 10;
   const want = Math.max(1, wantRaw);
 
-  if (want <= TRANSACTIONS_API_MAX_LIMIT && page === 1) {
-    return listTransactions({
-      ...query,
-      limit: want,
-      page: 1,
-    });
+  /* Até o teto do servidor, a página pedida vai como está — o scroll infinito
+     das Transações pede page 2, 3… com o mesmo `limit` (fincla-api#535). */
+  if (want <= TRANSACTIONS_API_MAX_LIMIT) {
+    return listTransactions({ ...query, limit: want, page }, options);
+  }
+
+  /* Acima do teto, os lotes de 100 são juntados aqui — e só para a página 1.
+     `page: 2, limit: 250` não tem tradução honesta em lotes de 100 sem calcular
+     o deslocamento; devolver a página 1 em silêncio seria pior que recusar. */
+  if (page > 1) {
+    throw new Error(
+      `listTransactionsForUi: limit ${want} > ${TRANSACTIONS_API_MAX_LIMIT} only supports page 1 (got page ${page})`,
+    );
   }
 
   const { page: _p, limit: _l, ...base } = query;
@@ -1029,7 +1045,7 @@ export async function listTransactionsForUi(query) {
       ...base,
       limit: TRANSACTIONS_API_MAX_LIMIT,
       page: currentPage,
-    });
+    }, options);
     const batch = lastRes.data ?? [];
     all.push(...batch);
     if (!lastRes.pagination?.has_next || batch.length === 0) break;
@@ -1049,8 +1065,8 @@ export async function listTransactionsForUi(query) {
   };
 }
 
-export async function getTransactionsSummaryForUi(query) {
-  return getTransactionsSummary(query);
+export async function getTransactionsSummaryForUi(query, options = {}) {
+  return getTransactionsSummary(query, options);
 }
 
 export async function deleteTransactionForUi(transactionId, organizationId) {
