@@ -408,7 +408,40 @@ const RITMO_VAZIO = {
   rhythmMode: "daily",
 };
 
-export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
+/**
+ * As despesas do período levadas à moeda base, para a FORMA da curva de ritmo.
+ *
+ * A curva soma as despesas dia a dia e depois é escalada para o total do período.
+ * Com uma moeda só, a escala resolve sozinha (a forma não depende da unidade). Com
+ * duas, somar US$ e R$ no mesmo dia distorce a forma: cada despesa estrangeira é
+ * convertida pela taxa que a API usou no período (`rates`). Faltando a base ou
+ * alguma taxa → `null`, e a curva não é desenhada.
+ */
+export function rhythmTransactionsInBase(transactions, baseCurrency, rates) {
+  const list = transactions ?? [];
+  const currencies = new Set();
+  for (const tx of list) {
+    if (tx?.type === "expense") currencies.add(tx.value_currency ?? baseCurrency ?? "?");
+  }
+  if (currencies.size <= 1) return list;
+  if (baseCurrency == null) return null;
+  const out = [];
+  for (const tx of list) {
+    const currency = tx?.value_currency;
+    if (tx?.type !== "expense" || !currency || currency === baseCurrency) {
+      out.push(tx);
+      continue;
+    }
+    const q = rateTo(baseCurrency, currency, rates);
+    const converted = q ? convertByQuote(pickDisplayAmount(tx).toFixed(2), q.rate, q.op) : null;
+    if (converted == null) return null;
+    // `installment_info: null`: o valor convertido já é o desta ocorrência.
+    out.push({ ...tx, value: Number(converted), installment_info: null, value_currency: baseCurrency });
+  }
+  return out;
+}
+
+export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd, baseCurrency = null, rates = null) {
   const startD = parseLocalYmd(rangeStartYmd);
   const endD = parseLocalYmd(rangeEndYmd);
   if (!startD || !endD) return { ...RITMO_VAZIO };
@@ -426,6 +459,9 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   if (summary && (summary.total_expenses == null || summary.total_income == null)) {
     return { ...RITMO_VAZIO };
   }
+  const inBase = rhythmTransactionsInBase(transactions, baseCurrency, rates);
+  if (inBase === null) return { ...RITMO_VAZIO };
+  transactions = inBase;
 
   const D = daysInclusive(startD, endD);
   const now = new Date();
@@ -868,7 +904,14 @@ export function useDashboardData({
 
       const rawTx = transactionsResponse.data ?? [];
       const recent = rawTx.slice(0, 5).map(mapTransaction);
-      const rhythm = buildRhythmChart(rawTx, summary, start, end);
+      const rhythm = buildRhythmChart(
+        rawTx,
+        summary,
+        start,
+        end,
+        categoriesResponse.consolidation?.target_currency ?? null,
+        categoriesResponse.consolidation?.rates ?? null,
+      );
 
       const prevTotalByTagId = new Map(
         (prevCategoriesResponse.categories ?? []).map((c) => [
