@@ -11,7 +11,6 @@ import { T } from "../tokens";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
-import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
 import {
@@ -23,6 +22,8 @@ import {
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveTransactionsDeepLink } from "../features/transactions/transactionsDeepLink.js";
+import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
+import { exportTexts } from "../features/export/exportTexts.js";
 import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
 import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
@@ -33,7 +34,7 @@ import { ConfirmActionInline, ConfirmActionModal } from "../features/transaction
 import { settlementCopy } from "../features/transactions/settlementCopy.js";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
-import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { useFocusTrap } from "../components/useFocusTrap.js";
 import { describeFilterChange } from "../features/transactions/filters/describeFilterChange.js";
 import { flyToChip } from "../features/transactions/flyToChip.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
@@ -91,11 +92,9 @@ import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../
 import { BulkMoveDialog } from "../features/transactions/bulkMove/BulkMoveDialog.jsx";
 import { mergeTransferRows, transfersToRows } from "../features/transactions/transferRows.js";
 import { listTransfers } from "../../api/transfers";
-import { exportTransactionsCsv } from "../../api/transactions";
-import { buildTransactionsQuery, transactionsDateRangeFor } from "../data/transactionsAdapter.js";
+import { buildTransactionsSummaryQuery, transactionsDateRangeFor } from "../data/transactionsAdapter.js";
 import {
   filtersToLegacyParams,
-  filtersToCsvOptions,
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { facetSentenceLabel } from "../features/transactions/filters/facetSentenceLabel.js";
@@ -103,7 +102,9 @@ import { getPaymentMethodLabel } from "../features/transactions/filters/paymentM
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
-import { saveBlob } from "../features/export/saveBlob.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { SELECTION_MAX_IDS } from "../features/export/exportFailure.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
 import {
   CAT_COLORS,
   catColor,
@@ -1365,9 +1366,11 @@ function TransacoesPageBody({
   });
   const effectiveCardSel = cardGuard.effectiveSel;
 
-  /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
-     2+ contas ativas. Ids em string (a lista mistura número e UUID). */
-  const selectionEnabled = shouldUseRealData && accountsForFilter.length >= 2;
+  /* Seleção em lote (#281, #531): "Exportar seleção" vale com qualquer número de contas, então as caixas e a barra
+     existem sempre nos dados reais; "Mover para conta…" só com 2+ contas ativas (precisa de um destino).
+     Ids em string (a lista mistura número e UUID). */
+  const selectionEnabled = shouldUseRealData;
+  const bulkMoveEnabled = selectionEnabled && accountsForFilter.length >= 2;
   /** A coluna das caixas: as réguas de largura da linha (wide/xwide/rótulos/tags)
       descontam ela, e o esqueleto reserva a mesma — nada pula quando o dado chega. */
   const selectionGutterPx = selectionEnabled ? (isMobile ? 30 : 34) : 0;
@@ -2856,50 +2859,48 @@ function TransacoesPageBody({
     ],
   );
 
-  // ── CSV export ────────────────────────────────────────────────────────────
-  const exportCSV = () => {
-    const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    /* Recorte por conta (#268) ou cartão (#280): o export do servidor de Transações
-       aceita os MESMOS filtros da lista, inclusive `account_id` (fincla-api#446) e
-       `credit_card_id` (fincla-api#468) repetíveis. O CSV
-       legado de analytics não conhece conta — usá-lo aqui exportaria a organização
-       inteira com um chip de conta na tela. */
-    if (shouldUseRealData && organizationId && (effectiveAccountSel.length > 0 || effectiveCardSel.length > 0)) {
-      const { page: _page, limit: _limit, sort_by: _sortBy, sort_order: _sortOrder, ...query } =
-        buildTransactionsQuery({ organizationId, ...transactionsFilters });
-      exportTransactionsCsv(query)
-        .then((blob) => saveBlob(blob, "transacoes.csv"))
-        .catch(() => {});
-      return;
+  // ── Exportar ──────────────────────────────────────────────────────────────
+  /* Um caminho só (fincla-api#520/#521): o painel compartilhado pede o arquivo ao exportador do servidor com o
+     MESMO objeto de filtros que pediu o resumo — busca, categoria, etiquetas e modo, situação, faixa de valor,
+     recorrência, conta, cartão, tipo, forma e período —, então os totais do arquivo são os do card da tela. */
+  const [exportOpen, setExportOpen] = useState(false);
+  /* "Exportar seleção" (#531, como no cartão #524): os ids marcados AO ABRIR — a seleção da tela pode ser limpa por
+     uma releitura enquanto o painel está aberto. `null` = o recorte inteiro. */
+  const [exportSelectionIds, setExportSelectionIds] = useState(null);
+  const closeExport = useCallback(() => { setExportOpen(false); setExportSelectionIds(null); }, []);
+  const openSelectionExport = useCallback(() => {
+    setExportSelectionIds(bulkSelectedRows.map((t) => String(t.id)));
+    setExportOpen(true);
+  }, [bulkSelectedRows]);
+  // Os totais SÓ dos marcados, pelo mesmo resumo que o servidor usa no arquivo (`ids`); acima do limite nem é pedido.
+  const selectionSummary = useExportSummary(
+    exportOpen && exportSelectionIds && organizationId && exportSelectionIds.length <= SELECTION_MAX_IDS
+      ? { organization_id: organizationId, ids: exportSelectionIds }
+      : null,
+  );
+  const exportFilterParams = useMemo(
+    () => (organizationId ? buildTransactionsSummaryQuery({ organizationId, ...transactionsFilters }) : null),
+    [organizationId, transactionsFilters],
+  );
+  /* O período recorta sempre (mesmo o padrão, que não acende chip), então o arquivo o diz sempre — nas DATAS que o
+     pedido leva, com ano: o arquivo é lido depois e fora da tela, onde "Este mês" não diz nada (QA BUG-04).
+     As etiquetas saem numa linha só, com o modo (todas × qualquer) no texto do painel de Tags (QA BUG-01). */
+  const exportFiltersText = useMemo(() => {
+    const texts = exportTexts("pt-BR");
+    const out = [texts.period(exportFilterParams?.date_start, exportFilterParams?.date_end)];
+    let tagsDone = false;
+    for (const entry of activeFilterEntries) {
+      if (entry.key === "periodo") continue;
+      if (entry.key === "tag" || entry.key.startsWith("tag:")) {
+        if (!tagsDone) out.push(texts.tags(filter.tags, TAG_MODE_LABELS[filter.tagMode] ?? TAG_MODE_LABELS.any));
+        tagsDone = true;
+        continue;
+      }
+      out.push(`${entry.label}: ${entry.value}`);
     }
-    // A busca e o filtro por categoria não têm equivalente no endpoint de CSV,
-    // então esses casos caem no export client-side. Forma(s) de pagamento agora
-    // vão para o backend (param repetido), então não limitam mais o caminho remoto.
-    if (
-      shouldUseRealData &&
-      organizationId &&
-      !debouncedSearch &&
-      filter.cats.length === 0
-    ) {
-      downloadTransactionsCsvForUi(
-        organizationId,
-        filtersToCsvOptions({
-          type: filter.type,
-          method: filter.method,
-          period: filter.period,
-          customFrom: filter.customFrom,
-          customTo: filter.customTo,
-        }),
-      ).catch(() => {});
-      return;
-    }
-
-    const rows = filtered.map((t) =>
-      `${t.date},"${t.desc}","${t.cat}","${t.method}","${t.val > 0 ? "+" : ""}${t.val}","${t.status}","${(t.tags || []).join(";")}"`
-    );
-    const csv = [header, ...rows].join("\n");
-    saveBlob(new Blob([csv], { type:"text/csv;charset=utf-8;" }), "transacoes.csv");
-  };
+    return out.filter(Boolean);
+  }, [exportFilterParams, activeFilterEntries, filter.tags, filter.tagMode]);
+  const canExport = shouldUseRealData && Boolean(organizationId) && !tagFilterBlocked;
 
   // ── Detail panel content ──────────────────────────────────────────────────
 
@@ -3703,7 +3704,10 @@ function TransacoesPageBody({
           padding: isMobile ? "8px 12px" : "8px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
           <SelectionCount count={bulkSelectedRows.length} />
           <BulkActionsToolbar onClear={() => setBulkSelected([])}>
-            <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+            {bulkMoveEnabled ? (
+              <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+            ) : null}
+            <button type="button" onClick={openSelectionExport} disabled={!exportFilterParams} style={bulkButton}>Exportar seleção</button>
           </BulkActionsToolbar>
         </div>
       ) : null}
@@ -4232,23 +4236,39 @@ function TransacoesPageBody({
                     )}
                   </button>
                   <button type="button" role="menuitem"
-                    onClick={() => { setMobileMenuOpen(false); exportCSV(); }}
+                    disabled={!canExport}
+                    onClick={() => { setMobileMenuOpen(false); setExportOpen(true); }}
                     style={{ ...G, height:38, borderRadius:9, display:"flex", alignItems:"center",
                       gap:10, padding:"0 10px", fontSize:12.5, border:"none", background:"none",
                       color:T.inkMid, cursor:"pointer", textAlign:"left" }}>
-                    <Download size={13}/> Exportar CSV
+                    <Download size={13}/> Exportar
                   </button>
                 </div>
               </>
             )}
           </div>
         ) : (
-          <button onClick={exportCSV}
+          <button type="button" onClick={() => setExportOpen(true)} disabled={!canExport}
             style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
               border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
-              fontSize:12, fontWeight:600, color:T.inkMid, cursor:"pointer", flexShrink:0 }}>
-            <Download size={13}/> CSV
+              fontSize:12, fontWeight:600, color:T.inkMid, cursor: canExport ? "pointer" : "not-allowed",
+              opacity: canExport ? 1 : 0.5, flexShrink:0 }}>
+            <Download size={13}/> Exportar
           </button>
+        )}
+        {exportOpen && exportFilterParams && (
+          <ExportPanel
+            title="Transações"
+            filePrefix="transacoes"
+            filtersText={exportFiltersText}
+            filterParams={exportFilterParams}
+            count={transactionsData.summary?.total_transactions ?? transactionsData.total}
+            summary={transactionsData.summary}
+            selection={exportSelectionIds
+              ? { ids: exportSelectionIds, count: exportSelectionIds.length, summary: selectionSummary.data, error: selectionSummary.error }
+              : null}
+            onClose={closeExport}
+          />
         )}
       </div>
 

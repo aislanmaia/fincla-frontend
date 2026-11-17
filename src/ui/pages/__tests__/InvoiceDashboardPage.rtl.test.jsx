@@ -81,7 +81,7 @@ const item = (id, description, amount, date, extra = {}) => ({
 const detailFixture = (over = {}) => ({
   month: "2026-10", due_date: "2026-10-10", total_amount: money("8129.51"), status: "open",
   closing_date: "2026-10-15", paid_date: null, days_until_due: 6, is_overdue: false,
-  previous_month_total: money("6940.00"), month_over_month_change: 17.1, limit_usage_percent: 65, items_count: 62,
+  previous_month_total: money("6940.00"), month_over_month_change: 17.1, limit_usage_percent: 65, items_count: 62, invoice_id: 410,
   category_breakdown: [
     { category_id: "c1", category_name: "Alimentação", category_color: "#22C55E", total: money("3000.00"), percentage: 36.9, transaction_count: 15 },
     { category_id: "c2", category_name: "Moradia", category_color: "#6B7280", total: money("2000.00"), percentage: 24.6, transaction_count: 3 },
@@ -108,8 +108,8 @@ const detailFixture = (over = {}) => ({
 
 const DETAILS = {
   "2026/10": () => detailFixture(),
-  "2026/9": () => detailFixture({ month: "2026-09", due_date: "2026-09-10", total_amount: money("6940.00"), status: "closed", closing_date: "2026-09-15", days_until_due: -24, is_overdue: true, previous_month_total: null, month_over_month_change: null, items_count: 58 }),
-  "2026/8": () => detailFixture({ month: "2026-08", due_date: "2026-08-10", total_amount: money("7340.00"), status: "paid", closing_date: "2026-08-15", paid_date: "2026-08-09", days_until_due: -55, items_count: 51 }),
+  "2026/9": () => detailFixture({ month: "2026-09", due_date: "2026-09-10", total_amount: money("6940.00"), status: "closed", closing_date: "2026-09-15", days_until_due: -24, is_overdue: true, previous_month_total: null, month_over_month_change: null, items_count: 58, invoice_id: 409 }),
+  "2026/8": () => detailFixture({ month: "2026-08", due_date: "2026-08-10", total_amount: money("7340.00"), status: "paid", closing_date: "2026-08-15", paid_date: "2026-08-09", days_until_due: -55, items_count: 51, invoice_id: 408 }),
 };
 
 /** Backend de mentira na camada HTTP: cliente, adapter, hook e tela reais rodam por cima. */
@@ -538,7 +538,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.getByTestId("invoice-card-2026-11")).toHaveTextContent("7 parcelas já garantidas");
     expect(screen.getByTestId("forecast-installments")).toHaveTextContent("Celular");
     expect(screen.queryByTestId("pay-controls")).toBeNull();
-    expect(screen.queryByTestId("export-csv")).toBeNull();
+    expect(screen.queryByTestId("export-invoice")).toBeNull();
     expect(calls.filter((c) => /invoices\/2026\/11$/.test(c))).toHaveLength(1);
   });
 
@@ -725,27 +725,96 @@ describe("InvoiceDashboardPage — marcar como paga", () => {
   });
 });
 
-describe("InvoiceDashboardPage — exportar CSV", () => {
-  it("baixa o CSV da fatura selecionada", async () => {
-    mockApi();
-    let blob = null;
-    URL.createObjectURL = vi.fn((b) => { blob = b; return "blob:x"; });
+describe("InvoiceDashboardPage — exportar (painel compartilhado, fincla-api#525)", () => {
+  const FUTURE = { ...DETAILS, "2026/11": () => detailFixture({ month: "2026-11", due_date: "2026-11-10", total_amount: money("35.00"), items_count: 1, closing_date: "2026-11-03", days_until_due: 37, previous_month_total: null, month_over_month_change: null, limit_usage_percent: null, items: [item(9, "Padaria", "35.00", "2026-10-13")], category_breakdown: [], invoice_id: 411 }) };
+  const summaryBody = { total_transactions: 62, total_income: { amount: "0.00", currency: "BRL" }, total_expenses: { amount: "8168.41", currency: "BRL" }, total_refunds: { amount: "38.90", currency: "BRL" }, balance: { amount: "-8129.51", currency: "BRL" }, unsettled_count: 3, result_by_currency: [] };
+  const withExportApi = ({ summary = () => HttpResponse.json(summaryBody) } = {}) => {
+    const seen = { summaries: [], exports: [] };
+    server.use(
+      http.get("*/v1/transactions/summary", ({ request }) => { seen.summaries.push(new URL(request.url).searchParams); return summary(); }),
+      http.get("*/v1/transactions/export", ({ request }) => {
+        seen.exports.push(new URL(request.url).searchParams);
+        return new HttpResponse("%PDF-1.4", { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="cartao-azul-fatura-2026-10-2026-10-04.pdf"' } });
+      }),
+    );
+    return seen;
+  };
+  const stubDownload = () => {
+    const names = [];
+    URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();
-    const clicked = [];
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function recordClick() { clicked.push(this.download); });
+    const spy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function recordClick() { names.push(this.download); });
+    return { names, restore: () => spy.mockRestore() };
+  };
+
+  it.each([
+    ["2026", "8", "Ago/2026", "2026-08", "408"],
+    ["2026", "9", "Set/2026", "2026-09", "409"],
+    ["2026", "10", "Out/2026", "2026-10", "410"],
+    ["2026", "11", "Nov/2026", "2026-11", "411"],
+  ])("fatura %s/%s: 'Exportar' abre o painel com cartão + fatura e o arquivo sai do servidor", async (year, month, label, ym, invoiceId) => {
+    mockApi({ detail: FUTURE });
+    const seen = withExportApi();
+    const { names, restore } = stubDownload();
+    routeParams = { cardId: CARD_PUBLIC_ID, year, month };
     const user = userEvent.setup();
     renderPage();
     await screen.findByTestId("invoice-count");
 
-    await user.click(screen.getByTestId("export-csv"));
+    const button = screen.getByTestId("export-invoice");
+    expect(button).toHaveTextContent(/^\s*Exportar\s*$/);
+    expect(button).not.toHaveTextContent(/CSV/);
+    await user.click(button);
+    // O botão só abre o painel: nada é baixado do navegador.
+    expect(names).toEqual([]);
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    expect(panel).toHaveTextContent(`Fatura: ${label}`);
 
-    expect(clicked).toEqual(["fatura-Azul-2026-10.csv"]);
-    const text = await blob.text();
-    const lines = text.split("\n");
-    expect(lines[0]).toBe("Descrição,Categoria,Valor,Data,Parcela,Recorrente");
-    expect(lines).toHaveLength(7);
-    expect(lines.find((l) => l.includes("Supermercado Extra"))).toContain('"412,30"');
-    click.mockRestore();
+    // Os totais do painel vêm do resumo do MESMO recorte (cartão + fatura), na moeda do recorte.
+    await waitFor(() => expect(seen.summaries).toHaveLength(1));
+    const summary = seen.summaries[0];
+    expect(summary.get("organization_id")).toBe(ORG);
+    expect(summary.get("credit_card_id")).toBe("1");
+    expect(summary.getAll("invoice_id")).toEqual([invoiceId]);
+    expect(summary.get("slice_currency")).toBe("true");
+    expect(await within(panel).findByTestId("export-totals")).toHaveTextContent(/8\.129,51/);
+
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(seen.exports).toHaveLength(1));
+    const asked = seen.exports[0];
+    expect(asked.get("organization_id")).toBe(ORG);
+    expect(asked.get("credit_card_id")).toBe("1");
+    expect(asked.getAll("invoice_id")).toEqual([invoiceId]);
+    expect(asked.get("format")).toBe("pdf");
+    expect(asked.get("content")).toBe("full");
+    expect(asked.get("file_prefix")).toBe(`cartao-azul-fatura-${ym}`);
+    expect(asked.get("title")).toBe(`Azul •7112 · Fatura de ${label}`);
+    expect(asked.getAll("filters_text")).toEqual([`Fatura: ${label}`]);
+    // Exatamente os filtros do resumo vão ao arquivo: tela e arquivo descrevem o mesmo recorte.
+    // Nos dois sentidos (G3-2-09): um filtro A MAIS no arquivo (um `type` velho) também quebraria a paridade.
+    const FILE_ONLY = ["format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"];
+    const filtersOf = (params, skip) => Object.fromEntries([...new Set(params.keys())].filter((key) => !skip.includes(key)).map((key) => [key, params.getAll(key)]));
+    expect(filtersOf(asked, FILE_ONLY)).toEqual(filtersOf(summary, ["slice_currency", "locale"]));
+    await waitFor(() => expect(names).toEqual(["cartao-azul-fatura-2026-10-2026-10-04.pdf"]));
+    restore();
+  });
+
+  it("fatura sem id no servidor não oferece exportar (não há recorte para pedir)", async () => {
+    mockApi({ detail: { ...DETAILS, "2026/10": () => detailFixture({ invoice_id: null }) } });
+    renderPage();
+    await screen.findByTestId("invoice-count");
+    expect(screen.queryByTestId("export-invoice")).toBeNull();
+  });
+
+  it("falha do resumo aparece no painel, nunca engolida", async () => {
+    mockApi();
+    withExportApi({ summary: () => HttpResponse.json({ detail: "boom" }, { status: 500 }) });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("invoice-count");
+    await user.click(screen.getByTestId("export-invoice"));
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    expect(await within(panel).findByText(/Não foi possível calcular os totais/)).toBeInTheDocument();
   });
 });
 
@@ -823,7 +892,7 @@ describe("InvoiceDashboardPage — mobile", () => {
     const sept = screen.getByTestId("invoice-card-2026-09");
     expect(sept).toHaveTextContent("6.940,00");
     expect(sept).toHaveTextContent("58 lançamentos");
-    expect(within(sept).queryByTestId("export-csv")).toBeNull();
+    expect(within(sept).queryByTestId("export-invoice")).toBeNull();
     expect(calls.filter((c) => /invoices\/\d{4}\/\d+$/.test(c))).toHaveLength(1);
     expect(screen.getByTestId("invoice-dots")).toBeInTheDocument();
     expect(screen.queryByText(/ver todas as faturas/i)).toBeNull();

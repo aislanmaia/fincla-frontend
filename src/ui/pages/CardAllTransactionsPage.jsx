@@ -3,18 +3,23 @@ import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-ro
 import { ArrowLeft, Download, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
-import { exportTransactionsCsv, getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
+import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { dayKey, groupSubtotal, installmentOf } from "../features/cardTransactions/ledgerModel.js";
 import { alertsLabel, assistantFailureMessage, assistantFromApi } from "../features/cardTransactions/assistantModel.js";
-import { CategorizeDialog, ExportDialog, MoveInstallmentDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
+import { CategorizeDialog, MoveInstallmentDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
 import { useLedgerAssistant } from "../features/cardTransactions/useLedgerAssistant.js";
-import { categorizeRows, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
-import { saveBlob } from "../features/export/saveBlob.js";
-import { buildPdfParts, buildPrintHtml, downloadCsv, exportFailureMessage, exportFileName, printHtml } from "../features/cardTransactions/ledgerExport.js";
+import { categorizeRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { SELECTION_MAX_IDS, exportFailureMessage } from "../features/export/exportFailure.js";
+import { filePrefixOf } from "../features/export/exportRequest.js";
+import { withSliceCurrency } from "../features/export/sliceCurrency.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
+import { exportTexts } from "../features/export/exportTexts.js";
+import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -23,7 +28,7 @@ import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
 import { describeLedgerChange, weekEnd } from "../features/cardTransactions/ledgerHistory.js";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { HistoryButton } from "../features/transactions/TransactionsListHeader.jsx";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceExportLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { FacetCard } from "../features/transactions/filters/facetBar/FacetCard.jsx";
@@ -36,7 +41,7 @@ import { useTransactionsFilterState } from "../features/transactions/filters/use
 import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
 import { buildTagOptions, isTagFilterBlocked, resolveTagFilterStatuses, tagFilterStatusMessage, tagOptionsToDisplayMap } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
-import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { useFocusTrap } from "../components/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
 import { parseMoneyInputFor } from "../money/moneyInput.js";
@@ -258,8 +263,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const tagOptions = useMemo(() => buildTagOptions(tagCatalog.rows, categoryLabels), [tagCatalog.rows, categoryLabels]);
   const tagIdByLabel = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
   const tagStatus = resolveTagFilterStatuses({ selectedLabels: filter.tags, loading: tagCatalog.loading, error: tagCatalog.error, displayToId: tagIdByLabel });
-  const unresolvedCategory = filter.cats.length > 0 && (categoryCatalog.isLoading || categoryCatalog.error || filter.cats.some((id) => !categoriesById[id]?.apiName));
-  const catalogBlocked = isTagFilterBlocked(tagStatus) || Boolean(unresolvedCategory);
+  const catalogBlocked = isTagFilterBlocked(tagStatus);
   const bounds = resolvePeriodDisplayBounds(filter.period, filter.customFrom, filter.customTo);
   const invoiceMode = timeMode === "invoice" && cardScope === "current";
   const invoiceOpts = useMemo(() => {
@@ -293,7 +297,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     ...(kind === "refund" ? { type: "refund" } : filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
     ...(kind === "one_off" || kind === "installment" ? { commitment_kind: kind } : kind === "recurring" ? { recurring: true } : {}),
     ...(filter.settlement === "pagas" ? { settled: true } : filter.settlement === "a-pagar" ? { settled: false } : {}),
-    ...(filter.cats.length && !unresolvedCategory ? { category: filter.cats.map((id) => categoriesById[id]?.apiName) } : {}),
+    // Pelo id da etiqueta de categoria, que a API casa exatamente. O nome do catálogo é rótulo de tela (tradução ou
+    // nome personalizado) e o `system_key` falta nas categorias criadas pela pessoa (G3-2-01).
+    ...(filter.cats.length ? { category: filter.cats.map(String) } : {}),
     ...(tagStatus.kind === "resolved" ? { tag_id: tagStatus.ids, tag_match: filter.tagMode } : {}),
     ...(cardScope === "all" ? { payment_method: "credit_card" } : {}),
     sort_by: sortField,
@@ -375,21 +381,28 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (!state.card || filterBlocked) return undefined;
     let active = true;
     setSummaryState({ key: summaryKey, data: null, loading: true, error: false });
-    getTransactionsSummary({
+    // A moeda do recorte (fincla-api#520, D1): o card desta tela e o arquivo do painel saem do mesmo cálculo.
+    getTransactionsSummary(withSliceCurrency({
       organization_id: organizationId,
       ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}),
       ...aggregateFilter,
       include_breakdown: true,
       locale: "pt-BR",
-    }).then((data) => {
+    })).then((data) => {
       if (active) { setSummaryState({ key: summaryKey, data, loading: false, error: false }); if (cardScope === "current") rememberInvoices(state.card.id, data); }
-    }).catch(() => {
-      if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true });
+    }).catch((error) => {
+      // A mensagem vai ao painel de exportar (nenhum erro engolido); o card da tela só precisa saber que falhou.
+      if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true, message: exportFailureMessage(error) });
     });
     return () => { active = false; };
   // summaryKey carries queryFilter and cardScope.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, summaryKey, filterBlocked]);
+
+  // "Exportar seleção": os totais SÓ dos marcados, pelo mesmo resumo que o servidor usa no arquivo (`ids`, #524).
+  const selectionIds = dialog?.kind === "export" && dialog.selection ? dialog.selection.ids : null;
+  // O mesmo hook das outras telas: pedido com `slice_currency`, erro como mensagem do painel.
+  const selectionSummary = useExportSummary(selectionIds && selectionIds.length <= SELECTION_MAX_IDS ? { organization_id: organizationId, ids: selectionIds } : null);
 
   // Várias faturas: a escada tira o recorte de fatura. Uma semana marcada: tira o recorte de datas, para as outras semanas continuarem no gráfico.
   const needsLadder = invoiceMode && (selectedInvoiceIds.length >= 2 || Boolean(activeWeek));
@@ -524,28 +537,22 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     setInspected(null);
     onRefund({ transactionId: row.id, cardId: state.card?.id, description: row.description, amount, dateLabel: formatYmdToBrDisplay(String(row.date ?? "").slice(0, 10)), category: pickCategoryTagFromApiTransaction(row)?.label || row.category || undefined });
   };
-  const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
-  const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
-  // CSV do recorte inteiro vem do servidor (todas as páginas, até 20.000); a seleção marcada e o PDF (impressão do
-  // navegador) partem das linhas que já temos / lidas página a página.
-  const submitExport = async (format, selectionRows = null) => {
-    try {
-      if (format === "csv" && !selectionRows) {
-        saveBlob(await exportTransactionsCsv({ organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}), ...aggregateFilter }), exportFileName("csv"));
-        return null;
-      }
-      const all = selectionRows ?? await exportRowsOf();
-      if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
-      printHtml(buildPrintHtml({
-        title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
-        subtitle: selectionRows ? `${all.length} lançamento${all.length === 1 ? "" : "s"} selecionado${all.length === 1 ? "" : "s"}` : `${plural(all.length, "lançamento", "lançamentos")} · ${filterSummary().join(" · ")}`,
-        ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
-      }));
-      return null;
-    } catch (error) {
-      return exportFailureMessage(error);
-    }
+  const exportTitle = () => `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`;
+  /* Os filtros como o diálogo e o ARQUIVO os descrevem: o arquivo é lido depois e fora da tela, então o recorte de
+     tempo sai absoluto e com ano — faturas com mês/ano, período e semana nas datas do pedido (QA BUG-04) — e as
+     etiquetas numa linha só, com o modo no texto do painel de Tags (QA BUG-01). */
+  const filterSummary = () => {
+    const texts = exportTexts("pt-BR");
+    const time = scopeWaiting ? chipLabel : invoiceMode ? invoiceExportLabel(invoiceOpts, invoiceKeys ?? []) : texts.period(queryFilter.date_start, queryFilter.date_end);
+    const facetLines = activeFacets.map((facet) => (facet.key === "tag" ? texts.tags(filter.tags, TAG_MODE_LABELS[filter.tagMode] ?? TAG_MODE_LABELS.any) : `${facet.label}: ${facet.value}`));
+    return [time, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(activeWeek ? [texts.period(activeWeek.from, activeWeek.to)] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...facetLines].filter(Boolean);
   };
+  const exportFilePrefix = () => (cardScope === "all" ? filePrefixOf("cartoes") : filePrefixOf("cartao", cardLabel(state.card)));
+  // O recorte como o painel e o arquivo o leem: os MESMOS filtros do resumo da tela (sem ordem nem página).
+  const exportFilterParams = { organization_id: organizationId, ...(cardScope === "current" && state.card ? { credit_card_id: state.card.id } : {}), ...aggregateFilter };
+  const openExport = () => setDialog({ kind: "export" });
+  // "Exportar seleção" guarda os ids marcados ao abrir: a lista pode recarregar por baixo sem mudar o que sai.
+  const openSelectionExport = () => setDialog({ kind: "export", selection: { ids: [...selectedRows] } });
   const openOriginal = async (id) => {
     try { setInspected(await getTransaction(id, organizationId)); } catch { setNotice("Não foi possível abrir o lançamento original."); }
   };
@@ -568,6 +575,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
+  const currentSummaryErrorMessage = currentSummaryError ? summaryState.message : null;
   const currentFacets = facetCacheRef.current.get(facetKey) ?? null;
   const facetCounts = {
     counts: currentFacets,
@@ -675,13 +683,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const clearSearch = () => { filter.setSearch(""); closeSearch(); };
   const chipPill = { borderRadius: 99, padding: "0 12px", height: 30, boxSizing: "border-box", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap", flex: "none" };
   return <div style={isMobile ? { height: "100%", minHeight: 0, display: "flex", flexDirection: "column", minWidth: 0 } : { padding: 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-    {isMobile && <LedgerAppBar subtitle={card ? (cardScope === "all" ? "Todos os cartões" : cardLabel(card)) : null} onBack={back} hasCard={Boolean(card)} searchOpen={searchOpen} onSearchOpen={openSearch} onSearchClose={closeSearch} search={filter.search} onSearchChange={filter.setSearch} facetCount={activeFacets.length} filtersOpen={filtersOpen} onFilters={() => { setMobileFacetOpen(false); setFiltersOpen((open) => !open); }} alertCount={alerts.length} onAssistant={openAssistant} onExport={() => setDialog({ kind: "export" })} exportDisabled={!state.total} />}
+    {isMobile && <LedgerAppBar subtitle={card ? (cardScope === "all" ? "Todos os cartões" : cardLabel(card)) : null} onBack={back} hasCard={Boolean(card)} searchOpen={searchOpen} onSearchOpen={openSearch} onSearchClose={closeSearch} search={filter.search} onSearchChange={filter.setSearch} facetCount={activeFacets.length} filtersOpen={filtersOpen} onFilters={() => { setMobileFacetOpen(false); setFiltersOpen((open) => !open); }} alertCount={alerts.length} onAssistant={openAssistant} onExport={openExport} exportDisabled={!state.total || filterBlocked} />}
     {isMobile && card && alerts.length > 0 && <LedgerAlertStrip label={alertsLabel(alerts.length)} summary={alertSummary} onOpen={openAssistant} />}
     {!isMobile && <button type="button" onClick={back} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para o cartão</button>}
     {!isMobile && <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
       <div><PageTitle sans="Lançamentos do" serif="cartão" />{card && <p style={{ ...G, ...NUM, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{cardScope === "all" ? "Todos os cartões" : cardLabel(card)}</p>}</div>
       {card && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <Btn variant="outGray" disabled={!state.total} onClick={() => setDialog({ kind: "export" })}><Download size={14} /> Exportar</Btn>
+        <Btn variant="outGray" disabled={!state.total || filterBlocked} onClick={openExport}><Download size={14} /> Exportar</Btn>
         {!isMobile && assistantButton}
       </div>}
     </header>}
@@ -724,7 +732,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0, ...(isMobile ? { flex: 1, minHeight: 0 } : {}) }}>
         <div style={{ flex: 1, minWidth: 0, ...(isMobile ? { minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}>
         {searchEmpty ? <LedgerSearchEmpty query={searchTerm} onClear={clearSearch} /> : 
-        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => setDialog({ kind: "export", selection: { rows: selectedRowObjects, sum: selectionSum } })} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
+        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={openSelectionExport} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" && onRefund ? requestRefund : undefined} onOpenOriginal={openOriginal} /></Card></div>}
         {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel valueReadCurrency={valueReadCurrency} filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
@@ -738,7 +746,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids, { allowUnloaded: Boolean(dialog.fromAssistant) })} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
-    {dialog?.kind === "export" && <ExportDialog blocked={filterBlocked} total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
+    {dialog?.kind === "export" && card && <ExportPanel title={exportTitle()} filePrefix={exportFilePrefix()} filtersText={filterSummary()} filterParams={exportFilterParams} count={state.total} summary={currentSummary} summaryError={currentSummaryErrorMessage} selection={dialog.selection ? { ids: dialog.selection.ids, count: dialog.selection.ids.length, summary: selectionSummary.data, error: selectionSummary.error } : null} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights} loading={!assistant.current} error={assistant.current && assistant.error ? assistantFailureMessage(assistant.error) : null} onRetry={assistant.retry} categoryLabelOf={(id) => categoriesById[id]?.label} onApply={applySuggestion} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { const loaded = ids.filter((id) => state.rows.some((row) => row.id === id)); setSelectedRows(loaded); setDialog(null); if (loaded.length < ids.length) setNotice(`${ids.length - loaded.length} de ${ids.length} lançamentos deste alerta ainda não estão carregados na lista; carregue mais ou filtre para vê-los.`); }} onCategorize={(ids) => { setDialog({ kind: "categorize", ids, fromAssistant: true }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>

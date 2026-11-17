@@ -1,5 +1,4 @@
 import {
-  downloadTransactionsCsv,
   getByCategory,
   getMonthlyEvolution,
   getSpendingRhythm,
@@ -257,28 +256,6 @@ export function sumMonthsByCurrency(months) {
     }
   }
   return [...acc.values()].sort((a, b) => a.currency.localeCompare(b.currency));
-}
-
-export async function downloadReportsCsvForUi(organizationId, periodo) {
-  const months = resolveReportMonths(periodo);
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const fmt = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
-
-  return downloadTransactionsCsv(
-    organizationId,
-    {
-      dateStart: fmt(start),
-      dateEnd: fmt(end),
-    },
-    `relatorios-${periodo}.csv`,
-  );
 }
 
 export function formatReportsApiError(error) {

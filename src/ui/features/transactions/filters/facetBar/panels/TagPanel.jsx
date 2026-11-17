@@ -3,6 +3,7 @@ import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
+import { TAG_MODE_LABELS } from "../../tagModeLabels.js";
 
 /**
  * Painel da facet "Tags".
@@ -62,8 +63,8 @@ export function TagPanel({
           }}
         >
           {[
-            ["any", "Qualquer uma (OU)"],
-            ["all", "Todas juntas (E)"],
+            ["any", TAG_MODE_LABELS.any],
+            ["all", TAG_MODE_LABELS.all],
           ].map(([value, label]) => {
             const on = tagMode === value;
             return (

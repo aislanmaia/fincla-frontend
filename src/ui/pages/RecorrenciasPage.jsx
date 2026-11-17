@@ -4,7 +4,6 @@ import {
   ChevronDown,
   Plus,
   Sparkles,
-  Upload,
   Pause,
   Play,
   Pencil,
@@ -729,11 +728,6 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           <PageTitle sans="Recorrências &" serif="Compromissos" />
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: isMobile ? "nowrap" : "wrap", flexShrink: 0 }}>
-          {!isMobile && (
-            <Btn variant="outGray">
-              <Upload size={12} /> Exportar
-            </Btn>
-          )}
           {!isMobile && (
             <Btn variant="outPurp" onClick={() => onNav("simulation", { autoOpenModal: true, autoTipo: "despesa_recorrente" })}>
               <Sparkles size={12} /> Simular recorrência

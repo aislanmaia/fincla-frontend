@@ -123,12 +123,18 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     expect(screen.queryByTestId("bulk-selection-bar")).toBeNull();
   });
 
-  it("com UMA conta ativa não há seleção (a única ação é mover de conta)", async () => {
+  /* Antes da #531 a seleção sumia com UMA conta, porque mover era a única ação. Com "Exportar seleção" (que vale com
+     qualquer número de contas) a seleção existe sempre; só "Mover para conta…" continua exigindo 2+ contas. */
+  it("com UMA conta ativa há seleção, mas sem 'Mover para conta…' (não há destino)", async () => {
     listAccountsMock.mockResolvedValue([ACCOUNTS[0]]);
+    const user = userEvent.setup();
     renderPage();
     await screen.findAllByText("Mercado");
     await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
-    expect(screen.queryByRole("checkbox", { name: "Selecionar Mercado" })).toBeNull();
+    await selectRows(user, "Mercado");
+    const bar = screen.getByTestId("bulk-selection-bar");
+    expect(bar).toHaveTextContent("1 selecionado");
+    expect(within(bar).queryByRole("button", { name: "Mover para conta…" })).toBeNull();
   });
 
   it("mesma moeda: a conta de origem sai do seletor; um PUT por lançamento só com account_id; lista e saldos releem", async () => {
@@ -151,14 +157,18 @@ describe("<TransacoesPage> — seleção em lote e mover para conta (#281)", () 
     expect(onTransactionsInvalidate).toHaveBeenCalled();
   });
 
-  it("1 conta ativa + 1 desativada: nada de seleção nem de 'Mover para conta…' (desativada não conta)", async () => {
+  // Desde a #531 a seleção existe com qualquer número de contas (por causa de "Exportar seleção"); o que este teste
+  // guarda é que a conta desativada não conta como destino, então "Mover para conta…" não aparece.
+  it("1 conta ativa + 1 desativada: há seleção, mas nada de 'Mover para conta…' (desativada não conta)", async () => {
     listAccountsMock.mockResolvedValue([ACCOUNTS[0], { id: ACC_B, name: "Conta B Nubank", currency: "BRL", is_active: false }]);
+    const user = userEvent.setup();
     renderPage();
     await screen.findAllByText("Mercado");
     await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByRole("checkbox", { name: "Selecionar Mercado" })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: "Selecionar lançamentos carregados" })).toBeNull();
+    await selectRows(user, "Mercado");
+    const bar = screen.getByTestId("bulk-selection-bar");
+    expect(within(bar).getByRole("button", { name: "Exportar seleção" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Mover para conta…" })).toBeNull();
   });
 

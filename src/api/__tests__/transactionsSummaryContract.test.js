@@ -14,7 +14,12 @@
  * é justamente por serem derivados que precisam de teste.
  */
 import { describe, it, expect } from "vitest";
-import exemplo from "../__fixtures__/transactions_summary.example.json";
+import bruto from "../__fixtures__/transactions_summary.example.json";
+import { unwrapMoney } from "../money";
+
+/* A tela não lê o JSON cru: `getTransactionsSummary` desembrulha o dinheiro canônico (`{amount, currency}`) em
+   números. Os cálculos abaixo rodam sobre o que a tela recebe. */
+const exemplo = unwrapMoney(bruto);
 
 /** Os campos que a faixa expandida lê. Some um, some um pedaço da tela. */
 const CAMPOS_EXPANDIDOS = [
@@ -118,5 +123,14 @@ describe("contrato de /v1/transactions/summary", () => {
       ? semReceita.total_income / semReceita.income_count
       : null;
     expect(media).toBeNull();
+  });
+
+  it("o resultado de cada moeda (fincla-api#520) chega à tela com a moeda de cada entrada", () => {
+    expect(bruto.result_by_currency.length).toBeGreaterThan(0);
+    for (const item of exemplo.result_by_currency) {
+      expect(typeof item.currency).toBe("string");
+      expect(item.balance).toBeCloseTo(item.total_income + item.total_refunds - item.total_expenses, 2);
+    }
+    expect(exemplo.result_by_currency.reduce((n, item) => n + item.total_transactions, 0)).toBe(exemplo.total_transactions);
   });
 });

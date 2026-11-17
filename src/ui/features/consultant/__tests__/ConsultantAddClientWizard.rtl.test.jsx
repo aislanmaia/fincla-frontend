@@ -2,6 +2,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Sem `{ timeout }` por teste: vale o teto global de `vite.config.ts` (45 s).
+// O `15000` que havia aqui REBAIXAVA esse teto e, sob a carga de um gate,
+// derrubava o teste por tempo.
+
 const navigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 
@@ -121,5 +125,5 @@ describe("<ConsultantAddClientWizard>", () => {
     );
     expect(await screen.findByText("Cliente adicionado!")).toBeInTheDocument();
     expect(screen.getByDisplayValue("https://app/login?reset_token=abc")).toBeInTheDocument();
-  }, 15000);
+  });
 });

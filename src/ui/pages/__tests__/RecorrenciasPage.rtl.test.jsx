@@ -122,4 +122,14 @@ describe("RecorrenciasPage (RTL)", () => {
     expect(button.parentElement.parentElement.style.flexWrap).toBe("wrap");
     expect(button.style.width).toBe("");
   });
+
+  it.each([
+    ["desktop", false],
+    ["mobile", true],
+  ])("%s: não mostra botão Exportar sem ação", (_label, isMobile) => {
+    renderPage(isMobile);
+    expect(screen.getByRole("button", { name: "Nova recorrência" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /exportar/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/exportar/i)).not.toBeInTheDocument();
+  });
 });

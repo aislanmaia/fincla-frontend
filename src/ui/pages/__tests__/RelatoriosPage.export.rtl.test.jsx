@@ -1,0 +1,384 @@
+/** @vitest-environment jsdom */
+
+/**
+ * Relatórios no exportador único (fincla-api#526). "Exportar" abre o painel compartilhado com os lançamentos do
+ * período do relatório (todas as contas da organização); o arquivo sai de `GET /v1/transactions/export` e os totais
+ * do painel, do resumo do MESMO recorte com `slice_currency`. O caminho antigo (`/analytics/export-csv`, que só
+ * passava o período e falhava calado) não é mais chamado.
+ *
+ * A camada HTTP é simulada (msw); tela, painel, hook do resumo e clientes de API são reais. Os gráficos vêm de um
+ * dublê da leitura de análise do adapter — eles não entram no arquivo.
+ */
+import React from "react";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+
+import { setCurrencyRegistry } from "../../money/currencyRegistry.js";
+
+// Cada teste pode trocar a leitura de análise (ex.: sem cotação para consolidar, BUG-01 dos smokes).
+const analytics = vi.hoisted(() => ({ override: null }));
+vi.mock("../../data/reportsAdapter.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchReportsAnalytics: () => Promise.resolve({
+    monthlyData: [{ mes: "Nov'26", receita: 100, gasto: 40 }],
+    drift: { driftData: [], driftColors: {} },
+    compositionData: [],
+    compositionWindowLabel: null,
+    waterfallRows: [],
+    velocityDaily: [],
+    currencyUnavailable: null,
+    byCurrency: [],
+    ...analytics.override,
+  }),
+}));
+vi.mock("../../../api/recurringSeries", () => ({
+  listRecurringSeries: vi.fn(() => Promise.resolve({ series: [] })),
+}));
+vi.mock("recharts", () => {
+  const passthrough = ({ children }) => <div>{children}</div>;
+  const none = () => null;
+  return {
+    ResponsiveContainer: passthrough, AreaChart: passthrough, BarChart: passthrough, ComposedChart: passthrough,
+    PieChart: passthrough, Area: none, Pie: none, Bar: none, Line: none, Cell: none, XAxis: none, YAxis: none,
+    CartesianGrid: none, Tooltip: none, ReferenceLine: none,
+  };
+});
+
+import { RelatoriosPage } from "../RelatoriosPage.jsx";
+
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+const ORG = "org-1";
+const money = (amount, currency = "BRL") => ({ amount, currency });
+/** Contas em real e em dólar: os totais saem na base (BRL) com a cotação; o Resultado de cada moeda vem junto. */
+const MIXED_SUMMARY = {
+  total_transactions: 7,
+  total_income: money("5000.00"),
+  total_expenses: money("1530.00"),
+  total_refunds: money("0.00"),
+  balance: money("3470.00"),
+  unsettled_count: 2,
+  consolidation: { target_currency: "BRL", rates: [{ base: "USD", quote: "BRL", rate: "5.1000", quoted_on: "2026-11-14" }], unavailable: null },
+  result_by_currency: [
+    { currency: "BRL", total_transactions: 5, total_income: money("5000.00"), total_expenses: money("1020.00"), total_refunds: money("0.00"), balance: money("3980.00") },
+    { currency: "USD", total_transactions: 2, total_income: money("0.00", "USD"), total_expenses: money("100.00", "USD"), total_refunds: money("0.00", "USD"), balance: money("-100.00", "USD") },
+  ],
+};
+
+const server = setupServer();
+let seen;
+const withApi = ({ summary = () => HttpResponse.json(MIXED_SUMMARY), exported } = {}) => {
+  seen = { summaries: [], exports: [], legacy: [] };
+  server.use(
+    http.get("*/v1/organizations/:id", () => HttpResponse.json({ id: ORG, base_currency: "BRL" })),
+    http.get("*/v1/transactions/summary", ({ request }) => { seen.summaries.push(new URL(request.url).searchParams); return summary(); }),
+    http.get("*/v1/transactions/export", ({ request }) => {
+      seen.exports.push(new URL(request.url).searchParams);
+      return exported ? exported() : new HttpResponse("%PDF-1.4", {
+        headers: { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="relatorios-2026-06-a-2026-11-2026-11-16.pdf"' },
+      });
+    }),
+    http.get("*/v1/analytics/export-csv", ({ request }) => { seen.legacy.push(new URL(request.url).searchParams); return new HttpResponse("x"); }),
+  );
+};
+
+let downloads;
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+beforeEach(() => {
+  // 16/11/2026 às 22h no fuso local: em UTC já é dia 17 — o período não pode depender disso.
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 16, 22, 0) });
+  setCurrencyRegistry([
+    { code: "BRL", name: "Real", symbol: "R$", decimal_places: 2, is_active: true },
+    { code: "USD", name: "Dólar", symbol: "US$", decimal_places: 2, is_active: true },
+  ]);
+  downloads = [];
+  URL.createObjectURL = vi.fn(() => "blob:x");
+  URL.revokeObjectURL = vi.fn();
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function recordClick() { downloads.push(this.download); });
+});
+afterEach(() => {
+  analytics.override = null;
+  cleanup();
+  server.resetHandlers();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+const openPanel = async (user) => {
+  render(<RelatoriosPage dataMode="live" organizationId={ORG} />);
+  await user.click(await screen.findByRole("button", { name: /Exportar/ }));
+  return screen.findByRole("dialog", { name: "Exportar" });
+};
+
+const ONLY_PERIOD = ["organization_id", "date_start", "date_end"];
+
+describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () => {
+  it.each([
+    ["6m", null, "2026-06-01", "2026-11-30", "Período: 01/06/2026 a 30/11/2026", "relatorios-2026-06-a-2026-11"],
+    ["3m", "3m", "2026-09-01", "2026-11-30", "Período: 01/09/2026 a 30/11/2026", "relatorios-2026-09-a-2026-11"],
+    ["12m", "12m", "2025-12-01", "2026-11-30", "Período: 01/12/2025 a 30/11/2026", "relatorios-2025-12-a-2026-11"],
+  ])("período %s: painel com o período como filtro e o pedido só com as datas do relatório", async (_label, pick, from, to, periodLine, prefix) => {
+    withApi();
+    const user = userEvent.setup();
+    render(<RelatoriosPage dataMode="live" organizationId={ORG} />);
+    // Espera a tela assentar (relatório e moeda base carregados): antes disso o seletor ainda se redesenha.
+    await waitFor(() => expect(document.body.textContent).toMatch(/R\$\s?100/));
+    if (pick) await user.click(screen.getByRole("button", { name: pick }));
+    await user.click(await screen.findByRole("button", { name: /Exportar/ }));
+    // O botão só abre o painel: nada é baixado nem pedido ao exportador.
+    expect(downloads).toEqual([]);
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent(periodLine);
+
+    await waitFor(() => expect(seen.summaries).toHaveLength(1));
+    const summary = seen.summaries[0];
+    // Todas as contas da organização: nenhum filtro além do período.
+    expect([...new Set(summary.keys())].sort()).toEqual([...ONLY_PERIOD, "locale", "slice_currency"].sort());
+    expect(summary.get("organization_id")).toBe(ORG);
+    expect(summary.get("date_start")).toBe(from);
+    expect(summary.get("date_end")).toBe(to);
+    expect(summary.get("slice_currency")).toBe("true");
+    // A contagem do painel é a do resumo do recorte inteiro.
+    expect(await within(panel).findByText("7 lançamentos")).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(seen.exports).toHaveLength(1));
+    const asked = seen.exports[0];
+    expect([...new Set(asked.keys())].sort()).toEqual(
+      [...ONLY_PERIOD, "format", "content", "title", "filters_text", "file_prefix", "timezone", "locale"].sort(),
+    );
+    expect(asked.get("organization_id")).toBe(ORG);
+    expect(asked.get("date_start")).toBe(from);
+    expect(asked.get("date_end")).toBe(to);
+    expect(asked.get("format")).toBe("pdf");
+    expect(asked.get("content")).toBe("full");
+    expect(asked.get("title")).toBe("Relatórios");
+    expect(asked.getAll("filters_text")).toEqual([periodLine]);
+    expect(asked.get("file_prefix")).toBe(prefix);
+    await waitFor(() => expect(downloads).toEqual(["relatorios-2026-06-a-2026-11-2026-11-16.pdf"]));
+    // O caminho antigo não é chamado.
+    expect(seen.legacy).toEqual([]);
+  });
+
+  it("contas em moedas diferentes: totais na moeda base com a cotação e o Resultado de cada moeda", async () => {
+    withApi();
+    const user = userEvent.setup();
+    const panel = await openPanel(user);
+    const totals = await within(panel).findByTestId("export-totals");
+    expect(totals).toHaveTextContent(/R\$\s?3\.470,00/);
+    expect(totals).toHaveTextContent(/R\$\s?5\.000,00/);
+    expect(panel).toHaveTextContent("1 US$ = R$ 5,1000");
+    expect(panel).toHaveTextContent(/USD −US\$\s?100,00 \(2\)/);
+  });
+
+  it("falha do resumo aparece no painel, nunca engolida — e a contagem não vira 0 (G3-2-04)", async () => {
+    withApi({ summary: () => HttpResponse.json({ detail: "boom" }, { status: 500 }) });
+    const user = userEvent.setup();
+    const panel = await openPanel(user);
+    expect(await within(panel).findByText(/Não foi possível calcular os totais/)).toBeInTheDocument();
+    const scope = within(panel).getByRole("region", { name: "Lançamentos exportados" });
+    expect(scope).toHaveTextContent("contagem indisponível");
+    expect(scope).not.toHaveTextContent(/\b0 lançamentos/);
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+  });
+
+  it("enquanto o resumo carrega o painel diz 'contando…', nunca '0 lançamentos', e não deixa exportar (G3-2-04)", async () => {
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
+    withApi({ summary: async () => { await pending; return HttpResponse.json(MIXED_SUMMARY); } });
+    const user = userEvent.setup();
+    const panel = await openPanel(user);
+    const scope = within(panel).getByRole("region", { name: "Lançamentos exportados" });
+    expect(scope).toHaveTextContent("Sai o recorte inteiro: contando…");
+    expect(scope).not.toHaveTextContent(/\b0 lançamentos/);
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeDisabled();
+    release();
+    expect(await within(scope).findByText("7 lançamentos")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
+  });
+
+  it("falha do exportador aparece no painel, que continua aberto", async () => {
+    withApi({ exported: () => HttpResponse.json({ detail: "boom" }, { status: 500 }) });
+    const user = userEvent.setup();
+    const panel = await openPanel(user);
+    await within(panel).findByTestId("export-totals");
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(seen.exports).toHaveLength(1));
+    expect(await within(panel).findAllByRole("alert")).not.toHaveLength(0);
+    expect(screen.getByRole("dialog", { name: "Exportar" })).toBeInTheDocument();
+    expect(downloads).toEqual([]);
+    expect(seen.legacy).toEqual([]);
+  });
+
+  describe("no celular (#527)", () => {
+    const original = window.matchMedia;
+    afterEach(() => { window.matchMedia = original; });
+    const stubViewport = (width) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+    };
+
+    it("o layout do celular tem o botão Exportar, que abre o painel em tela cheia e baixa o período do relatório", async () => {
+      stubViewport(390);
+      withApi();
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/R\$\s?100/));
+      await user.click(screen.getByRole("button", { name: "3m" }));
+      await user.click(screen.getByRole("button", { name: "Exportar" }));
+      const panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(panel).toHaveAttribute("data-full-screen", "true");
+      expect(within(panel).queryByTestId("export-preview")).toBeNull();
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/09/2026 a 30/11/2026");
+      expect(await within(panel).findByText("7 lançamentos")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2026-09-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].get("file_prefix")).toBe("relatorios-2026-09-a-2026-11");
+    });
+
+    it("em demonstração o botão do celular aparece desativado, com o motivo", async () => {
+      withApi();
+      render(<RelatoriosPage dataMode="mock" organizationId={null} isMobile />);
+      const button = screen.getByRole("button", { name: "Exportar" });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", "Disponível com os dados da sua organização");
+    });
+  });
+
+  describe("sem cotação para consolidar (BUG-01 dos smokes; spec #520 histórias 32 e 59)", () => {
+    const original = window.matchMedia;
+    afterEach(() => { window.matchMedia = original; });
+    /** Org em € com conta em R$ e sem cotação: o resumo devolve totais `null` e o Resultado de cada moeda. */
+    const NO_RATE_SUMMARY = {
+      total_transactions: 10,
+      total_income: null,
+      total_expenses: null,
+      total_refunds: null,
+      balance: null,
+      unsettled_count: 1,
+      consolidation: { target_currency: "EUR", rates: [], unavailable: "BRL" },
+      result_by_currency: [
+        { currency: "BRL", total_transactions: 1, total_income: money("0.00"), total_expenses: money("35.00"), total_refunds: money("0.00"), balance: money("-35.00") },
+        { currency: "EUR", total_transactions: 9, total_income: money("2000.00", "EUR"), total_expenses: money("102.00", "EUR"), total_refunds: money("0.00", "EUR"), balance: money("1898.00", "EUR") },
+      ],
+    };
+    const noRate = () => {
+      analytics.override = {
+        monthlyData: [],
+        currencyUnavailable: "Sem cotação para BRL/EUR",
+        byCurrency: [{ currency: "BRL", income: 0, expenses: 35 }, { currency: "EUR", income: 2000, expenses: 102 }],
+      };
+      setCurrencyRegistry([
+        { code: "BRL", name: "Real", symbol: "R$", decimal_places: 2, is_active: true },
+        { code: "EUR", name: "Euro", symbol: "€", decimal_places: 2, is_active: true },
+      ]);
+      server.use(http.get("*/v1/organizations/:id", () => HttpResponse.json({ id: ORG, base_currency: "EUR" })));
+    };
+
+    it.each([
+      ["desktop", 1440, false],
+      ["celular", 390, true],
+    ])("%s: o aviso dos gráficos continua e o Exportar abre o painel com 'indisponível' e o Resultado de cada moeda", async (_label, width, isMobile) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+      withApi({ summary: () => HttpResponse.json(NO_RATE_SUMMARY) });
+      noRate();
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile={isMobile} />);
+
+      // O aviso que já existia continua: nenhum gráfico afirma números que não existem.
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: /Exportar/ });
+      expect(button).toBeEnabled();
+      await user.click(button);
+      const panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/06/2026 a 30/11/2026");
+
+      await waitFor(() => expect(seen.summaries).toHaveLength(1));
+      expect(seen.summaries[0].get("date_start")).toBe("2026-06-01");
+      expect(seen.summaries[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.summaries[0].get("slice_currency")).toBe("true");
+      const totals = await within(panel).findByTestId("export-totals");
+      expect(totals.textContent.match(/indisponível/g)).toHaveLength(4);
+      expect(totals).not.toHaveTextContent("0,00");
+      expect(panel).toHaveTextContent(/Por moeda: BRL −R\$\s?35,00 \(1\) · EUR \+€\s?1\.898,00 \(9\)/);
+      expect(panel).toHaveTextContent("Cotação para € indisponível no momento");
+      expect(within(panel).getByText("10 lançamentos")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2026-06-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].getAll("filters_text")).toEqual(["Período: 01/06/2026 a 30/11/2026"]);
+    });
+
+    it.each([
+      ["desktop", 1440, false],
+      ["celular", 390, true],
+    ])("%s: a tela sem cotação tem o seletor de período, e painel e arquivo seguem o período escolhido (G3-D-01/02)", async (_label, width, isMobile) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+      withApi({ summary: () => HttpResponse.json(NO_RATE_SUMMARY) });
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile={isMobile} />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/R\$\s?100/));
+
+      // Na tela normal a pessoa escolhe 12m; nesse período falta cotação e a tela vira o cartão de aviso.
+      noRate();
+      await user.click(screen.getByRole("button", { name: "12m" }));
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+
+      // O seletor continua no cartão, com o período escolhido; o Exportar sai com ele.
+      await user.click(screen.getByRole("button", { name: /Exportar/ }));
+      let panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/12/2025 a 30/11/2026");
+      await within(panel).findByText("10 lançamentos");
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2025-12-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].getAll("filters_text")).toEqual(["Período: 01/12/2025 a 30/11/2026"]);
+      expect(seen.summaries.at(-1).get("date_start")).toBe("2025-12-01");
+      await user.click(within(panel).getByRole("button", { name: /Fechar/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Exportar" })).toBeNull());
+
+      // No próprio cartão a pessoa troca para 3m, sem sair da página.
+      await user.click(screen.getByRole("button", { name: "3m" }));
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /Exportar/ }));
+      panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/09/2026 a 30/11/2026");
+      await within(panel).findByText("10 lançamentos");
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(2));
+      expect(seen.exports[1].get("date_start")).toBe("2026-09-01");
+      expect(seen.exports[1].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[1].getAll("filters_text")).toEqual(["Período: 01/09/2026 a 30/11/2026"]);
+      expect(seen.summaries.at(-1).get("date_start")).toBe("2026-09-01");
+    });
+  });
+
+  it("a tela não usa mais o cliente antigo de exportação", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const source = fs.readFileSync(path.resolve(__dirname, "../RelatoriosPage.jsx"), "utf8");
+    expect(source).not.toMatch(/downloadReportsCsvForUi|exportTransactionsCsv|downloadTransactionsCsv|export-csv/);
+  });
+});
