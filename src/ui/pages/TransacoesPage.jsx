@@ -2194,10 +2194,18 @@ function TransacoesPageBody({
     () => (selectionEnabled ? txList.filter((t) => t.kind !== "transfer").map((t) => String(t.id)) : []),
     [selectionEnabled, txList],
   );
-  const allLoadedSelected = selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelected.includes(id));
+  const selectableLoadedSet = useMemo(() => new Set(selectableLoadedIds), [selectableLoadedIds]);
+  /* G3-P-06: a lista não tem mais teto de 100 linhas. As consultas "está
+     marcado?" usam conjuntos — com `includes` em array eram O(n·m) por render
+     (milhões de comparações com 2.000 linhas e todas marcadas). */
+  const bulkSelectedSet = useMemo(() => new Set(bulkSelected), [bulkSelected]);
+  const allLoadedSelected = useMemo(
+    () => selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelectedSet.has(id)),
+    [selectableLoadedIds, bulkSelectedSet],
+  );
   const bulkSelectedRows = useMemo(
-    () => txList.filter((t) => bulkSelected.includes(String(t.id))),
-    [txList, bulkSelected],
+    () => txList.filter((t) => bulkSelectedSet.has(String(t.id))),
+    [txList, bulkSelectedSet],
   );
   /* Seleção velha não sobrevive (mesma regra dos Lançamentos do cartão): outro
      recorte (filtro, período, busca, conta) ou uma releitura por transação salva
@@ -3650,7 +3658,7 @@ function TransacoesPageBody({
           <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
             onChange={(e) => setBulkSelected(e.target.checked
               ? [...new Set([...bulkSelected, ...selectableLoadedIds])]
-              : bulkSelected.filter((id) => !selectableLoadedIds.includes(id)))} />
+              : bulkSelected.filter((id) => !selectableLoadedSet.has(id)))} />
         ) : null}
         total={filteredCount}
         /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
@@ -3867,7 +3875,7 @@ function TransacoesPageBody({
                       style={{ flex: "none", width: selectionGutterPx, alignSelf: "stretch", display: "grid", placeItems: "center",
                         background: selected?.id === tx.id ? `${catColor(tx.cat)}08` : "transparent" }}>
                       {tx.kind === "transfer" ? null : (
-                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelected.includes(String(tx.id))}
+                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelectedSet.has(String(tx.id))}
                           onChange={() => toggleBulk(String(tx.id))} />
                       )}
                     </span>
