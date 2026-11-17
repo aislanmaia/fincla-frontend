@@ -29,22 +29,22 @@ const PT_BR = {
   pendingIncluded(n) {
     return counted(n, "{n} pendente (incluído nos totais)", "{n} pendentes (incluídos nos totais)", this.locale);
   },
-  /** A linha do arquivo, igual à do servidor: o número sem separador de milhar, como a coluna Valor. */
+  /** A linha do arquivo, igual à do servidor: é texto, então a contagem leva o separador de milhar do idioma. */
   fileCountLine(count, pending) {
     const p = Number(pending ?? 0);
-    return `LANÇAMENTOS: ${Number(count ?? 0)} (${p} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais)`;
+    return `LANÇAMENTOS: ${this.number(count ?? 0)} (${this.number(p)} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais)`;
   },
   /** A nota do PDF "Só o resumo" (igual à do servidor, #523). */
   summaryOnlyNote(n) {
     const count = Number(n ?? 0);
     return count === 1
       ? "Versão resumida: o 1 lançamento do recorte não está listado neste arquivo. Exporte em “Completo” para vê-lo."
-      : `Versão resumida: a lista dos ${count} lançamentos não está neste arquivo. Exporte em “Completo” para vê-la.`;
+      : `Versão resumida: a lista dos ${this.number(count)} lançamentos não está neste arquivo. Exporte em “Completo” para vê-la.`;
   },
   /** A linha de contagem do PDF, igual à do servidor. */
   pdfCountLine(count, pending) {
     const p = Number(pending ?? 0);
-    return `${this.entries(count)} · ${p} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais`;
+    return `${this.entries(count)} · ${this.number(p)} ${p === 1 ? "pendente, incluído" : "pendentes, incluídos"} nos totais`;
   },
   countLabel: "LANÇAMENTOS",
   pendingLabel: "PENDENTES (incluídos nos totais)",

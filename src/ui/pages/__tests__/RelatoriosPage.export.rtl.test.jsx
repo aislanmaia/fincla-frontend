@@ -18,6 +18,8 @@ import { setupServer } from "msw/node";
 
 import { setCurrencyRegistry } from "../../money/currencyRegistry.js";
 
+// Cada teste pode trocar a leitura de análise (ex.: sem cotação para consolidar, BUG-01 dos smokes).
+const analytics = vi.hoisted(() => ({ override: null }));
 vi.mock("../../data/reportsAdapter.js", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchReportsAnalytics: () => Promise.resolve({
@@ -29,6 +31,7 @@ vi.mock("../../data/reportsAdapter.js", async (importOriginal) => ({
     velocityDaily: [],
     currencyUnavailable: null,
     byCurrency: [],
+    ...analytics.override,
   }),
 }));
 vi.mock("../../../api/recurringSeries", () => ({
@@ -102,6 +105,7 @@ beforeEach(() => {
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function recordClick() { downloads.push(this.download); });
 });
 afterEach(() => {
+  analytics.override = null;
   cleanup();
   server.resetHandlers();
   vi.useRealTimers();
@@ -251,6 +255,76 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
       const button = screen.getByRole("button", { name: "Exportar" });
       expect(button).toBeDisabled();
       expect(button).toHaveAttribute("title", "Disponível com os dados da sua organização");
+    });
+  });
+
+  describe("sem cotação para consolidar (BUG-01 dos smokes; spec #520 histórias 32 e 59)", () => {
+    const original = window.matchMedia;
+    afterEach(() => { window.matchMedia = original; });
+    /** Org em € com conta em R$ e sem cotação: o resumo devolve totais `null` e o Resultado de cada moeda. */
+    const NO_RATE_SUMMARY = {
+      total_transactions: 10,
+      total_income: null,
+      total_expenses: null,
+      total_refunds: null,
+      balance: null,
+      unsettled_count: 1,
+      consolidation: { target_currency: "EUR", rates: [], unavailable: "BRL" },
+      result_by_currency: [
+        { currency: "BRL", total_transactions: 1, total_income: money("0.00"), total_expenses: money("35.00"), total_refunds: money("0.00"), balance: money("-35.00") },
+        { currency: "EUR", total_transactions: 9, total_income: money("2000.00", "EUR"), total_expenses: money("102.00", "EUR"), total_refunds: money("0.00", "EUR"), balance: money("1898.00", "EUR") },
+      ],
+    };
+    const noRate = () => {
+      analytics.override = {
+        monthlyData: [],
+        currencyUnavailable: "Sem cotação para BRL/EUR",
+        byCurrency: [{ currency: "BRL", income: 0, expenses: 35 }, { currency: "EUR", income: 2000, expenses: 102 }],
+      };
+      setCurrencyRegistry([
+        { code: "BRL", name: "Real", symbol: "R$", decimal_places: 2, is_active: true },
+        { code: "EUR", name: "Euro", symbol: "€", decimal_places: 2, is_active: true },
+      ]);
+      server.use(http.get("*/v1/organizations/:id", () => HttpResponse.json({ id: ORG, base_currency: "EUR" })));
+    };
+
+    it.each([
+      ["desktop", 1440, false],
+      ["celular", 390, true],
+    ])("%s: o aviso dos gráficos continua e o Exportar abre o painel com 'indisponível' e o Resultado de cada moeda", async (_label, width, isMobile) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+      withApi({ summary: () => HttpResponse.json(NO_RATE_SUMMARY) });
+      noRate();
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile={isMobile} />);
+
+      // O aviso que já existia continua: nenhum gráfico afirma números que não existem.
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: /Exportar/ });
+      expect(button).toBeEnabled();
+      await user.click(button);
+      const panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/06/2026 a 30/11/2026");
+
+      await waitFor(() => expect(seen.summaries).toHaveLength(1));
+      expect(seen.summaries[0].get("date_start")).toBe("2026-06-01");
+      expect(seen.summaries[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.summaries[0].get("slice_currency")).toBe("true");
+      const totals = await within(panel).findByTestId("export-totals");
+      expect(totals.textContent.match(/indisponível/g)).toHaveLength(4);
+      expect(totals).not.toHaveTextContent("0,00");
+      expect(panel).toHaveTextContent(/Por moeda: BRL −R\$\s?35,00 \(1\) · EUR \+€\s?1\.898,00 \(9\)/);
+      expect(panel).toHaveTextContent("Cotação para € indisponível no momento");
+      expect(within(panel).getByText("10 lançamentos")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2026-06-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].getAll("filters_text")).toEqual(["Período: 01/06/2026 a 30/11/2026"]);
     });
   });
 

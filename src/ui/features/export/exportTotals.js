@@ -68,11 +68,12 @@ export function conversionNote(totals) {
   return `Totais em ${target}, moeda base da organização. Cotações: ${dated.join(" · ")}. Cada lançamento aparece na moeda da sua conta.`;
 }
 
-/** "BRL +R$ 100,00 (1) · USD −US$ 7,50 (2)" — o Resultado de cada moeda, sem conversão. */
-export function byCurrencyLine(totals) {
+/** "BRL +R$ 100,00 (1) · USD −US$ 7,50 (2)" — o Resultado de cada moeda, sem conversão. A contagem sai com o
+ *  agrupamento do idioma (`texts.number`: "12.000"), como no arquivo. */
+export function byCurrencyLine(totals, texts) {
   if (!totals?.mixed) return null;
   return totals.byCurrency
-    .map((item) => `${item.currency} ${signedOrUnavailable(item.result, item.currency)} (${item.count})`)
+    .map((item) => `${item.currency} ${signedOrUnavailable(item.result, item.currency)} (${texts.number(item.count)})`)
     .join(" · ");
 }
 

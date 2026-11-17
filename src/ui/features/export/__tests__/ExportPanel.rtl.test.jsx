@@ -106,6 +106,21 @@ describe("<ExportPanel>", () => {
     expect(panel).toHaveTextContent("Cotação para R$ indisponível no momento");
   });
 
+  it("'Por moeda' agrupa o milhar da contagem de cada moeda, no painel e na prévia (BUG-02 dos smokes de dev)", () => {
+    const big = {
+      ...UNAVAILABLE,
+      total_transactions: 20000,
+      result_by_currency: [
+        { ...UNAVAILABLE.result_by_currency[0], total_transactions: 12000 },
+        { ...UNAVAILABLE.result_by_currency[1], total_transactions: 8000 },
+      ],
+    };
+    const { panel } = renderPanel({ summary: big, count: 20000 });
+    expect(panel).toHaveTextContent(/Por moeda: BRL \+R\$\s100,00 \(12\.000\) · USD −US\$\s7,50 \(8\.000\)/);
+    expect(within(panel).getByTestId("export-preview-pdf")).toHaveTextContent("(12.000)");
+    expect(panel).not.toHaveTextContent(/\(12000\)|\(8000\)/);
+  });
+
   it("moedas misturadas convertidas: totais na base, cotações com 4 casas e a data", () => {
     const { panel } = renderPanel({ summary: CONVERTED });
     expect(within(panel).getByTestId("export-totals")).toHaveTextContent(/Resultado\+€\s62,50/);
@@ -551,6 +566,12 @@ describe("buildXlsxPreview", () => {
     expect(preview.rows.indexOf(bottom)).toBe(13);
     expect(preview.rows.slice(14).map((r) => r.cells[0])).toEqual([undefined, "Categoria", "… uma linha por categoria e moeda …"]);
     expect(preview.rows.some((r) => r.cells.join("").includes("R$"))).toBe(false);
+  });
+
+  it("contagens com milhar aparecem agrupadas, como a planilha (#,##0) mostra (BUG-02 dos smokes de dev)", () => {
+    const preview = sheet({ ...ONE_CURRENCY, total_transactions: 20000, unsettled_count: 1500 });
+    expect(byLabel(preview, "LANÇAMENTOS")[0].cells[4]).toBe("20.000");
+    expect(byLabel(preview, "PENDENTES (incluídos nos totais)")[0].cells[4]).toBe("1.500");
   });
 
   it("moedas misturadas: valores fixos, o aviso com os símbolos e o resultado de cada moeda", () => {
