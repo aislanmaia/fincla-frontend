@@ -710,6 +710,16 @@ describe("Extratos importados (fincla-api#518)", () => {
     expect(within(rows[3]).getByTestId("import-difference")).toHaveTextContent(/Diferença de saldo registrada: −R\$\s23,06/);
   });
 
+  it("diferença registrada zero aparece sem sinal, como na confirmação de concluir (G4 BUG-01)", async () => {
+    imports = clone(contract.imports.imports);
+    imports[3].final_difference = 0;
+    await openAccount();
+
+    const difference = within(screen.getAllByTestId("imported-statement")[3]).getByTestId("import-difference");
+    expect(difference).toHaveTextContent(/Diferença de saldo registrada: R\$\s0,00$/);
+    expect(difference).not.toHaveTextContent(/[+−]R\$/);
+  });
+
   it("só a concluída mais recente oferece desfazer, que leva à tela do desfazer", async () => {
     imports = clone(contract.imports.imports);
     const user = userEvent.setup();
