@@ -169,3 +169,63 @@ describe("DashboardPage — valores na moeda base da organização (#310)", () =
     expect(container.textContent).not.toMatch(/R\$/);
   });
 });
+
+/**
+ * BUG-05 (QA do Exportar, CT-26): org em BRL com uma conta em USD. "Últimas
+ * Transações" e "Gastos por Categoria" escreviam "R$ 50,00" para uma despesa de
+ * US$ 50 — formatavam toda LINHA na moeda base. Uma linha é o dinheiro dela.
+ */
+describe("DashboardPage — cada linha na moeda dela (BUG-05)", () => {
+  beforeEach(() => {
+    baseCurrency = "BRL";
+  });
+
+  it("lançamento e débito em US$ saem em US$; o total de débitos não soma moedas", async () => {
+    mockDashboardData = {
+      ...liveData(),
+      transactions: [
+        { id: "t1", desc: "Loja NY", cat: "Compras", val: -50, currency: "USD", date: "10/11", icon: null },
+        { id: "t2", desc: "Padaria", cat: "Alimentação", val: -30, currency: "BRL", date: "09/11", icon: null },
+      ],
+      upcomingDebits: [
+        { id: "d1", name: "Streaming", cat: "Lazer", value: 20, currency: "USD", daysLeft: 2, dateLabel: "19/11" },
+        { id: "d2", name: "Aluguel", cat: "Moradia", value: 100, currency: null, daysLeft: 5, dateLabel: "22/11" },
+      ],
+    };
+    const { container } = renderDash();
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("dashboard-headline-saldo-conta")).toHaveTextContent("R$ 5.092,19"),
+    );
+    expect(container.textContent).toContain("−US$ 50,00");
+    expect(container.textContent).not.toContain("R$ 50,00");
+    expect(container.textContent).toContain("−R$ 30,00");
+    expect(container.textContent).toContain("US$ 20,00");
+    expect(container.textContent).toContain("R$ 100,00 + US$ 20,00");
+    expect(container.textContent).not.toContain("R$ 120,00");
+  });
+
+  it("categoria sem total convertido (sem cotação) mostra travessão, não zero", async () => {
+    mockDashboardData = {
+      ...liveData(),
+      categories: [{ tagId: 1, name: "Viagem", value: null, currency: "BRL", avg: null, color: "#EF4444" }],
+    };
+    renderDash();
+    const row = await screen.findByText("Viagem");
+    expect(row.parentElement.parentElement).toHaveTextContent("—");
+    expect(row.parentElement.parentElement).not.toHaveTextContent("R$ 0,00");
+  });
+
+  it("categoria sem conversão mostra as somas por moeda lado a lado, sem somar", async () => {
+    mockDashboardData = {
+      ...liveData(),
+      categories: [{
+        tagId: 1, name: "Viagem", value: null, currency: null, avg: null, color: "#EF4444",
+        byCurrency: [{ currency: "BRL", amount: 190.4 }, { currency: "USD", amount: 225.6 }],
+      }],
+    };
+    renderDash();
+    const row = await screen.findByText("Viagem");
+    expect(row.parentElement.parentElement).toHaveTextContent("R$ 190,40 + US$ 225,60");
+    expect(row.parentElement.parentElement).not.toHaveTextContent("R$ 416,00");
+  });
+});
