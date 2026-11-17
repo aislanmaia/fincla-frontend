@@ -51,6 +51,7 @@ import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
 import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { CardCommitmentsPage } from "./pages/CardCommitmentsPage.jsx";
 import { StatementReconciliationPage } from "./pages/StatementReconciliationPage.jsx";
+import { fillsAvailableHeight } from "./routing/statementImportRoute.js";
 import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
@@ -684,7 +685,7 @@ export default function App() {
               onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen}><Outlet /></PageEnter></ErrorBoundary>
+          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen} fillMin={!selfScrollingScreen && fillsAvailableHeight(pathname, isMobile)}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
       <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />

@@ -13,3 +13,12 @@ export function statementReconciliationPath(accountId, importId = null) {
 export function statementImportUndoPath(accountId, importId) {
   return `/accounts/${encodeURIComponent(accountId)}/reconcile/${encodeURIComponent(importId)}/undo`;
 }
+
+/**
+ * A tela inicial da conta (sem `importId`), no computador, ocupa a altura que sobra na área de
+ * conteúdo: a área grande de soltar estica em vez de deixar vazio embaixo (decisão do Owner,
+ * 2026-11-17). Celular e as demais telas ficam como eram.
+ */
+export function fillsAvailableHeight(pathname, isMobile) {
+  return !isMobile && /^\/accounts\/[^/]+\/reconcile\/?$/.test(pathname ?? "");
+}

@@ -148,6 +148,18 @@ describe("a tela inicial, sem rascunho", () => {
     expect(await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ })).toBeInTheDocument();
   });
 
+  it("sem rascunho, a linha da área ocupa a altura que sobra; com rascunho, não (área compacta)", async () => {
+    await openAccount();
+    await screen.findByRole("button", { name: /Solte aqui o extrato do banco/ });
+    expect(screen.getByTestId("start-upload-row").style.flexGrow).toBe("1");
+    cleanup();
+
+    imports = [openDraft(["suggested"])];
+    await openAccount();
+    await screen.findByRole("button", { name: /Ou solte aqui outro extrato/ });
+    expect(screen.getByTestId("start-upload-row").style.flexGrow).not.toBe("1");
+  });
+
   it("no celular a área fala em tocar, não em soltar nem clicar (G4 OBS)", async () => {
     params = { accountId: ACCOUNT };
     render(<StatementReconciliationPage organizationId={ORG} isMobile />);

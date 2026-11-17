@@ -379,7 +379,7 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0, flex: 1 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
           <PageTitle sans="Conciliar" serif="extrato" />
@@ -403,7 +403,9 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
           onRefused={load}
         />
       ))}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0 }}>
+      {/* Sem rascunho, a linha ocupa a altura que sobra (a área grande estica; a página só ganha
+          altura no computador, ver `fillsAvailableHeight`). Com rascunho a área é compacta e não estica. */}
+      <div data-testid="start-upload-row" style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "stretch", minHeight: 0, flexGrow: drafts.length ? 0 : 1 }}>
         {/* A área só aparece depois da lista (G4 OBS-12): o tamanho depende de haver rascunho, e
             nascer grande para encolher em seguida faz a tela pular. Lista com erro: aparece mesmo assim. */}
         {items || error ? (
@@ -1271,7 +1273,7 @@ export function StatementReconciliationPage({ organizationId, isMobile = false, 
   const accountName = useAccountName(organizationId, accountId);
   if (!organizationId || !accountId) return null;
   return (
-    <div style={{ minWidth: 0 }}>
+    <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
       {importId ? (
         <DraftView
           key={importId}
