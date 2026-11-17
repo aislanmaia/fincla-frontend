@@ -1409,7 +1409,9 @@ function TransacoesPageBody({
       compact={isMobile}
     />
   ) : null;
-  const showsAccountChips = effectiveAccountSel.length > 0 && !!accountsForFilterById;
+  // No celular o chip da conta não aparece (decisão do Owner, 2026-11-17): o "Filtros 1" já indica
+  // o recorte e a linha a mais apertava a lista. No computador ele continua (#279).
+  const showsAccountChips = !isMobile && effectiveAccountSel.length > 0 && !!accountsForFilterById;
 
   const categoryTagsData = useCategoryTagsData({
     organizationId,

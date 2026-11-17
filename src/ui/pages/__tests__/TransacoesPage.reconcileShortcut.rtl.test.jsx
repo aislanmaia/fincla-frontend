@@ -218,6 +218,22 @@ describe("<TransacoesPage> — atalho Conciliar extrato", () => {
     expect(screen.getByTestId("reconcile-shortcut-row")).toContainElement(btn);
   });
 
+  it("celular com uma conta filtrada: sem o chip da conta (decisão do Owner, 2026-11-17); o atalho fica na linha própria", async () => {
+    routerSearch = { fc_account: ACC_A };
+    renderPage({ isMobile: true });
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato da Conta A Itaú" });
+    expect(screen.queryByTestId("account-filter-chips")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Remover filtro de conta/ })).toBeNull();
+    expect(screen.getByTestId("reconcile-shortcut-row")).toContainElement(btn);
+  });
+
+  it("computador com uma conta filtrada: o chip da conta continua", async () => {
+    routerSearch = { fc_account: ACC_A };
+    renderPage();
+    const chips = await screen.findByTestId("account-filter-chips");
+    expect(chips).toHaveTextContent("Conta A Itaú");
+  });
+
   it("celular sem conta elegível: nem a linha do atalho aparece", async () => {
     listAccountsMock.mockResolvedValue([{ id: ACC_A, name: "Conta A Itaú", currency: "BRL", is_active: false }]);
     renderPage({ isMobile: true });
