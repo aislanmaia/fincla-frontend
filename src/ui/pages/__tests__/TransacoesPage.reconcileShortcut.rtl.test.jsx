@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -76,14 +76,18 @@ vi.mock("../../../api/organizations", () => ({
 }));
 
 const listDraftsMock = vi.fn();
+const getImportMock = vi.fn();
+const listImportsMock = vi.fn();
 vi.mock("../../../api/statementImports", async (importOriginal) => ({
   ...(await importOriginal()),
   listStatementImportDrafts: (...args) => listDraftsMock(...args),
-  getStatementImport: vi.fn(() => new Promise(() => {})),
-  listStatementImports: vi.fn().mockResolvedValue([]),
+  getStatementImport: (...args) => getImportMock(...args),
+  listStatementImports: (...args) => listImportsMock(...args),
 }));
 
 import { TransacoesPage } from "../TransacoesPage.jsx";
+import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { normalizeStatementImport } from "../../../api/statementImports";
 
 const ACC_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACC_B = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -111,6 +115,8 @@ beforeEach(() => {
   listTransfersMock.mockResolvedValue([]);
   listCreditCardsMock.mockResolvedValue(CARDS);
   listDraftsMock.mockResolvedValue([]);
+  getImportMock.mockImplementation(() => new Promise(() => {}));
+  listImportsMock.mockResolvedValue([]);
   Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
   Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 900 });
 });
@@ -218,5 +224,40 @@ describe("<TransacoesPage> — atalho Conciliar extrato", () => {
     await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
     await screen.findAllByText("Mercado");
     expect(screen.queryByTestId("reconcile-shortcut-row")).toBeNull();
+  });
+
+  it("G3 achado 1: filtrar por uma conta e tirar o filtro não pede os rascunhos de novo, e o número já está lá", async () => {
+    listDraftsMock.mockResolvedValue([{ id: "d-1", account_id: ACC_A, status: "draft", last_activity_at: "2026-11-14T10:00:00" }]);
+    getImportMock.mockResolvedValue({ ...normalizeStatementImport(contract.draft), id: "d-1", account_id: ACC_A, reviewed_steps: ["suggested", "doubt"] });
+    routerSearch = { fc_account: ACC_A };
+    renderPage();
+    const chips = await screen.findByTestId("account-filter-chips");
+    await waitFor(() => expect(within(chips).getByRole("button", { name: /Continuar conciliação/ })).toHaveTextContent(/de 8 passos/));
+    const steps = within(chips).getByRole("button", { name: /Continuar conciliação/ }).textContent.replace("Continuar conciliação", "");
+
+    // Tira o filtro: o atalho vai para a linha da contagem (menu, duas contas).
+    await userEvent.click(screen.getByRole("button", { name: "Remover filtro de conta Conta A Itaú" }));
+    const btn = within(header()).getByRole("button", { name: "Conciliar extrato…" });
+    await userEvent.click(btn);
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    // Sem esperar: o progresso da Corrente já veio quando ela estava filtrada.
+    expect(items[0]).toHaveTextContent(`Conciliação começada · ${steps}`);
+    expect(listDraftsMock).toHaveBeenCalledTimes(1);
+    expect(getImportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("G3 achado 2: sem filtro e com várias contas, nenhum detalhe de rascunho é pedido até abrir o menu", async () => {
+    listDraftsMock.mockResolvedValue([
+      { id: "d-a", account_id: ACC_A, status: "draft", last_activity_at: "2026-11-14T10:00:00" },
+      { id: "d-b", account_id: ACC_B, status: "draft", last_activity_at: "2026-11-14T10:00:00" },
+    ]);
+    renderPage();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalledTimes(1));
+    await act(async () => { await Promise.resolve(); });
+    expect(getImportMock).not.toHaveBeenCalled();
+    await userEvent.click(btn);
+    await screen.findByRole("menu");
+    await waitFor(() => expect(getImportMock).toHaveBeenCalledTimes(2));
   });
 });

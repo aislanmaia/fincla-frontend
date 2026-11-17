@@ -58,6 +58,7 @@ import {
   LIST_HEADER_HEIGHT_COMPACT,
 } from "../features/transactions/TransactionsListHeader.jsx";
 import { ReconcileShortcut } from "../features/statementImport/ReconcileShortcut.jsx";
+import { useReconcileShortcutData } from "../features/statementImport/useReconcileShortcutData.js";
 import {
   DAY_HEADER_HEIGHT,
   DENSITIES,
@@ -1394,9 +1395,13 @@ function TransacoesPageBody({
      mesma regra do "Importar extrato" de Minhas Contas (cartão de crédito não é conta). Fica na
      linha do chip da conta filtrada; sem chip, na linha da contagem (no celular, numa linha própria
      acima dela, para não apertar a contagem). */
-  const reconcileShortcut = onReconcileStatement && shouldUseRealData && organizationId && accountsForFilter.length > 0 ? (
+  const reconcileShortcutOn = !!onReconcileStatement && shouldUseRealData && !!organizationId && accountsForFilter.length > 0;
+  /* Os dados do atalho moram AQUI (G3): o botão muda de lugar conforme o filtro e é remontado; com
+     os dados na página, a troca não repete pedidos nem faz o botão piscar. */
+  const reconcileShortcutData = useReconcileShortcutData({ organizationId, enabled: reconcileShortcutOn });
+  const reconcileShortcut = reconcileShortcutOn ? (
     <ReconcileShortcut
-      organizationId={organizationId}
+      data={reconcileShortcutData}
       accounts={accountsForFilter}
       filteredIds={effectiveAccountSel}
       baseCurrency={orgBase.currency ?? null}
