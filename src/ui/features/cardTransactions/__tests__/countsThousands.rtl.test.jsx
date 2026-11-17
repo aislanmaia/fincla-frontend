@@ -43,3 +43,35 @@ describe("ledger do cartão — contagens com milhar", () => {
     expect(text()).not.toMatch(/\b1001\b/);
   });
 });
+
+/* QA display-and-pagination BUG-03 (varredura): a recategorização do ledger e a aba Fatura ainda escreviam
+   contagens cruas ("1235 lançamentos selecionados", "1050 de 1050 lançamentos"). */
+describe("ledger e aba Fatura — contagens restantes com milhar", () => {
+  it("Categorizar: '1.235 lançamentos selecionados' e '1.001 estornos ficam de fora'", async () => {
+    const { CategorizeDialog } = await import("../LedgerDialogs.jsx");
+    const rows = [
+      ...Array.from({ length: 1235 }, (_, i) => ({ id: `e${i}`, type: "expense" })),
+      ...Array.from({ length: 1001 }, (_, i) => ({ id: `r${i}`, type: "refund" })),
+    ];
+    render(<CategorizeDialog rows={rows} categories={[]} onSubmit={noop} onClose={noop} />);
+    expect(text()).toContain("1.235 lançamentos selecionados");
+    expect(text()).toContain("1.001 estornos ficam de fora");
+    expect(text()).not.toMatch(/\b1235\b|\b1001\b/);
+  });
+
+  it("aba Fatura: '1.049 de 1.050 lançamentos' no cabeçalho e no rodapé", async () => {
+    const { InvoiceTab } = await import("../../creditCards/CartoesFaturaTab.jsx");
+    const items = Array.from({ length: 1050 }, (_, i) => ({ id: i, desc: `Compra ${i}`, cat: "Moradia", val: -1 }));
+    render(
+      <InvoiceTab variant="desktop" card={{ id: 1, nome: "Visa", currency: "BRL" }} invoice={{ mes: "nov/26", pago: false, total: 1050 }}
+        previousInvoice={null} filtered={items.slice(1)} displayItems={items} grouped={[]} pagedGroups={[]} categoryTotals={[]}
+        recurringTotal={0} averageValue={0} diffPercent={0} totalItems={1050} visibleItems={1049} hasMoreGroups
+        pastItemsLoading={false} isCurrent shouldUseRealData totalInstallments={0} usagePercent={0} usageColor="#000"
+        pageGroupsLimit={10} formatBRL={(v) => String(v)} categoryColor={() => "#000"} search="" setSearch={noop}
+        invoiceFilterChips={[]} filterCategory={null} setFilterCategory={noop} expandedDate={null} setExpandedDate={noop}
+        visibleGroups={10} setVisibleGroups={noop} onLaunchRefund={noop} onOpenTransaction={noop} onDeleteTransaction={noop} />,
+    );
+    expect(text()).toContain("1.049 de 1.050 lançamentos");
+    expect(text()).not.toMatch(/\b1049 de\b|de 1050 /);
+  });
+});

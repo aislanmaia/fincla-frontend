@@ -126,7 +126,8 @@ describe("DashboardPage — valores na moeda base da organização (#310)", () =
     expect(screen.getAllByText("US$ 1.630,17").length).toBeGreaterThan(0); // receitas
     expect(screen.getByTestId("y-tick")).toHaveTextContent("US$2.0k");
     expect(screen.getByTestId("rhythm-tooltip")).toHaveTextContent("US$ 12,50");
-    expect(container.textContent).toMatch(/US\$ \d+ (à frente|acima) do ritmo/);
+    // O valor do ritmo é dinheiro: casas da moeda, não um inteiro arredondado (QA BUG-04).
+    expect(container.textContent).toMatch(/US\$ [\d.]+,\d{2} (à frente|acima) do ritmo/);
     expect(container.textContent).not.toMatch(/R\$/);
   });
 
@@ -227,5 +228,25 @@ describe("DashboardPage — cada linha na moeda dela (BUG-05)", () => {
     const row = await screen.findByText("Viagem");
     expect(row.parentElement.parentElement).toHaveTextContent("R$ 190,40 + US$ 225,60");
     expect(row.parentElement.parentElement).not.toHaveTextContent("R$ 416,00");
+  });
+});
+
+/* QA display-and-pagination BUG-03/BUG-04: com 1.235 lançamentos e gastos acima do ritmo, a Visão Geral
+   escrevia "1235 lançamentos no período" e "R$ 1063 acima do ritmo" (sem milhar e sem centavos). */
+describe("DashboardPage — contagem com milhar e ritmo com as casas da moeda", () => {
+  it.each([
+    ["BRL", "R\\$"],
+    ["USD", "US\\$"],
+    ["EUR", "€"],
+  ])("base %s", async (code, symbol) => {
+    baseCurrency = code;
+    mockDashboardData = liveData();
+    mockDashboardData.summary = { ...mockDashboardData.summary, total_income: 30000, total_expenses: 29876.54, balance: 123.46, total_transactions: 1235 };
+    const { container } = renderDash();
+    await vi.waitFor(() => expect(container.textContent).toContain("1.235 lançamentos no período"));
+    expect(container.textContent).not.toMatch(/1235 lançamentos/);
+    await vi.waitFor(() => expect(container.textContent).toMatch(new RegExp(`${symbol} \\d{1,3}(\\.\\d{3})*,\\d{2} (à frente|acima) do ritmo`)));
+    // Nada de inteiro cru (o defeito): "R$ 1063 acima do ritmo".
+    expect(container.textContent).not.toMatch(/ \d{4,} (à frente|acima) do ritmo/);
   });
 });
