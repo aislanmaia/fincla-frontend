@@ -422,7 +422,7 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   if (summary && (summary.total_expenses == null || summary.total_income == null)) {
     return { ...RITMO_VAZIO };
   }
-  const expenses = expensesInBase(transactions, baseCurrency, rates);
+  const expenses = expensesInBase(transactions, baseCurrency, rates, pickDisplayAmount);
   if (expenses === null) return { ...RITMO_VAZIO };
 
   const D = daysInclusive(startD, endD);
@@ -865,10 +865,14 @@ export function useDashboardData({
         balanceRes.status === "fulfilled" ? balanceRes.value : null;
 
       const rawTx = transactionsResponse.data ?? [];
-      // O recibo do TOTAL do período (`/transactions/summary`): base e taxas que a
-      // API usou. O de `/analytics/by-category` só cobre despesa com categoria,
-      // então uma estrangeira sem categoria ficaria sem taxa. Fica de reserva.
-      const consolidation = summary?.consolidation ?? categoriesResponse.consolidation ?? null;
+      // Base e taxas: as do recibo do TOTAL do período (`/transactions/summary`), que
+      // cobre também despesa sem categoria; as de `/analytics/by-category` completam
+      // um par que faltar ali. A base é a do resumo.
+      const consolidation = {
+        target_currency:
+          summary?.consolidation?.target_currency ?? categoriesResponse.consolidation?.target_currency ?? null,
+        rates: [...(summary?.consolidation?.rates ?? []), ...(categoriesResponse.consolidation?.rates ?? [])],
+      };
       const recent = rawTx.slice(0, 5).map(mapTransaction);
       const rhythm = buildRhythmChart(
         rawTx,

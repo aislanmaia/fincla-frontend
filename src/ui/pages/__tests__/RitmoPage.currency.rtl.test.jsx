@@ -29,6 +29,11 @@ vi.mock("recharts", () => {
   };
 });
 
+// Recibo de conversão do período (#331): as despesas destes testes não declaram
+// moeda estrangeira, então basta a base.
+vi.mock("../../data/periodConsolidation.js", () => ({
+  fetchExpenseConsolidation: () => Promise.resolve({ target_currency: globalThis.__ritmoBase ?? "BRL", rates: [] }),
+}));
 vi.mock("../../data/dashboardAdapter.js", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchAllTransactionsPages: () => Promise.resolve(txPage(123.45)),
@@ -63,6 +68,7 @@ afterEach(() => {
 afterAll(() => server.close());
 beforeEach(() => {
   baseCurrency = "USD";
+  globalThis.__ritmoBase = baseCurrency;
 });
 
 const text = () => document.body.textContent ?? "";
@@ -77,6 +83,7 @@ describe("Ritmo — valores na moeda base (#310)", () => {
 
   it("base BRL: continua como antes", async () => {
     baseCurrency = "BRL";
+    globalThis.__ritmoBase = baseCurrency;
     render(<RitmoPage dataMode="live" organizationId={ORG} onNav={vi.fn()} />);
     await waitFor(() => expect(text()).toContain("R$ 123,45"));
     expect(text()).toContain("R$2.0k");

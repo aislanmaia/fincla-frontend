@@ -33,6 +33,11 @@ vi.mock("../../money/useOrganizationBaseCurrency.js", () => ({
 }));
 
 const fetchTxMock = vi.fn();
+// Recibo de conversão do período (#331): as despesas destes testes não declaram
+// moeda estrangeira, então basta a base.
+vi.mock("../../data/periodConsolidation.js", () => ({
+  fetchExpenseConsolidation: () => Promise.resolve({ target_currency: "BRL", rates: [] }),
+}));
 vi.mock("../../data/dashboardAdapter.js", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchAllTransactionsPages: (...args) => fetchTxMock(...args),

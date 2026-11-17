@@ -54,12 +54,22 @@ describe("useSpendingPaceData — moedas (#331)", () => {
     expect(result.current.projFim).not.toBe(200);
   });
 
-  it("uma moeda só e o resumo fora do ar: segue como antes", async () => {
+  it("uma moeda só, na base: soma de sempre", async () => {
     fetchTxMock.mockResolvedValue(page([exp("2026-09-02", 100, "BRL"), exp("2026-09-03", 50, "BRL")]));
-    summaryMock.mockRejectedValue(new Error("down"));
+    summaryMock.mockResolvedValue(RECEIPT);
     const { result } = render();
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.error).toBe("");
     expect(result.current.projFim).toBe(150);
+  });
+
+  it("resumo fora do ar: erro de rede (com tentar de novo), não \"falta cotação\" nem soma crua", async () => {
+    fetchTxMock.mockResolvedValue(page([exp("2026-09-02", 100, "USD")]));
+    summaryMock.mockRejectedValue(new Error("Network Error"));
+    const { result } = render();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.error).not.toBe("");
+    expect(result.current.error).not.toMatch(/mais de uma moeda/);
+    expect(result.current.projFim).not.toBe(100);
   });
 });

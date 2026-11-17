@@ -4,13 +4,14 @@ import {
   getSpendingRhythm,
 } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
-import { getTransactionsSummary, listTransactions } from "../../api/transactions";
+import { listTransactions } from "../../api/transactions";
 import { expensesInBase } from "../money/convertToBase.js";
+import { fetchExpenseConsolidation } from "./periodConsolidation.js";
 import {
   categoryLabelPtForTag,
   resolveCategoryColorForTag,
 } from "./categoryLabels.js";
-import { expandExpenseTxToAttributedParts } from "./transactionsAdapter.js";
+import { expandExpenseTxToAttributedParts, pickDisplayAmount } from "./transactionsAdapter.js";
 
 /**
  * Rótulo PT para pontos de analytics (nome EN/PT da API + icon_key opcional).
@@ -205,25 +206,27 @@ export async function fetchReportsAnalytics(organizationId, periodo) {
   let velocityDaily = [];
   if (compositionWindow?.dateStart && compositionWindow?.dateEnd) {
     try {
-      const [rawTxs, summary] = await Promise.all([
+      const [rawTxs, consolidation] = await Promise.all([
         fetchAllExpenseTransactionsInRange(
           organizationId,
           compositionWindow.dateStart,
           compositionWindow.dateEnd,
         ),
-        getTransactionsSummary({
-          organization_id: organizationId,
-          date_start: compositionWindow.dateStart,
-          date_end: compositionWindow.dateEnd,
-          type: "expense",
-        }).catch(() => null),
+        // Sem o recibo do resumo, o de `composition` (mesma janela, só despesa com
+        // categoria) ainda serve para as moedas que ele cobre.
+        fetchExpenseConsolidation(
+          organizationId,
+          compositionWindow.dateStart,
+          compositionWindow.dateEnd,
+        ).catch(() => composition?.consolidation ?? null),
       ]);
       // O acumulado do dia é escrito na base: as estrangeiras entram pela taxa do
       // período (#331). Sem taxa, a velocidade não é desenhada (lista vazia).
       const txs = expensesInBase(
         rawTxs,
-        summary?.consolidation?.target_currency ?? null,
-        summary?.consolidation?.rates ?? null,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
+        pickDisplayAmount,
       );
       velocityDaily = txs === null
         ? []

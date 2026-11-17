@@ -18,7 +18,8 @@ import {
   cumulativeFromDaily,
   getSpendingPaceMonthContext,
 } from "./spendingPaceModel.js";
-import { getTransactionsSummary } from "../../../api/transactions";
+import { fetchExpenseConsolidation } from "../../data/periodConsolidation.js";
+import { pickDisplayAmount } from "../../data/transactionsAdapter.js";
 import { expensesInBase } from "../../money/convertToBase.js";
 
 /** Erro de "não há soma honesta" (moedas misturadas sem cotação) — a mensagem já é a da tela. */
@@ -116,16 +117,15 @@ export function useSpendingPaceData({
             ? listBudgetsForUi(organizationId)
             : Promise.resolve(null);
 
-        // O recibo do total do período: base e taxas que a API usou. Falhar aqui não
-        // derruba a tela — sem ele, só um mês com moedas misturadas fica sem soma.
-        const summaryPromise = getTransactionsSummary({
-          organization_id: organizationId,
-          date_start: ctx.start,
-          date_end: ctx.end,
-          type: "expense",
-        }).catch(() => null);
+        // O recibo do total do período: base e taxas que a API usou. Falha aqui é
+        // falha de rede como as outras (erro com "tentar de novo"), não "falta cotação".
+        const consolidationPromise = fetchExpenseConsolidation(organizationId, ctx.start, ctx.end);
 
-        const [txRes, budgetsRes, summary] = await Promise.all([txPromise, budgetPromise, summaryPromise]);
+        const [txRes, budgetsRes, consolidation] = await Promise.all([
+          txPromise,
+          budgetPromise,
+          consolidationPromise,
+        ]);
 
         if (cancelled) return;
 
@@ -133,8 +133,9 @@ export function useSpendingPaceData({
         // taxa do período, nunca como R$ 100 (#331).
         const rawTx = expensesInBase(
           txRes.data ?? [],
-          summary?.consolidation?.target_currency ?? null,
-          summary?.consolidation?.rates ?? null,
+          consolidation?.target_currency ?? null,
+          consolidation?.rates ?? null,
+          pickDisplayAmount,
         );
         if (rawTx === null) {
           const e = new Error(CURRENCY_MIX);
