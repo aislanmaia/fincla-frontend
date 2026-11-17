@@ -400,15 +400,14 @@ export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false
         </h2>
         {items.length ? <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>{items.length}</span> : null}
       </div>
-      {/* A lista rola dentro da coluna: no computador ela ocupa a altura da área de soltar. */}
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      {/* A lista mede o próprio conteúdo até um teto e só então rola dentro da coluna. No computador é
+          ela que dá a altura da linha e a área de soltar estica junto; presa à altura da área, uma
+          lista curta ficava cortada ao lado da área compacta (G4 BUG-03). */}
+      <div style={{ flex: 1, minHeight: 0 }}>
         <div
           data-testid="imported-statements-scroll"
           className="fincla-scroll"
-          style={{
-            ...(isMobile ? { maxHeight: 420 } : { position: "absolute", inset: 0 }),
-            overflowY: "auto", padding: "0 16px 8px",
-          }}
+          style={{ maxHeight: isMobile ? 420 : 480, overflowY: "auto", padding: "0 16px 8px" }}
         >
           {items.length ? (
             <>

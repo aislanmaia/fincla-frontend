@@ -29,3 +29,16 @@ describe("a área de soltar dentro da coluna", () => {
     expect(screen.getByRole("button", { name: /Solte aqui o extrato do banco/ }).style.minHeight).toBe("420px");
   });
 });
+
+describe("Extratos importados ao lado da área (computador)", () => {
+  it("a lista mede o próprio conteúdo até 480px e só então rola; nunca encolhe até a área (G4 BUG-03)", async () => {
+    const { ImportedStatementsList } = await import("../ImportedStatements.jsx");
+    const item = { id: "a", status: "concluded", period: { start: "2026-05-01", end: "2026-05-12" }, summary: { total: 6, to_create: 5, grouped: 0, groups: 0, ignored: 0, unanswered: 0 }, final_difference: 0, final_difference_currency: "BRL", created_at: "2026-11-15T10:00:00", concluded_at: "2026-11-15T10:00:00", undone_at: null, latest_concluded: true };
+    render(<ImportedStatementsList items={[item]} onOpen={() => {}} onUndo={() => {}} />);
+
+    const scroll = screen.getByTestId("imported-statements-scroll");
+    expect(scroll.style.position).not.toBe("absolute");
+    expect(scroll.style.maxHeight).toBe("480px");
+    expect(scroll.style.overflowY).toBe("auto");
+  });
+});
