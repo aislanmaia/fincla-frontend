@@ -5,13 +5,14 @@
 
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { TransactionsListHeader } from "../TransactionsListHeader.jsx";
 import { TransactionsStats } from "../TransactionsStats.jsx";
 import { FacetCount } from "../filters/shared/FacetCount.jsx";
 import { SelectionCount } from "../../selection/BulkSelection.jsx";
 import { fmtCount } from "../../../formatters.js";
+import { BulkMoveDialog } from "../bulkMove/BulkMoveDialog.jsx";
 
 afterEach(() => {
   cleanup();
@@ -26,6 +27,18 @@ describe("fmtCount", () => {
     expect(fmtCount(1234567)).toBe("1.234.567");
     expect(fmtCount(999)).toBe("999");
     expect(fmtCount(0)).toBe("0");
+  });
+
+  // G3-P-09: ausência nunca vira zero. Uma contagem que ainda não chegou
+  // (ou não é número) sai como o marcador de ausência, não "0 transações".
+  it("null, undefined, vazio e não-número viram '—', nunca '0'", () => {
+    expect(fmtCount(null)).toBe("—");
+    expect(fmtCount(undefined)).toBe("—");
+    expect(fmtCount("")).toBe("—");
+    expect(fmtCount(Number.NaN)).toBe("—");
+    expect(fmtCount(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(fmtCount("abc")).toBe("—");
+    expect(fmtCount("1235")).toBe("1.235");
   });
 });
 
@@ -78,5 +91,21 @@ describe("contagens com milhar (fincla-api#534)", () => {
     );
     expect(screen.getByLabelText("4.321 transações").textContent).toBe("4.321");
     expect(text()).toMatch(/1\.200 selecionados/);
+  });
+});
+
+// G3-P-08: o título do diálogo já dizia "Mover 1.235"; o botão dizia "Mover 1235".
+describe("Mover para a conta… — contagem com milhar no botão", () => {
+  it("1.235 lançamentos elegíveis: título e botão com '1.235'", () => {
+    const transactions = Array.from({ length: 1235 }, (_, i) => ({
+      id: i + 1, desc: `Compra ${i}`, val: -1, type: "expense", accountId: "acc-a", currency: "BRL", settleable: true, seriesId: null,
+    }));
+    render(
+      <BulkMoveDialog organizationId="org" transactions={transactions} baseCurrency="BRL" onClose={() => {}}
+        accounts={[{ id: "acc-a", label: "Conta A", currency: "BRL" }, { id: "acc-b", label: "Conta B", currency: "BRL" }]} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Conta B/ }));
+    expect(screen.getByRole("button", { name: "Mover 1.235 lançamentos" })).toBeTruthy();
+    expect(text()).not.toMatch(/Mover 1235/);
   });
 });
