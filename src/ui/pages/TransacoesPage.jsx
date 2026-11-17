@@ -514,12 +514,12 @@ const DetailPanel = ({
                   gap:6, background:"none", border:"none", padding:0, cursor:"pointer",
                   fontSize:12, fontWeight:600, color:T.ink, textAlign:"left" }}>
                 <span style={{ width:8, height:8, borderRadius:"50%",
-                  background:catColor(tx.cat, tx.categorySystemKey), flexShrink:0 }}/>
+                  background:catColor(tx.cat, tx.categorySystemKey, tx.categoryColor), flexShrink:0 }}/>
                 {tx.cat}
               </button>
             ) : (
               <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat, tx.categorySystemKey), flexShrink:0 }}/>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat, tx.categorySystemKey, tx.categoryColor), flexShrink:0 }}/>
                 {tx.cat}
               </span>
             )},
@@ -3872,7 +3872,7 @@ function TransacoesPageBody({
                          coluna da caixa (a saída já anima o item inteiro). */
                       className={settledFlashId === tx.id ? "fincla-tx-settled" : undefined}
                       style={{ flex: "none", width: selectionGutterPx, alignSelf: "stretch", display: "grid", placeItems: "center",
-                        background: selected?.id === tx.id ? `${catColor(tx.cat, tx.categorySystemKey)}08` : "transparent" }}>
+                        background: selected?.id === tx.id ? `${catColor(tx.cat, tx.categorySystemKey, tx.categoryColor)}08` : "transparent" }}>
                       {tx.kind === "transfer" ? null : (
                         <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelectedSet.has(String(tx.id))}
                           onChange={() => toggleBulk(String(tx.id))} />

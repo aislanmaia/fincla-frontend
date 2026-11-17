@@ -65,7 +65,8 @@ describe("CardTransactionsSummary — categorias", () => {
    Geral. Agora a cor sai do catálogo da organização pela chave estável `system_key`. */
 describe("CardTransactionsSummary — cor da categoria (BUG-02)", () => {
   const catalog = [
-    { id: "h", label: "Saude da Familia QA", apiName: "health", systemKey: "health", color: "#123456" },
+    // Catálogo sem cor própria para a renomeada: a chave do sistema decide.
+    { id: "h", label: "Saude da Familia QA", apiName: "health", systemKey: "health", color: null },
     { id: "f", label: "Alimentação", apiName: "food_groceries", systemKey: "food_groceries", color: "#059669" },
   ];
   const renamedSummary = {
@@ -87,8 +88,8 @@ describe("CardTransactionsSummary — cor da categoria (BUG-02)", () => {
   it("a mesma cor que a linha das Transações usa para a mesma categoria", async () => {
     const { catColor } = await import("../../transactions/shared/transactionFormat.js");
     const resolve = categoryColorResolver(catalog);
-    expect(resolve("Saude da Familia QA")).toBe(catColor("Saude da Familia QA", "health"));
-    expect(resolve("Alimentação")).toBe(catColor("Alimentação", "food_groceries"));
+    expect(resolve("Saude da Familia QA")).toBe(catColor("Saude da Familia QA", "health", null));
+    expect(resolve("Alimentação")).toBe(catColor("Alimentação", "food_groceries", "#059669"));
   });
 
   it("sem catálogo, o nome canônico ainda dá a cor da categoria", () => {

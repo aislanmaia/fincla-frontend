@@ -459,8 +459,24 @@ describe("categoryColorForCategory — cor pela chave estável da categoria do s
     expect(catColor(RENAMED, "health")).toBe(HEALTH);
     expect(catBg(RENAMED, "health")).toBe(`${HEALTH}18`);
     expect(cardCategoryColor(RENAMED, "health")).toBe(HEALTH);
-    // A chave vence a cor crua da API: é a mesma chave em toda tela.
-    expect(resolveCategoryColorForTag({ name: "Health", label: RENAMED, system_key: "health", color: "#123456" })).toBe(HEALTH);
-    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_label: RENAMED, tag_system_key: "health", tag_color: "#123456" })).toBe(HEALTH);
+    // Sem cor da API, a chave decide em qualquer formato de tag.
+    expect(resolveCategoryColorForTag({ name: "Health", label: RENAMED, system_key: "health" })).toBe(HEALTH);
+    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_label: RENAMED, tag_system_key: "health" })).toBe(HEALTH);
+  });
+
+  // Orquestrador 2026-11-17: a pessoa edita a cor em Configurações → Categorias,
+  // e a edição vale em toda tela. Regra: cor da API > chave do sistema > rótulo.
+  it("a cor da própria categoria na API (a editada) vence a chave e o rótulo, em toda função", async () => {
+    const EDITED = "#7E22CE";
+    const { catColor, catBg } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    expect(categoryColorForCategory({ color: EDITED, systemKey: "health", label: "Saúde" })).toBe(EDITED);
+    expect(catColor(RENAMED, "health", EDITED)).toBe(EDITED);
+    expect(catBg(RENAMED, "health", EDITED)).toBe(`${EDITED}18`);
+    expect(cardCategoryColor(RENAMED, "health", EDITED)).toBe(EDITED);
+    expect(resolveCategoryColorForTag({ name: "Health", system_key: "health", color: EDITED })).toBe(EDITED);
+    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_system_key: "health", tag_color: EDITED })).toBe(EDITED);
+    // Cor em branco conta como ausente: cai na chave.
+    expect(categoryColorForCategory({ color: "  ", systemKey: "health" })).toBe(HEALTH);
   });
 });

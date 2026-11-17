@@ -18,9 +18,11 @@ export function rotuloDeData(raw) {
 }
 
 
-/* A cor da categoria vem do mapa único (G3-P-10), pela chave estável da
-   categoria do sistema quando a linha a tem: renomear não muda a cor (BUG-02). */
-export const catColor = (label, systemKey = null) => categoryColorForCategory({ systemKey, label }) || T.inkMid;
+/* A cor da categoria segue a regra única (`categoryColorForCategory`): a cor da
+   própria categoria na API (a que a pessoa edita), senão a chave estável do
+   sistema, senão o mapa por rótulo. Renomear não muda a cor (BUG-02). */
+export const catColor = (label, systemKey = null, color = null) =>
+  categoryColorForCategory({ color, systemKey, label }) || T.inkMid;
 
 /** "20/08/2026" -> { top: "20 ago", sub: "qua" }. Duas linhas curtas cabem numa
  *  coluna de 54 px sem quebrar; a data por extenso não cabia. */
@@ -54,7 +56,7 @@ export function shortDateLabel(raw, today = new Date()) {
   if (sameDay(d, yesterday)) return { top, sub: "ontem" };
   return { top, sub: WEEKDAYS_SHORT[d.getDay()] || "" };
 }
-export const catBg = (label, systemKey = null) => `${catColor(label, systemKey)}18`;
+export const catBg = (label, systemKey = null, color = null) => `${catColor(label, systemKey, color)}18`;
 
 export function transactionStatus(status) {
   return status === "confirmado"

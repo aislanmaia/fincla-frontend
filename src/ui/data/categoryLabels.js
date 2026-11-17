@@ -274,16 +274,19 @@ const CATEGORY_COLOR_BY_SYSTEM_KEY = Object.fromEntries(
 );
 
 /**
- * A cor de uma categoria, ou `null`. A chave estável (`system_key`) decide
- * quando existe: a categoria do sistema renomeada pela organização ("Saúde" →
- * "Saúde da família") mantém a cor em toda tela (QA display-and-pagination,
- * BUG-02). Sem chave (categoria criada pela organização, dado de
- * demonstração), o rótulo decide, pelo mapa único `categoryColorForLabel`.
- * Transações, cartões, Visão Geral e Relatórios chamam esta função.
- * @param {{ systemKey?: string | null; label?: string | null }} [category]
+ * A cor de uma categoria, ou `null`. Regra única de todas as telas
+ * (Transações, cartão, Resumo do recorte, Visão Geral, Relatórios):
+ * 1. a cor da própria categoria vinda da API (`tag.color`): é a que a pessoa
+ *    edita em Configurações → Categorias e, sem edição, a do catálogo do backend;
+ * 2. sem ela, a cor pela chave estável (`system_key`): a categoria do sistema
+ *    renomeada mantém a cor (QA display-and-pagination, BUG-02);
+ * 3. sem ela, o mapa único por rótulo (`categoryColorForLabel`).
+ * @param {{ color?: string | null; systemKey?: string | null; label?: string | null }} [category]
  * @returns {string | null}
  */
-export function categoryColorForCategory({ systemKey = null, label = null } = {}) {
+export function categoryColorForCategory({ color = null, systemKey = null, label = null } = {}) {
+  const own = typeof color === "string" ? color.trim() : "";
+  if (own) return own;
   const key = typeof systemKey === "string" ? systemKey.trim() : "";
   if (key && CATEGORY_COLOR_BY_SYSTEM_KEY[key]) return CATEGORY_COLOR_BY_SYSTEM_KEY[key];
   return categoryColorForLabel(label);
@@ -313,25 +316,22 @@ function hashCategoryColorKey(value) {
 }
 
 /**
- * Resolve uma cor estável para a tag de categoria.
- * A chave do sistema (`system_key`) vem primeiro, igual às outras telas
- * (`categoryColorForCategory`); depois a cor explícita da API; depois a cor
- * canônica do rótulo e, por fim, uma paleta fixa não-cinza baseada no
- * nome/ícone da categoria.
+ * Resolve uma cor estável para a tag de categoria, pela regra única de
+ * `categoryColorForCategory` (cor da API > chave do sistema > rótulo) e, por
+ * fim, uma paleta fixa não-cinza baseada no nome/ícone da categoria.
  * @param {Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
 export function resolveCategoryColorForTag(tag) {
   if (!tag || typeof tag !== "object") return "#6B7280";
   const o = tag;
-  const bySystemKey = categoryColorForCategory({ systemKey: coerceCategoryTagShape(o).system_key });
-  if (bySystemKey) return bySystemKey;
   const explicitColor =
     (typeof o.tag_color === "string" && o.tag_color.trim()) ||
     (typeof o.color === "string" && o.color.trim()) ||
     (typeof o.category_color === "string" && o.category_color.trim()) ||
     null;
-  if (explicitColor) return explicitColor;
+  const known = categoryColorForCategory({ color: explicitColor, systemKey: coerceCategoryTagShape(o).system_key });
+  if (known) return known;
 
   const { name, icon_key: rawIk, is_default } = coerceCategoryTagShape(o);
   const labelPt = categoryLabelPtForTag({ name, icon_key: rawIk, is_default });

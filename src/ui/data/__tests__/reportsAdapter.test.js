@@ -206,7 +206,8 @@ describe("Relatórios: categoria renomeada pela organização", () => {
     tag_name: "Health",
     tag_label: RENAMED,
     tag_system_key: "health",
-    tag_color: "#123456",
+    // Resposta sem cor própria: a chave do sistema decide.
+    tag_color: null,
     total: 300,
   };
   const untouched = {
@@ -238,6 +239,13 @@ describe("Relatórios: categoria renomeada pela organização", () => {
     expect(Object.keys(driftData[1])).toEqual(["mes", RENAMED]);
     expect(driftData[1][RENAMED]).toBe(200);
     expect(driftColors).toEqual({ [RENAMED]: HEALTH_RED });
+  });
+
+  it("a cor editada pela pessoa (tag_color) vence a chave na composição e na evolução", () => {
+    const edited = { ...renamed, tag_color: "#7E22CE" };
+    expect(buildCategoryComposition([edited])[0].color).toBe("#7E22CE");
+    const { driftColors } = buildDriftData({ months: ["nov/26"], categories: [{ ...edited, monthly_totals: [1] }] });
+    expect(driftColors).toEqual({ [RENAMED]: "#7E22CE" });
   });
 
   it("resposta antiga sem `tag_label` ainda traduz o nome cru", () => {

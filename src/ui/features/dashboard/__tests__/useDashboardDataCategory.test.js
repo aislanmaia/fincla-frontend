@@ -448,7 +448,7 @@ describe("Gastos por categoria: categoria do sistema renomeada", () => {
   const HEALTH = "#DC2626";
   const renamedTag = {
     id: "cat-h", name: "Health", label: RENAMED, custom_name: RENAMED, system_key: "health",
-    color: "#123456", is_default: true, tag_type: { name: "categoria" },
+    color: null, is_default: true, tag_type: { name: "categoria" },
   };
 
   it("a linha vinda das transações tem o nome da organização e a cor da chave do sistema", async () => {
@@ -464,7 +464,7 @@ describe("Gastos por categoria: categoria do sistema renomeada", () => {
   it("a linha só da API (sem transações) usa tag_label e a cor da chave", () => {
     const api = [{
       tag_id: "cat-h", tag_name: "Health", tag_label: RENAMED, tag_system_key: "health",
-      tag_color: "#123456", total: 120,
+      tag_color: null, total: 120,
     }];
     const [row] = buildDashboardCategoryRows([], "2026-11-01", "2026-11-30", api, new Map(), "BRL", []);
     expect(row.name).toBe(RENAMED);

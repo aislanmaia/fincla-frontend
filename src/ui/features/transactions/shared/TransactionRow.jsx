@@ -152,8 +152,8 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
   const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
   const tags       = tx.tags || [];
-  const avatarBg   = isRefund ? T.greenLight : catBg(tx.cat, tx.categorySystemKey);
-  const catCol     = catColor(tx.cat, tx.categorySystemKey);
+  const avatarBg   = isRefund ? T.greenLight : catBg(tx.cat, tx.categorySystemKey, tx.categoryColor);
+  const catCol     = catColor(tx.cat, tx.categorySystemKey, tx.categoryColor);
   const dense      = rowHeight <= 40;
 
   // Método é o único metadado que sobra sob a descrição. Para crédito ele

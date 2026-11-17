@@ -586,6 +586,8 @@ export function mapApiTransactionToUi(transaction) {
     categoryIconKey: catTag?.icon_key ?? null,
     // Chave estável da categoria do sistema: a cor sai dela, não do nome (renomear não muda a cor).
     categorySystemKey: catTag?.system_key ?? null,
+    // A cor da própria categoria (a que a pessoa edita em Configurações): vence a chave e o rótulo.
+    categoryColor: typeof catTag?.color === "string" && catTag.color.trim() ? catTag.color : null,
     date: dateLabel,
     dateIsoForEdit: pickDateIsoForEditTransaction(transaction),
     purchaseDateIso: pickPurchaseDateIsoForEdit(transaction),

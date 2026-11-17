@@ -47,10 +47,10 @@ export function categoryOptions(breakdown) {
 }
 
 /**
- * Nome exibido de uma categoria → cor, pelo catálogo da organização. A chave
- * estável (`systemKey`) decide, como nas Transações (`catColor`): a categoria do
- * sistema renomeada mantém a cor (QA display-and-pagination, BUG-02). Sem
- * chave, a cor do catálogo; fora do catálogo, o mapa único pelo nome.
+ * Nome exibido de uma categoria → cor, pelo catálogo da organização e pela
+ * regra única das Transações (`catColor`): a cor da categoria no catálogo (a que
+ * a pessoa edita), senão a chave estável do sistema, senão o mapa pelo nome.
+ * O resumo da API só traz o nome; o catálogo traz a cor.
  * @param {{ label?: string; apiName?: string; systemKey?: string | null; color?: string | null }[]} catalog
  * @returns {(name: string) => string | null}
  */
@@ -58,7 +58,7 @@ export function categoryColorResolver(catalog) {
   return (name) => {
     const entry = (catalog ?? []).find((row) => row.label === name || row.apiName === name);
     if (!entry) return categoryColorForCategory({ label: name });
-    return categoryColorForCategory({ systemKey: entry.systemKey ?? null, label: name }) ?? entry.color ?? null;
+    return categoryColorForCategory({ color: entry.color ?? null, systemKey: entry.systemKey ?? null, label: name });
   };
 }
 

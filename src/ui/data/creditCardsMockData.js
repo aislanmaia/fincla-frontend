@@ -123,4 +123,4 @@ export const CARTOES_DATA = [
 ];
 
 /** Cor de uma categoria nas telas do cartão: o mesmo mapa das Transações (G3-P-10). */
-export const cardCategoryColor = (label, systemKey = null) => categoryColorForCategory({ systemKey, label }) || T.inkMid;
+export const cardCategoryColor = (label, systemKey = null, color = null) => categoryColorForCategory({ color, systemKey, label }) || T.inkMid;
