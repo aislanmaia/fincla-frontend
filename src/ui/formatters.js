@@ -55,3 +55,9 @@ export function fmtK(v, moeda) {
   if (moedaEsquecida("fmtK", arguments) || !moeda) return "";
   return formatMoneyCompact(v, moeda) ?? "";
 }
+
+const contagem = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+/** Uma contagem com o separador de milhar do idioma: "1.235 transações", não "1235" (fincla-api#534). */
+export function fmtCount(n) {
+  return contagem.format(Number(n) || 0);
+}

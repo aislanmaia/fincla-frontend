@@ -35,6 +35,11 @@ export const CAT_COLORS = {
   Serviços: "#6B7280",
   "Impostos & Taxas": "#D97706",
   Vestuário: "#BE185D",
+  // Rótulos do catálogo, como a API os entrega (fincla-api#534).
+  "Assinaturas e software": "#0891B2",
+  "Lazer e entretenimento": "#D97706",
+  "Compras pessoais": "#DC2626",
+  "Impostos e taxas": "#D97706",
 };
 export const catColor = (label) => CAT_COLORS[label] || T.inkMid;
 

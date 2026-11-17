@@ -125,8 +125,9 @@ import {
 /** Valor da parcela nas células do seletor: número pt-BR (vírgula), sem símbolo, para caber no botão. */
 /** Limite disponível do cartão, na moeda DELE (a da conta que liquida a fatura). Sem
  *  moeda conhecida, travessão — nunca "R$" chapado (#310). */
-const fmtCardAvailable = (c) =>
-  c.moeda ? `${currencyInfo(c.moeda).symbol} ${Number(c.disp).toLocaleString("pt-BR")}` : "—";
+export const fmtCardAvailable = (c) =>
+  // Casas da moeda pelo registro, completas ("R$ 1.234,50", não "R$ 1.234,5") — fincla-api#534.
+  (c.moeda && formatMoneyPlainSpace(c.disp, c.moeda)) || "—";
 const fmtInstallmentCell = v => !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */

@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { T } from "../tokens";
+import { fmtCount } from "../formatters.js";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
@@ -3792,7 +3793,7 @@ function TransacoesPageBody({
               iconSize={28}
               title="Nenhuma transação neste filtro"
               sub={`O filtro “${narrowest.label}” é o que mais restringe: sem ele ${
-                narrowest.total === 1 ? "volta 1 transação" : `voltam ${narrowest.total} transações`
+                narrowest.total === 1 ? "volta 1 transação" : `voltam ${fmtCount(narrowest.total)} transações`
               }.`}
               primaryLabel={`Remover “${narrowest.label}”`}
               onPrimary={() => clearFacetAndResetPage(narrowest.key)}
@@ -4563,7 +4564,7 @@ function TransacoesPageBody({
                   fontSize:15, fontWeight:800, cursor:"pointer",
                   opacity: filterBarApplyProps.resultsLoading ? 0.7 : 1,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
+                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {fmtCount(filteredCount)} transaç{filteredCount!==1?"ões":"ão"}</>}
               </button>
             </div>
           </div>
