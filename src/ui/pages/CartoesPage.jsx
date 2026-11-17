@@ -406,7 +406,8 @@ export const CartoesPage = ({
   const totalInstallments       = installmentsExposure.net;
   const hasRefundedInstallments = installmentsExposure.hasRefunds;
 
-  const categoryColor = (it) => it.catColor || cardCategoryColor(it.cat);
+  // Regra única: cor da categoria na API (a editada) > chave do sistema > rótulo.
+  const categoryColor = (it) => cardCategoryColor(it.cat, it.catSystemKey, it.catColor);
 
   const invoiceFilterChips = useMemo(() => {
     const m = new Map();

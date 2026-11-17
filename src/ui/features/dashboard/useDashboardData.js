@@ -200,12 +200,14 @@ function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) 
       if (!cur.color && tag?.color) cur.color = tag.color;
       if (!cur.tagId && tag?.id) cur.tagId = tag.id;
       if (!cur.icon_key && tag?.icon_key) cur.icon_key = tag.icon_key;
+      if (!cur.systemKey && tag?.system_key) cur.systemKey = tag.system_key;
     } else {
       map.set(mapKey, {
         tagId: tag?.id ?? null,
         tagName: rawName,
         displayName,
         icon_key: tag?.icon_key ?? null,
+        systemKey: tag?.system_key ?? null,
         color: tag?.color ?? null,
         isDefault,
         total: add,
@@ -318,7 +320,10 @@ export function buildDashboardCategoryRows(
       : apiList.map((c) => ({
           tagId: c.tag_id,
           tagName: c.tag_name,
+          // O nome que o resto do app mostra (nome da organização > tradução), já resolvido pela API (BUG-01).
+          displayName: c.tag_label || null,
           icon_key: c.tag_icon_key ?? null,
+          systemKey: c.tag_system_key ?? null,
           color: c.tag_color,
           // Endpoint de agregação do consultor NUNCA manda `is_default`
           // (ver doc de `categoryLabelPtForTag` em categoryLabels.js) — fica
@@ -349,6 +354,7 @@ export function buildDashboardCategoryRows(
       const apiMeta = apiMetaByName.get(rowNameKey);
       const tagId = row.tagId || apiMeta?.tag_id || undefined;
       const iconKey = row.icon_key || apiMeta?.tag_icon_key || null;
+      const systemKey = row.systemKey || apiMeta?.tag_system_key || null;
       const color =
         row.color ||
         (tagId ? apiColorByTagId.get(String(tagId)) : null) ||
@@ -361,6 +367,8 @@ export function buildDashboardCategoryRows(
           tag_name: row.tagName,
           display_name: row.displayName ?? null,
           tag_icon_key: iconKey,
+          // A cor sai da chave estável antes da cor crua (`pickCategoryColor`), como nas Transações (BUG-02).
+          tag_system_key: systemKey,
           tag_color: color,
           is_default: row.isDefault ?? null,
           total: row.money.value,

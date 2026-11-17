@@ -265,7 +265,7 @@ export function InstallmentsTab({
           const pct = Math.round(p.pago / p.total * 100);
           const remainingCount = p.total - p.pago;
           const remainingValue = remainingCount * p.vParcela;
-          const rowColor = cardCategoryColor(p.cat);
+          const rowColor = cardCategoryColor(p.cat, p.catSystemKey, p.catColor);
           const isOpen = expandedInstallment === p.id;
           const isLast = idx === sorted.length - 1;
           return (

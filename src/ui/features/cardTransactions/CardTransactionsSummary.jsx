@@ -7,13 +7,18 @@ import { G, NUM } from "../../typography.js";
 import { groupCategories } from "./categoryGroups.js";
 import { LedgerModal } from "./LedgerDialogs.jsx";
 import { fmtCount } from "../../formatters.js";
+import { categoryColorForCategory } from "../../data/categoryLabels.js";
 
 const COLORS = [T.blue, T.green, T.amber, T.purple, T.red, T.inkMid];
+const byLabel = (name) => categoryColorForCategory({ label: name });
+/* A cor é da categoria (mapa único, chave estável via `colorForCategory`), não da posição na lista:
+   a posição só colore o que nenhum mapa conhece (QA display-and-pagination, BUG-02). */
+const rowColor = (colorForCategory, row, index) => colorForCategory(row.category) ?? COLORS[index % COLORS.length];
 const validAmount = (row) => row.amount != null && Number.isFinite(Number(row.amount)) && row.amount_currency;
 const RADIUS = 38;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function Donut({ rows, total }) {
+function Donut({ rows, total, colorForCategory }) {
   const rest = Math.max(0, total - rows.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0));
   let offset = 0;
   return <svg role="img" aria-label="Distribuição das saídas por categoria" viewBox="0 0 100 100" width="112" height="112" style={{ flex: "none" }}>
@@ -23,7 +28,7 @@ function Donut({ rows, total }) {
     {total > 0 && rows.map((row, index) => {
       const share = Math.abs(Number(row.amount)) / total;
       const length = share * CIRCUMFERENCE;
-      const segment = <circle key={`${row.category}-${index}`} cx="50" cy="50" r={RADIUS} fill="none" stroke={COLORS[index % COLORS.length]} strokeWidth="14" strokeDasharray={`${length} ${CIRCUMFERENCE - length}`} strokeDashoffset={-offset} transform="rotate(-90 50 50)" />;
+      const segment = <circle key={`${row.category}-${index}`} cx="50" cy="50" r={RADIUS} fill="none" stroke={rowColor(colorForCategory, row, index)} strokeWidth="14" strokeDasharray={`${length} ${CIRCUMFERENCE - length}`} strokeDashoffset={-offset} transform="rotate(-90 50 50)" />;
       offset += length;
       return segment;
     })}
@@ -56,7 +61,7 @@ function CategoryRow({ row, color, sum, currency, state, onToggle }) {
  * backend sobre TODO o resultado filtrado, não da página carregada. A legenda é
  * clicável: marcar uma categoria isola a tela inteira nela (mesmo filtro da faceta).
  */
-export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory, isMobile, selectedLabel = null, onClearSelection }) {
+export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory, isMobile, selectedLabel = null, onClearSelection, colorForCategory = byLabel }) {
   const [allOpen, setAllOpen] = useState(null);
   const categories = (summary?.breakdown?.by_category ?? []).filter(validAmount);
   const currencies = [...new Set(categories.map((row) => row.amount_currency))];
@@ -79,11 +84,11 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
         {currencies.length > 1 && <h3 style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>{currency}</h3>}
         {/* Card estreito: a legenda desce para baixo da rosca em vez de espremer os nomes. */}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <Donut rows={visible} total={sum} />
+          <Donut rows={visible} total={sum} colorForCategory={colorForCategory} />
           <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: isMobile ? "1 1 230px" : "1 1 190px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {visible.map((row, index) => <li key={`${row.category}-${index}`}>
               {/* `null` = a categoria não existe no catálogo: sem id não há filtro possível. */}
-              <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
+              <CategoryRow row={row} color={rowColor(colorForCategory, row, index)} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
             </li>)}
           </ul>
         </div>
@@ -92,7 +97,7 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
           <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Do maior para o menor valor. Clique numa categoria para filtrar a lista; clique de novo para remover.</p>
           <ul aria-label={`Todas as categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {all.map((row, index) => <li key={`${row.category}-${index}`}>
-              <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
+              <CategoryRow row={row} color={rowColor(colorForCategory, row, index)} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
             </li>)}
           </ul>
         </LedgerModal>}

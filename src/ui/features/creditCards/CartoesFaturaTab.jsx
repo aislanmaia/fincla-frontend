@@ -5,6 +5,7 @@ import { G, NUM } from "../../typography";
 import { M_MONO } from "../moodV4";
 import { DateGroup } from "./CardFaturaList.jsx";
 import { CategoryBars, LimitBar } from "./cartoesPanels.jsx";
+import { fmtCount } from "../../formatters.js";
 
 /**
  * Conteúdo da aba "Fatura" (lista + sidebar). Único componente atende
@@ -94,7 +95,7 @@ export function InvoiceTab({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink }}>
               {displayItems.length > 0
-                ? `${filtered.length} de ${displayItems.length} lançamentos`
+                ? `${fmtCount(filtered.length)} de ${fmtCount(displayItems.length)} lançamentos`
                 : `Fatura ${invoice?.mes} · ${invoice?.pago ? "Paga" : "Pendente"}`}
             </span>
             {filtered.length > 0 && (
@@ -137,7 +138,7 @@ export function InvoiceTab({
           {filtered.length > 0 && hasMoreGroups && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 20px", borderTop: `1px solid ${T.border}` }}>
               <span style={{ ...G, fontSize: 12, color: T.inkMid }}>
-                {visibleItems} de {totalItems} lançamentos
+                {fmtCount(visibleItems)} de {fmtCount(totalItems)} lançamentos
               </span>
               <span style={{ ...M_MONO, ...NUM, fontSize: 16, fontWeight: 800, color: T.ink }}>
                 {formatBRL(filtered.reduce((s, i) => s + i.val, 0))}

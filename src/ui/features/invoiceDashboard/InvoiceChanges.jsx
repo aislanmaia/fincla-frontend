@@ -4,6 +4,7 @@ import { formatMoney } from "../../money/formatMoney.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { invoiceMoneyValue } from "./invoiceMoney.js";
+import { fmtCount } from "../../formatters.js";
 
 const changeLabels = {
   new: "Novo compromisso",
@@ -116,7 +117,7 @@ export function InvoiceChanges({ changes, currency, isMobile = false, invoiceOpe
         </Chip>)}</div>
       </Card>}
       {oneOffChanged && <Card style={{ padding: isMobile ? 16 : 20, ...G, fontSize: 12, color: T.inkMid }}>
-        <strong style={{ color: T.ink }}>Compras avulsas e estornos</strong>: <span style={NUM}>{moneyOrDash(oneOff.previous_total, currency)} → {moneyOrDash(oneOff.current_total, currency)}</span> · {oneOff.previous_count} → {oneOff.current_count} lançamentos
+        <strong style={{ color: T.ink }}>Compras avulsas e estornos</strong>: <span style={NUM}>{moneyOrDash(oneOff.previous_total, currency)} → {moneyOrDash(oneOff.current_total, currency)}</span> · {fmtCount(oneOff.previous_count)} → {fmtCount(oneOff.current_count)} lançamentos
         {onOpenLedger && <> · <button type="button" onClick={() => onOpenLedger({ kind: "one_off" })} style={{ ...G, ...LINK_BUTTON, fontSize: 12, fontWeight: 700, color: T.blue }}>ver lançamentos →</button></>}
       </Card>}
     </section>

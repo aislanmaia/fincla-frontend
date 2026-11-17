@@ -1,3 +1,4 @@
+import { categoryColorForCategory } from "../../data/categoryLabels.js";
 import { invoiceItemTagNames, mapInvoiceItemToUi } from "../../data/creditCardsAdapter.js";
 import { matchesValueRange } from "../transactions/filters/filtersToLegacyParams.js";
 import { parseMoneyInput } from "../onboarding/onboardingValueUtils.js";
@@ -43,6 +44,22 @@ export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode 
 export function categoryOptions(breakdown) {
   return (breakdown ?? []).filter((row) => row.category_name)
     .map((row) => ({ id: row.category_id == null ? "uncategorized" : String(row.category_id), name: row.category_name, color: row.category_color }));
+}
+
+/**
+ * Nome exibido de uma categoria → cor, pelo catálogo da organização e pela
+ * regra única das Transações (`catColor`): a cor da categoria no catálogo (a que
+ * a pessoa edita), senão a chave estável do sistema, senão o mapa pelo nome.
+ * O resumo da API só traz o nome; o catálogo traz a cor.
+ * @param {{ label?: string; apiName?: string; systemKey?: string | null; color?: string | null }[]} catalog
+ * @returns {(name: string) => string | null}
+ */
+export function categoryColorResolver(catalog) {
+  return (name) => {
+    const entry = (catalog ?? []).find((row) => row.label === name || row.apiName === name);
+    if (!entry) return categoryColorForCategory({ label: name });
+    return categoryColorForCategory({ color: entry.color ?? null, systemKey: entry.systemKey ?? null, label: name });
+  };
 }
 
 export function tagOptions(items) {

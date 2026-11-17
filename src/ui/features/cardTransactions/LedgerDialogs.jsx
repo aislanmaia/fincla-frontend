@@ -6,6 +6,7 @@ import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
 import { useFocusTrap } from "../../components/useFocusTrap.js";
 import { installmentOf } from "./ledgerModel.js";
+import { fmtCount } from "../../formatters.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -48,7 +49,7 @@ export function CategorizeDialog({ rows: selection, categories, onSubmit, onClos
     if (failed) setError(failed);
   };
   return <LedgerModal title="Categorizar lançamentos" onClose={onClose}>
-    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{rows.length} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.{ignored > 0 ? ` ${ignored} estorno${ignored === 1 ? " fica" : "s ficam"} de fora: estorno mantém a categoria de estorno.` : ""}</p>
+    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{fmtCount(rows.length)} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.{ignored > 0 ? ` ${fmtCount(ignored)} estorno${ignored === 1 ? " fica" : "s ficam"} de fora: estorno mantém a categoria de estorno.` : ""}</p>
     <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Nova categoria
       <Select aria-label="Nova categoria" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
         <option value="">Escolha…</option>
@@ -90,7 +91,7 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, currentKey = null,
     {movable.length === 0
       ? <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Só parcelas de compras parceladas podem mudar de fatura. Nenhum item selecionado é parcelado.</p>
       : <>
-        <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{movable.length} parcela{movable.length === 1 ? "" : "s"}{movable.length < rows.length ? ` (${rows.length - movable.length} item(ns) à vista foram ignorados)` : ""}. As demais parcelas da mesma compra são reposicionadas, um mês de intervalo entre elas.</p>
+        <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{fmtCount(movable.length)} parcela{movable.length === 1 ? "" : "s"}{movable.length < rows.length ? ` (${fmtCount(rows.length - movable.length)} item(ns) à vista foram ignorados)` : ""}. As demais parcelas da mesma compra são reposicionadas, um mês de intervalo entre elas.</p>
         <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Fatura de destino
           <Select aria-label="Fatura de destino" value={target} onChange={(event) => setTarget(event.target.value)}>
             <option value="">Escolha…</option>
