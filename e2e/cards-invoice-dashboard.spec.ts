@@ -4,7 +4,7 @@
  * Semeia a PRÓPRIA organização (id novo) com dois cartões: um com fatura paga,
  * fechada, aberta e parcelas futuras; outro sem nenhum lançamento. Prova o que os
  * testes de tela não alcançam: o carrossel nativo do mobile sem rolagem horizontal
- * da página, pagar/desfazer contra o servidor, o CSV baixado e, sobretudo, o
+ * da página, pagar/desfazer contra o servidor, o CSV exportado pelo painel e, sobretudo, o
  * ORÇAMENTO DE CHAMADAS (independente do número de cartões e de meses).
  */
 import { test, expect, type Page } from "@playwright/test";
@@ -100,6 +100,8 @@ const url = (cardId: number, ref: { year: number; month: number }) => {
   return `/cards/${publicId}/invoices/${ref.year}/${ref.month}`;
 };
 const keyFor = (ref: { year: number; month: number }) => `${ref.year}-${pad(ref.month)}`;
+const MONTH_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const monthLabel = (ref: { year: number; month: number }) => `${MONTH_ABBR[ref.month - 1]}/${ref.year}`;
 const parseBRL = (t: string | null) => {
   const m = /(-?[\d.]+,\d{2})/.exec(t ?? "");
   return m ? Number(m[1].replace(/\./g, "").replace(",", ".")) : null;
@@ -283,14 +285,29 @@ for (const vp of VIEWPORTS) {
       expect(await page.evaluate(() => (window as unknown as { __sawLoading: boolean }).__sawLoading)).toBe(false);
     });
 
-    test("exportar CSV baixa a fatura selecionada", async ({ page }) => {
+    test("exportar a fatura pelo painel baixa o CSV gerado pelo servidor", async ({ page }) => {
       await login(page, vp);
       await page.goto(url(busyCardId, openRef));
-      await expect(page.getByTestId("export-csv")).toBeVisible({ timeout: 30_000 });
-      const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("export-csv").click()]);
-      expect(download.suggestedFilename()).toBe(`fatura-Dash Azul-${keyFor(openRef)}.csv`);
-      const text = fs.readFileSync((await download.path())!, "utf8");
-      expect(text.split("\n")[0]).toBe("Descrição,Categoria,Valor,Data,Parcela,Recorrente");
+      await expect(page.getByTestId("export-invoice")).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId("export-invoice").click();
+      const panel = page.getByRole("dialog", { name: "Exportar" });
+      await expect(panel).toContainText(`Fatura: ${monthLabel(openRef)}`);
+      // Os totais vêm do resumo do recorte; o botão só habilita quando eles chegam.
+      await expect(panel.getByTestId("export-totals")).toBeVisible({ timeout: 30_000 });
+      await panel.getByRole("group", { name: "Formato do arquivo" }).getByRole("button", { name: "CSV" }).click();
+      const [download] = await Promise.all([
+        page.waitForEvent("download"),
+        panel.getByRole("button", { name: "Exportar CSV" }).click(),
+      ]);
+      // O nome vem do servidor (`Content-Disposition`): prefixo do cartão + mês da fatura, e a data de geração.
+      expect(download.suggestedFilename()).toMatch(
+        new RegExp(`^cartao-dash-azul-fatura-${keyFor(openRef)}-\\d{4}-\\d{2}-\\d{2}\\.csv$`),
+      );
+      const text = fs.readFileSync((await download.path())!, "utf8").replace(/^\uFEFF/, "");
+      const lines = text.split(/\r?\n/);
+      // 1ª linha: o título da origem na coluna Descrição; a tabela tem as colunas do exportador do servidor.
+      expect(lines[0]).toBe(`,Dash Azul •7112 · Fatura de ${monthLabel(openRef)},,,,,`);
+      expect(lines).toContain("Data,Descrição,Categoria,Tipo,Valor,Moeda,Situação");
       expect(text).toContain("Compra aberta");
     });
 
