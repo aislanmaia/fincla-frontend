@@ -17,8 +17,10 @@ export function PageEnter({ children, fill = false, fillMin = false }) {
         ...(fill
           ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
           : fillMin
-            // No mínimo a altura da área de conteúdo, que continua rolando se a página passar dela.
-            ? { minHeight: "100%", display: "flex", flexDirection: "column" }
+            // Cresce até o que sobra na área de conteúdo (coluna flex, ver `mainScrollStyle`), que
+            // continua rolando se a página passar dela. Não `minHeight: 100%`: com o aviso de acesso
+            // em cima, 100% somado ao aviso fazia a tela rolar à toa.
+            ? { flex: "1 0 auto", display: "flex", flexDirection: "column" }
             : null),
       }}
     >

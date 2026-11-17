@@ -52,6 +52,7 @@ import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { CardCommitmentsPage } from "./pages/CardCommitmentsPage.jsx";
 import { StatementReconciliationPage } from "./pages/StatementReconciliationPage.jsx";
 import { fillsAvailableHeight } from "./routing/statementImportRoute.js";
+import { mainScrollStyle } from "./layouts/mainScroll.js";
 import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
@@ -161,6 +162,8 @@ export default function App() {
      uma página que rola, e numa tela autocontida vira uma faixa morta. */
   const ledgerScreen = isMobile && /^\/cards\/[^/]+\/transactions\/?$/.test(pathname);
   const selfScrollingScreen = isMobile && (activeSegment === "transactions" || ledgerScreen);
+  // A tela inicial do Conciliar extrato no computador ocupa a altura que sobra (área de soltar grande).
+  const fillsHeight = !selfScrollingScreen && fillsAvailableHeight(pathname, isMobile);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactionsListVersion, setTransactionsListVersion] = useState(0);
@@ -652,14 +655,7 @@ export default function App() {
         <div
           data-fincla-main-scroll
           className={selfScrollingScreen ? undefined : "fincla-scroll"}
-          style={{ flex:1, minHeight:0,
-            overflowY: selfScrollingScreen ? "hidden" : "auto",
-            overflowX: selfScrollingScreen ? "clip" : "hidden",
-            display: selfScrollingScreen ? "flex" : undefined,
-            flexDirection: selfScrollingScreen ? "column" : undefined,
-            padding: selfScrollingScreen
-              ? (ledgerScreen ? 0 : "14px 14px 0")
-              : isMobile ? "14px 14px 40px" : "20px 28px 40px" }}>
+          style={mainScrollStyle({ selfScrolling: selfScrollingScreen, ledger: ledgerScreen, fillsHeight, isMobile })}>
           <AccessNotice user={session.user} />
           {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
             <div style={{ display:"flex", alignItems:"flex-start", gap:10, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:11, padding:"12px 14px", marginBottom:14 }}>
@@ -686,7 +682,7 @@ export default function App() {
               onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen} fillMin={!selfScrollingScreen && fillsAvailableHeight(pathname, isMobile)}><Outlet /></PageEnter></ErrorBoundary>
+          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen} fillMin={fillsHeight}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
       <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />

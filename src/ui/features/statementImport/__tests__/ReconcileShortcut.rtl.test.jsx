@@ -2,7 +2,7 @@
 // O atalho "Conciliar extrato" da tela de Transações (decisão do Owner de 2026-11-17, telas T1–T4).
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import contract from "../../../../api/__fixtures__/statement_import.example.json";
@@ -20,6 +20,7 @@ vi.mock("../../../../api/statementImports", async (importOriginal) => ({
 }));
 
 import { ReconcileShortcut } from "../ReconcileShortcut.jsx";
+import { useReconcileShortcutData } from "../useReconcileShortcutData.js";
 
 const A = { id: "acc-a", label: "Corrente Smoke", currency: "BRL" };
 const B = { id: "acc-b", label: "Poupança Smoke", currency: "BRL" };
@@ -48,15 +49,30 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const renderShortcut = (props = {}) => {
-  const onOpen = vi.fn();
-  render(
+/** Como a página: os dados vêm do hook do nível da página; o botão só os lê. */
+function Harness({ organizationId = "org-1", accounts = [A, B, C], ...props }) {
+  const data = useReconcileShortcutData({ organizationId, enabled: accounts.length > 0 });
+  return (
     <div>
       <button type="button">fora</button>
-      <ReconcileShortcut organizationId="org-1" accounts={[A, B, C]} filteredIds={[]} baseCurrency="BRL" onOpen={onOpen} {...props} />
-    </div>,
+      <ReconcileShortcut data={data} accounts={accounts} filteredIds={[]} baseCurrency="BRL" {...props} />
+      <button type="button">depois</button>
+    </div>
   );
-  return onOpen;
+}
+
+const renderShortcut = (props = {}) => {
+  const onOpen = vi.fn();
+  const view = render(<Harness onOpen={onOpen} {...props} />);
+  return Object.assign(onOpen, { rerenderWith: (next) => view.rerender(<Harness onOpen={onOpen} {...props} {...next} />) });
+};
+
+/** Uma promessa que o teste resolve quando quiser. */
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 };
 
 const expectedN = () => {
@@ -151,7 +167,7 @@ describe("ReconcileShortcut — escolher a conta (T4)", () => {
     await waitFor(() => expect(items[2]).toHaveTextContent("Última conciliação até 31/10/2026"));
     // A conta com rascunho não precisa da lista: o rascunho já responde.
     expect(listImportsMock).not.toHaveBeenCalledWith("acc-a", "org-1");
-    expect(menu).toHaveTextContent("Cartões de crédito não aparecem: a fatura não é conciliada por extrato.");
+    expect(menu).toHaveAccessibleDescription("Cartões de crédito não aparecem: a fatura não é conciliada por extrato.");
     await userEvent.click(items[0]);
     expect(onOpen).toHaveBeenCalledWith("acc-a", "d-1");
     expect(screen.queryByRole("menu")).toBeNull();
@@ -184,7 +200,7 @@ describe("ReconcileShortcut — escolher a conta (T4)", () => {
     expect(onOpen).toHaveBeenCalledWith("acc-b", null);
   });
 
-  it("teclado: abre com o foco na primeira conta, setas e Tab percorrem, Esc fecha e devolve o foco ao botão", async () => {
+  it("teclado: abre com o foco na primeira conta, setas percorrem em ciclo, Esc fecha e devolve o foco ao botão", async () => {
     renderShortcut();
     const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
     btn.focus();
@@ -193,18 +209,85 @@ describe("ReconcileShortcut — escolher a conta (T4)", () => {
     await waitFor(() => expect(items[0]).toHaveFocus());
     await userEvent.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();
-    await userEvent.tab();
-    expect(items[2]).toHaveFocus();
-    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}");
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{ArrowUp}");
     expect(items[2]).toHaveFocus();
-    await userEvent.tab({ shift: true });
-    expect(items[1]).toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    expect(items[0]).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    expect(items[2]).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).toBeNull();
     expect(btn).toHaveFocus();
     expect(btn).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("Tab não prende: fecha o menu e o foco segue para o que vem depois do botão (G3 achado 6)", async () => {
+    renderShortcut();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    await userEvent.click(btn);
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    await userEvent.tab();
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("button", { name: "depois" })).toHaveFocus();
+  });
+
+  it("Shift+Tab também fecha e o foco volta para antes do botão", async () => {
+    renderShortcut();
+    await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    await userEvent.tab({ shift: true });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("button", { name: "fora" })).toHaveFocus();
+  });
+
+  it("seta para baixo no botão fechado abre com o foco na primeira conta; seta para cima, na última", async () => {
+    renderShortcut();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    btn.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    let items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    await userEvent.keyboard("{Escape}");
+    expect(btn).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[2]).toHaveFocus());
+  });
+
+  it("Espaço no botão abre o menu", async () => {
+    renderShortcut();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    btn.focus();
+    await userEvent.keyboard(" ");
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+  });
+
+  it("o rodapé dos cartões fica FORA do role=menu e descreve o menu (aria-describedby)", async () => {
+    renderShortcut();
+    await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
+    const menu = await screen.findByRole("menu");
+    expect(menu).not.toHaveTextContent("Cartões de crédito");
+    // Dentro do menu, só itens de menu (o título é decorativo e repetido no aria-label).
+    for (const child of menu.children) expect(child.getAttribute("role") === "menuitem" || child.getAttribute("aria-hidden") === "true").toBe(true);
+    const footer = document.getElementById(menu.getAttribute("aria-describedby"));
+    expect(footer).toHaveTextContent("Cartões de crédito não aparecem: a fatura não é conciliada por extrato.");
+    expect(menu).toHaveAccessibleDescription("Cartões de crédito não aparecem: a fatura não é conciliada por extrato.");
+  });
+
+  it("rolar a página com o menu aberto fecha o menu (ele não fica parado longe do botão)", async () => {
+    renderShortcut();
+    await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
+    const menu = await screen.findByRole("menu");
+    // Rolar dentro do próprio menu (lista longa) não fecha.
+    fireEvent.scroll(menu);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.scroll(screen.getByRole("button", { name: "fora" }).parentElement);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("clique fora fecha o menu sem navegar", async () => {
@@ -229,10 +312,134 @@ describe("ReconcileShortcut — escolher a conta (T4)", () => {
     window.innerWidth = 390;
     renderShortcut({ compact: true });
     await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
-    const menu = await screen.findByRole("menu");
-    const left = parseFloat(menu.style.left);
-    const width = parseFloat(menu.style.width);
+    // A caixa posicionada envolve o menu e o rodapé dos cartões.
+    const box = (await screen.findByRole("menu")).parentElement;
+    const left = parseFloat(box.style.left);
+    const width = parseFloat(box.style.width);
     expect(left).toBeGreaterThanOrEqual(16);
     expect(left + width).toBeLessThanOrEqual(390 - 16);
+  });
+});
+
+describe("ReconcileShortcut — pedidos (G3 achados 2, 4 e 5)", () => {
+  it("modo menu: o detalhe dos rascunhos só é pedido quando o menu abre, e reabrir não pede de novo", async () => {
+    listDraftsMock.mockResolvedValue([draftItem("acc-a", "d-a"), draftItem("acc-b", "d-b")]);
+    renderShortcut();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalledTimes(1));
+    // Dá tempo de qualquer pedido indevido sair.
+    await act(async () => { await Promise.resolve(); });
+    expect(getImportMock).not.toHaveBeenCalled();
+    expect(listImportsMock).not.toHaveBeenCalled();
+
+    await userEvent.click(btn);
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveTextContent(`Conciliação começada · ${expectedN()} de 8 passos`));
+    await waitFor(() => expect(items[1]).toHaveTextContent(`Conciliação começada · ${expectedN()} de 8 passos`));
+    await waitFor(() => expect(items[2]).toHaveTextContent("Nenhum extrato importado ainda"));
+    expect(getImportMock.mock.calls.map((c) => c[2]).sort()).toEqual(["d-a", "d-b"]);
+    expect(listImportsMock.mock.calls).toEqual([["acc-c", "org-1"]]);
+
+    await userEvent.click(btn);
+    expect(screen.queryByRole("menu")).toBeNull();
+    await userEvent.click(btn);
+    const again = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    // Na reabertura, tudo já está à vista, sem esperar.
+    expect(again[0]).toHaveTextContent(`Conciliação começada · ${expectedN()} de 8 passos`);
+    expect(again[2]).toHaveTextContent("Nenhum extrato importado ainda");
+    expect(getImportMock).toHaveBeenCalledTimes(2);
+    expect(listImportsMock).toHaveBeenCalledTimes(1);
+    expect(listDraftsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("menu aberto antes de os rascunhos chegarem: espera por eles e pede a lista só das contas sem rascunho, uma vez", async () => {
+    const drafts = deferred();
+    listDraftsMock.mockReturnValue(drafts.promise);
+    renderShortcut();
+    await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    await act(async () => { await Promise.resolve(); });
+    expect(listImportsMock).not.toHaveBeenCalled();
+    await act(async () => { drafts.resolve([draftItem("acc-b", "d-b")]); });
+    await waitFor(() => expect(items[1]).toHaveTextContent(`Conciliação começada · ${expectedN()} de 8 passos`));
+    await waitFor(() => expect(listImportsMock).toHaveBeenCalledTimes(2));
+    expect(listImportsMock.mock.calls.map((c) => c[0]).sort()).toEqual(["acc-a", "acc-c"]);
+    expect(getImportMock.mock.calls.map((c) => c[2])).toEqual(["d-b"]);
+  });
+
+  it("lista de rascunhos falhou: o menu pede a última concluída de todas as contas", async () => {
+    listDraftsMock.mockRejectedValue(new Error("500"));
+    renderShortcut();
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalled());
+    await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
+    await screen.findByRole("menu");
+    await waitFor(() => expect(listImportsMock).toHaveBeenCalledTimes(3));
+    expect(getImportMock).not.toHaveBeenCalled();
+  });
+
+  it("lista de extratos de uma conta falhou: a próxima abertura tenta de novo só aquela", async () => {
+    listImportsMock.mockImplementation((id) => (id === "acc-b" ? Promise.reject(new Error("x")) : Promise.resolve([])));
+    renderShortcut();
+    const btn = await screen.findByRole("button", { name: "Conciliar extrato…" });
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalled());
+    await userEvent.click(btn);
+    await screen.findByRole("menu");
+    await waitFor(() => expect(listImportsMock).toHaveBeenCalledTimes(3));
+    await userEvent.click(btn);
+    await userEvent.click(btn);
+    await screen.findByRole("menu");
+    await waitFor(() => expect(listImportsMock).toHaveBeenCalledTimes(4));
+    expect(listImportsMock.mock.calls[3][0]).toBe("acc-b");
+  });
+
+  it("achado 4: o filtro muda com o detalhe em voo; a resposta que chega depois não se perde e o 'N de 8 passos' volta", async () => {
+    listDraftsMock.mockResolvedValue([draftItem("acc-a", "d-a"), draftItem("acc-b", "d-b")]);
+    const detailA = deferred();
+    getImportMock.mockImplementation((accountId, _org, id) => (id === "d-a" ? detailA.promise : Promise.resolve(draftDetail(accountId, id, REVIEWED))));
+    const view = renderShortcut({ filteredIds: ["acc-a"] });
+    await screen.findByRole("button", { name: /Continuar conciliação/ });
+    await waitFor(() => expect(getImportMock).toHaveBeenCalledWith("acc-a", "org-1", "d-a"));
+    // Acrescenta a Poupança ao filtro antes da resposta: o atalho vira menu.
+    view.rerenderWith({ filteredIds: ["acc-a", "acc-b"] });
+    await screen.findByRole("button", { name: "Conciliar extrato…" });
+    await act(async () => { detailA.resolve(draftDetail("acc-a", "d-a", REVIEWED)); });
+    // Volta a filtrar só pela Corrente: o número está lá, sem novo pedido.
+    view.rerenderWith({ filteredIds: ["acc-a"] });
+    const btn = screen.getByRole("button", { name: /Continuar conciliação/ });
+    expect(btn).toHaveTextContent(`Continuar conciliação${expectedN()} de 8 passos`);
+    expect(getImportMock.mock.calls.filter((c) => c[2] === "d-a")).toHaveLength(1);
+    // E o menu também mostra o número da Corrente.
+    view.rerenderWith({ filteredIds: [] });
+    await userEvent.click(screen.getByRole("button", { name: "Conciliar extrato…" }));
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    expect(items[0]).toHaveTextContent(`Conciliação começada · ${expectedN()} de 8 passos`);
+  });
+
+  it("troca de organização: a resposta atrasada da organização anterior não aparece", async () => {
+    const oldDrafts = deferred();
+    listDraftsMock.mockImplementation((org) => (org === "org-1" ? oldDrafts.promise : Promise.resolve([])));
+    const view = renderShortcut({ filteredIds: ["acc-a"] });
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalledWith("org-1"));
+    view.rerenderWith({ organizationId: "org-2" });
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalledWith("org-2"));
+    await act(async () => { oldDrafts.resolve([draftItem("acc-a", "d-old-org")]); });
+    expect(screen.getByRole("button", { name: "Conciliar extrato da Corrente Smoke" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Continuar conciliação/ })).toBeNull();
+    expect(getImportMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ReconcileShortcut — rótulo longo (G3 achado 7)", () => {
+  it("o botão encolhe e o rótulo corta com reticências, numa linha só", async () => {
+    const long = { id: "acc-l", label: "Conta Corrente Banco do Brasil Ag 1234", currency: "BRL" };
+    renderShortcut({ accounts: [long] });
+    const btn = await screen.findByRole("button", { name: `Conciliar extrato da ${long.label}` });
+    expect(btn.style.flex).toBe("0 1 auto");
+    expect(btn.style.minWidth).toBe("0px");
+    const text = within(btn).getByText(`Conciliar extrato da ${long.label}`);
+    expect(text.style.overflow).toBe("hidden");
+    expect(text.style.textOverflow).toBe("ellipsis");
+    expect(text.style.whiteSpace).toBe("nowrap");
+    expect(text.style.minWidth).toBe("0px");
   });
 });

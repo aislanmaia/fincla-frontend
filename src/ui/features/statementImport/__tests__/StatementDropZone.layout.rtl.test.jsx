@@ -41,4 +41,22 @@ describe("Extratos importados ao lado da área (computador)", () => {
     expect(scroll.style.maxHeight).toBe("480px");
     expect(scroll.style.overflowY).toBe("auto");
   });
+
+  it("esticada (tela inicial sem rascunho, computador): a lista ocupa a coluna inteira e rola dentro dela, sem teto e sem empurrar a linha (G3 achado 3)", async () => {
+    const { ImportedStatementsList } = await import("../ImportedStatements.jsx");
+    render(<ImportedStatementsList items={[]} fill onOpen={() => {}} onUndo={() => {}} />);
+
+    const scroll = screen.getByTestId("imported-statements-scroll");
+    // Fora do fluxo: o conteúdo não dá altura à linha; a coluna toma a altura da linha.
+    expect(scroll.style.position).toBe("absolute");
+    expect([scroll.style.top, scroll.style.right, scroll.style.bottom, scroll.style.left]).toEqual(["0px", "0px", "0px", "0px"]);
+    expect(scroll.style.maxHeight).toBe("");
+    expect(scroll.style.overflowY).toBe("auto");
+    const box = scroll.parentElement;
+    expect(box.style.position).toBe("relative");
+    expect(box.style.flexGrow).toBe("1");
+    expect(box.style.minHeight).toBe("0px");
+    // O cartão segue com o mínimo de 280px (a coluna nunca some).
+    expect(screen.getByRole("region", { name: "Extratos importados" }).style.minHeight).toBe("280px");
+  });
 });
