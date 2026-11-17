@@ -380,6 +380,7 @@ export default function App() {
       extraTx={extraTx}
       onNewTx={openNewTxFromTransactions}
       onAccountScopeChange={setTxAccountScope}
+      onReconcileStatement={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: statementReconciliationPath(accountId, importId) }) : null}
       onEditTx={(tx) => {
         flushSync(() => setModalPreConfig(buildTxModalPreConfig(tx)));
         openTxModal({ [FC.TX]: String(tx.id) });

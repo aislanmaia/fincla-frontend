@@ -53,6 +53,8 @@ export function TransactionsListHeader({
   compact = false,
   /** Caixa "selecionar todos" da seleção em lote (#281) — antes da contagem, como nos Lançamentos do cartão. */
   leading = null,
+  /** Ação à direita, antes da soma (o atalho "Conciliar extrato", decisão do Owner de 2026-11-17). */
+  action = null,
 }) {
   const num = (v) => (loading ? "—" : String(v));
 
@@ -79,6 +81,7 @@ export function TransactionsListHeader({
 
   return (
     <div
+      data-testid="transactions-list-header"
       style={{
         ...G,
         position: "sticky",
@@ -204,7 +207,7 @@ export function TransactionsListHeader({
             />
           </span>
         )}
-        {null}
+        {action}
         {sum != null && !loading ? (
           onSumClick ? (
             /* No mobile este número É o resumo: a faixa de KPIs não existe, e
