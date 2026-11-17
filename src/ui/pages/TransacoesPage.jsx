@@ -103,6 +103,8 @@ import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
 import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { SELECTION_MAX_IDS } from "../features/export/exportFailure.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
 import {
   CAT_COLORS,
   catColor,
@@ -2860,7 +2862,20 @@ function TransacoesPageBody({
      MESMO objeto de filtros que pediu o resumo — busca, categoria, etiquetas e modo, situação, faixa de valor,
      recorrência, conta, cartão, tipo, forma e período —, então os totais do arquivo são os do card da tela. */
   const [exportOpen, setExportOpen] = useState(false);
-  const closeExport = useCallback(() => setExportOpen(false), []);
+  /* "Exportar seleção" (#531, como no cartão #524): os ids marcados AO ABRIR — a seleção da tela pode ser limpa por
+     uma releitura enquanto o painel está aberto. `null` = o recorte inteiro. */
+  const [exportSelectionIds, setExportSelectionIds] = useState(null);
+  const closeExport = useCallback(() => { setExportOpen(false); setExportSelectionIds(null); }, []);
+  const openSelectionExport = useCallback(() => {
+    setExportSelectionIds(bulkSelectedRows.map((t) => String(t.id)));
+    setExportOpen(true);
+  }, [bulkSelectedRows]);
+  // Os totais SÓ dos marcados, pelo mesmo resumo que o servidor usa no arquivo (`ids`); acima do limite nem é pedido.
+  const selectionSummary = useExportSummary(
+    exportOpen && exportSelectionIds && organizationId && exportSelectionIds.length <= SELECTION_MAX_IDS
+      ? { organization_id: organizationId, ids: exportSelectionIds }
+      : null,
+  );
   const exportFilterParams = useMemo(
     () => (organizationId ? buildTransactionsSummaryQuery({ organizationId, ...transactionsFilters }) : null),
     [organizationId, transactionsFilters],
@@ -3688,6 +3703,7 @@ function TransacoesPageBody({
           <SelectionCount count={bulkSelectedRows.length} />
           <BulkActionsToolbar onClear={() => setBulkSelected([])}>
             <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+            <button type="button" onClick={openSelectionExport} disabled={!exportFilterParams} style={bulkButton}>Exportar seleção</button>
           </BulkActionsToolbar>
         </div>
       ) : null}
@@ -4244,6 +4260,9 @@ function TransacoesPageBody({
             filterParams={exportFilterParams}
             count={transactionsData.summary?.total_transactions ?? transactionsData.total}
             summary={transactionsData.summary}
+            selection={exportSelectionIds
+              ? { ids: exportSelectionIds, count: exportSelectionIds.length, summary: selectionSummary.data, error: selectionSummary.error }
+              : null}
             onClose={closeExport}
           />
         )}
