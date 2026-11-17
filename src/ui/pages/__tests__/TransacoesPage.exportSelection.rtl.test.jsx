@@ -49,12 +49,13 @@ vi.mock("../../../api/organizations", () => ({
 }));
 const ACC_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACC_B = "bbbbbbbb-0000-4000-8000-000000000002";
-vi.mock("../../../api/accounts", () => ({
-  listAccounts: vi.fn(() => Promise.resolve([
-    { id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Conta A", currency: "BRL" },
-    { id: "bbbbbbbb-0000-4000-8000-000000000002", name: "Conta B", currency: "BRL" },
-  ])),
-}));
+const TWO_ACCOUNTS = [
+  { id: ACC_A, name: "Conta A", currency: "BRL" },
+  { id: ACC_B, name: "Conta B", currency: "BRL" },
+];
+let accounts;
+const listAccountsMock = vi.fn(() => Promise.resolve(accounts));
+vi.mock("../../../api/accounts", () => ({ listAccounts: (...args) => listAccountsMock(...args) }));
 const exportMock = vi.fn();
 const summaryMock = vi.fn();
 vi.mock("../../../api/transactions", async (importOriginal) => ({
@@ -81,6 +82,7 @@ const selectionSummary = (n) => ({
 
 beforeEach(() => {
   localStorage.clear();
+  accounts = TWO_ACCOUNTS;
   rows = [row(101, "Jantar", -287.15), row(102, "Mercado", -40), row(103, "Padaria", -40, ACC_B)];
   summaryMock.mockImplementation((query) => Promise.resolve(query?.ids ? selectionSummary(query.ids.length) : selectionSummary(0)));
   exportMock.mockResolvedValue({ blob: new Blob(["x"]), fileName: "transacoes-2026-11-16.pdf" });
@@ -108,6 +110,33 @@ async function openSelectionExport(user) {
 const selectionSummaryCalls = () => summaryMock.mock.calls.map(([query]) => query).filter((query) => query?.ids);
 
 describe("<TransacoesPage> — Exportar seleção (#531)", () => {
+  it("com UMA conta: caixas nas linhas e a barra só com 'Exportar seleção' (mover precisa de outra conta)", async () => {
+    accounts = [TWO_ACCOUNTS[0]];
+    rows = [row(101, "Jantar", -287.15), row(102, "Mercado", -40)];
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await selectRows(user, "Mercado");
+    const bar = screen.getByTestId("bulk-selection-bar");
+    expect(within(bar).getByRole("button", { name: "Exportar seleção" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "Mover para conta…" })).toBeNull();
+    const panel = await openSelectionExport(user);
+    expect(within(panel).getByRole("region", { name: "Lançamentos exportados" })).toHaveTextContent("1 lançamento selecionado");
+    await within(panel).findByTestId("export-totals");
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    expect(exportMock.mock.calls[0][0].ids).toEqual(["102"]);
+  });
+
+  it("com 2 contas: a barra tem os dois botões", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectRows(user, "Mercado");
+    const bar = screen.getByTestId("bulk-selection-bar");
+    expect(await within(bar).findByRole("button", { name: "Mover para conta…" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Exportar seleção" })).toBeInTheDocument();
+  });
+
   it("a barra dos marcados abre o painel no modo seleção; resumo e arquivo pedem EXATAMENTE os ids marcados", async () => {
     const user = userEvent.setup();
     renderPage();

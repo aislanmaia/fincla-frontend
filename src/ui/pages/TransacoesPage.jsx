@@ -1366,9 +1366,11 @@ function TransacoesPageBody({
   });
   const effectiveCardSel = cardGuard.effectiveSel;
 
-  /* Seleção em lote (#281) — a ÚNICA ação é mover de conta, então ela só existe com
-     2+ contas ativas. Ids em string (a lista mistura número e UUID). */
-  const selectionEnabled = shouldUseRealData && accountsForFilter.length >= 2;
+  /* Seleção em lote (#281, #531): "Exportar seleção" vale com qualquer número de contas, então as caixas e a barra
+     existem sempre nos dados reais; "Mover para conta…" só com 2+ contas ativas (precisa de um destino).
+     Ids em string (a lista mistura número e UUID). */
+  const selectionEnabled = shouldUseRealData;
+  const bulkMoveEnabled = selectionEnabled && accountsForFilter.length >= 2;
   /** A coluna das caixas: as réguas de largura da linha (wide/xwide/rótulos/tags)
       descontam ela, e o esqueleto reserva a mesma — nada pula quando o dado chega. */
   const selectionGutterPx = selectionEnabled ? (isMobile ? 30 : 34) : 0;
@@ -3702,7 +3704,9 @@ function TransacoesPageBody({
           padding: isMobile ? "8px 12px" : "8px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
           <SelectionCount count={bulkSelectedRows.length} />
           <BulkActionsToolbar onClear={() => setBulkSelected([])}>
-            <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+            {bulkMoveEnabled ? (
+              <button type="button" onClick={() => setBulkMoveRows(bulkSelectedRows)} style={bulkButton}>Mover para conta…</button>
+            ) : null}
             <button type="button" onClick={openSelectionExport} disabled={!exportFilterParams} style={bulkButton}>Exportar seleção</button>
           </BulkActionsToolbar>
         </div>
