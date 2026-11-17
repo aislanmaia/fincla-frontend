@@ -1031,7 +1031,8 @@ function TransacoesPageBody({
      único caminho de volta era o F5, que descarta filtro, rolagem e a linha
      aberta — preço absurdo para um problema que costuma durar dois segundos.
 
-     Reusa o token LOCAL de retentativa em vez do global (`transactionsRefreshToken`,
+     Chama o `reload()` do próprio hook da lista (recarga EXPLÍCITA, que acende
+     carregamento) em vez de bumpar o token global (`transactionsRefreshToken`,
      que é prop e dispara outros efeitos da página, como as âncoras de saldo).
      O que se quer aqui é refazer ESTA busca, não sacudir a tela inteira. */
   /* Ref e não a variável direta: `transactionsData` nasce ~250 linhas abaixo,
@@ -4108,6 +4109,20 @@ function TransacoesPageBody({
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
+        </div>
+      )}
+      {/* G3-P-01: a atualização em segundo plano falhou. A lista continua a
+          que estava e a rolagem segue — por isso é um aviso discreto, não a
+          faixa vermelha de erro. */}
+      {shouldUseRealData && transactionsData.refreshError && !transactionsData.error && (
+        <div role="status" style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          fontSize:12, color:T.inkLight, padding:"0 2px" }}>
+          <span>Não foi possível atualizar a lista. Mostrando o que já estava carregado.</span>
+          <button type="button" onClick={recarregarLista}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Atualizar
+          </button>
         </div>
       )}
 

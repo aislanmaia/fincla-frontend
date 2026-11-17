@@ -11,6 +11,7 @@ import {
   TRANSACTIONS_API_MAX_LIMIT,
 } from "../../data/transactionsAdapter.js";
 import { withSliceCurrency } from "../export/sliceCurrency.js";
+import { runWithConcurrency } from "./bulkMove/bulkMoveModel.js";
 
 const EMPTY_STATE = {
   isLoading: false,
@@ -26,6 +27,9 @@ const EMPTY_STATE = {
   // "carregar mais" (scroll infinito) — nunca pode contaminar `error`
   // (que `hasMore` abaixo usa pra decidir se continua oferecendo páginas).
   pageError: "",
+  /* G3-P-01: a releitura em SEGUNDO PLANO (mesma pergunta) falhou. As linhas
+     da tela continuam valendo e a rolagem segue; isto é só um aviso discreto. */
+  refreshError: "",
   summary: null,
   transactions: [],
   total: 0,
@@ -63,21 +67,31 @@ function pageSizeOf(query) {
    lotes pequenos, não todas de uma vez contra o servidor. */
 const PAGE_REQUESTS_IN_PARALLEL = 4;
 
-/** Páginas `fromPage..toPage` da pergunta, todas com o mesmo `limit`, na ordem. */
-async function fetchPageRange(query, fromPage, toPage, limit) {
+function abortedError() {
+  const error = new Error("aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+/** Páginas `fromPage..toPage` da pergunta, todas com o mesmo `limit`, na ordem.
+    Devolve `{ ok, value | error }` por página (`runWithConcurrency`): uma
+    página que falha não apaga as outras. Com `signal` abortado, nenhuma página
+    ainda na fila sai — os pedidos já em voo são cancelados pelo próprio sinal. */
+function fetchPageRange(query, fromPage, toPage, limit, signal) {
   const pages = [];
   for (let page = fromPage; page <= toPage; page += 1) pages.push(page);
-  const responses = new Array(pages.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < pages.length) {
-      const at = next;
-      next += 1;
-      responses[at] = await listTransactionsForUi({ ...query, page: pages[at], limit });
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(PAGE_REQUESTS_IN_PARALLEL, pages.length) }, worker));
-  return responses;
+  return runWithConcurrency(pages, PAGE_REQUESTS_IN_PARALLEL, (page) => {
+    if (signal?.aborted) throw abortedError();
+    return listTransactionsForUi({ ...query, page, limit }, { signal });
+  });
+}
+
+function firstFailure(results) {
+  return results.find((result) => !result.ok)?.error ?? null;
+}
+
+function valuesOf(results) {
+  return results.map((result) => result.value);
 }
 
 function rowsOf(responses) {
@@ -108,6 +122,13 @@ function hasMoreRows(state) {
   return state.total > state.transactions.length;
 }
 
+function freshPaging(contextKey, generation) {
+  return {
+    contextKey, pagesLoaded: 0, removed: 0, generation,
+    appending: null, appendController: null, reading: null, tail: [],
+  };
+}
+
 export function useTransactionsData({
   organizationId,
   enabled = true,
@@ -131,8 +152,11 @@ export function useTransactionsData({
      - `generation`: sobe a cada leitura nova da pergunta; a resposta de uma
        página pedida antes disso é descartada.
      - `appending`: geração de uma página em voo (guarda síncrona contra dois
-       pedidos da mesma página). */
-  const pagingRef = useRef({ contextKey: null, pagesLoaded: 0, removed: 0, generation: 0, appending: null });
+       pedidos da mesma página); `appendController` cancela esse pedido.
+     - `reading`: geração de uma leitura (1..N) ainda em voo; `tail` guarda as
+       linhas que a rolagem somou ENQUANTO ela voava, para a leitura não
+       apagá-las ao chegar (G3-P-04). */
+  const pagingRef = useRef(freshPaging(null, 0));
   /* Os sinais de recarga da ÚLTIMA execução do efeito, para distinguir
      "recarregar" (pedido explícito, acende carregamento) de "revalidar"
      (`refreshToken`, silencioso). */
@@ -157,9 +181,8 @@ export function useTransactionsData({
   useEffect(() => {
     if (!enabled || !organizationId || !query || !summaryQuery) {
       setState(EMPTY_STATE);
-      pagingRef.current = {
-        contextKey: null, pagesLoaded: 0, removed: 0, generation: pagingRef.current.generation + 1, appending: null,
-      };
+      pagingRef.current.appendController?.abort();
+      pagingRef.current = freshPaging(null, pagingRef.current.generation + 1);
       prevSignalsRef.current = null;
       return;
     }
@@ -184,11 +207,18 @@ export function useTransactionsData({
        servidor, e reler só a página 1 cortaria a lista que ela está lendo. */
     const pagesToLoad = sameContext ? Math.max(1, paging.pagesLoaded) : 1;
     const generation = paging.generation + 1;
+    /* Uma página em voo da leitura anterior seria descartada pela geração de
+       qualquer jeito: cancelar libera o servidor (1 worker) para esta leitura. */
+    paging.appendController?.abort();
     pagingRef.current = sameContext
-      ? { ...paging, generation, appending: null }
-      : { contextKey, pagesLoaded: 0, removed: 0, generation, appending: null };
+      ? { ...paging, generation, appending: null, appendController: null, reading: generation, tail: [] }
+      : { ...freshPaging(contextKey, generation), reading: generation };
 
     let cancelled = false;
+    /* G3-P-01: a leitura superada (outro refresh, troca de filtro ou de
+       organização, desmontagem) é CANCELADA, não só ignorada — senão seus
+       pedidos ficam na fila do servidor na frente da página 1 da pergunta nova. */
+    const controller = new AbortController();
     /* `pageError` limpa no INÍCIO de qualquer leitura nova (não só no sucesso):
        ele esconde a sentinela, então não pode viver mais que o pedido que o
        criou. Uma página em voo da leitura anterior é descartada pela geração. */
@@ -199,30 +229,56 @@ export function useTransactionsData({
       error: "",
       errorCode: "",
       pageError: "",
+      refreshError: "",
     }));
 
     const limit = pageSizeOf(query);
+    const { signal } = controller;
     Promise.all([
-      fetchPageRange(query, 1, pagesToLoad, limit),
-      getTransactionsSummaryForUi(summaryQuery),
+      fetchPageRange(query, 1, pagesToLoad, limit, signal),
+      getTransactionsSummaryForUi(summaryQuery, { signal }).then(
+        (value) => ({ ok: true, value }),
+        (error) => ({ ok: false, error }),
+      ),
     ])
-      .then(([responses, summary]) => {
+      .then(([pageResults, summaryResult]) => {
         if (cancelled || pagingRef.current.generation !== generation) return;
 
-        const transactions = appendUnique([], rowsOf(responses));
-        const pagination = responses.at(-1)?.pagination ?? null;
-        pagingRef.current = { ...pagingRef.current, pagesLoaded: pagesToLoad, removed: 0 };
-        setState({
-          isLoading: false,
-          isAppending: false,
-          error: "",
-          errorCode: "",
-          pageError: "",
-          summary,
-          transactions,
-          total: pagination?.total ?? transactions.length,
-          pagination,
-          hasLoaded: true,
+        const failure = firstFailure(pageResults) ?? (summaryResult.ok ? null : summaryResult.error);
+        const { tail, pagesLoaded: pagesNow, appending } = pagingRef.current;
+        if (failure) {
+          pagingRef.current = { ...pagingRef.current, reading: null, tail: [] };
+          throw failure;
+        }
+
+        const responses = valuesOf(pageResults);
+        /* A rolagem pode ter somado páginas além de `pagesToLoad` enquanto
+           esta leitura voava: elas ficam no fim, sem piscar (G3-P-04). */
+        const grewMeanwhile = pagesNow > pagesToLoad;
+        const transactions = appendUnique(appendUnique([], rowsOf(responses)), grewMeanwhile ? tail : []);
+        const appendInFlight = appending === generation;
+        pagingRef.current = {
+          ...pagingRef.current,
+          pagesLoaded: Math.max(pagesToLoad, pagesNow),
+          removed: 0,
+          reading: null,
+          tail: [],
+        };
+        setState((current) => {
+          const pagination = grewMeanwhile ? current.pagination : (responses.at(-1)?.pagination ?? null);
+          return {
+            isLoading: appendInFlight,
+            isAppending: appendInFlight,
+            error: "",
+            errorCode: "",
+            pageError: "",
+            refreshError: "",
+            summary: summaryResult.value,
+            transactions,
+            total: pagination?.total ?? transactions.length,
+            pagination,
+            hasLoaded: true,
+          };
         });
       })
       .catch((error) => {
@@ -231,10 +287,16 @@ export function useTransactionsData({
         const message = formatTransactionsApiError(error);
         const errorCode = apiErrorCodeOf(error);
         setState((current) => {
+          if (sameContext && current.hasLoaded) {
+            // G3-P-01: MESMA organização e MESMOS filtros, com linhas já lidas.
+            // Nada da leitura entra pela metade (uma página nova ao lado de uma
+            // velha mistura posições): a lista fica como está, a rolagem segue
+            // e só um aviso discreto liga. `errorCode` vale para a página reagir
+            // a um caso conhecido (cartão do filtro apagado em outra aba).
+            return { ...current, isLoading: false, isAppending: false, refreshError: message, errorCode };
+          }
           if (sameContext) {
-            // Stale-while-revalidate (mesmo padrão do `useCalendarData`): MESMA
-            // organização e MESMOS filtros — revalidação ou recarga. As linhas na
-            // tela continuam válidas pra ESTE contexto; só o aviso de erro liga.
+            // Ainda não havia leitura boa deste contexto: é o erro geral.
             return { ...current, isLoading: false, isAppending: false, error: message, errorCode };
           }
           // Organização OU filtros mudaram (fincla-frontend#109 achado 3):
@@ -246,6 +308,7 @@ export function useTransactionsData({
             error: message,
             errorCode,
             pageError: "",
+            refreshError: "",
             summary: null,
             transactions: [],
             total: 0,
@@ -257,34 +320,67 @@ export function useTransactionsData({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [enabled, organizationId, query, summaryQuery, refreshToken, reloadNonce]);
+
+  // Desmontar cancela também a página em voo do scroll infinito.
+  useEffect(() => () => pagingRef.current.appendController?.abort(), []);
 
   /* Pede a página seguinte à última lida e SOMA as linhas. Falha vai para o
      canal próprio `pageError` (fincla-frontend#109 rodada 3, achado 2): as
      linhas lidas ficam, `error`/`hasMore` continuam valendo, e só uma ação
      explícita (`retryPage`) pede a página de novo. */
   const fetchNextPage = useCallback(() => {
-    const paging = pagingRef.current;
-    const currentQuery = queryRef.current;
-    if (!currentQuery || paging.contextKey == null || paging.pagesLoaded < 1) return;
-    if (paging.appending === paging.generation) return;
+    const start = () => {
+      const paging = pagingRef.current;
+      const currentQuery = queryRef.current;
+      if (!currentQuery || paging.contextKey == null || paging.pagesLoaded < 1) return;
+      if (paging.appending === paging.generation) return;
 
-    const { generation, removed } = paging;
-    const limit = pageSizeOf(currentQuery);
-    const nextPage = paging.pagesLoaded + 1;
-    const fromPage = Math.max(1, nextPage - Math.ceil(removed / limit));
-    paging.appending = generation;
-    setState((current) => ({ ...current, isLoading: true, isAppending: true, pageError: "" }));
+      const { generation, removed } = paging;
+      const limit = pageSizeOf(currentQuery);
+      const nextPage = paging.pagesLoaded + 1;
+      const fromPage = Math.max(1, nextPage - Math.ceil(removed / limit));
+      const controller = new AbortController();
+      paging.appending = generation;
+      paging.appendController = controller;
+      setState((current) => ({ ...current, isLoading: true, isAppending: true, pageError: "" }));
 
-    fetchPageRange(currentQuery, fromPage, nextPage, limit)
-      .then((responses) => {
-        if (pagingRef.current.generation !== generation) return;
+      fetchPageRange(currentQuery, fromPage, nextPage, limit, controller.signal).then((results) => {
+        if (controller.signal.aborted || pagingRef.current.generation !== generation) return;
+        const latest = pagingRef.current;
+        /* G3-P-05: uma exclusão confirmada enquanto a página voava moveu as
+           fronteiras das páginas por baixo desta leitura — a linha que subiu
+           para a página anterior não estaria nela. Lê de novo, já contando a
+           exclusão (o trecho começa uma página antes). */
+        if (latest.removed !== removed) {
+          pagingRef.current = { ...latest, appending: null, appendController: null };
+          start();
+          return;
+        }
+        const failure = firstFailure(results);
+        if (failure) {
+          pagingRef.current = { ...latest, appending: null, appendController: null };
+          setState((current) => ({
+            ...current,
+            isLoading: false,
+            isAppending: false,
+            pageError: formatTransactionsApiError(failure),
+            errorCode: apiErrorCodeOf(failure),
+          }));
+          return;
+        }
+        const responses = valuesOf(results);
+        const rows = rowsOf(responses);
         pagingRef.current = {
-          ...pagingRef.current,
+          ...latest,
           pagesLoaded: nextPage,
-          removed: Math.max(0, pagingRef.current.removed - removed),
+          removed: 0,
           appending: null,
+          appendController: null,
+          // Uma leitura 1..N em voo trocará a lista: estas linhas vão junto (G3-P-04).
+          tail: latest.reading === generation ? [...latest.tail, ...rows] : latest.tail,
         };
         const pagination = responses.at(-1)?.pagination ?? null;
         setState((current) => ({
@@ -292,22 +388,13 @@ export function useTransactionsData({
           isLoading: false,
           isAppending: false,
           pageError: "",
-          transactions: appendUnique(current.transactions, rowsOf(responses)),
+          transactions: appendUnique(current.transactions, rows),
           total: pagination?.total ?? current.total,
           pagination: pagination ?? current.pagination,
         }));
-      })
-      .catch((error) => {
-        if (pagingRef.current.generation !== generation) return;
-        pagingRef.current = { ...pagingRef.current, appending: null };
-        setState((current) => ({
-          ...current,
-          isLoading: false,
-          isAppending: false,
-          pageError: formatTransactionsApiError(error),
-          errorCode: apiErrorCodeOf(error),
-        }));
       });
+    };
+    start();
   }, []);
 
   const loadMore = useCallback(() => {
@@ -383,6 +470,7 @@ export function useTransactionsData({
     error: state.error,
     errorCode: state.errorCode,
     pageError: state.pageError,
+    refreshError: state.refreshError,
     hasLoaded: state.hasLoaded,
     summary: state.summary,
     transactions: state.transactions,

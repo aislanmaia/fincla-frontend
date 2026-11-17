@@ -1006,20 +1006,24 @@ export async function fetchAllTransactionsPages(baseQuery) {
   return { data: all, pagination: lastRes?.pagination };
 }
 
-export async function listTransactionsForUi(query) {
+export async function listTransactionsForUi(query, options = {}) {
   const page = query.page ?? 1;
   const wantRaw = query.limit ?? 10;
   const want = Math.max(1, wantRaw);
 
   /* Até o teto do servidor, a página pedida vai como está — o scroll infinito
-     das Transações pede page 2, 3… com o mesmo `limit` (fincla-api#535). Só
-     acima do teto (e na página 1) os lotes de 100 são juntados aqui. */
+     das Transações pede page 2, 3… com o mesmo `limit` (fincla-api#535). */
   if (want <= TRANSACTIONS_API_MAX_LIMIT) {
-    return listTransactions({
-      ...query,
-      limit: want,
-      page,
-    });
+    return listTransactions({ ...query, limit: want, page }, options);
+  }
+
+  /* Acima do teto, os lotes de 100 são juntados aqui — e só para a página 1.
+     `page: 2, limit: 250` não tem tradução honesta em lotes de 100 sem calcular
+     o deslocamento; devolver a página 1 em silêncio seria pior que recusar. */
+  if (page > 1) {
+    throw new Error(
+      `listTransactionsForUi: limit ${want} > ${TRANSACTIONS_API_MAX_LIMIT} only supports page 1 (got page ${page})`,
+    );
   }
 
   const { page: _p, limit: _l, ...base } = query;
@@ -1032,7 +1036,7 @@ export async function listTransactionsForUi(query) {
       ...base,
       limit: TRANSACTIONS_API_MAX_LIMIT,
       page: currentPage,
-    });
+    }, options);
     const batch = lastRes.data ?? [];
     all.push(...batch);
     if (!lastRes.pagination?.has_next || batch.length === 0) break;
@@ -1052,8 +1056,8 @@ export async function listTransactionsForUi(query) {
   };
 }
 
-export async function getTransactionsSummaryForUi(query) {
-  return getTransactionsSummary(query);
+export async function getTransactionsSummaryForUi(query, options = {}) {
+  return getTransactionsSummary(query, options);
 }
 
 export async function deleteTransactionForUi(transactionId, organizationId) {
