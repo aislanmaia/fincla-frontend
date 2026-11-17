@@ -45,3 +45,18 @@ describe("rota de desfazer importação", () => {
     expect(routeIdFor("/accounts/acc-1/reconcile/imp-2").id).toBe("/accounts/$accountId/reconcile/{-$importId}");
   });
 });
+
+describe("fillsAvailableHeight (área de soltar ocupa a altura que sobra)", async () => {
+  const { fillsAvailableHeight } = await import("../statementImportRoute.js");
+  it("só a tela inicial da conta, no computador", () => {
+    expect(fillsAvailableHeight("/accounts/abc/reconcile", false)).toBe(true);
+    expect(fillsAvailableHeight("/accounts/abc/reconcile/", false)).toBe(true);
+  });
+  it("nunca no celular, nem dentro de uma conciliação, nem em outra tela", () => {
+    expect(fillsAvailableHeight("/accounts/abc/reconcile", true)).toBe(false);
+    expect(fillsAvailableHeight("/accounts/abc/reconcile/imp-1", false)).toBe(false);
+    expect(fillsAvailableHeight("/accounts/abc/reconcile/imp-1/undo", false)).toBe(false);
+    expect(fillsAvailableHeight("/accounts", false)).toBe(false);
+    expect(fillsAvailableHeight("/transactions", false)).toBe(false);
+  });
+});

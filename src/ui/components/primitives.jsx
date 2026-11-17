@@ -9,14 +9,17 @@ import { G, S, NUM } from "../typography";
  * pode encolher. Sem isso ele cresce com o conteúdo, e uma tela que quer ser
  * autocontida no viewport nunca consegue: a altura vaza por aqui.
  */
-export function PageEnter({ children, fill = false }) {
+export function PageEnter({ children, fill = false, fillMin = false }) {
   return (
     <div
       style={{
         animation: "fadeIn 0.18s ease both",
         ...(fill
           ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
-          : null),
+          : fillMin
+            // No mínimo a altura da área de conteúdo, que continua rolando se a página passar dela.
+            ? { minHeight: "100%", display: "flex", flexDirection: "column" }
+            : null),
       }}
     >
       {children}
