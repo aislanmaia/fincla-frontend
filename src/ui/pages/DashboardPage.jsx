@@ -21,6 +21,7 @@ import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
 import { fmtAbs as fmtAbsIn, fmtSgn as fmtSgnIn } from "../formatters.js";
+import { fmtTotals, sumByCurrency } from "../features/consultant/consultantCurrency.js";
 import { UNKNOWN_MONEY, useBaseCurrencyMoney } from "../money/useBaseCurrencyMoney.js";
 import {
   AnimNum,
@@ -208,23 +209,18 @@ export function DashboardPage({
    * zero, e aqui o zero volta. É deliberado — num SOMATÓRIO, ausência que vira NaN
    * apaga o total inteiro, enquanto ausência que vira zero erra só a própria parcela.
    * O contrário do que vale num saldo, onde zero é afirmação e ausência não é.
+   *
+   * Total por moeda (`sumByCurrency`): um débito de US$ 20 e outro de R$ 100 não
+   * somam "R$ 120,00". Débito sem moeda declarada conta como a base — então "BRL"
+   * e "sem moeda" caem na MESMA pilha. A base sai primeiro. `null` (base ainda
+   * não conhecida e há débito sem moeda) → travessão.
    */
-  /**
-   * Total por moeda: um débito de US$ 20 e outro de R$ 100 não somam "R$ 120,00".
-   * Uma moeda só → um valor; várias → "R$ 100,00 · US$ 20,00". `null` na chave = a base.
-   */
+  const baseCode = money.currency ?? null;
   const upcomingDebitsTotals = useMemo(() => {
-    const byCurrency = new Map();
-    for (const d of upcomingDebits) {
-      const key = d?.currency ?? null;
-      byCurrency.set(key, (byCurrency.get(key) ?? 0) + toAmount(d?.value));
-    }
-    if (byCurrency.size === 0) byCurrency.set(null, 0);
-    // A base (chave `null`) primeiro; as outras em ordem de código, para a linha não mudar de lugar.
-    return [...byCurrency.entries()]
-      .sort(([a], [b]) => (a == null ? -1 : b == null ? 1 : a.localeCompare(b)))
-      .map(([currency, total]) => ({ currency, total }));
-  }, [upcomingDebits]);
+    const totals = sumByCurrency(upcomingDebits, (d) => toAmount(d?.value), (d) => d?.currency ?? baseCode);
+    if (!totals) return null;
+    return totals.sort((a, b) => (a.currency === baseCode ? -1 : b.currency === baseCode ? 1 : 0));
+  }, [upcomingDebits, baseCode]);
   const {
     dim,
     today: calendarDay,
@@ -1883,11 +1879,7 @@ export function DashboardPage({
                 ))}
               </div>
             )}
-            {categoryData.length === 0 && dashboardData.categoriesUnavailable ? (
-              <div style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.6, padding: "12px 0" }}>
-                Gastos em mais de uma moeda e o total convertido não carregou. Tente de novo em instantes.
-              </div>
-            ) : categoryData.length === 0 ? (
+            {categoryData.length === 0 ? (
               <div style={{ flex: isMobile ? undefined : 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: isMobile ? undefined : 0 }}>
                 <CardEmptyWithCta
                   icon="📭"
@@ -1918,7 +1910,9 @@ export function DashboardPage({
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {isOver && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
-                            <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtRowAbs(c.value, c.currency)}</span>
+                            <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{c.value == null && c.byCurrency
+                              ? fmtTotals(c.byCurrency, fmtRowAbs)
+                              : fmtRowAbs(c.value, c.currency)}</span>
                           </div>
                         </div>
                         <div style={{ position: "relative", height: 6, background: T.grayLight, borderRadius: 99 }}>
@@ -2042,7 +2036,7 @@ export function DashboardPage({
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Total · próx. 14 dias</span>
-            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{upcomingDebitsTotals.map((p) => fmtRowAbs(p.total, p.currency)).join(" · ")}</span>
+            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{fmtTotals(upcomingDebitsTotals, fmtRowAbs, baseCode)}</span>
           </div>
         </Card>
       </div>

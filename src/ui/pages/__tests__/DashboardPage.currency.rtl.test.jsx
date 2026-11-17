@@ -200,7 +200,7 @@ describe("DashboardPage — cada linha na moeda dela (BUG-05)", () => {
     expect(container.textContent).not.toContain("R$ 50,00");
     expect(container.textContent).toContain("−R$ 30,00");
     expect(container.textContent).toContain("US$ 20,00");
-    expect(container.textContent).toContain("R$ 100,00 · US$ 20,00");
+    expect(container.textContent).toContain("R$ 100,00 + US$ 20,00");
     expect(container.textContent).not.toContain("R$ 120,00");
   });
 
@@ -215,10 +215,17 @@ describe("DashboardPage — cada linha na moeda dela (BUG-05)", () => {
     expect(row.parentElement.parentElement).not.toHaveTextContent("R$ 0,00");
   });
 
-  it("categorias indisponíveis (mais de uma moeda, sem total convertido) dizem isso", async () => {
-    mockDashboardData = { ...liveData(), categories: [], categoriesUnavailable: true };
-    const { container } = renderDash();
-    await vi.waitFor(() => expect(container.textContent).toContain("Gastos em mais de uma moeda"));
-    expect(container.textContent).not.toContain("Nenhuma despesa categorizada");
+  it("categoria sem conversão mostra as somas por moeda lado a lado, sem somar", async () => {
+    mockDashboardData = {
+      ...liveData(),
+      categories: [{
+        tagId: 1, name: "Viagem", value: null, currency: null, avg: null, color: "#EF4444",
+        byCurrency: [{ currency: "BRL", amount: 190.4 }, { currency: "USD", amount: 225.6 }],
+      }],
+    };
+    renderDash();
+    const row = await screen.findByText("Viagem");
+    expect(row.parentElement.parentElement).toHaveTextContent("R$ 190,40 + US$ 225,60");
+    expect(row.parentElement.parentElement).not.toHaveTextContent("R$ 416,00");
   });
 });
