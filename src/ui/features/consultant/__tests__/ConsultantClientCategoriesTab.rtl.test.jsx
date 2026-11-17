@@ -35,4 +35,11 @@ describe("ConsultantClientCategoriesTab", () => {
     rerender(<ConsultantClientCategoriesTab categories={state({ categories: [] })} />);
     expect(screen.getByText("Nenhum gasto por categoria no período.")).toBeInTheDocument();
   });
+
+  // G3-P-08 (fincla-api#534): contagem com separador de milhar.
+  it("nº de transações com milhar: '1.235 transações'", () => {
+    render(<ConsultantClientCategoriesTab categories={state({ categories: [cat({ transaction_count: 1235 })] })} currency="BRL" />);
+    expect(screen.getByText(/1\.235 transações/)).toBeInTheDocument();
+    expect(screen.queryByText(/1235/)).toBeNull();
+  });
 });

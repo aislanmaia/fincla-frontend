@@ -8,6 +8,7 @@ import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapte
 import { dayKey, forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
 import { plural } from "../../plural.js";
 import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../selection/BulkSelection.jsx";
+import { fmtCount } from "../../formatters.js";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -36,8 +37,8 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
   const style = { ...G, ...NUM, position: "sticky", top: isMobile ? 0 : COLUMN_HEADER_HEIGHT, zIndex: 2, display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", minHeight: isMobile ? 44 : 32, margin: 0, background: T.bg, border: 0, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "0 16px" : "0 14px", fontSize: 11, color: T.inkMid, textAlign: "left" };
   const content = <>
     {collapsible && <ChevronDown size={16} aria-hidden="true" style={{ flex: "none", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s" }} />}
-    <span>{label} · {count} {count === 1 ? "item" : "itens"}</span>
-    {collapsed && selectedCount > 0 && <span style={{ color: T.blue, fontWeight: 700 }}>{selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>}
+    <span>{label} · {fmtCount(count)} {count === 1 ? "item" : "itens"}</span>
+    {collapsed && selectedCount > 0 && <span style={{ color: T.blue, fontWeight: 700 }}>{fmtCount(selectedCount)} selecionado{selectedCount === 1 ? "" : "s"}</span>}
     {subtotal && <strong style={{ marginLeft: "auto", color: T.ink }}>{subtotal}</strong>}
   </>;
   return collapsible
@@ -80,7 +81,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
       <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span data-testid="ledger-count">{plural(total == null ? rows.length : total, "lançamento", "lançamentos")}</span>
-      <SelectionCount count={selected.length} extra={[selectionSum, hiddenSelected > 0 ? `${hiddenSelected} em dias recolhidos` : null].filter(Boolean).join(" · ") || null} />
+      <SelectionCount count={selected.length} extra={[selectionSum, hiddenSelected > 0 ? `${fmtCount(hiddenSelected)} em dias recolhidos` : null].filter(Boolean).join(" · ") || null} />
       {selected.length > 0 && <BulkActionsToolbar onClear={() => onSelected([])}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}

@@ -289,7 +289,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
     <div style={{ display: "flex", gap: 8 }}>
       <button type="button" style={btn(false, false)} onClick={close} disabled={running}>Cancelar</button>
       <button type="button" style={btn(true, !canConfirm)} disabled={!canConfirm} onClick={() => execute(plan.eligible)}>
-        Mover {total} lançamento{total === 1 ? "" : "s"}
+        Mover {fmtCount(total)} lançamento{total === 1 ? "" : "s"}
       </button>
     </div>
   );
