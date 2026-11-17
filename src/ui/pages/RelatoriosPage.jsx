@@ -338,9 +338,34 @@ function ComposicaoDonutSection({ compositionData, compact = false, fmtBase, des
   );
 }
 
-/** "Exportar" sobre fundo claro: com nome no desktop, só o ícone (nome acessível) no celular. Componente de
- *  módulo, não da página: definido lá dentro, remontaria a cada render. */
-function ExportButton({ compact = false, enabled, hint, onClick }) {
+/** Seletor de período (3m/6m/12m) do relatório. Componente de módulo, não da página: definido lá dentro,
+ *  remontaria a cada render. Serve à tela normal e à tela sem cotação, onde ele decide o recorte do arquivo. */
+function PeriodSelector({ compact = false, value, onChange }) {
+  return (
+    <div style={{ display:"flex", background:T.grayLight, borderRadius:10, padding:3, gap:2, flexShrink:0 }}>
+      {["3m","6m","12m"].map(p => (
+        <button key={p} type="button" aria-pressed={value===p} onClick={() => onChange(p)}
+          style={{ ...G, padding:compact?"5px 11px":"6px 14px", borderRadius:7, border:"none",
+            background:value===p ? T.surface : "transparent",
+            color:value===p ? T.ink : T.inkMid,
+            fontSize:12, fontWeight:700, cursor:"pointer",
+            boxShadow:value===p ? T.sm : "none", transition:"all 0.15s" }}>
+          {p}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Cores do "Exportar" por superfície: fundo claro (cabeçalho da página) ou o cabeçalho escuro do celular. */
+const EXPORT_BUTTON_TONES = {
+  light: { border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid },
+  dark: { border:"1px solid rgba(255,255,255,0.18)", background:"rgba(255,255,255,0.06)", color:"#fff" },
+};
+
+/** "Exportar": com nome no desktop, só o ícone (nome acessível) no celular. Uma regra só de habilitação e dica
+ *  para todos os cabeçalhos. Componente de módulo, não da página: definido lá dentro, remontaria a cada render. */
+function ExportButton({ compact = false, tone = "light", enabled, hint, onClick }) {
   return (
     <button
       type="button"
@@ -350,7 +375,7 @@ function ExportButton({ compact = false, enabled, hint, onClick }) {
       onClick={onClick}
       style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexShrink:0,
         ...(compact ? { width:36, height:36, borderRadius:10 } : { padding:"7px 12px", borderRadius:8 }),
-        border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid, fontSize:11, fontWeight:600,
+        ...EXPORT_BUTTON_TONES[tone], fontSize:11, fontWeight:600,
         cursor:enabled ? "pointer" : "not-allowed", opacity:enabled ? 1 : 0.5 }}>
       <Download size={compact ? 16 : 11} aria-hidden={compact ? "true" : undefined} />
       {compact ? null : " Exportar"}
@@ -402,6 +427,7 @@ export function RelatoriosPage({
      somem, mas a exportação continua, com "indisponível" e o Resultado de cada moeda. */
   const exportUnavailableHint = "Disponível com os dados da sua organização";
   const openExport = () => setExportScope(reportsExportScope(periodo));
+  const choosePeriod = (p) => { setPeriodo(p); setScoreDetail(null); };
   const exportPanel = exportScope && exportParams ? (
     <ExportPanel
       title={exportScope.title}
@@ -637,7 +663,12 @@ export function RelatoriosPage({
       <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
           <PageTitle sans="Relatórios &" serif="Análises"/>
-          <ExportButton compact={isMobile} enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
+          {/* O período continua escolhível aqui: sem ele a pessoa ficaria presa no período que perdeu a cotação, e
+              é ele que decide o recorte do arquivo (G3-D-01). */}
+          <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 8 : 10 }}>
+            <PeriodSelector compact={isMobile} value={periodo} onChange={choosePeriod} />
+            <ExportButton compact={isMobile} enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
+          </div>
         </div>
         {exportPanel}
         <div style={{ ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"24px" }}>
@@ -711,21 +742,6 @@ export function RelatoriosPage({
       </div>
     );
   };
-
-  const PeriodSelector = ({ compact=false }) => (
-    <div style={{ display:"flex", background:T.grayLight, borderRadius:10, padding:3, gap:2, flexShrink:0 }}>
-      {["3m","6m","12m"].map(p => (
-        <button key={p} onClick={() => { setPeriodo(p); setScoreDetail(null); }}
-          style={{ ...G, padding:compact?"5px 11px":"6px 14px", borderRadius:7, border:"none",
-            background:periodo===p ? T.surface : "transparent",
-            color:periodo===p ? T.ink : T.inkMid,
-            fontSize:12, fontWeight:700, cursor:"pointer",
-            boxShadow:periodo===p ? T.sm : "none", transition:"all 0.15s" }}>
-          {p}
-        </button>
-      ))}
-    </div>
-  );
 
   const InsightChip = ({ color=T.blue, icon, text }) => (
     <div style={{ display:"flex", alignItems:"flex-start", gap:8,
@@ -949,18 +965,8 @@ export function RelatoriosPage({
             </div>
             {/* Ações do cabeçalho no celular: período e Exportar (ícone com nome acessível, como a barra do cartão). */}
             <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-              <PeriodSelector compact />
-              <button
-                type="button"
-                aria-label="Exportar"
-                disabled={!canExport}
-                title={canExport ? undefined : exportUnavailableHint}
-                onClick={openExport}
-                style={{ display:"grid", placeItems:"center", width:36, height:36, borderRadius:10, flexShrink:0,
-                  border:"1px solid rgba(255,255,255,0.18)", background:"rgba(255,255,255,0.06)", color:"#fff",
-                  cursor:canExport ? "pointer" : "not-allowed", opacity:canExport ? 1 : 0.45 }}>
-                <Download size={16} aria-hidden="true" />
-              </button>
+              <PeriodSelector compact value={periodo} onChange={choosePeriod} />
+              <ExportButton compact tone="dark" enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
             </div>
           </div>
           {/* Saldo hero */}
@@ -1130,7 +1136,7 @@ export function RelatoriosPage({
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <PageTitle sans="Meus" serif="Relatórios" />
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <PeriodSelector />
+          <PeriodSelector value={periodo} onChange={choosePeriod} />
           <ExportButton enabled={canExport} hint={exportUnavailableHint} onClick={openExport} />
         </div>
       </div>
