@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  categoryColorForLabel,
   categoryLabelPtForTag,
   DETAIL_LABEL_PT_BY_EN_NAME,
   detailLabelPtForTag,
@@ -372,7 +373,6 @@ describe("categoryLabels: catálogo de categorias do backend", () => {
 // âmbar nas Transações e roxo no cartão).
 describe("categoryColorForLabel — mapa único e busca tolerante", () => {
   it("a mesma categoria tem a mesma cor em qualquer grafia (caixa, acento, 'e' × '&')", async () => {
-    const { categoryColorForLabel } = await import("../categoryLabels.js");
     for (const [a, b] of [
       ["Lazer e entretenimento", "Lazer & Entretenimento"],
       ["Assinaturas e software", "Assinaturas & Software"],
@@ -388,7 +388,6 @@ describe("categoryColorForLabel — mapa único e busca tolerante", () => {
   });
 
   it("Transações (catColor), cartões (cardCategoryColor) e a tag (resolveCategoryColorForTag) concordam", async () => {
-    const { categoryColorForLabel, resolveCategoryColorForTag } = await import("../categoryLabels.js");
     const { catColor } = await import("../../features/transactions/shared/transactionFormat.js");
     const { cardCategoryColor } = await import("../creditCardsMockData.js");
     for (const label of ["Lazer e entretenimento", "Assinaturas & Software", "Alimentação", "Moradia", "Compras Pessoais"]) {

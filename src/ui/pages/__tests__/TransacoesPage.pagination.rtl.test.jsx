@@ -48,6 +48,13 @@ vi.mock("../../../api/organizations", () => ({
   getOrganization: vi.fn(() => Promise.resolve({ id: "org-test", base_currency: "BRL" })),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
+/* A paginação é do hook e da página, não da linha: uma linha mínima no lugar
+   do `TxRow` completo tira o custo de desenhar 510 linhas reais no jsdom (o
+   teste dos 510 levava ~20 s e estourava o teto com a máquina carregada). */
+vi.mock("../../features/transactions/shared/TransactionRow.jsx", async (importOriginal) => ({
+  ...(await importOriginal()),
+  TxRow: ({ tx }) => <div data-testid="tx-row-stub">{tx.desc}</div>,
+}));
 const listTransactionsMock = vi.fn();
 const summaryApiMock = vi.fn();
 vi.mock("../../../api/transactions", async (importOriginal) => ({
