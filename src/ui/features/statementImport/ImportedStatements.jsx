@@ -134,7 +134,9 @@ export function draftProgress(statementImport) {
     ...progress,
     badge,
     ready,
-    count: `${progress.done.toLocaleString("pt-BR")} de ${plural(progress.total, "passo conferido", "passos conferidos")}`,
+    // Pronto: o único passo que falta é o próprio "Revisar e concluir" (nunca conta antes de concluir);
+    // dizê-lo evita "Tudo conferido" ao lado de "7 de 8" (G4, observação).
+    count: `${progress.done.toLocaleString("pt-BR")} de ${plural(progress.total, "passo conferido", "passos conferidos")}${ready ? " · falta só Revisar e concluir" : ""}`,
     tone: ready ? GREEN_TONE : BLUE_TONE,
   };
 }
@@ -351,7 +353,12 @@ export function groupImports(items) {
 function ImportedStatementRow({ item, first, onOpen, onUndo }) {
   const period = periodLabel(item.period);
   // `null` = não registrada (antes da conferência de saldo, fincla-api#514): travessão, nunca zero.
-  const difference = (item.final_difference == null ? null : formatMoneySigned(item.final_difference, item.final_difference_currency)) ?? "—";
+  // Zero sem sinal, como na confirmação de concluir (G4 BUG-01); `null` = não registrada → "—".
+  const difference = item.final_difference == null
+    ? "—"
+    : Number(item.final_difference) === 0
+      ? formatMoney(0, item.final_difference_currency)
+      : formatMoneySigned(item.final_difference, item.final_difference_currency) ?? "—";
   return (
     <li data-testid="imported-statement" style={{ ...G, display: "flex", flexDirection: "column", gap: 4, padding: "10px 0", borderTop: first ? "none" : `1px solid ${T.grayLight}`, fontSize: 13 }}>
       <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

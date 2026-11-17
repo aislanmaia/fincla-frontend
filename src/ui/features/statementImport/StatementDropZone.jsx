@@ -38,17 +38,24 @@ const VISUALLY_HIDDEN = { position: "absolute", width: 1, height: 1, margin: -1,
  * arquivo sendo lido (a área para de aceitar outro até a resposta). `tip`: a dica de onde continuar.
  * `onError`: mais de um arquivo solto de uma vez (nenhum é usado).
  */
-export function StatementDropZone({ compact = false, readingName = "", tip = null, onFile, onError = null }) {
+export function StatementDropZone({ compact = false, touch = false, readingName = "", tip = null, onFile, onError = null }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   // Entrar num filho (ícone, textos) dispara `dragleave` na área: conta entradas e saídas, e o
   // destaque só apaga quando o arquivo sai de fato da área.
   const depth = useRef(0);
   const reading = Boolean(readingName);
-  const title = compact ? "Ou solte aqui outro extrato" : "Solte aqui o extrato do banco";
+  // `touch` (celular): não há arrastar nem clicar, só tocar (G4, observação).
+  const title = touch
+    ? (compact ? "Ou toque para escolher outro extrato" : "Toque para escolher o extrato do banco")
+    : (compact ? "Ou solte aqui outro extrato" : "Solte aqui o extrato do banco");
+  const hint = touch ? "A leitura começa na hora." : "ou clique para escolher. A leitura começa na hora.";
+  const compactHint = touch ? FORMATS : `ou clique para escolher · ${FORMATS}`;
   const label = reading
     ? `Lendo ${readingName}…`
-    : `${title}. ${compact ? "Ou clique para escolher" : "Ou clique para escolher. A leitura começa na hora"}. ${FORMATS}.`;
+    : touch
+      ? `${title}. A leitura começa na hora. ${FORMATS}.`
+      : `${title}. ${compact ? "Ou clique para escolher" : "Ou clique para escolher. A leitura começa na hora"}. ${FORMATS}.`;
 
   const choose = () => { if (!reading) inputRef.current?.click(); };
   const take = (file) => { if (file && !reading) onFile(file); };
@@ -106,10 +113,10 @@ export function StatementDropZone({ compact = false, readingName = "", tip = nul
           <>
             <b style={{ fontSize: compact ? 16 : 20, color: T.ink }}>{title}</b>
             {compact ? (
-              <span style={{ fontSize: 12, color: T.inkLight }}>ou clique para escolher · {FORMATS}</span>
+              <span style={{ fontSize: 12, color: T.inkLight }}>{compactHint}</span>
             ) : (
               <>
-                <span style={{ fontSize: 14, color: T.inkMid, maxWidth: 480 }}>ou clique para escolher. A leitura começa na hora.</span>
+                <span style={{ fontSize: 14, color: T.inkMid, maxWidth: 480 }}>{hint}</span>
                 {tip ? <span style={{ ...NUM, fontSize: 13, color: T.inkMid, background: T.grayLight, borderRadius: 8, padding: "6px 10px" }}>{tip}</span> : null}
                 <span style={{ fontSize: 12, color: T.inkLight }}>{FORMATS}</span>
               </>

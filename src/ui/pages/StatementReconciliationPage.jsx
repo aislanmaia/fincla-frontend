@@ -190,7 +190,7 @@ function useCategories(organizationId) {
  * Planilha não reconhecida: "Indique as colunas" ocupa o lugar da área e reenvia o mesmo arquivo. O
  * mesmo arquivo com conciliação em andamento (fincla-api#516): aviso e a lista da conta recarregada.
  */
-function UploadArea({ organizationId, accountId, compact = false, tip = null, onDraftInProgress = null }) {
+function UploadArea({ organizationId, accountId, compact = false, touch = false, tip = null, onDraftInProgress = null }) {
   const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -251,6 +251,7 @@ function UploadArea({ organizationId, accountId, compact = false, tip = null, on
     <div style={{ flex: "999 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
       <StatementDropZone
         compact={compact}
+        touch={touch}
         tip={tip}
         readingName={sending && file ? file.name : ""}
         onFile={pick}
@@ -407,6 +408,7 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
           organizationId={organizationId}
           accountId={accountId}
           compact={drafts.length > 0}
+          touch={isMobile}
           tip={tip}
           onDraftInProgress={load}
         />

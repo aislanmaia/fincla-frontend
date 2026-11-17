@@ -122,6 +122,26 @@ describe("a tela inicial, sem rascunho", () => {
     expect(screen.queryByRole("button", { name: "Enviar extrato" })).not.toBeInTheDocument();
   });
 
+  it("no celular a área fala em tocar, não em soltar nem clicar (G4 OBS)", async () => {
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Extratos importados" });
+
+    const zone = screen.getByRole("button", { name: /Toque para escolher o extrato do banco/ });
+    expect(zone).toHaveTextContent("A leitura começa na hora.");
+    expect(zone).not.toHaveTextContent(/solte|clique/i);
+  });
+
+  it("no celular, com rascunho, a área menor também fala em tocar", async () => {
+    imports = [openDraft(["suggested"])];
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Extratos importados" });
+
+    const zone = await screen.findByRole("button", { name: /Ou toque para escolher outro extrato/ });
+    expect(zone).not.toHaveTextContent(/solte|clique/i);
+  });
+
   it("sem conciliação concluída, não há dica", async () => {
     imports = [clone(UNDONE)];
     await openAccount();
@@ -465,7 +485,8 @@ describe("Concluir agora (tudo conferido)", () => {
 
     const card = screen.getByTestId("resume-draft");
     expect(await within(card).findByTestId("resume-badge")).toHaveTextContent("Tudo conferido · só falta concluir");
-    expect(card).toHaveTextContent("7 de 8 passos conferidos");
+    // O mesmo número da conciliação, sem contradizer o selo: o que falta é o próprio Revisar e concluir (G4 OBS).
+    expect(within(card).getByTestId("resume-count")).toHaveTextContent("7 de 8 passos conferidos · falta só Revisar e concluir");
     expect(within(card).getAllByRole("button").map((b) => b.textContent)).toEqual(["Concluir agora", "Abrir conciliação", "Descartar"]);
     await user.click(within(card).getByRole("button", { name: "Abrir conciliação" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/accounts/${ACCOUNT}/reconcile/${DRAFT.id}` });
