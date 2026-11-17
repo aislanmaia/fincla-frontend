@@ -20,6 +20,7 @@ import { concludeStatementImport, discardStatementImport, getStatementBalanceChe
 import { SummaryEffects } from "./BalanceCheckStep.jsx";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
 import { ErrorNote } from "./StatementImportNotes.jsx";
+import { latestConcludedEnd } from "./reconcileShortcut.js";
 import { STEPS, blockerText, passedStepsOf, progressBadge, stepProgress } from "./reconciliationSteps.js";
 import { summaryCountRows, unclassifiedText } from "./summaryRows.js";
 
@@ -321,13 +322,11 @@ function nextDay(ymd) {
  * voltar para setembro). `null` sem conciliação concluída com o fim do período.
  */
 export function continueTip(items) {
-  const concluded = items
-    .filter((i) => i.status === "concluded" && i.period?.end)
-    .sort((a, b) => b.period.end.localeCompare(a.period.end))[0];
-  if (!concluded) return null;
-  const from = nextDay(concluded.period.end);
+  const end = latestConcludedEnd(items);
+  if (!end) return null;
+  const from = nextDay(end);
   const [, m, d] = from.split("-");
-  return `Dica: a última conciliação foi até ${bankDateLabel(concluded.period.end)}. Um extrato a partir de ${d}/${m} continua de onde ela parou.`;
+  return `Dica: a última conciliação foi até ${bankDateLabel(end)}. Um extrato a partir de ${d}/${m} continua de onde ela parou.`;
 }
 
 /** O dia que ordena e agrupa uma importação: o fim do período; sem ele, o dia em que foi importada. */
