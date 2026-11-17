@@ -193,3 +193,55 @@ describe("quebra por moeda quando o total não converte (#170)", () => {
     expect(sumMonthsByCurrency(null)).toEqual([]);
   });
 });
+
+// QA display-and-pagination BUG-01/BUG-02: categoria do sistema renomeada pela
+// organização ("Health" → "Saude da Familia QA"). A API manda `tag_label` (o nome
+// que o resto do app mostra) e `tag_system_key` (a chave da cor); `tag_name`
+// continua "Health", e os Relatórios o traduziam de volta para "Saúde".
+describe("Relatórios: categoria renomeada pela organização", () => {
+  const RENAMED = "Saude da Familia QA";
+  const HEALTH_RED = "#DC2626";
+  const renamed = {
+    tag_id: "h1",
+    tag_name: "Health",
+    tag_label: RENAMED,
+    tag_system_key: "health",
+    tag_color: "#123456",
+    total: 300,
+  };
+  const untouched = {
+    tag_id: "t1",
+    tag_name: "Transport",
+    tag_label: "Transporte",
+    tag_system_key: "transport",
+    tag_color: "#2563EB",
+    total: 100,
+  };
+
+  it("composição: nome da organização e a cor da chave do sistema", () => {
+    const rows = buildCategoryComposition([untouched, renamed]);
+    expect(rows.map((r) => r.name)).toEqual([RENAMED, "Transporte"]);
+    expect(rows[0].color).toBe(HEALTH_RED);
+    expect(rows.some((r) => r.name === "Saúde")).toBe(false);
+  });
+
+  it("cascata: nome da organização", () => {
+    const rows = buildWaterfallRowsFromCategories(1000, [renamed, untouched]);
+    expect(rows.map((r) => r.nome)).toEqual(["Receita", RENAMED, "Transporte", "Saldo"]);
+  });
+
+  it("evolução por categoria: série e cor pelo nome da organização", () => {
+    const { driftData, driftColors } = buildDriftData({
+      months: ["out/26", "nov/26"],
+      categories: [{ ...renamed, monthly_totals: [100, 200] }],
+    });
+    expect(Object.keys(driftData[1])).toEqual(["mes", RENAMED]);
+    expect(driftData[1][RENAMED]).toBe(200);
+    expect(driftColors).toEqual({ [RENAMED]: HEALTH_RED });
+  });
+
+  it("resposta antiga sem `tag_label` ainda traduz o nome cru", () => {
+    const rows = buildCategoryComposition([{ tag_name: "Health", total: 10 }]);
+    expect(rows[0].name).toBe("Saúde");
+  });
+});
