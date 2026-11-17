@@ -193,7 +193,7 @@ function TotalsStep({ totals, error }) {
     return <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Os totais ainda estão carregando.</p>;
   }
   const note = conversionNote(totals);
-  const perCurrency = byCurrencyLine(totals);
+  const perCurrency = byCurrencyLine(totals, TEXTS);
   return (
     <>
       <div data-testid="export-totals" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
@@ -303,8 +303,8 @@ export function buildXlsxPreview({ title, filtersText, selection, totals }) {
         total("RECEITAS", totals.income, sumIf("Receita")),
         total("DESPESAS", totals.expenses == null ? null : -totals.expenses, sumIf("Despesa")),
         total("ESTORNOS", totals.refunds, sumIf("Estorno")),
-        row([TEXTS.countLabel, "", "", "", String(count), "", ""], "total", fx(`=CONT.VALORES(${span("D")})`)),
-        row([TEXTS.pendingLabel, "", "", "", String(totals.pending), "", ""], "total",
+        row([TEXTS.countLabel, "", "", "", TEXTS.number(count), "", ""], "total", fx(`=CONT.VALORES(${span("D")})`)),
+        row([TEXTS.pendingLabel, "", "", "", TEXTS.number(totals.pending), "", ""], "total",
           fx(`=CONT.VALORES(${span("G")})-CONT.SE(${span("G")};"Paga")`)),
         ...(totals.mixed
           ? totals.byCurrency.map((item) =>
@@ -420,7 +420,7 @@ export function buildPdfPreview({ title, filtersText, selection, totals, content
     flow: flow.map((item) => ({
       ...item, text: moneyOrUnavailable(item.value, currency), share: item.value == null ? 0 : Math.abs(item.value) / largest,
     })),
-    byCurrency: byCurrencyLine(t),
+    byCurrency: byCurrencyLine(t, TEXTS),
     note: conversionNote(t),
     noteWarning: Boolean(t?.unavailable),
     list: content === "full" ? { placeholder: `… ${TEXTS.entries(t?.count)}, um por linha …`, boxes } : null,

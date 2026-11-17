@@ -34,9 +34,18 @@ describe("exportTexts — contagens concordam com o número (BUG-03)", () => {
     [1, 1, "LANÇAMENTOS: 1 (1 pendente, incluído nos totais)"],
     [2, 1, "LANÇAMENTOS: 2 (1 pendente, incluído nos totais)"],
     [2, 0, "LANÇAMENTOS: 2 (0 pendentes, incluídos nos totais)"],
-    [1429, 3, "LANÇAMENTOS: 1429 (3 pendentes, incluídos nos totais)"],
+    // Contagem em texto leva o separador de milhar do idioma, como o servidor (BUG-02 dos smokes de dev).
+    [1429, 3, "LANÇAMENTOS: 1.429 (3 pendentes, incluídos nos totais)"],
+    [20000, 1500, "LANÇAMENTOS: 20.000 (1.500 pendentes, incluídos nos totais)"],
   ])("linha do arquivo com %i e %i pendentes → %s (igual ao servidor)", (count, pending, expected) => {
     expect(t.fileCountLine(count, pending)).toBe(expected);
+  });
+
+  it("PDF: a linha de contagem e a nota do resumo agrupam o milhar (BUG-02 dos smokes de dev)", () => {
+    expect(t.pdfCountLine(20000, 1500)).toBe("20.000 lançamentos · 1.500 pendentes, incluídos nos totais");
+    expect(t.summaryOnlyNote(20000)).toBe(
+      "Versão resumida: a lista dos 20.000 lançamentos não está neste arquivo. Exporte em “Completo” para vê-la.",
+    );
   });
 
   it("um idioma sem tradução cai no pt-BR", () => {
