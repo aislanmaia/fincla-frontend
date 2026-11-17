@@ -18,6 +18,11 @@ import {
   cumulativeFromDaily,
   getSpendingPaceMonthContext,
 } from "./spendingPaceModel.js";
+import { getTransactionsSummary } from "../../../api/transactions";
+import { expensesInBase } from "../../money/convertToBase.js";
+
+/** Erro de "não há soma honesta" (moedas misturadas sem cotação) — a mensagem já é a da tela. */
+const CURRENCY_MIX = "Há gastos em mais de uma moeda e falta cotação para convertê-los. O ritmo deste mês fica indisponível por enquanto.";
 
 const EMPTY = {
   isLoading: false,
@@ -111,11 +116,31 @@ export function useSpendingPaceData({
             ? listBudgetsForUi(organizationId)
             : Promise.resolve(null);
 
-        const [txRes, budgetsRes] = await Promise.all([txPromise, budgetPromise]);
+        // O recibo do total do período: base e taxas que a API usou. Falhar aqui não
+        // derruba a tela — sem ele, só um mês com moedas misturadas fica sem soma.
+        const summaryPromise = getTransactionsSummary({
+          organization_id: organizationId,
+          date_start: ctx.start,
+          date_end: ctx.end,
+          type: "expense",
+        }).catch(() => null);
+
+        const [txRes, budgetsRes, summary] = await Promise.all([txPromise, budgetPromise, summaryPromise]);
 
         if (cancelled) return;
 
-        const rawTx = txRes.data ?? [];
+        // Gasto por dia é escrito na moeda base: US$ 100 entram convertidos pela
+        // taxa do período, nunca como R$ 100 (#331).
+        const rawTx = expensesInBase(
+          txRes.data ?? [],
+          summary?.consolidation?.target_currency ?? null,
+          summary?.consolidation?.rates ?? null,
+        );
+        if (rawTx === null) {
+          const e = new Error(CURRENCY_MIX);
+          e.currencyMix = true;
+          throw e;
+        }
         const mappedBudget =
           budgetsRes != null ? mapBudgetsResponseToUi(budgetsRes) : null;
         const budgetVal = mappedBudget?.budget ?? 0;
@@ -217,6 +242,7 @@ export function useSpendingPaceData({
       } catch (error) {
         if (cancelled) return;
         const msg =
+          (error?.currencyMix ? error.message : "") ||
           formatDashboardApiError(error) ||
           formatBudgetsApiError(error) ||
           String(error?.message || error);
