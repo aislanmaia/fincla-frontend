@@ -1,6 +1,6 @@
 /* ─── CARTÕES DATA ───────────────────────────────────────── */
 import { T } from "../tokens";
-import { categoryColorForLabel } from "./categoryLabels.js";
+import { categoryColorForCategory } from "./categoryLabels.js";
 
 export const CARTOES_DATA = [
   {
@@ -123,4 +123,4 @@ export const CARTOES_DATA = [
 ];
 
 /** Cor de uma categoria nas telas do cartão: o mesmo mapa das Transações (G3-P-10). */
-export const cardCategoryColor = (label) => categoryColorForLabel(label) || T.inkMid;
+export const cardCategoryColor = (label, systemKey = null) => categoryColorForCategory({ systemKey, label }) || T.inkMid;

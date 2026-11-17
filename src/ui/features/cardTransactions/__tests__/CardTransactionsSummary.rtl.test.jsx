@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardTransactionsSummary } from "../CardTransactionsSummary.jsx";
+import { categoryColorResolver } from "../cardTransactionsModel.js";
 
 afterEach(cleanup);
 const cat = (category, amount) => ({ category, amount, amount_currency: "BRL" });
@@ -56,5 +57,43 @@ describe("CardTransactionsSummary — categorias", () => {
   it("no sheet mobile a legenda só fica ao lado da rosca quando cabe com folga", () => {
     render(<CardTransactionsSummary summary={summary} isCategorySelected={() => false} onToggleCategory={() => {}} isMobile />);
     expect(screen.getByRole("list", { name: "Categorias em BRL" }).style.flexBasis).toBe("230px");
+  });
+});
+
+/* QA display-and-pagination BUG-02: a cor do ponto vinha da POSIÇÃO na lista (azul para a primeira), não da
+   categoria. "Saude da Familia QA" (Saúde renomeada) era azul aqui, cinza nas Transações e vermelha na Visão
+   Geral. Agora a cor sai do catálogo da organização pela chave estável `system_key`. */
+describe("CardTransactionsSummary — cor da categoria (BUG-02)", () => {
+  const catalog = [
+    { id: "h", label: "Saude da Familia QA", apiName: "health", systemKey: "health", color: "#123456" },
+    { id: "f", label: "Alimentação", apiName: "food_groceries", systemKey: "food_groceries", color: "#059669" },
+  ];
+  const renamedSummary = {
+    total_transactions: 2,
+    by_currency: [{ currency: "BRL", amount: "300.00" }],
+    breakdown: { by_category: [cat("Alimentação", "200"), cat("Saude da Familia QA", "100")] },
+  };
+  const dotColor = (name) => {
+    const label = within(screen.getByRole("list", { name: "Categorias em BRL" })).getByTitle(name);
+    return label.previousElementSibling.style.background;
+  };
+
+  it("a renomeada tem a cor de Saúde e cada categoria a sua, independentemente da posição", () => {
+    render(<CardTransactionsSummary summary={renamedSummary} isCategorySelected={() => false} onToggleCategory={() => {}} colorForCategory={categoryColorResolver(catalog)} />);
+    expect(dotColor("Saude da Familia QA")).toBe("rgb(220, 38, 38)");
+    expect(dotColor("Alimentação")).toBe("rgb(5, 150, 105)");
+  });
+
+  it("a mesma cor que a linha das Transações usa para a mesma categoria", async () => {
+    const { catColor } = await import("../../transactions/shared/transactionFormat.js");
+    const resolve = categoryColorResolver(catalog);
+    expect(resolve("Saude da Familia QA")).toBe(catColor("Saude da Familia QA", "health"));
+    expect(resolve("Alimentação")).toBe(catColor("Alimentação", "food_groceries"));
+  });
+
+  it("sem catálogo, o nome canônico ainda dá a cor da categoria", () => {
+    render(<CardTransactionsSummary summary={{ ...renamedSummary, breakdown: { by_category: [cat("Transporte", "50"), cat("Saúde", "40")] } }} isCategorySelected={() => false} onToggleCategory={() => {}} />);
+    expect(dotColor("Saúde")).toBe("rgb(220, 38, 38)");
+    expect(dotColor("Transporte")).toBe("rgb(37, 99, 235)");
   });
 });

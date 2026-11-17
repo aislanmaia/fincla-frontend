@@ -135,6 +135,8 @@ export function pickCategoryTagFromApiTransaction(transaction) {
     // `categoryLabelPtForTag` o põe acima de `label` (regra `tag_display_label`).
     custom_name: typeof t.custom_name === "string" && t.custom_name.trim() ? t.custom_name : null,
     icon_key: t.icon_key ?? null,
+    // Chave estável da categoria do sistema: a cor sai dela (BUG-02).
+    system_key: typeof t.system_key === "string" && t.system_key.trim() ? t.system_key : null,
     is_active: t.is_active !== false,
     color:
       typeof t.color === "string" && t.color.trim() ? t.color : null,
@@ -582,6 +584,8 @@ export function mapApiTransactionToUi(transaction) {
     categoryTagId: catTag?.id ?? null,
     categoryTagIsActive: catTag?.is_active !== false,
     categoryIconKey: catTag?.icon_key ?? null,
+    // Chave estável da categoria do sistema: a cor sai dela, não do nome (renomear não muda a cor).
+    categorySystemKey: catTag?.system_key ?? null,
     date: dateLabel,
     dateIsoForEdit: pickDateIsoForEditTransaction(transaction),
     purchaseDateIso: pickPurchaseDateIsoForEdit(transaction),

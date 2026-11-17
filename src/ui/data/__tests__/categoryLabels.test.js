@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  categoryColorForCategory,
   categoryColorForLabel,
   categoryLabelPtForTag,
   DETAIL_LABEL_PT_BY_EN_NAME,
@@ -396,5 +397,70 @@ describe("categoryColorForLabel — mapa único e busca tolerante", () => {
       expect(cardCategoryColor(label)).toBe(color);
       expect(resolveCategoryColorForTag({ name: label })).toBe(color);
     }
+  });
+});
+
+// QA display-and-pagination BUG-02: a categoria do sistema renomeada ("Saúde" →
+// "Saude da Familia QA") era cinza nas Transações, azul no cartão e vermelha na
+// Visão Geral — a cor saía do rótulo, e o nome da organização não está no mapa.
+// A cor sai da chave estável (`system_key`), a mesma em toda tela.
+describe("categoryColorForCategory — cor pela chave estável da categoria do sistema", () => {
+  const RENAMED = "Saude da Familia QA";
+  const HEALTH = "#DC2626";
+
+  it("a renomeada tem a cor da categoria do sistema, não a do rótulo", () => {
+    expect(categoryColorForLabel(RENAMED)).toBeNull();
+    expect(categoryColorForCategory({ systemKey: "health", label: RENAMED })).toBe(HEALTH);
+    expect(categoryColorForCategory({ systemKey: "health", label: RENAMED })).toBe(categoryColorForLabel("Saúde"));
+  });
+
+  it("a chave decide mesmo quando o rótulo é de outra categoria do mapa", () => {
+    // Uma organização que renomeou Saúde para "Transporte" continua vendo a cor de Saúde.
+    expect(categoryColorForCategory({ systemKey: "health", label: "Transporte" })).toBe(HEALTH);
+  });
+
+  it("sem chave (categoria criada pela organização, dado de demonstração) segue o rótulo", () => {
+    expect(categoryColorForCategory({ systemKey: null, label: "Alimentação" })).toBe("#059669");
+    expect(categoryColorForCategory({ label: "Inexistente" })).toBeNull();
+    expect(categoryColorForCategory({ systemKey: "chave_que_nao_existe", label: "Moradia" })).toBe(categoryColorForLabel("Moradia"));
+  });
+
+  it("toda categoria do catálogo do sistema tem cor própria por chave", () => {
+    for (const key of [
+      "food_groceries", "housing", "transport", "health", "education", "leisure_entertainment",
+      "personal_shopping", "services", "subscriptions_software", "taxes_fees", "financing_debt",
+      "donations", "pets", "travel", "work_personal_business", "work_salary", "services_provided",
+      "sales", "benefits", "rental_income", "investment_returns", "received_transfers",
+      "received_reimbursements",
+    ]) {
+      expect(categoryColorForCategory({ systemKey: key, label: "Nome qualquer da org" })).toMatch(/^#[0-9A-F]{6}$/i);
+    }
+  });
+
+  it("as categorias já no mapa mantêm a cor de antes (nada muda para quem não renomeou)", () => {
+    for (const [key, label] of [
+      ["food_groceries", "Alimentação"],
+      ["transport", "Transporte"],
+      ["health", "Saúde"],
+      ["leisure_entertainment", "Lazer e entretenimento"],
+      ["personal_shopping", "Compras pessoais"],
+      ["subscriptions_software", "Assinaturas e software"],
+      ["taxes_fees", "Impostos e taxas"],
+      ["housing", "Moradia"],
+      ["services", "Serviços"],
+    ]) {
+      expect(categoryColorForCategory({ systemKey: key, label: "x" })).toBe(categoryColorForLabel(label));
+    }
+  });
+
+  it("Transações, cartões e a tag concordam com a chave na categoria renomeada", async () => {
+    const { catColor, catBg } = await import("../../features/transactions/shared/transactionFormat.js");
+    const { cardCategoryColor } = await import("../creditCardsMockData.js");
+    expect(catColor(RENAMED, "health")).toBe(HEALTH);
+    expect(catBg(RENAMED, "health")).toBe(`${HEALTH}18`);
+    expect(cardCategoryColor(RENAMED, "health")).toBe(HEALTH);
+    // A chave vence a cor crua da API: é a mesma chave em toda tela.
+    expect(resolveCategoryColorForTag({ name: "Health", label: RENAMED, system_key: "health", color: "#123456" })).toBe(HEALTH);
+    expect(resolveCategoryColorForTag({ tag_name: "Health", tag_label: RENAMED, tag_system_key: "health", tag_color: "#123456" })).toBe(HEALTH);
   });
 });

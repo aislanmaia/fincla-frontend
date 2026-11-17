@@ -71,3 +71,32 @@ describe("nome da categoria na linha (fincla-api#534)", () => {
     expect(screen.queryByText("Personal Shopping")).toBeNull();
   });
 });
+
+/* QA display-and-pagination BUG-02: a categoria do sistema renomeada ficava cinza nas Transações (a cor saía do
+   rótulo, e o nome da organização não está no mapa). A cor sai da chave estável `system_key`. */
+describe("cor da categoria na linha (BUG-02)", () => {
+  const chipColors = (name) =>
+    screen.getAllByText(name).map((el) => el.style.color).filter(Boolean);
+
+  it("categoria do sistema renomeada mantém a cor da categoria (Saúde = vermelho), não o cinza", () => {
+    const tx = renderRow({
+      id: "cat-h",
+      name: "Health",
+      label: "Saude da Familia QA",
+      custom_name: "Saude da Familia QA",
+      system_key: "health",
+      icon_key: "heart-pulse",
+      is_default: true,
+    });
+    expect(tx.categorySystemKey).toBe("health");
+    const colors = chipColors("Saude da Familia QA");
+    expect(colors.length).toBeGreaterThan(0);
+    // rgb(220, 38, 38) = #DC2626, a cor de Saúde; o defeito era rgb(55, 65, 81) (cinza).
+    for (const color of colors) expect(color).toBe("rgb(220, 38, 38)");
+  });
+
+  it("a mesma categoria sem renomear tem a mesma cor", () => {
+    renderRow({ id: "cat-h", name: "Health", label: "Saúde", system_key: "health", is_default: true });
+    for (const color of chipColors("Saúde")) expect(color).toBe("rgb(220, 38, 38)");
+  });
+});

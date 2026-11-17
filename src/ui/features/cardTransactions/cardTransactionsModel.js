@@ -1,3 +1,4 @@
+import { categoryColorForCategory } from "../../data/categoryLabels.js";
 import { invoiceItemTagNames, mapInvoiceItemToUi } from "../../data/creditCardsAdapter.js";
 import { matchesValueRange } from "../transactions/filters/filtersToLegacyParams.js";
 import { parseMoneyInput } from "../onboarding/onboardingValueUtils.js";
@@ -43,6 +44,22 @@ export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode 
 export function categoryOptions(breakdown) {
   return (breakdown ?? []).filter((row) => row.category_name)
     .map((row) => ({ id: row.category_id == null ? "uncategorized" : String(row.category_id), name: row.category_name, color: row.category_color }));
+}
+
+/**
+ * Nome exibido de uma categoria → cor, pelo catálogo da organização. A chave
+ * estável (`systemKey`) decide, como nas Transações (`catColor`): a categoria do
+ * sistema renomeada mantém a cor (QA display-and-pagination, BUG-02). Sem
+ * chave, a cor do catálogo; fora do catálogo, o mapa único pelo nome.
+ * @param {{ label?: string; apiName?: string; systemKey?: string | null; color?: string | null }[]} catalog
+ * @returns {(name: string) => string | null}
+ */
+export function categoryColorResolver(catalog) {
+  return (name) => {
+    const entry = (catalog ?? []).find((row) => row.label === name || row.apiName === name);
+    if (!entry) return categoryColorForCategory({ label: name });
+    return categoryColorForCategory({ systemKey: entry.systemKey ?? null, label: name }) ?? entry.color ?? null;
+  };
 }
 
 export function tagOptions(items) {

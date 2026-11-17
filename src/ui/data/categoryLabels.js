@@ -27,6 +27,7 @@ export function coerceCategoryTagShape(raw) {
   const o = raw;
   const name =
     (typeof o.label === "string" && o.label.trim()) ||
+    (typeof o.tag_label === "string" && o.tag_label.trim()) ||
     (typeof o.name === "string" && o.name.trim()) ||
     (typeof o.tag_name === "string" && o.tag_name.trim()) ||
     (typeof o.category_name === "string" && o.category_name.trim()) ||
@@ -55,6 +56,7 @@ export function coerceCategoryTagShape(raw) {
   const system_key =
     (typeof o.system_key === "string" && o.system_key.trim()) ||
     (typeof o.systemKey === "string" && o.systemKey.trim()) ||
+    (typeof o.tag_system_key === "string" && o.tag_system_key.trim()) ||
     null;
   return { name, icon_key, custom_name, system_key, is_default };
 }
@@ -232,6 +234,61 @@ export function categoryColorForLabel(label) {
   return CATEGORY_COLOR_BY_LOOKUP_KEY[colorLookupKey(label)] ?? null;
 }
 
+/**
+ * Categorias do sistema por `system_key` (catálogo do backend,
+ * fincla-api/src/infrastructure/database/seeds/system_category_catalog.py):
+ * o rótulo do mapa de cores acima e, para as que não estão nele, a cor do seed.
+ * A chave não muda quando a organização renomeia a categoria; o rótulo muda.
+ */
+const SYSTEM_CATEGORY_COLOR_SOURCE = {
+  food_groceries: ["Alimentação", "#059669"],
+  housing: ["Moradia", "#6B7280"],
+  transport: ["Transporte", "#2563EB"],
+  health: ["Saúde", "#DC2626"],
+  education: ["Educação", "#7C3AED"],
+  leisure_entertainment: ["Lazer e entretenimento", "#D97706"],
+  personal_shopping: ["Compras pessoais", "#BE185D"],
+  services: ["Serviços", "#64748B"],
+  subscriptions_software: ["Assinaturas e software", "#0891B2"],
+  taxes_fees: ["Impostos e taxas", "#A16207"],
+  financing_debt: ["Financiamentos e dívidas", "#B45309"],
+  donations: ["Doações", "#C2410C"],
+  pets: ["Animais de estimação", "#92400E"],
+  travel: ["Viagem", "#0369A1"],
+  work_personal_business: ["Trabalho e negócios pessoais", "#4338CA"],
+  work_salary: ["Trabalho e salário", "#15803D"],
+  services_provided: ["Serviços prestados", "#15803D"],
+  sales: ["Vendas", "#15803D"],
+  benefits: ["Benefícios", "#15803D"],
+  rental_income: ["Aluguéis recebidos", "#15803D"],
+  investment_returns: ["Rendimentos", "#15803D"],
+  received_transfers: ["Transferências recebidas", "#15803D"],
+  received_reimbursements: ["Reembolsos recebidos", "#15803D"],
+};
+
+const CATEGORY_COLOR_BY_SYSTEM_KEY = Object.fromEntries(
+  Object.entries(SYSTEM_CATEGORY_COLOR_SOURCE).map(([key, [label, seedColor]]) => [
+    key,
+    categoryColorForLabel(label) ?? seedColor,
+  ]),
+);
+
+/**
+ * A cor de uma categoria, ou `null`. A chave estável (`system_key`) decide
+ * quando existe: a categoria do sistema renomeada pela organização ("Saúde" →
+ * "Saúde da família") mantém a cor em toda tela (QA display-and-pagination,
+ * BUG-02). Sem chave (categoria criada pela organização, dado de
+ * demonstração), o rótulo decide, pelo mapa único `categoryColorForLabel`.
+ * Transações, cartões, Visão Geral e Relatórios chamam esta função.
+ * @param {{ systemKey?: string | null; label?: string | null }} [category]
+ * @returns {string | null}
+ */
+export function categoryColorForCategory({ systemKey = null, label = null } = {}) {
+  const key = typeof systemKey === "string" ? systemKey.trim() : "";
+  if (key && CATEGORY_COLOR_BY_SYSTEM_KEY[key]) return CATEGORY_COLOR_BY_SYSTEM_KEY[key];
+  return categoryColorForLabel(label);
+}
+
 const CATEGORY_COLOR_PALETTE = [
   "#059669",
   "#2563EB",
@@ -257,14 +314,18 @@ function hashCategoryColorKey(value) {
 
 /**
  * Resolve uma cor estável para a tag de categoria.
- * Prioriza a cor explícita da API; caso falte, usa a cor canônica da UI e,
- * por fim, uma paleta fixa não-cinza baseada no nome/ícone da categoria.
+ * A chave do sistema (`system_key`) vem primeiro, igual às outras telas
+ * (`categoryColorForCategory`); depois a cor explícita da API; depois a cor
+ * canônica do rótulo e, por fim, uma paleta fixa não-cinza baseada no
+ * nome/ícone da categoria.
  * @param {Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
 export function resolveCategoryColorForTag(tag) {
   if (!tag || typeof tag !== "object") return "#6B7280";
   const o = tag;
+  const bySystemKey = categoryColorForCategory({ systemKey: coerceCategoryTagShape(o).system_key });
+  if (bySystemKey) return bySystemKey;
   const explicitColor =
     (typeof o.tag_color === "string" && o.tag_color.trim()) ||
     (typeof o.color === "string" && o.color.trim()) ||

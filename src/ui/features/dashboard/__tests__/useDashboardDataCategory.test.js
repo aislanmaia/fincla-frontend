@@ -438,3 +438,36 @@ describe("mapTransaction / mapUpcomingDebits — moeda da linha (BUG-05)", () =>
     expect(d.currency).toBe("USD");
   });
 });
+
+// QA display-and-pagination BUG-01/BUG-02: Saúde (system_key "health") renomeada
+// para "Saude da Familia QA". Na Visão Geral a cor vinha da cor crua da API e nas
+// Transações do rótulo; agora as duas saem da chave estável, e as linhas que só
+// existem na resposta de `/analytics/by-category` usam `tag_label`.
+describe("Gastos por categoria: categoria do sistema renomeada", () => {
+  const RENAMED = "Saude da Familia QA";
+  const HEALTH = "#DC2626";
+  const renamedTag = {
+    id: "cat-h", name: "Health", label: RENAMED, custom_name: RENAMED, system_key: "health",
+    color: "#123456", is_default: true, tag_type: { name: "categoria" },
+  };
+
+  it("a linha vinda das transações tem o nome da organização e a cor da chave do sistema", async () => {
+    const { catColor } = await import("../../transactions/shared/transactionFormat.js");
+    const tx = { type: "expense", value: 80, value_currency: "BRL", tags: { categoria: [renamedTag] } };
+    const [row] = buildDashboardCategoryRows([tx], "2026-11-01", "2026-11-30", [], new Map(), "BRL", []);
+    expect(row.name).toBe(RENAMED);
+    expect(row.color).toBe(HEALTH);
+    // A mesma cor do chip das Transações para a mesma linha.
+    expect(row.color).toBe(catColor(RENAMED, "health"));
+  });
+
+  it("a linha só da API (sem transações) usa tag_label e a cor da chave", () => {
+    const api = [{
+      tag_id: "cat-h", tag_name: "Health", tag_label: RENAMED, tag_system_key: "health",
+      tag_color: "#123456", total: 120,
+    }];
+    const [row] = buildDashboardCategoryRows([], "2026-11-01", "2026-11-30", api, new Map(), "BRL", []);
+    expect(row.name).toBe(RENAMED);
+    expect(row.color).toBe(HEALTH);
+  });
+});
