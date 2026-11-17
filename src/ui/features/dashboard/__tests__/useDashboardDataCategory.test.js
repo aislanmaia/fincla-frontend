@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardCategoryRows,
   mapCategory,
+  mapTransaction,
   mapUpcomingDebits,
   pickCategoryName,
 } from "../useDashboardData.js";
@@ -342,5 +343,75 @@ describe("buildDashboardCategoryRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("Health");
     expect(rows[0].color).toBe("#ABCDEF");
+  });
+});
+
+/**
+ * BUG-05: com R$ 190,40 e US$ 225,60 na mesma categoria, o card somava as
+ * transações e escrevia "R$ 416,00". As linhas seguem vindo das transações, mas
+ * somadas por moeda e convertidas pela cotação que a API usou no período.
+ */
+describe("buildDashboardCategoryRows — moedas (BUG-05)", () => {
+  const food = { categoria: [{ id: "cat-food", name: "Food & Groceries", icon_key: "shopping-cart", is_default: true }] };
+  const tx = (value, currency, tags = food) => ({ type: "expense", value, value_currency: currency, tags });
+  const RATES = [{ base: "USD", quote: "BRL", rate: "5.7898000000", quoted_on: "2026-11-17" }];
+  const build = (txs, base, rates, prev = new Map()) =>
+    buildDashboardCategoryRows(txs, "2026-11-01", "2026-11-30", [], prev, base, rates);
+
+  it("R$ + US$ na mesma categoria: convertido para a base pela cotação da API", () => {
+    const [row] = build([tx(190.4, "BRL"), tx(225.6, "USD")], "BRL", RATES);
+    // 225,60 × 5,7898 = 1.306,18; + 190,40
+    expect(row).toEqual(expect.objectContaining({ value: 1496.58, currency: "BRL", byCurrency: null }));
+  });
+
+  it("mês só em US$ numa base BRL: convertido, nunca US$ escrito como R$", () => {
+    const [row] = build([tx(50, "USD")], "BRL", RATES);
+    expect(row).toEqual(expect.objectContaining({ value: 289.49, currency: "BRL" }));
+  });
+
+  it("sem a cotação do par: sem soma; as somas por moeda lado a lado, base primeiro", () => {
+    const [row] = build([tx(225.6, "USD"), tx(190.4, "BRL")], "BRL", []);
+    expect(row.value).toBeNull();
+    expect(row.byCurrency).toEqual([
+      { currency: "BRL", amount: 190.4 },
+      { currency: "USD", amount: 225.6 },
+    ]);
+    expect(row.avg).toBeNull();
+  });
+
+  it("API fora do ar (sem base, sem taxas) e uma moeda só: a soma, escrita nessa moeda, sem comparativo", () => {
+    const [row] = build([tx(20, "USD"), tx(30, "USD")], null, null, new Map([["cat-food", 10]]));
+    expect(row).toEqual(expect.objectContaining({ value: 50, currency: "USD", avg: null }));
+  });
+
+  it("\"Sem categoria\" continua no card quando há moeda estrangeira no mês", () => {
+    const rows = build([tx(300, "BRL", {}), tx(50, "USD")], "BRL", RATES);
+    expect(rows.map((r) => r.name)).toContain("Sem categoria");
+  });
+
+  it("tudo na moeda base: a soma das transações, com comparativo, como antes", () => {
+    const [row] = build([tx(20, "BRL"), tx(30, "BRL")], "BRL", RATES, new Map([["cat-food", 40]]));
+    expect(row).toEqual(expect.objectContaining({ value: 50, currency: "BRL", avg: 40 }));
+  });
+
+  it("despesa sem moeda declarada conta como a base, não como a estrangeira", () => {
+    const [row] = build([tx(100, undefined), tx(10, "USD")], "BRL", RATES);
+    // 100 (base) + 10 × 5,7898 = 157,90
+    expect(row).toEqual(expect.objectContaining({ value: 157.9, currency: "BRL" }));
+  });
+});
+
+describe("mapTransaction / mapUpcomingDebits — moeda da linha (BUG-05)", () => {
+  it("a linha leva a moeda da transação", () => {
+    expect(mapTransaction({ id: 1, type: "expense", value: 50, value_currency: "USD", tags: {} }).currency).toBe("USD");
+    expect(mapTransaction({ id: 2, type: "expense", value: 50, tags: {} }).currency).toBeNull();
+  });
+
+  it("o débito previsto leva a moeda da série", () => {
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 2);
+    const ymd = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, "0")}-${String(soon.getDate()).padStart(2, "0")}`;
+    const [d] = mapUpcomingDebits({ series: [{ id: "s1", type: "expense", description: "Netflix", value: 20, value_currency: "USD", next_occurrence: ymd, tags: [] }] });
+    expect(d.currency).toBe("USD");
   });
 });

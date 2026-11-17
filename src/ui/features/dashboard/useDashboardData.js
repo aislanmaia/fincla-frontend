@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBalanceSummary } from "../../../api/balances";
 import { linearProjection } from "./periodYardstick.js";
+import { convertByQuote } from "../../money/quoteDirection.js";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -129,7 +130,7 @@ function pickTransactionIcon(transaction) {
   return "🧾";
 }
 
-function mapTransaction(transaction) {
+export function mapTransaction(transaction) {
   const dateRaw = pickTransactionListDateRawForDisplay(transaction);
   const expenseAmt =
     transaction.type === "expense" ? pickDisplayAmount(transaction) : 0;
@@ -137,6 +138,9 @@ function mapTransaction(transaction) {
     id: transaction.id,
     desc: transaction.description,
     cat: pickCategoryName(transaction),
+    // A moeda DESTA linha (a da conta). A lista não é um total: um gasto de
+    // US$ 50 é escrito "US$ 50,00", nunca na moeda base da organização.
+    currency: transaction.value_currency ?? null,
     date: formatShortDate(dateRaw),
     val:
       transaction.type === "income"
@@ -161,7 +165,7 @@ function normalizeTagNameKey(name) {
 /**
  * Agrega despesas retornadas pela API no período (já filtradas no servidor).
  */
-function aggregateExpenseCategoriesFromTransactions(rawTx) {
+function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) {
   const map = new Map();
 
   for (const tx of rawTx) {
@@ -186,9 +190,12 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
         : `name:${normalizeTagNameKey(normalizedName)}`;
 
     const add = pickDisplayAmount(tx);
+    // Sem moeda declarada = a base (é o que toda org de moeda única sempre viu).
+    const txCurrency = tx.value_currency ?? baseCurrency ?? null;
     const cur = map.get(mapKey);
     if (cur) {
       cur.total += add;
+      cur.parts.set(txCurrency, (cur.parts.get(txCurrency) ?? 0) + add);
       if (!cur.color && tag?.color) cur.color = tag.color;
       if (!cur.tagId && tag?.id) cur.tagId = tag.id;
       if (!cur.icon_key && tag?.icon_key) cur.icon_key = tag.icon_key;
@@ -200,6 +207,8 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
         color: tag?.color ?? null,
         isDefault,
         total: add,
+        // Soma POR MOEDA: `total` acima é nominal e só vale com uma moeda só.
+        parts: new Map([[txCurrency, add]]),
       });
     }
   }
@@ -207,14 +216,72 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
   return Array.from(map.values());
 }
 
+/** A taxa para levar `from` a `target`, na direção em que a API a mandou, ou `null`. */
+function rateTo(target, from, rates) {
+  for (const r of rates ?? []) {
+    if (r?.base === from && r?.quote === target) return { rate: r.rate, op: "multiply" };
+    if (r?.base === target && r?.quote === from) return { rate: r.rate, op: "divide" };
+  }
+  return null;
+}
+
+/**
+ * O valor de uma linha somada por moeda (`parts`: moeda → soma).
+ *
+ * Uma moeda só: o próprio valor, nela. Mais de uma: convertido para a moeda base
+ * (`target`) pelas cotações que a API usou no mesmo período (`rates`), cada parte
+ * pela taxa do seu par. Faltando a base ou alguma taxa, não há número honesto:
+ * `value: null`, e a linha mostra as somas por moeda lado a lado, sem somar.
+ */
+export function resolveRowMoney(parts, target, rates) {
+  const list = [...parts.entries()].map(([currency, amount]) => ({ currency, amount }));
+  if (list.length === 1 && (target == null || list[0].currency === target)) {
+    return { value: list[0].amount, currency: list[0].currency, byCurrency: null };
+  }
+  if (target != null) {
+    let sum = 0;
+    let ok = true;
+    for (const { currency, amount } of list) {
+      if (currency === target) {
+        sum += amount;
+        continue;
+      }
+      const q = currency ? rateTo(target, currency, rates) : null;
+      const converted = q ? convertByQuote(amount.toFixed(2), q.rate, q.op) : null;
+      if (converted == null) {
+        ok = false;
+        break;
+      }
+      sum += Number(converted);
+    }
+    if (ok) return { value: Math.round(sum * 100) / 100, currency: target, byCurrency: null };
+  }
+  if (list.length === 1) return { value: list[0].amount, currency: list[0].currency, byCurrency: null };
+  const byCurrency = list.sort((a, b) =>
+    a.currency === target ? -1 : b.currency === target ? 1 : String(a.currency).localeCompare(String(b.currency)),
+  );
+  return { value: null, currency: null, byCurrency };
+}
+
+/**
+ * Linhas do card "Gastos por Categoria".
+ *
+ * As linhas continuam vindo das transações do período (mesma semântica de sempre:
+ * "Sem categoria" incluso, estorno não abatido), mas somadas POR MOEDA: com
+ * R$ 190,40 e US$ 225,60 na mesma categoria, a soma nominal escrevia "R$ 416,00".
+ * Ver `resolveRowMoney`. `baseCurrency` e `rates` vêm de `consolidation` da
+ * resposta de `/analytics/by-category`; com ela fora do ar, ambos `null`.
+ */
 export function buildDashboardCategoryRows(
   rawTx,
   rangeStartYmd,
   rangeEndYmd,
   apiCategories,
   prevTotalByTagId,
+  baseCurrency = null,
+  rates = null,
 ) {
-  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx);
+  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency);
   const apiList = apiCategories ?? [];
 
   const apiColorByTagId = new Map(
@@ -256,11 +323,19 @@ export function buildDashboardCategoryRows(
           // `null`, mesmo shape que os outros call sites desse endpoint.
           isDefault: null,
           total: c.total,
+          // Total da API: já na base (ou `null`, sem cotação).
+          parts: new Map([[baseCurrency, c.total]]),
         }));
 
   return sourceRows
-    .filter((r) => r.total > 0)
-    .sort((a, b) => b.total - a.total)
+    .filter((r) => r.total === null || r.total > 0)
+    .map((r) =>
+      r.total === null
+        ? { ...r, money: { value: null, currency: baseCurrency, byCurrency: null } }
+        : { ...r, money: resolveRowMoney(r.parts, baseCurrency, rates) },
+    )
+    // Valores conhecidos primeiro, do maior; os sem número honesto depois.
+    .sort((a, b) => (b.money.value ?? -1) - (a.money.value ?? -1))
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
       // Mesma chamada de `apiJoinKey` acima — de propósito SEM `is_default`
@@ -285,14 +360,22 @@ export function buildDashboardCategoryRows(
           tag_icon_key: iconKey,
           tag_color: color,
           is_default: row.isDefault ?? null,
-          total: row.total,
+          total: row.money.value,
         },
-        prevTotalByTagId,
+        // O comparativo vem da API, na moeda base: só vale para uma linha na base.
+        // O comparativo é na base: vale para linha com número e na base (ou sem
+        // moeda declarada, que é a base por convenção). Sem número, nada a desenhar.
+        row.money.value != null &&
+          (row.money.currency == null || row.money.currency === baseCurrency)
+          ? prevTotalByTagId
+          : new Map(),
+        row.money.currency,
+        row.money.byCurrency,
       );
     });
 }
 
-export function mapCategory(category, prevTotalByTagId) {
+export function mapCategory(category, prevTotalByTagId, currency = null, byCurrency = null) {
   const prev = category.tag_id ? prevTotalByTagId.get(category.tag_id) : undefined;
   const avg = typeof prev === "number" && prev > 0 ? prev : null;
 
@@ -308,6 +391,10 @@ export function mapCategory(category, prevTotalByTagId) {
       is_default: category.is_default ?? null,
     }),
     value: category.total,
+    /** Moeda de `value`/`avg`; `null` = a base da organização. */
+    currency,
+    /** Com `value: null`: as somas por moeda, para mostrar lado a lado. */
+    byCurrency,
     avg,
     color: pickCategoryColor(category),
   };
@@ -599,6 +686,7 @@ export function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         id: r.id,
         name: r.description,
         value: r.value,
+        currency: r.value_currency ?? null,
         day: occ.getDate(),
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
@@ -796,6 +884,8 @@ export function useDashboardData({
         end,
         categoriesResponse.categories,
         prevTotalByTagId,
+        categoriesResponse.consolidation?.target_currency ?? null,
+        categoriesResponse.consolidation?.rates ?? null,
       );
 
       setState({
