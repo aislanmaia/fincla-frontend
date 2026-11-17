@@ -64,11 +64,11 @@ export const CATEGORY_LABEL_PT_BY_ICON_KEY = {
   car: "Transporte",
   pill: "Saúde",
   "book-open": "Educação",
-  "party-popper": "Lazer & Entretenimento",
-  "shopping-bag": "Compras Pessoais",
+  "party-popper": "Lazer e entretenimento",
+  "shopping-bag": "Compras pessoais",
   wrench: "Serviços",
-  smartphone: "Assinaturas & Software",
-  receipt: "Impostos & Taxas",
+  smartphone: "Assinaturas e software",
+  receipt: "Impostos e taxas",
   home: "Moradia",
   wallet: "Receita",
   "circle-help": "Não classificado",
@@ -80,11 +80,11 @@ export const CATEGORY_LABEL_PT_BY_EN_NAME = {
   Transport: "Transporte",
   Health: "Saúde",
   Education: "Educação",
-  "Leisure & Entertainment": "Lazer & Entretenimento",
-  "Personal Shopping": "Compras Pessoais",
+  "Leisure & Entertainment": "Lazer e entretenimento",
+  "Personal Shopping": "Compras pessoais",
   Services: "Serviços",
-  "Subscriptions & Software": "Assinaturas & Software",
-  "Taxes & Fees": "Impostos & Taxas",
+  "Subscriptions & Software": "Assinaturas e software",
+  "Taxes & Fees": "Impostos e taxas",
   Housing: "Moradia",
   Income: "Receita",
   Uncategorized: "Não classificado",
@@ -114,37 +114,15 @@ const CATEGORY_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(
   ]),
 );
 
-const CATEGORY_LABEL_PT_BY_PT_NAME = {
-  alimentacao: "Alimentação",
-  transporte: "Transporte",
-  saude: "Saúde",
-  educacao: "Educação",
-  "lazer entretenimento": "Lazer & Entretenimento",
-  "lazer e entretenimento": "Lazer & Entretenimento",
-  "compras pessoais": "Compras Pessoais",
-  servicos: "Serviços",
-  "assinaturas software": "Assinaturas & Software",
-  "assinaturas e software": "Assinaturas & Software",
-  "impostos taxas": "Impostos & Taxas",
-  "impostos e taxas": "Impostos & Taxas",
-  moradia: "Moradia",
-  receita: "Receita",
-  renda: "Receita",
-  outros: "Outros",
-  vestuario: "Vestuário",
-  lazer: "Lazer",
-  assinaturas: "Assinaturas",
-};
-
 /** Variações de nome que alguns backends enviam fora do canônico do guia → rótulo PT. */
 const CATEGORY_EN_NAME_ALIASES = {
   "food and groceries": "Alimentação",
-  "leisure and entertainment": "Lazer & Entretenimento",
-  "personal shopping": "Compras Pessoais",
-  "subscriptions & software": "Assinaturas & Software",
-  "subscriptions and software": "Assinaturas & Software",
-  "taxes & fees": "Impostos & Taxas",
-  "taxes and fees": "Impostos & Taxas",
+  "leisure and entertainment": "Lazer e entretenimento",
+  "personal shopping": "Compras pessoais",
+  "subscriptions & software": "Assinaturas e software",
+  "subscriptions and software": "Assinaturas e software",
+  "taxes & fees": "Impostos e taxas",
+  "taxes and fees": "Impostos e taxas",
 };
 
 /**
@@ -168,52 +146,32 @@ function labelPtFromEnglishCategoryName(name) {
 }
 
 /**
- * @param {string | null | undefined} name
- * @returns {string | null}
- */
-function labelPtFromPortugueseCategoryName(name) {
-  if (!name) return null;
-  const normalized = normalizeCategoryLookupKey(name);
-  return CATEGORY_LABEL_PT_BY_PT_NAME[normalized] ?? null;
-}
-
-/**
- * Nome é a chave primária: só traduz quando o nome cru bater com um nome
- * canônico do seed (EN ou PT) — e quando a tag não for confirmadamente do
- * usuário. `is_default === false` é o único sinal confiável de "não é a
- * linha do seed": uma categoria do usuário chamada literalmente "Health" ou
- * "Renda" não pode ser reescrita só porque o texto coincide com o mapa
- * canônico.
+ * O nome que a tela mostra para uma categoria: o nome exato que a API entrega
+ * (fincla-api#534). A API já aplica a regra `tag_display_label` — o nome da
+ * organização, senão o rótulo do catálogo no idioma — em listagem, facetas,
+ * resumo e fatura, e é esse mesmo nome que vai no arquivo exportado. A tela
+ * não reescreve um nome que já veio em pt-BR (nem caixa, nem "e" × "&").
  *
- * Por que o nome usa `!== false` (não `=== true`) como portão, diferente do
- * `icon_key` abaixo: os endpoints de agregação do consultor
- * (`/analytics/by-category`, `/consultant/expenses-by-category`) NUNCA
- * trazem `is_default` no payload — um deles nem passa pela tabela de tags,
- * agrega direto pela string livre `transaction.category`. Exigir
- * `=== true` pro NOME apagaria a tradução dessas telas por completo. Como só
- * sabemos que uma tag é do usuário quando o backend manda
- * `is_default: false` explicitamente, é esse o único caso que bloqueia a
- * tradução pelo nome; `true` ou "campo ausente" seguem o mapa EN/PT normal.
+ * O mapa EN → pt-BR é só reserva para uma resposta que não localizou e mandou
+ * o nome cru do sistema em inglês ("Personal Shopping"); ele devolve o rótulo
+ * do catálogo letra por letra, para a tela e o arquivo seguirem iguais.
+ * `is_default === false` (tag criada pela organização) bloqueia até essa
+ * reserva: uma categoria do usuário chamada "Health" fica "Health".
  *
- * `icon_key` é mais perigoso que o nome (uma categoria renomeada mantém o
- * `icon_key` do seed, então ele nunca deixa de "parecer" a categoria
- * original) — por isso o portão dele é estrito, `=== true`: só entra como
- * rede de segurança para uma linha CONFIRMADAMENTE do seed cujo nome não
- * bateu com o mapa (nunca pros dois endpoints de agregação acima, que
- * também não mandam `icon_key`, então isso não os afeta de qualquer forma).
+ * `icon_key` só nomeia uma linha do seed que chegou SEM nome nenhum. Com nome
+ * presente ele nunca o sobrepõe: uma categoria renomeada mantém o `icon_key`
+ * do seed, e deixá-lo decidir trocava o nome da organização pelo do catálogo.
  * @param {{ name?: string | null; icon_key?: string | null; is_default?: boolean | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
 export function categoryLabelPtForTag(tag) {
   if (!tag) return "Categoria";
-  const { name, icon_key: rawIk, custom_name: customName, system_key: systemKey, is_default } = coerceCategoryTagShape(
+  const { name, icon_key: rawIk, custom_name: customName, is_default } = coerceCategoryTagShape(
     /** @type {Record<string, unknown>} */ (tag),
   );
-  const isConfirmedSeedRow = is_default === true;
-  const isConfirmedUserTag = is_default === false;
   if (customName) return customName;
   if (!name) {
-    if (isConfirmedSeedRow) {
+    if (is_default === true) {
       const ikNorm = normalizeCategoryIconKey(rawIk);
       if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
         return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
@@ -221,18 +179,8 @@ export function categoryLabelPtForTag(tag) {
     }
     return "Categoria";
   }
-  if (isConfirmedUserTag) return name;
-  const fromEn = labelPtFromEnglishCategoryName(name);
-  if (fromEn) return fromEn;
-  const fromPt = labelPtFromPortugueseCategoryName(name);
-  if (fromPt) return fromPt;
-  if (isConfirmedSeedRow && !systemKey) {
-    const ikNorm = normalizeCategoryIconKey(rawIk);
-    if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
-      return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
-    }
-  }
-  return name;
+  if (is_default === false) return name;
+  return labelPtFromEnglishCategoryName(name) ?? name;
 }
 
 const CATEGORY_COLOR_BY_LABEL_PT = {
@@ -240,19 +188,31 @@ const CATEGORY_COLOR_BY_LABEL_PT = {
   Transporte: "#2563EB",
   Saúde: "#DC2626",
   Educação: "#7C3AED",
-  "Lazer & Entretenimento": "#D97706",
+  "Lazer e entretenimento": "#D97706",
   Lazer: "#D97706",
-  "Compras Pessoais": "#DC2626",
+  "Compras pessoais": "#DC2626",
   Serviços: "#6B7280",
-  "Assinaturas & Software": "#0891B2",
+  "Assinaturas e software": "#0891B2",
   Assinaturas: "#7C3AED",
-  "Impostos & Taxas": "#D97706",
+  "Impostos e taxas": "#D97706",
   Moradia: "#6B7280",
   Receita: "#059669",
   Renda: "#059669",
   Outros: "#374151",
   Vestuário: "#BE185D",
 };
+
+/** Busca de cor sem depender de caixa, acento ou "e" × "&" — a cor é da categoria, não da grafia. */
+const CATEGORY_COLOR_BY_LOOKUP_KEY = Object.fromEntries(
+  Object.entries(CATEGORY_COLOR_BY_LABEL_PT).map(([label, color]) => [colorLookupKey(label), color]),
+);
+
+function colorLookupKey(value) {
+  return normalizeCategoryLookupKey(value)
+    .split(" ")
+    .filter((word) => word && word !== "e")
+    .join(" ");
+}
 
 const CATEGORY_COLOR_PALETTE = [
   "#059669",
@@ -296,9 +256,8 @@ export function resolveCategoryColorForTag(tag) {
 
   const { name, icon_key: rawIk, is_default } = coerceCategoryTagShape(o);
   const labelPt = categoryLabelPtForTag({ name, icon_key: rawIk, is_default });
-  if (labelPt && CATEGORY_COLOR_BY_LABEL_PT[labelPt]) {
-    return CATEGORY_COLOR_BY_LABEL_PT[labelPt];
-  }
+  const canonical = labelPt ? CATEGORY_COLOR_BY_LOOKUP_KEY[colorLookupKey(labelPt)] : null;
+  if (canonical) return canonical;
 
   const key = normalizeCategoryLookupKey(labelPt || name || rawIk);
   if (!key) return "#6B7280";
@@ -315,6 +274,11 @@ const LABEL_PT_ICON_KEY_ALIASES = {
   Vestuário: "shopping-bag",
   Outros: null,
   Renda: "wallet",
+  // Grafia antiga da tela (dados de demonstração), antes de seguir o catálogo (fincla-api#534).
+  "Lazer & Entretenimento": "party-popper",
+  "Compras Pessoais": "shopping-bag",
+  "Assinaturas & Software": "smartphone",
+  "Impostos & Taxas": "receipt",
 };
 
 /**

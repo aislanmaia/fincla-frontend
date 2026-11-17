@@ -108,12 +108,14 @@ function dayIndexInRange(isoDate, rangeStart, dayCount) {
  */
 export function pickCategoryName(transaction) {
   const tag = pickCategoryTagFromApiTransaction(transaction);
-  const rawName = tag?.name || transaction.category || "Sem categoria";
-  return categoryLabelPtForTag({
-    name: rawName,
-    icon_key: tag?.icon_key ?? null,
-    is_default: tag?.is_default ?? null,
-  });
+  // A tag com nome decide sozinha: o `label` dela é o nome que a API mostra (fincla-api#534).
+  if (tag && (tag.label || tag.name)) return categoryLabelPtForTag(tag);
+  if (transaction.category) {
+    return categoryLabelPtForTag({ name: transaction.category, is_default: tag?.is_default ?? null });
+  }
+  // Linha do seed sem nome nenhum: só o ícone ainda a identifica.
+  const byIcon = tag ? categoryLabelPtForTag(tag) : null;
+  return byIcon && byIcon !== "Categoria" ? byIcon : "Sem categoria";
 }
 
 function pickCategoryColor(category) {

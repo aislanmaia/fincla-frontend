@@ -83,6 +83,18 @@ describe("pickCategoryName", () => {
     expect(name).toBe("Saúde");
   });
 
+  // fincla-api#534: o nome é o que a API entrega em `label` (o da organização ou o do catálogo em pt-BR).
+  it("usa o rótulo da API: nome da organização numa categoria renomeada e o do catálogo nas outras", () => {
+    const renamed = pickCategoryName({
+      tags: { categoria: [{ id: "cat-1", name: "Personal Shopping", label: "Minhas compras", icon_key: "shopping-bag", is_default: true, tag_type: { name: "categoria" } }] },
+    });
+    expect(renamed).toBe("Minhas compras");
+    const catalog = pickCategoryName({
+      tags: { categoria: [{ id: "cat-2", name: "Subscriptions & Software", label: "Assinaturas e software", icon_key: "smartphone", is_default: true, tag_type: { name: "categoria" } }] },
+    });
+    expect(catalog).toBe("Assinaturas e software");
+  });
+
   // Regressão #100 (rodada 3, achado 2c): `??` deixava passar string vazia
   // como nome "válido" — `transaction.category` vazio virava o literal ""
   // e o tradutor devolvia o genérico "Categoria" em vez de "Sem categoria".

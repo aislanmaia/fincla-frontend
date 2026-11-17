@@ -26,9 +26,24 @@ describe("categoryLabels", () => {
     expect(categoryLabelPtForTag({ name: "Custom PT", icon_key: null })).toBe("Custom PT");
   });
 
-  it("normaliza nomes PT sem acento/caixa baixa", () => {
-    expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("Alimentação");
+  // fincla-api#534: vale o nome exato que a API entrega. Um nome já em pt-BR
+  // (o rótulo do catálogo ou o da organização) nunca é reescrito pela tela.
+  it("nome PT vindo da API passa como veio, sem normalizar caixa ou acento", () => {
+    expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("alimentacao");
   });
+
+  it.each(["Compras pessoais", "Assinaturas e software", "Lazer e entretenimento", "Impostos e taxas", "Renda", "outros"])(
+    "rótulo pt-BR da API (%s) aparece idêntico em qualquer shape",
+    (label) => {
+      // Listagem: `label` + linha do seed com system_key.
+      expect(categoryLabelPtForTag({ label, name: "x", is_default: true, system_key: "k", icon_key: "shopping-bag" })).toBe(label);
+      // Listagem sem system_key (o adapter só repassa name/label/icon_key/is_default).
+      expect(categoryLabelPtForTag({ label, is_default: true, icon_key: "shopping-bag" })).toBe(label);
+      // Facetas, resumo, fatura: só o nome, sem is_default.
+      expect(categoryLabelPtForTag({ name: label })).toBe(label);
+      expect(categoryLabelPtForTag({ category_name: label })).toBe(label);
+    },
+  );
 
   // Regressão do review adversarial da PR #97 (rodada 1): nome é a chave
   // primária; sem `is_default` no payload (shape do endpoint de agregação do
@@ -65,10 +80,12 @@ describe("categoryLabels", () => {
   // true`) cujo nome não bate com o mapa (ex.: dado legado de uma migração
   // de categoria antiga). Sem `icon_key` nem `tag_id` nos dois endpoints de
   // agregação do consultor, essa rede nunca entra em jogo lá.
-  it("icon_key é rede de segurança só quando is_default é true e o nome não bate com o mapa", () => {
+  // fincla-api#534: com nome presente, o icon_key não reescreve mais nada — o
+  // nome da API é o da organização (renomeado) ou o do catálogo.
+  it("icon_key não sobrepõe um nome que veio da API, mesmo com is_default true", () => {
     expect(
       categoryLabelPtForTag({ name: "Categoria Legada X", icon_key: "home", is_default: true }),
-    ).toBe("Moradia");
+    ).toBe("Categoria Legada X");
   });
 
   it("icon_key sem nome nenhum também exige is_default true (payload de agregação nunca manda icon_key)", () => {
@@ -85,10 +102,13 @@ describe("categoryLabels", () => {
   // (handleUpdateCat) garante que o PATCH em si nunca reescreve o nome sem
   // necessidade — este é só o caso em que o usuário renomeia de propósito
   // para um texto que não é nenhum nome canônico.
-  it("[trade-off conhecido] categoria com is_default:true renomeada pro usuário ainda cai no icon_key", () => {
+  it("categoria do seed renomeada pela organização aparece com o nome da organização", () => {
     expect(
       categoryLabelPtForTag({ name: "Mercado do Zé", icon_key: "shopping-cart", is_default: true }),
-    ).toBe("Alimentação");
+    ).toBe("Mercado do Zé");
+    expect(
+      categoryLabelPtForTag({ label: "Mercado do Zé", name: "Food & Groceries", icon_key: "shopping-cart", is_default: true }),
+    ).toBe("Mercado do Zé");
   });
 
   // Shape real dos endpoints de agregação do consultor (`tag_name` sem
@@ -219,6 +239,14 @@ describe("resolveCategoryIconKey", () => {
     expect(resolveCategoryIconKey(null, "Moradia")).toBe("home");
   });
 
+  it("resolve pelo rótulo do catálogo (o que a API e o fallback EN entregam) e pela grafia antiga", () => {
+    expect(resolveCategoryIconKey(null, "Compras pessoais")).toBe("shopping-bag");
+    expect(resolveCategoryIconKey(null, "Assinaturas e software")).toBe("smartphone");
+    expect(resolveCategoryIconKey(null, "Lazer e entretenimento")).toBe("party-popper");
+    expect(resolveCategoryIconKey(null, "Impostos e taxas")).toBe("receipt");
+    expect(resolveCategoryIconKey(null, "Compras Pessoais")).toBe("shopping-bag");
+  });
+
   it("atalhos do mock (protótipo)", () => {
     expect(resolveCategoryIconKey(null, "Lazer")).toBe("party-popper");
     expect(resolveCategoryIconKey(null, "Outros")).toBe(null);
@@ -232,6 +260,13 @@ describe("resolveCategoryColorForTag", () => {
 
   it("usa a cor canônica quando a API não envia cor", () => {
     expect(resolveCategoryColorForTag({ name: "alimentacao" })).toBe("#059669");
+  });
+
+  it("a cor canônica segue o rótulo do catálogo (sem depender da grafia antiga)", () => {
+    expect(resolveCategoryColorForTag({ name: "Compras pessoais" })).toBe("#DC2626");
+    expect(resolveCategoryColorForTag({ name: "Assinaturas e software" })).toBe("#0891B2");
+    expect(resolveCategoryColorForTag({ name: "Lazer e entretenimento" })).toBe("#D97706");
+    expect(resolveCategoryColorForTag({ name: "Personal Shopping" })).toBe("#DC2626");
   });
 
   it("nunca cai no cinza neutro para nomes conhecidos e sem cor", () => {
@@ -317,21 +352,11 @@ const SYSTEM_CATEGORY_CATALOG_PT_BR = [
   ["Uncategorized", "Não classificado"],
 ];
 
-// Divergência conhecida, pré-existente: o mapa do FE usa "&" e caixa alta onde
-// o catálogo usa "e" e caixa baixa. Fica registrada aqui (não corrigida neste
-// PR) para que uma mudança de qualquer lado apareça como falha.
-const KNOWN_FE_LABEL_DIVERGENCES = {
-  "Leisure & Entertainment": "Lazer & Entretenimento",
-  "Personal Shopping": "Compras Pessoais",
-  "Subscriptions & Software": "Assinaturas & Software",
-  "Taxes & Fees": "Impostos & Taxas",
-};
-
 describe("categoryLabels: catálogo de categorias do backend", () => {
   it.each(SYSTEM_CATEGORY_CATALOG_PT_BR)("traduz %s para o rótulo pt-BR do catálogo", (en, pt) => {
-    const expected = KNOWN_FE_LABEL_DIVERGENCES[en] ?? pt;
-    expect(categoryLabelPtForTag({ name: en })).toBe(expected);
-    expect(categoryLabelPtForTag({ name: en, is_default: true })).toBe(expected);
+    // Reserva para resposta que não localizou: o rótulo do catálogo, letra por letra (fincla-api#534).
+    expect(categoryLabelPtForTag({ name: en })).toBe(pt);
+    expect(categoryLabelPtForTag({ name: en, is_default: true })).toBe(pt);
   });
 
   it("nenhuma categoria do catálogo sai em inglês", () => {

@@ -129,4 +129,7 @@ export const CAT_COLORS_CARD = {
   "Receita":"#059669",
   Assinaturas:"#7C3AED", Lazer:"#9333EA", Casa:"#64748B",
   Eletrônicos:"#0891B2", Viagem:"#0D9488", Outros:"#9CA3AF",
+  // Rótulos do catálogo, como a API os entrega (fincla-api#534).
+  "Lazer e entretenimento":"#9333EA", "Compras pessoais":"#DC2626",
+  "Assinaturas e software":"#7C3AED", "Impostos e taxas":"#D97706",
 };
