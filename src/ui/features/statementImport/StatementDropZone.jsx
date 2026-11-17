@@ -61,7 +61,9 @@ export function StatementDropZone({ compact = false, touch = false, readingName 
   const take = (file) => { if (file && !reading) onFile(file); };
 
   return (
-    <div style={{ flex: "999 1 460px", minWidth: 0, display: "flex", position: "relative" }}>
+    // Mora numa coluna (UploadArea): base `auto`, nunca fixa — uma base em px viraria ALTURA e a área
+    // compacta ficaria do tamanho da grande (G4 BUG-02). Cresce só se a linha esticar a coluna.
+    <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", position: "relative" }}>
       <div
         role="button"
         tabIndex={reading ? -1 : 0}
