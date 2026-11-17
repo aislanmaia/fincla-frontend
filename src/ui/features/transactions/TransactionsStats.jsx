@@ -5,6 +5,7 @@ import { currencyInfo } from "../../money/currencyRegistry.js";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
+import { fmtCount } from "../../formatters.js";
 
 const LABELS = [
   { key: "receitas", full: "Receitas", short: "Rec" },
@@ -111,11 +112,11 @@ export function TransactionsStats({
   const loaded = (n) =>
     countsArePartial ? (
       <>
-        {n} carregada{n === 1 ? "" : "s"}
+        {fmtCount(n)} carregada{n === 1 ? "" : "s"}
       </>
     ) : (
       <>
-        {n} lançamento{n === 1 ? "" : "s"}
+        {fmtCount(n)} lançamento{n === 1 ? "" : "s"}
       </>
     );
 
@@ -208,12 +209,12 @@ export function TransactionsStats({
               border: `1.75px solid ${T.amber}`, borderRadius: "50%", boxSizing: "border-box",
             }}
           />
-          {aPagarCount} a pagar
+          {fmtCount(aPagarCount)} a pagar
           {aPagarDespesas ? <> somam {mono(fmt(aPagarDespesas))}</> : null}
         </div>
       ) : (
         <div>
-          {totalNoFiltro} transaç{totalNoFiltro === 1 ? "ão" : "ões"} no filtro
+          {fmtCount(totalNoFiltro)} transaç{totalNoFiltro === 1 ? "ão" : "ões"} no filtro
         </div>
       )}
       {saldoLiquidado != null ? (

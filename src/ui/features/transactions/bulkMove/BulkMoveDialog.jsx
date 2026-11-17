@@ -15,6 +15,7 @@ import { conversionHeadline, parseAmountInput } from "../../novaTransacao/accoun
 import { moneyInputStatus, reformatMoneyInputOnBlur } from "../../../money/moneyInput.js";
 import { formatTransactionsApiError, updateTransactionForUi } from "../../../data/transactionsAdapter.js";
 import { buildMovePayload, planBulkMove, rowCurrency, runWithConcurrency, suggestedMoveValue } from "./bulkMoveModel.js";
+import { fmtCount } from "../../../formatters.js";
 
 /**
  * "Mover para a conta…" em lote (#281). Escolher a conta → confirmar → executar.
@@ -264,7 +265,7 @@ export function BulkMoveDialog({ isMobile = false, organizationId, accounts, tra
   const failed = results.filter((r) => !r.ok);
   const title = state === "pick"
     ? "Mover para a conta…"
-    : `Mover ${total} lançamento${total === 1 ? "" : "s"} para ${target?.label ?? ""}${plan?.target.currency ? ` (${currencyInfo(plan.target.currency).symbol})` : ""}`;
+    : `Mover ${fmtCount(total)} lançamento${total === 1 ? "" : "s"} para ${target?.label ?? ""}${plan?.target.currency ? ` (${currencyInfo(plan.target.currency).symbol})` : ""}`;
   // Com o lote em voo nada fecha (Esc, ✕, fundo, arrasto): os resultados por item e o
   // "tentar de novo" se perderiam, e reabrir dispararia um segundo lote nos mesmos ids.
   // Com valores editados, o fundo não descarta o que a pessoa digitou (✕/Cancelar fecham).
