@@ -64,6 +64,13 @@ vi.mock("../../../api/transactions", async (importOriginal) => ({
   getTransactionsSummary: (...args) => summaryMock(...args),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
+/* G3-P-03: a seleção e a exportação são da PÁGINA (a caixa de cada linha mora
+   no invólucro da página), não da linha. Uma linha mínima no lugar do `TxRow`
+   completo deixa os testes de 500/501 linhas em ~1 s em vez de ~15 s. */
+vi.mock("../../features/transactions/shared/TransactionRow.jsx", async (importOriginal) => ({
+  ...(await importOriginal()),
+  TxRow: ({ tx }) => <div data-testid="tx-row-stub">{tx.desc}</div>,
+}));
 
 import { TransacoesPage } from "../TransacoesPage.jsx";
 
@@ -106,6 +113,16 @@ async function selectRows(user, ...descs) {
 async function openSelectionExport(user) {
   await user.click(within(screen.getByTestId("bulk-selection-bar")).getByRole("button", { name: "Exportar seleção" }));
   return screen.findByRole("dialog", { name: "Exportar seleção" });
+}
+/* A caixa "selecionar todos" por seletor, não por papel: com 500 linhas
+   na tela, `findByRole`/`findByLabelText` recalculam o nome acessível de cada
+   caixa e custavam ~9 s sozinhos (medido no G3-P-03). */
+function selectAllLoadedBox() {
+  return waitFor(() => {
+    const box = document.querySelector('input[type="checkbox"][aria-label="Selecionar lançamentos carregados"]');
+    expect(box).not.toBeNull();
+    return box;
+  });
 }
 const selectionSummaryCalls = () => summaryMock.mock.calls.map(([query]) => query).filter((query) => query?.ids);
 
@@ -176,11 +193,11 @@ describe("<TransacoesPage> — Exportar seleção (#531)", () => {
     expect(exportMock.mock.calls[0][0].ids).toEqual(["102"]);
   });
 
-  it("'selecionar todos' pega os carregados, mesmo os fora da janela da lista; acima de 500 avisa e não deixa exportar", async () => {
+  it("'selecionar todos' marca tudo o que foi carregado; acima de 500 avisa e não deixa exportar", async () => {
     rows = Array.from({ length: 501 }, (_, i) => row(1000 + i, `Compra ${i}`, -1));
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(await selectAllLoadedBox());
     const panel = await openSelectionExport(user);
     expect(within(panel).getByRole("region", { name: "Lançamentos exportados" })).toHaveTextContent("501 lançamentos selecionados");
     expect(within(panel).getByText(/A seleção tem 501 lançamentos e o máximo é 500/)).toBeInTheDocument();
@@ -190,11 +207,11 @@ describe("<TransacoesPage> — Exportar seleção (#531)", () => {
     expect(exportMock).not.toHaveBeenCalled();
   });
 
-  it("exatamente 500: exporta, com os 500 ids carregados (inclusive os que a lista não desenhou)", async () => {
+  it("exatamente 500 carregados: 'selecionar todos' exporta os 500 ids", async () => {
     rows = Array.from({ length: 500 }, (_, i) => row(1000 + i, `Compra ${i}`, -1));
     const user = userEvent.setup();
     renderPage();
-    await user.click(await screen.findByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(await selectAllLoadedBox());
     const panel = await openSelectionExport(user);
     expect(within(panel).queryByText(/o máximo é 500/)).toBeNull();
     await within(panel).findByTestId("export-totals");

@@ -34,7 +34,7 @@ import { UNKNOWN_MONEY } from "../money/useBaseCurrencyMoney.js";
 import { buildInvoiceCsv, downloadCsv } from "../features/creditCards/invoiceCsv.js";
 import {
   CARTOES_DATA,
-  CAT_COLORS_CARD,
+  cardCategoryColor,
 } from "../data/creditCardsMockData.js";
 import {
   buildCreateCreditCardPayload,
@@ -406,7 +406,7 @@ export const CartoesPage = ({
   const totalInstallments       = installmentsExposure.net;
   const hasRefundedInstallments = installmentsExposure.hasRefunds;
 
-  const categoryColor = (it) => it.catColor || CAT_COLORS_CARD[it.cat] || T.inkMid;
+  const categoryColor = (it) => it.catColor || cardCategoryColor(it.cat);
 
   const invoiceFilterChips = useMemo(() => {
     const m = new Map();

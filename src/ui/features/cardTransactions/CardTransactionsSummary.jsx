@@ -6,6 +6,7 @@ import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 import { groupCategories } from "./categoryGroups.js";
 import { LedgerModal } from "./LedgerDialogs.jsx";
+import { fmtCount } from "../../formatters.js";
 
 const COLORS = [T.blue, T.green, T.amber, T.purple, T.red, T.inkMid];
 const validAmount = (row) => row.amount != null && Number.isFinite(Number(row.amount)) && row.amount_currency;
@@ -68,7 +69,7 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
     </div>}
     {loading && <p role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>Carregando resumo…</p>}
     {error && <p role="alert" style={{ ...G, fontSize: 12, color: T.inkMid }}>Não foi possível carregar o resumo.</p>}
-    {summary && <strong style={{ ...G, ...NUM, fontSize: 22 }}>{summary.total_transactions} lançamento{summary.total_transactions === 1 ? "" : "s"}</strong>}
+    {summary && <strong style={{ ...G, ...NUM, fontSize: 22 }}>{fmtCount(summary.total_transactions)} lançamento{summary.total_transactions === 1 ? "" : "s"}</strong>}
     {summary && <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><span style={{ ...G, fontSize: 11, color: T.inkMid }}>Total movimentado no recorte</span>{totals.length === 0 ? <strong style={{ ...G, ...NUM, fontSize: 16 }}>—</strong> : totals.map((row) => <strong key={row.currency} style={{ ...G, ...NUM, fontSize: 16 }}>{formatMoney(row.amount, row.currency) ?? "—"}</strong>)}</div>}
     {summary && currencies.length === 0 && <p style={{ ...G, fontSize: 12, color: T.inkMid }}>Sem gastos por categoria neste recorte.</p>}
     {currencies.map((currency) => {

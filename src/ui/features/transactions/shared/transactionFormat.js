@@ -1,4 +1,5 @@
 import { T } from "../../../tokens";
+import { categoryColorForLabel } from "../../../data/categoryLabels.js";
 
 /** `shortDateLabel` com identidade estável — ver `cacheDeRotuloDeData`. */
 export function rotuloDeData(raw) {
@@ -17,31 +18,8 @@ export function rotuloDeData(raw) {
 }
 
 
-export const CAT_COLORS = {
-  Alimentação: "#059669",
-  Transporte: "#2563EB",
-  Moradia: "#6B7280",
-  Saúde: "#DC2626",
-  Receita: "#059669",
-  Assinaturas: "#7C3AED",
-  "Assinaturas & Software": "#0891B2",
-  Streaming: "#7C3AED",
-  Lazer: "#D97706",
-  "Lazer & Entretenimento": "#D97706",
-  Compras: "#0891B2",
-  "Compras Pessoais": "#DC2626",
-  Educação: "#7C3AED",
-  Outros: "#374151",
-  Serviços: "#6B7280",
-  "Impostos & Taxas": "#D97706",
-  Vestuário: "#BE185D",
-  // Rótulos do catálogo, como a API os entrega (fincla-api#534).
-  "Assinaturas e software": "#0891B2",
-  "Lazer e entretenimento": "#D97706",
-  "Compras pessoais": "#DC2626",
-  "Impostos e taxas": "#D97706",
-};
-export const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+/* A cor da categoria vem do mapa único (`categoryColorForLabel`, G3-P-10). */
+export const catColor = (label) => categoryColorForLabel(label) || T.inkMid;
 
 /** "20/08/2026" -> { top: "20 ago", sub: "qua" }. Duas linhas curtas cabem numa
  *  coluna de 54 px sem quebrar; a data por extenso não cabia. */

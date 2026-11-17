@@ -56,8 +56,13 @@ export function fmtK(v, moeda) {
   return formatMoneyCompact(v, moeda) ?? "";
 }
 
-const contagem = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
-/** Uma contagem com o separador de milhar do idioma: "1.235 transações", não "1235" (fincla-api#534). */
+/** Marcador de ausência de uma contagem (o mesmo travessão do valor sem moeda). */
+const ABSENT_COUNT = "—";
+const countFormat = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+/** Uma contagem com o separador de milhar do idioma: "1.235 transações", não "1235" (fincla-api#534).
+    Ausência nunca vira zero: `null`, `undefined`, vazio e não-número saem como "—". */
 export function fmtCount(n) {
-  return contagem.format(Number(n) || 0);
+  if (n == null || n === "") return ABSENT_COUNT;
+  const value = Number(n);
+  return Number.isFinite(value) ? countFormat.format(value) : ABSENT_COUNT;
 }

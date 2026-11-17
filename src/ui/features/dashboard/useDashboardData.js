@@ -179,15 +179,16 @@ function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) 
     // card Gastos por Categoria, na mesma tela.
     const rawName = tag?.name || tx.category || "Sem categoria";
     const isDefault = tag?.is_default ?? null;
-    const normalizedName = categoryLabelPtForTag({
-      name: rawName,
-      icon_key: tag?.icon_key ?? null,
-      is_default: isDefault,
-    });
+    /* O nome EXIBIDO segue a tag inteira (nome da org > `label` da API >
+       nome), como Últimas transações (G3-P-02). `rawName` continua a
+       identidade canônica: é a chave de junção com `/analytics/by-category`. */
+    const displayName = tag && (tag.custom_name || tag.label || tag.name)
+      ? categoryLabelPtForTag(tag)
+      : categoryLabelPtForTag({ name: rawName, icon_key: tag?.icon_key ?? null, is_default: isDefault });
     const mapKey =
       tag?.id != null && tag.id !== ""
         ? `id:${tag.id}`
-        : `name:${normalizeTagNameKey(normalizedName)}`;
+        : `name:${normalizeTagNameKey(displayName)}`;
 
     const add = pickDisplayAmount(tx);
     // Sem moeda declarada = a base (é o que toda org de moeda única sempre viu).
@@ -203,6 +204,7 @@ function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) 
       map.set(mapKey, {
         tagId: tag?.id ?? null,
         tagName: rawName,
+        displayName,
         icon_key: tag?.icon_key ?? null,
         color: tag?.color ?? null,
         isDefault,
@@ -357,6 +359,7 @@ export function buildDashboardCategoryRows(
         {
           tag_id: tagId,
           tag_name: row.tagName,
+          display_name: row.displayName ?? null,
           tag_icon_key: iconKey,
           tag_color: color,
           is_default: row.isDefault ?? null,
@@ -385,7 +388,8 @@ export function mapCategory(category, prevTotalByTagId, currency = null, byCurre
     // linha final do card sequestrava categorias do usuário que coincidem
     // de texto com um nome canônico do seed (ex. "Health" → "Saúde"), o
     // mesmo defeito que `pickCategoryName` já corrige pra Últimas transações.
-    name: categoryLabelPtForTag({
+    // `display_name`: o nome já resolvido da tag da transação (G3-P-02).
+    name: category.display_name || categoryLabelPtForTag({
       name: category.tag_name,
       icon_key: category.tag_icon_key ?? null,
       is_default: category.is_default ?? null,

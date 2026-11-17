@@ -63,9 +63,13 @@ describe("fincla-frontend#80 — facet Situação chega como `settled` na chamad
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, settled: false }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(getTransactionsSummary).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, settled: false }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -79,6 +83,8 @@ describe("fincla-frontend#80 — facet Situação chega como `settled` na chamad
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ settled: true }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -109,9 +115,13 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, tag_id: [TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(getTransactionsSummary).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -145,6 +155,8 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
     // da tag ficava aceso filtrando nada.
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [CAT_ID, TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -159,6 +171,8 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [TAG_ID, SECOND] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 });
@@ -226,7 +240,10 @@ describe("fincla-frontend#106 — hasLoaded distingue carregando/erro de vazio d
     listTransactions.mockRejectedValueOnce(new Error("network down"));
     rerender({ refreshToken: 1 });
 
-    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // G3-P-01: falha numa releitura em segundo plano é um aviso discreto
+    // (`refreshError`), não o erro geral — que pararia a rolagem.
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+    expect(result.current.error).toBe("");
 
     // A implementação ANTERIOR zerava `transactions`/`total` no catch — a
     // lista sumia da tela sob uma falha de revalidação, mesmo com dados
@@ -753,5 +770,193 @@ describe("moeda dos totais (fincla-api#520 D1, G3-1-01)", () => {
     expect(getTransactionsSummary.mock.calls[0][0]).toMatchObject({ slice_currency: true, settled: false });
     // A listagem não tem regra de moeda: o parâmetro é só do resumo.
     expect(listTransactions.mock.calls[0][0]).not.toHaveProperty("slice_currency");
+  });
+});
+
+// G3-P-01 / G3-P-04 / G3-P-05 (review do fix/post-export-ui). A releitura em
+// segundo plano continua relendo as páginas já roladas, mas:
+// - uma leitura superada é CANCELADA (AbortController) e nenhum pedido dela
+//   sai depois da troca;
+// - uma página que falha na releitura não derruba a lista nem para a rolagem;
+// - a página que chega pela rolagem durante a releitura não é apagada;
+// - excluir com uma página em voo não pula a linha que subiu.
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+function pageOf(rows, page, limit) {
+  const total = rows.length;
+  return {
+    data: rows.slice((page - 1) * limit, page * limit),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit), has_next: page * limit < total, has_prev: page > 1 },
+  };
+}
+
+describe("G3-P-01 — releitura superada é cancelada; falha parcial mantém as linhas", () => {
+  it("trocar o filtro durante a releitura de 6 páginas aborta os pedidos velhos e nenhum sai depois da troca", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    for (let i = 0; i < 5; i += 1) await loadNext(result);
+    expect(result.current.transactions).toHaveLength(60);
+
+    // A releitura das 6 páginas fica pendurada no servidor.
+    const stale = [];
+    listTransactions.mockImplementation((q, options) => {
+      if (q.type === "expense") return Promise.resolve(pageOf(rows, Number(q.page), Number(q.limit)));
+      stale.push({ page: q.page, signal: options?.signal });
+      return new Promise(() => {});
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(stale.length).toBe(4)); // concorrência limitada a 4
+    expect(stale.every((call) => call.signal instanceof AbortSignal)).toBe(true);
+
+    rerender({
+      refreshToken: 1,
+      filters: filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: PAGE_LIMIT }),
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(stale.every((call) => call.signal.aborted)).toBe(true);
+    // As páginas 5 e 6 da releitura velha nunca saíram.
+    expect(stale.map((call) => call.page).sort()).toEqual([1, 2, 3, 4]);
+    expect(loadedIds(result)).toEqual(range(1, 10));
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 1, type: "expense" });
+  });
+
+  it("desmontar no meio da releitura aborta os pedidos em voo", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result, rerender, unmount } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    const signals = [];
+    listTransactions.mockImplementation((_q, options) => {
+      signals.push(options?.signal);
+      return new Promise(() => {});
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(signals.length).toBe(1));
+    unmount();
+    expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it("uma página da releitura falha: as linhas atuais ficam, aviso discreto, sem erro geral e a rolagem continua", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    const failOnce = new Set();
+    serveRows(rows, { failOnce });
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+    await loadNext(result);
+
+    rows.unshift(apiRow(1000));
+    failOnce.add(2);
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+
+    // Nada da releitura entrou pela metade: a lista é a de antes, inteira.
+    expect(loadedIds(result)).toEqual(range(1, 30));
+    expect(result.current.error).toBe("");
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.hasMore).toBe(true);
+
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 4, limit: 10 });
+    expect(result.current.transactions.length).toBeGreaterThan(30);
+  });
+
+  it("o aviso da releitura apaga quando a próxima releitura começa", async () => {
+    const rows = Array.from({ length: 15 }, (_, i) => apiRow(i + 1));
+    const failOnce = new Set();
+    serveRows(rows, { failOnce });
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    failOnce.add(1);
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+    rerender({ refreshToken: 2 });
+    await waitFor(() => expect(result.current.refreshError).toBe(""));
+  });
+});
+
+describe("G3-P-04 — a página que chega pela rolagem durante a releitura não é apagada", () => {
+  it("releitura de 1..2 em voo, página 3 chega antes: no fim há 30 linhas, sem piscar e sem reler a 3", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const lengths = [];
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: PAGE_LIMIT });
+    const { result, rerender } = renderHook(
+      ({ refreshToken }) => {
+        const data = useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken });
+        lengths.push(data.transactions.length);
+        return data;
+      },
+      { initialProps: { refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+
+    const held = [];
+    listTransactions.mockImplementation((q) => {
+      const page = Number(q.page);
+      const limit = Number(q.limit);
+      if (page <= 2) {
+        const gate = deferred();
+        held.push(gate);
+        return gate.promise.then(() => pageOf(rows, page, limit));
+      }
+      return Promise.resolve(pageOf(rows, page, limit));
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(held).toHaveLength(2));
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.transactions).toHaveLength(30));
+    const fromHere = lengths.length;
+
+    await act(async () => { for (const gate of held) gate.resolve(); });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(loadedIds(result)).toEqual(range(1, 30));
+    expect(Math.min(...lengths.slice(fromHere))).toBe(30);
+    expect(pagesRequested().filter(([page]) => page === 3)).toHaveLength(1);
+
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 4, limit: 10 });
+    expect(loadedIds(result)).toEqual(range(1, 40));
+  });
+});
+
+describe("G3-P-05 — excluir com uma página em voo não pula linha", () => {
+  it("página 2 em voo, exclusão confirmada antes dela responder: o 11 (que subiu para a página 1) não some", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    deleteTransaction.mockImplementation(async (id) => {
+      const at = rows.findIndex((r) => String(r.id) === String(id));
+      if (at >= 0) rows.splice(at, 1);
+    });
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    const gate = deferred();
+    listTransactions.mockImplementationOnce((q) =>
+      // O servidor lê a página DEPOIS da exclusão (quando o portão abre).
+      gate.promise.then(() => pageOf(rows, Number(q.page), Number(q.limit))),
+    );
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(listTransactions.mock.calls.length).toBe(2));
+
+    await act(() => result.current.removeTransaction(3));
+    await act(async () => { gate.resolve(); });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(loadedIds(result)).toContain("21"));
+
+    expect(loadedIds(result)).toEqual([...range(1, 2), ...range(4, 21)]);
   });
 });

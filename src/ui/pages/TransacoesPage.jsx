@@ -107,7 +107,6 @@ import { ExportPanel } from "../features/export/ExportPanel.jsx";
 import { SELECTION_MAX_IDS } from "../features/export/exportFailure.js";
 import { useExportSummary } from "../features/export/useExportSummary.js";
 import {
-  CAT_COLORS,
   catColor,
   fmtBRL,
   fmtValorDaLinha,
@@ -1031,7 +1030,8 @@ function TransacoesPageBody({
      único caminho de volta era o F5, que descarta filtro, rolagem e a linha
      aberta — preço absurdo para um problema que costuma durar dois segundos.
 
-     Reusa o token LOCAL de retentativa em vez do global (`transactionsRefreshToken`,
+     Chama o `reload()` do próprio hook da lista (recarga EXPLÍCITA, que acende
+     carregamento) em vez de bumpar o token global (`transactionsRefreshToken`,
      que é prop e dispara outros efeitos da página, como as âncoras de saldo).
      O que se quer aqui é refazer ESTA busca, não sacudir a tela inteira. */
   /* Ref e não a variável direta: `transactionsData` nasce ~250 linhas abaixo,
@@ -1859,7 +1859,7 @@ function TransacoesPageBody({
       return categoryTagsData.categories.map((c) => ({
         id: c.id,
         label: c.labelPt,
-        color: c.color || CAT_COLORS[c.labelPt] || T.inkMid,
+        color: c.color || catColor(c.labelPt),
         icon: "●",
       }));
     }
@@ -1868,7 +1868,7 @@ function TransacoesPageBody({
       .map((label) => ({
         id: label,
         label,
-        color: CAT_COLORS[label] || T.inkMid,
+        color: catColor(label),
         icon: "●",
       }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
@@ -2193,10 +2193,18 @@ function TransacoesPageBody({
     () => (selectionEnabled ? txList.filter((t) => t.kind !== "transfer").map((t) => String(t.id)) : []),
     [selectionEnabled, txList],
   );
-  const allLoadedSelected = selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelected.includes(id));
+  const selectableLoadedSet = useMemo(() => new Set(selectableLoadedIds), [selectableLoadedIds]);
+  /* G3-P-06: a lista não tem mais teto de 100 linhas. As consultas "está
+     marcado?" usam conjuntos — com `includes` em array eram O(n·m) por render
+     (milhões de comparações com 2.000 linhas e todas marcadas). */
+  const bulkSelectedSet = useMemo(() => new Set(bulkSelected), [bulkSelected]);
+  const allLoadedSelected = useMemo(
+    () => selectableLoadedIds.length > 0 && selectableLoadedIds.every((id) => bulkSelectedSet.has(id)),
+    [selectableLoadedIds, bulkSelectedSet],
+  );
   const bulkSelectedRows = useMemo(
-    () => txList.filter((t) => bulkSelected.includes(String(t.id))),
-    [txList, bulkSelected],
+    () => txList.filter((t) => bulkSelectedSet.has(String(t.id))),
+    [txList, bulkSelectedSet],
   );
   /* Seleção velha não sobrevive (mesma regra dos Lançamentos do cartão): outro
      recorte (filtro, período, busca, conta) ou uma releitura por transação salva
@@ -3649,7 +3657,7 @@ function TransacoesPageBody({
           <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
             onChange={(e) => setBulkSelected(e.target.checked
               ? [...new Set([...bulkSelected, ...selectableLoadedIds])]
-              : bulkSelected.filter((id) => !selectableLoadedIds.includes(id)))} />
+              : bulkSelected.filter((id) => !selectableLoadedSet.has(id)))} />
         ) : null}
         total={filteredCount}
         /* Com recorte de conta, o "de N" seria o total da ORGANIZAÇÃO — outra
@@ -3866,7 +3874,7 @@ function TransacoesPageBody({
                       style={{ flex: "none", width: selectionGutterPx, alignSelf: "stretch", display: "grid", placeItems: "center",
                         background: selected?.id === tx.id ? `${catColor(tx.cat)}08` : "transparent" }}>
                       {tx.kind === "transfer" ? null : (
-                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelected.includes(String(tx.id))}
+                        <RowCheckbox aria-label={`Selecionar ${tx.desc}`} checked={bulkSelectedSet.has(String(tx.id))}
                           onChange={() => toggleBulk(String(tx.id))} />
                       )}
                     </span>
@@ -4108,6 +4116,20 @@ function TransacoesPageBody({
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
+        </div>
+      )}
+      {/* G3-P-01: a atualização em segundo plano falhou. A lista continua a
+          que estava e a rolagem segue — por isso é um aviso discreto, não a
+          faixa vermelha de erro. */}
+      {shouldUseRealData && transactionsData.refreshError && !transactionsData.error && (
+        <div role="status" style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          fontSize:12, color:T.inkLight, padding:"0 2px" }}>
+          <span>Não foi possível atualizar a lista. Mostrando o que já estava carregado.</span>
+          <button type="button" onClick={recarregarLista}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Atualizar
+          </button>
         </div>
       )}
 

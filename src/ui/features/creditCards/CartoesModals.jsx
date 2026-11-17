@@ -2,7 +2,7 @@ import { Check, Download, X } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
-import { CAT_COLORS_CARD } from "../../data/creditCardsMockData.js";
+import { cardCategoryColor } from "../../data/creditCardsMockData.js";
 
 function ModalWrap({ isMobile, onBackdrop, width = 400, maxVh = "80dvh", children }) {
   if (isMobile) {
@@ -162,7 +162,7 @@ export function ExportInvoiceModal({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
             {allCategories.map((cat) => {
               const active = !!exportCategories[cat];
-              const color = CAT_COLORS_CARD[cat] || T.inkMid;
+              const color = cardCategoryColor(cat);
               return (
                 <button key={cat} onClick={() => setExportCategories((m) => ({ ...m, [cat]: !m[cat] }))}
                   style={{ ...G, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? color : T.border}`, background: active ? color + "18" : T.surface, color: active ? color : T.inkMid, cursor: "pointer", transition: "all 0.15s" }}>

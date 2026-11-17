@@ -48,6 +48,13 @@ vi.mock("../../../api/organizations", () => ({
   getOrganization: vi.fn(() => Promise.resolve({ id: "org-test", base_currency: "BRL" })),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
+/* A paginação é do hook e da página, não da linha: uma linha mínima no lugar
+   do `TxRow` completo tira o custo de desenhar 510 linhas reais no jsdom (o
+   teste dos 510 levava ~20 s e estourava o teto com a máquina carregada). */
+vi.mock("../../features/transactions/shared/TransactionRow.jsx", async (importOriginal) => ({
+  ...(await importOriginal()),
+  TxRow: ({ tx }) => <div data-testid="tx-row-stub">{tx.desc}</div>,
+}));
 const listTransactionsMock = vi.fn();
 const summaryApiMock = vi.fn();
 vi.mock("../../../api/transactions", async (importOriginal) => ({
@@ -274,6 +281,26 @@ describe("<TransacoesPage> — scroll infinito pagina de verdade (fincla-api#535
     expect(screen.getAllByText("Compra 1")).toHaveLength(1);
     expect(screen.getByText(`Compra ${2 * size - 1}`)).toBeInTheDocument();
     expect(screen.queryByText(`Compra ${2 * size}`)).toBeNull();
+  });
+
+  it("G3-P-01: uma página da atualização em segundo plano falha — a lista fica, aviso discreto, sem faixa de erro, e a rolagem segue", async () => {
+    const { rerender } = render(<TransacoesPage {...props()} />);
+    await firstPageLoaded();
+    const size = pageSize();
+    await loadNextPage();
+
+    serverRows.unshift(apiRow(9000));
+    failOnce.add(2);
+    rerender(<TransacoesPage {...props({ transactionsRefreshToken: 1 })} />);
+    await screen.findByText("Não foi possível atualizar a lista. Mostrando o que já estava carregado.");
+
+    // Nada da releitura entrou pela metade: nem a 9000 nova, nem linha sumida.
+    expect(screen.queryByText("Compra 9000")).toBeNull();
+    expect(screen.getByText(`Compra ${2 * size}`)).toBeInTheDocument();
+    expect(screen.queryByText("network down")).toBeNull();
+
+    await loadNextPage();
+    expect(requests().at(-1)).toMatchObject({ page: 3, limit: size });
   });
 
   it("'Selecionar lançamentos carregados' marca tudo o que já foi lido, acima de 100", async () => {

@@ -69,11 +69,12 @@ export const createTransaction = async (
  * Retorna resposta paginada com metadata
  */
 export const listTransactions = async (
-  filters: ListTransactionsQuery
+  filters: ListTransactionsQuery,
+  options?: { signal?: AbortSignal }
 ): Promise<PaginatedTransactionsResponse> => {
   const response = await apiClient.get<PaginatedTransactionsResponse>(
     '/transactions',
-    { params: filters, paramsSerializer: repeatArrayParams }
+    { params: filters, paramsSerializer: repeatArrayParams, signal: options?.signal }
   );
   // A moeda de CADA linha é preservada antes do desembrulho: ela é a da conta em
   // que o lançamento caiu, e a lista mostra linhas de moedas diferentes lado a
@@ -90,11 +91,12 @@ export const listTransactions = async (
  * Útil para calcular métricas sem precisar buscar todas as transações
  */
 export const getTransactionsSummary = async (
-  filters: TransactionsSummaryQuery
+  filters: TransactionsSummaryQuery,
+  options?: { signal?: AbortSignal }
 ): Promise<TransactionsSummaryResponse> => {
   const response = await apiClient.get<TransactionsSummaryResponse>(
     '/transactions/summary',
-    { params: filters, paramsSerializer: repeatArrayParams }
+    { params: filters, paramsSerializer: repeatArrayParams, signal: options?.signal }
   );
   const raw = response.data;
   const withBreakdownCurrencies = raw.breakdown ? {

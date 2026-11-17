@@ -1,4 +1,6 @@
 /* ─── CARTÕES DATA ───────────────────────────────────────── */
+import { T } from "../tokens";
+import { categoryColorForLabel } from "./categoryLabels.js";
 
 export const CARTOES_DATA = [
   {
@@ -120,16 +122,5 @@ export const CARTOES_DATA = [
   },
 ];
 
-export const CAT_COLORS_CARD = {
-  "Alimentação":"#2563EB",           "Transporte":"#D97706",
-  "Saúde":"#059669",                 "Educação":"#BE185D",
-  "Lazer & Entretenimento":"#9333EA","Compras Pessoais":"#DC2626",
-  "Serviços":"#6B7280",              "Assinaturas & Software":"#7C3AED",
-  "Impostos & Taxas":"#D97706",      "Moradia":"#374151",
-  "Receita":"#059669",
-  Assinaturas:"#7C3AED", Lazer:"#9333EA", Casa:"#64748B",
-  Eletrônicos:"#0891B2", Viagem:"#0D9488", Outros:"#9CA3AF",
-  // Rótulos do catálogo, como a API os entrega (fincla-api#534).
-  "Lazer e entretenimento":"#9333EA", "Compras pessoais":"#DC2626",
-  "Assinaturas e software":"#7C3AED", "Impostos e taxas":"#D97706",
-};
+/** Cor de uma categoria nas telas do cartão: o mesmo mapa das Transações (G3-P-10). */
+export const cardCategoryColor = (label) => categoryColorForLabel(label) || T.inkMid;
