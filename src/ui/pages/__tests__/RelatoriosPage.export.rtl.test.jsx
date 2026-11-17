@@ -326,6 +326,53 @@ describe("Relatórios — Exportar pelo exportador único (fincla-api#526)", () 
       expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
       expect(seen.exports[0].getAll("filters_text")).toEqual(["Período: 01/06/2026 a 30/11/2026"]);
     });
+
+    it.each([
+      ["desktop", 1440, false],
+      ["celular", 390, true],
+    ])("%s: a tela sem cotação tem o seletor de período, e painel e arquivo seguem o período escolhido (G3-D-01/02)", async (_label, width, isMobile) => {
+      window.matchMedia = vi.fn((query) => {
+        const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+        return { matches: Number.isFinite(max) ? width <= max : false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+      });
+      withApi({ summary: () => HttpResponse.json(NO_RATE_SUMMARY) });
+      const user = userEvent.setup();
+      render(<RelatoriosPage dataMode="live" organizationId={ORG} isMobile={isMobile} />);
+      await waitFor(() => expect(document.body.textContent).toMatch(/R\$\s?100/));
+
+      // Na tela normal a pessoa escolhe 12m; nesse período falta cotação e a tela vira o cartão de aviso.
+      noRate();
+      await user.click(screen.getByRole("button", { name: "12m" }));
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+
+      // O seletor continua no cartão, com o período escolhido; o Exportar sai com ele.
+      await user.click(screen.getByRole("button", { name: /Exportar/ }));
+      let panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/12/2025 a 30/11/2026");
+      await within(panel).findByText("10 lançamentos");
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(1));
+      expect(seen.exports[0].get("date_start")).toBe("2025-12-01");
+      expect(seen.exports[0].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[0].getAll("filters_text")).toEqual(["Período: 01/12/2025 a 30/11/2026"]);
+      expect(seen.summaries.at(-1).get("date_start")).toBe("2025-12-01");
+      await user.click(within(panel).getByRole("button", { name: /Fechar/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Exportar" })).toBeNull());
+
+      // No próprio cartão a pessoa troca para 3m, sem sair da página.
+      await user.click(screen.getByRole("button", { name: "3m" }));
+      expect(await screen.findByText("Não foi possível converter para uma moeda só")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /Exportar/ }));
+      panel = await screen.findByRole("dialog", { name: "Exportar" });
+      expect(within(panel).getByRole("list", { name: "Filtros ativos" })).toHaveTextContent("Período: 01/09/2026 a 30/11/2026");
+      await within(panel).findByText("10 lançamentos");
+      await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+      await waitFor(() => expect(seen.exports).toHaveLength(2));
+      expect(seen.exports[1].get("date_start")).toBe("2026-09-01");
+      expect(seen.exports[1].get("date_end")).toBe("2026-11-30");
+      expect(seen.exports[1].getAll("filters_text")).toEqual(["Período: 01/09/2026 a 30/11/2026"]);
+      expect(seen.summaries.at(-1).get("date_start")).toBe("2026-09-01");
+    });
   });
 
   it("a tela não usa mais o cliente antigo de exportação", async () => {
