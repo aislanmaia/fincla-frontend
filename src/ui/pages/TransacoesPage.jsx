@@ -59,6 +59,8 @@ import {
   LIST_HEADER_HEIGHT,
   LIST_HEADER_HEIGHT_COMPACT,
 } from "../features/transactions/TransactionsListHeader.jsx";
+import { ReconcileShortcut } from "../features/statementImport/ReconcileShortcut.jsx";
+import { useReconcileShortcutData } from "../features/statementImport/useReconcileShortcutData.js";
 import {
   DAY_HEADER_HEIGHT,
   DENSITIES,
@@ -696,6 +698,9 @@ function TransacoesPageBody({
   organizationId = null,
   transactionsRefreshToken = 0,
   onTransactionsInvalidate,
+  /** Atalho "Conciliar extrato" (decisão do Owner de 2026-11-17): (accountId, importId|null) abre a
+      conciliação. Só o dono concilia: `null` esconde o atalho. */
+  onReconcileStatement = null,
 }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
@@ -1381,6 +1386,28 @@ function TransacoesPageBody({
     onAccountScopeChange?.(singleFilteredAccountId);
   }, [onAccountScopeChange, singleFilteredAccountId]);
   useEffect(() => () => onAccountScopeChange?.(null), [onAccountScopeChange]);
+
+  /* Atalho "Conciliar extrato" (decisão do Owner de 2026-11-17): contas elegíveis = as ativas, a
+     mesma regra do "Importar extrato" de Minhas Contas (cartão de crédito não é conta). Fica na
+     linha do chip da conta filtrada; sem chip, na linha da contagem (no celular, numa linha própria
+     acima dela, para não apertar a contagem). */
+  const reconcileShortcutOn = !!onReconcileStatement && shouldUseRealData && !!organizationId && accountsForFilter.length > 0;
+  /* Os dados do atalho moram AQUI (G3): o botão muda de lugar conforme o filtro e é remontado; com
+     os dados na página, a troca não repete pedidos nem faz o botão piscar. */
+  const reconcileShortcutData = useReconcileShortcutData({ organizationId, enabled: reconcileShortcutOn });
+  const reconcileShortcut = reconcileShortcutOn ? (
+    <ReconcileShortcut
+      data={reconcileShortcutData}
+      accounts={accountsForFilter}
+      filteredIds={effectiveAccountSel}
+      baseCurrency={orgBase.currency ?? null}
+      onOpen={onReconcileStatement}
+      compact={isMobile}
+    />
+  ) : null;
+  // No celular o chip da conta não aparece (decisão do Owner, 2026-11-17): o "Filtros 1" já indica
+  // o recorte e a linha a mais apertava a lista. No computador ele continua (#279).
+  const showsAccountChips = !isMobile && effectiveAccountSel.length > 0 && !!accountsForFilterById;
 
   const categoryTagsData = useCategoryTagsData({
     organizationId,
@@ -3634,8 +3661,8 @@ function TransacoesPageBody({
       background:T.surface, border:`1px solid ${T.border}`, borderRadius:12 }}>
       {/* Chip da conta filtrada, à vista em qualquer largura: chegando de Minhas
           Contas no celular, o filtro só aparecia como "Filtros 1". */}
-      {effectiveAccountSel.length > 0 && accountsForFilterById ? (
-        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 0" }}>
+      {showsAccountChips ? (
+        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "8px 12px 0" }}>
           {effectiveAccountSel.map((id) => {
             const label = anyAccountById[id]?.label || "Conta";
             return (
@@ -3650,9 +3677,19 @@ function TransacoesPageBody({
               </span>
             );
           })}
+          {reconcileShortcut ? (
+            <span style={{ marginLeft: "auto", display: "flex", justifyContent: "flex-end", minWidth: 0, maxWidth: "100%" }}>
+              {reconcileShortcut}
+            </span>
+          ) : null}
+        </div>
+      ) : reconcileShortcut && isMobile ? (
+        <div data-testid="reconcile-shortcut-row" style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0", minWidth: 0 }}>
+          {reconcileShortcut}
         </div>
       ) : null}
       <TransactionsListHeader
+        action={!showsAccountChips && !isMobile ? reconcileShortcut : null}
         leading={selectionEnabled ? (
           <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
             onChange={(e) => setBulkSelected(e.target.checked

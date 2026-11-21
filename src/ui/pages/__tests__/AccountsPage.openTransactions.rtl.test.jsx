@@ -39,3 +39,19 @@ describe("Minhas Contas → Transações filtradas na conta (#268)", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 });
+
+describe("Minhas Contas → Importar extrato (fincla-api#508)", () => {
+  it("o menu da conta leva à conciliação daquela conta", async () => {
+    const onImport = vi.fn();
+    render(<AccountsPage organizationId="org-1" dataMode="live" onImportStatement={onImport} />);
+    await userEvent.click(screen.getAllByLabelText("Ações da conta")[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Importar extrato" }));
+    expect(onImport).toHaveBeenCalledWith("acc-b");
+  });
+
+  it("sem permissão para conciliar, o item não aparece", async () => {
+    render(<AccountsPage organizationId="org-1" dataMode="live" />);
+    await userEvent.click(screen.getAllByLabelText("Ações da conta")[0]);
+    expect(screen.queryByRole("button", { name: "Importar extrato" })).toBeNull();
+  });
+});

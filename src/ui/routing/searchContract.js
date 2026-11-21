@@ -121,6 +121,11 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   if (opts.accountId != null && String(opts.accountId).trim() !== "") {
     next[FC.TX_ACCOUNT] = String(opts.accountId).trim();
   }
+  // Período do deep link (ex.: extrato recém-conciliado de um mês anterior). Só inteiro e em ordem.
+  if (isRealYmd(opts.txFrom) && isRealYmd(opts.txTo) && opts.txFrom <= opts.txTo) {
+    next[FC.TX_FROM] = opts.txFrom;
+    next[FC.TX_TO] = opts.txTo;
+  }
   if (opts.autoOpenAdd) {
     next[FC.ADD] = "1";
   }

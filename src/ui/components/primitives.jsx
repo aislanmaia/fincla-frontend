@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { forwardRef, useState, useEffect, useRef } from "react";
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 
@@ -9,14 +9,19 @@ import { G, S, NUM } from "../typography";
  * pode encolher. Sem isso ele cresce com o conteúdo, e uma tela que quer ser
  * autocontida no viewport nunca consegue: a altura vaza por aqui.
  */
-export function PageEnter({ children, fill = false }) {
+export function PageEnter({ children, fill = false, fillMin = false }) {
   return (
     <div
       style={{
         animation: "fadeIn 0.18s ease both",
         ...(fill
           ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
-          : null),
+          : fillMin
+            // Cresce até o que sobra na área de conteúdo (coluna flex, ver `mainScrollStyle`), que
+            // continua rolando se a página passar dela. Não `minHeight: 100%`: com o aviso de acesso
+            // em cima, 100% somado ao aviso fazia a tela rolar à toa.
+            ? { flex: "1 0 auto", display: "flex", flexDirection: "column" }
+            : null),
       }}
     >
       {children}
@@ -291,7 +296,8 @@ export function CollapsibleSection({ open, children }) {
   );
 }
 
-export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }) {
+// `ref` chega ao <button> (foco movido pela tela, ex.: o "Alterar" de uma linha da conciliação).
+export const Btn = forwardRef(function BtnView({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }, ref) {
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
     blue: { bg: T.blue, txt: "#fff", brd: T.blue },
@@ -307,6 +313,7 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
   const s = styles[variant] || styles.outGray;
   return (
     <button
+      ref={ref}
       {...buttonProps}
       type={type}
       disabled={disabled}
@@ -337,7 +344,7 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
       {children}
     </button>
   );
-}
+});
 
 export function Select({ children, style, disabled = false, ...selectProps }) {
   return <select
