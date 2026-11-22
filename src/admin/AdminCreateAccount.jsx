@@ -12,6 +12,21 @@ function courtesyEndLabel(days) {
   return end.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+/**
+ * A trial is a free period by definition, so it never starts without one: the
+ * courtesy is switched on for it, and switched back off if the admin returns to
+ * a ready account before changing the access by hand.
+ */
+function switchSetup(current, setup) {
+  if (setup === "self_onboarding" && current.initial_access === "none") {
+    return { ...current, setup, initial_access: "courtesy", autoCourtesy: true };
+  }
+  if (setup === "ready" && current.autoCourtesy) {
+    return { ...current, setup, initial_access: "none", autoCourtesy: false };
+  }
+  return { ...current, setup };
+}
+
 export function AdminCreateAccount({ onCreated, onCancel }) {
   const [form, setForm] = useState({ setup: "ready", email: "", first_name: "", last_name: "", organization_name: "", organization_type: "", monthly_income: "", initial_access: "none", courtesy_plan: "", courtesy_days: "14" });
   const [plans, setPlans] = useState([]);
@@ -58,7 +73,7 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
     <h2>Criar conta</h2>
     <p>A pessoa receberá um link de uso único para definir sua senha.</p>
     <div className="admin-create-fields">
-      <label>Como a conta começa<AdminSelect ariaLabel="Como a conta começa" value={form.setup} onChange={(value) => setForm((current) => ({ ...current, setup: value, initial_access: value === "self_onboarding" && current.initial_access === "none" ? "courtesy" : current.initial_access }))} options={[{ value: "ready", label: "Conta pronta: eu configuro" }, { value: "self_onboarding", label: "Conta de teste: a pessoa configura" }]} /></label>
+      <label>Como a conta começa<AdminSelect ariaLabel="Como a conta começa" value={form.setup} onChange={(value) => setForm((current) => switchSetup(current, value))} options={[{ value: "ready", label: "Conta pronta: eu configuro" }, { value: "self_onboarding", label: "Conta de teste: a pessoa configura" }]} /></label>
     </div>
     <p className="admin-create-access-note">{form.setup === "self_onboarding"
       ? "Você informa só a pessoa e o acesso. No primeiro acesso ela faz o onboarding completo: nome da organização, moeda, renda, cartão e categorias."
@@ -76,7 +91,7 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
     <div className="admin-create-access">
       <div><h3>Acesso inicial</h3><p>Defina o acesso junto com a criação da conta.</p></div>
       <div className="admin-create-fields">
-        <label>Tipo de acesso<AdminSelect ariaLabel="Tipo de acesso inicial" value={form.initial_access} onChange={(value) => setForm((current) => ({ ...current, initial_access: value }))} options={[{ value: "none", label: "Sem acesso gratuito" }, { value: "courtesy", label: "Cortesia com prazo" }, { value: "beta", label: "Beta sem prazo" }]} /></label>
+        <label>Tipo de acesso<AdminSelect ariaLabel="Tipo de acesso inicial" value={form.initial_access} onChange={(value) => setForm((current) => (value === current.initial_access ? current : { ...current, initial_access: value, autoCourtesy: false }))} options={[...(form.setup === "ready" ? [{ value: "none", label: "Sem acesso gratuito" }] : []), { value: "courtesy", label: "Cortesia com prazo" }, { value: "beta", label: "Beta sem prazo" }]} /></label>
         {form.initial_access === "courtesy" && <>
           <label>Plano liberado<AdminSelect ariaLabel="Plano da cortesia" value={form.courtesy_plan} onChange={(value) => setForm((current) => ({ ...current, courtesy_plan: value }))} required options={[{ value: "", label: "Selecione um plano" }, ...plans.map((plan) => ({ value: plan.id, label: plan.name }))]} /></label>
           <label>Dias gratuitos<input type="number" inputMode="numeric" min="1" max={MAX_COURTESY_DAYS} step="1" value={form.courtesy_days} onChange={(event) => setForm((current) => ({ ...current, courtesy_days: event.target.value }))} required /></label>

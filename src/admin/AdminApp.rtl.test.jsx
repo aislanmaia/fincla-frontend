@@ -260,6 +260,28 @@ describe("painel do administrador Fincla", () => {
     expect(screen.getByText(/ela faz o onboarding completo/)).toBeInTheDocument();
     // A trial starts as a courtesy: the access is already preselected.
     expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Cortesia com prazo");
+    // A trial never starts without a free period.
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    expect(screen.queryByRole("option", { name: "Sem acesso gratuito" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
+    // Back to a ready account, the automatic courtesy is undone (re-picking the same value is no manual choice)…
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta pronta: eu configuro" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Sem acesso gratuito");
+    // …and redone when the trial is chosen again.
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Cortesia com prazo");
+    // A courtesy the admin picks by hand on a ready account stays when switching modes.
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta pronta: eu configuro" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    fireEvent.click(screen.getByRole("option", { name: "Beta sem prazo" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Beta sem prazo");
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
     fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Lead" } });
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "lead@example.com" } });
     fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
