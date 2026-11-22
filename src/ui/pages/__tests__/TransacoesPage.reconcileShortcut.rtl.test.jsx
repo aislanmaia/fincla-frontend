@@ -337,10 +337,12 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
     resolveDetails();
     const onReconcile = renderMobile();
-    const chip = await screen.findByRole("button", { name: "Continuar 2 conciliações começadas" });
+    const chip = await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
     expect(chip).toHaveTextContent(/^Continuar conciliações2$/);
     expect(within(chip).getByText("2")).toHaveAttribute("data-testid", "reconcile-chip-badge");
     expect(chip).toHaveAttribute("aria-haspopup", "dialog");
+    // G3 achado 5: o nome começa pelo texto visível, e o chip diz se a folha está aberta.
+    expect(chip).toHaveAttribute("aria-expanded", "false");
     expect(mobileChipRow()).toContainElement(chip);
     await act(async () => { await Promise.resolve(); });
     expect(getImportMock).not.toHaveBeenCalled();
@@ -349,11 +351,14 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
     expect(sheet).toHaveTextContent("Continue de onde parou em cada conta.");
     await waitFor(() => expect(getImportMock).toHaveBeenCalledTimes(2));
+    expect(chip).toHaveAttribute("aria-expanded", "true");
     const rows = within(sheet).getAllByRole("button", { name: /^Continuar a conciliação da / });
-    expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
-      "Continuar a conciliação da Conta A Itaú",
-      "Continuar a conciliação da Conta B Nubank",
-    ]);
+    // G3 achado 1: o nome acessível de cada linha traz o progresso (o que diferencia uma da outra).
+    await waitFor(() => expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
+      `Continuar a conciliação da Conta A Itaú, ${nOf("d-a")} de 8 passos conferidos`,
+      `Continuar a conciliação da Conta B Nubank, ${nOf("d-b")} de 8 passos conferidos`,
+    ]));
+    expect(within(sheet).getByRole("button", { name: `Continuar a conciliação da Conta B Nubank, ${nOf("d-b")} de 8 passos conferidos` })).toBe(rows[1]);
     await waitFor(() => expect(rows[0]).toHaveTextContent(`Conta A Itaú${nOf("d-a")} de 8 passos conferidosContinuar`));
     expect(rows[1]).toHaveTextContent(`Conta B Nubank${nOf("d-b")} de 8 passos conferidosContinuar`);
     await userEvent.click(rows[1]);
@@ -366,10 +371,19 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
     resolveDetails();
     const onReconcile = renderMobile();
-    await userEvent.click(await screen.findByRole("button", { name: "Continuar 2 conciliações começadas" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" }));
     const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
+    const backdrop = screen.getByTestId("reconcile-sheet-backdrop");
     await userEvent.click(within(sheet).getByRole("button", { name: "Conciliar outra conta…" }));
     const choice = await screen.findByRole("dialog", { name: "Conciliar o extrato de qual conta?" });
+    // G3 achado 4: a MESMA folha (nem o fundo nem a folha remontam: sem piscar, sem subir de novo);
+    // só o título e o conteúdo trocam, e o foco vai para o primeiro controle do conteúdo novo.
+    expect(choice).toBe(sheet);
+    expect(screen.getByTestId("reconcile-sheet-backdrop")).toBe(backdrop);
+    expect(choice).toHaveTextContent("Conciliar o extrato de qual conta?");
+    expect(choice).not.toHaveTextContent("Conciliações começadas");
+    expect(choice).not.toHaveTextContent("Conciliar outra conta…");
+    await waitFor(() => expect(document.activeElement).toBe(within(choice).getByRole("button", { name: /Conta A Itaú/ })));
     expect(choice).not.toHaveTextContent("Nubank Roxinho");
     expect(choice).toHaveTextContent("Cartões de crédito não aparecem");
     await userEvent.click(within(choice).getByRole("button", { name: /Conta Euro/ }));
@@ -380,7 +394,7 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
     resolveDetails();
     renderMobile();
-    const chip = await screen.findByRole("button", { name: "Continuar 2 conciliações começadas" });
+    const chip = await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
     await userEvent.click(chip);
     const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
     expect(sheet).toHaveAttribute("aria-modal", "true");
@@ -394,10 +408,33 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     expect(document.activeElement).toBe(chip);
   });
 
+  it("M3, o foco entra na folha sem rolar a página (preventScroll: a folha ainda está subindo, o iOS pularia)", async () => {
+    listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
+    renderMobile();
+    const chip = await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      await userEvent.click(chip);
+      const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
+      await waitFor(() => expect(sheet).toContainElement(document.activeElement));
+      const intoSheet = focusSpy.mock.contexts.map((el, i) => [el, focusSpy.mock.calls[i]]).filter(([el]) => sheet.contains(el));
+      expect(intoSheet.length).toBeGreaterThan(0);
+      for (const [, args] of intoSheet) expect(args[0]).toEqual({ preventScroll: true });
+      // Trocar o conteúdo (Conciliar outra conta…) também foca sem rolar.
+      focusSpy.mockClear();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Conciliar outra conta…" }));
+      await waitFor(() => expect(focusSpy.mock.contexts.some((el) => sheet.contains(el) && el.tagName === "BUTTON" && /Conta A Itaú/.test(el.textContent))).toBe(true));
+      const afterSwitch = focusSpy.mock.contexts.map((el, i) => [el, focusSpy.mock.calls[i]]).filter(([el]) => sheet.contains(el) && el.tagName === "BUTTON" && /Conta A Itaú/.test(el.textContent));
+      for (const [, args] of afterSwitch) expect(args[0]).toEqual({ preventScroll: true });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it("M3, tocar fora fecha a folha", async () => {
     listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
     renderMobile();
-    await userEvent.click(await screen.findByRole("button", { name: "Continuar 2 conciliações começadas" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" }));
     await screen.findByRole("dialog", { name: "Conciliações começadas" });
     await userEvent.click(screen.getByTestId("reconcile-sheet-backdrop"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -476,5 +513,88 @@ describe("<TransacoesPage> — atalho Conciliar extrato no CELULAR", () => {
     const choice = await screen.findByRole("dialog", { name: "Conciliar o extrato de qual conta?" });
     await userEvent.click(within(choice).getByRole("button", { name: /Conta A Itaú/ }));
     expect(onReconcile).toHaveBeenCalledWith(ACC_A, null);
+  });
+
+  it("M3, conta em outra moeda: a moeda entra no nome acessível da linha, junto com o progresso", async () => {
+    listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_EUR, name: "Conta Euro", currency: "EUR" }]);
+    listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_EUR, "d-b")]);
+    resolveDetails();
+    renderMobile();
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" }));
+    const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
+    expect(await within(sheet).findByRole("button", { name: `Continuar a conciliação da Conta Euro · EUR, ${nOf("d-b")} de 8 passos conferidos` }))
+      .toHaveTextContent(`Conta Euro · EUR${nOf("d-b")} de 8 passos conferidos`);
+  });
+
+  it("G3 achado 3: filtro A+B com rascunho só na C → sem chip", async () => {
+    listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_EUR, name: "Conta Euro", currency: "EUR" }]);
+    listDraftsMock.mockResolvedValue([draftItem(ACC_EUR, "d-b")]);
+    resolveDetails();
+    routerSearch = { fc_account: `${ACC_A},${ACC_B}` };
+    renderMobile();
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalled());
+    await screen.findAllByText("Mercado");
+    await act(async () => { await Promise.resolve(); });
+    expect(mobileChipRow()).toBeNull();
+    expect(screen.queryByRole("button", { name: /Continuar/ })).toBeNull();
+  });
+
+  it("G3 achado 3: filtro A+B com rascunho em A e B (e na C) → chip M3 com 2, e a folha só com A e B", async () => {
+    listAccountsMock.mockResolvedValue([...TWO_ACCOUNTS, { id: ACC_EUR, name: "Conta Euro", currency: "EUR" }]);
+    listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b"), draftItem(ACC_EUR, "d-c")]);
+    resolveDetails();
+    routerSearch = { fc_account: `${ACC_A},${ACC_B}` };
+    renderMobile();
+    const chip = await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
+    expect(within(chip).getByTestId("reconcile-chip-badge")).toHaveTextContent(/^2$/);
+    await userEvent.click(chip);
+    const sheet = await screen.findByRole("dialog", { name: "Conciliações começadas" });
+    expect(within(sheet).getAllByRole("button", { name: /^Continuar a conciliação da / }).map((r) => r.querySelector("b").textContent))
+      .toEqual(["Conta A Itaú", "Conta B Nubank"]);
+    expect(sheet).not.toHaveTextContent("Conta Euro");
+  });
+
+  it("G3 achado 2: a folha some quando deixa de ser celular e NÃO reabre sozinha ao voltar", async () => {
+    listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
+    resolveDetails();
+    const props = { onNav: vi.fn(), onNewTx: vi.fn(), onEditTx: vi.fn(), dataMode: "live", organizationId: "org-test",
+      transactionsRefreshToken: 0, onTransactionsInvalidate: vi.fn(), onReconcileStatement: vi.fn() };
+    const { rerender } = render(<TransacoesPage {...props} isMobile />);
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" }));
+    await screen.findByRole("dialog", { name: "Conciliações começadas" });
+    rerender(<TransacoesPage {...props} isMobile={false} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(<TransacoesPage {...props} isMobile />);
+    await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("G3 achado 2: na troca de organização a folha aberta fecha", async () => {
+    listDraftsMock.mockResolvedValue([draftItem(ACC_A, "d-a"), draftItem(ACC_B, "d-b")]);
+    resolveDetails();
+    const props = { onNav: vi.fn(), onNewTx: vi.fn(), onEditTx: vi.fn(), dataMode: "live", isMobile: true,
+      transactionsRefreshToken: 0, onTransactionsInvalidate: vi.fn(), onReconcileStatement: vi.fn() };
+    const { rerender } = render(<TransacoesPage {...props} organizationId="org-test" />);
+    await userEvent.click(await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" }));
+    await screen.findByRole("dialog", { name: "Conciliações começadas" });
+    rerender(<TransacoesPage {...props} organizationId="org-other" />);
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalledWith("org-other"));
+    await screen.findByRole("button", { name: "Continuar conciliações, 2 começadas" });
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("G3 achado 7: escolha aberta pelo ⋯ e fechada com Esc devolve o foco ao botão ⋯", async () => {
+    renderMobile();
+    await waitFor(() => expect(listDraftsMock).toHaveBeenCalled());
+    const menuButton = await screen.findByRole("button", { name: "Opções da lista" });
+    const menu = await openListOptions();
+    await userEvent.click(within(menu).getByRole("menuitem", { name: "Conciliar extrato…" }));
+    const choice = await screen.findByRole("dialog", { name: "Conciliar o extrato de qual conta?" });
+    await waitFor(() => expect(choice).toContainElement(document.activeElement));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(menuButton);
   });
 });
