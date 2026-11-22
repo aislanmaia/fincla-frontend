@@ -35,3 +35,26 @@ export function latestConcludedEnd(items) {
   const ends = items.filter((i) => i.status === "concluded" && i.period?.end).map((i) => i.period.end);
   return ends.length ? ends.sort().at(-1) : null;
 }
+
+/**
+ * O chip do CELULAR entre a busca e a lista (decisão do Owner de 2026-11-22). `target` vem de
+ * `shortcutTarget`; `draftByAccount` é `null` enquanto os rascunhos não chegaram (ou falharam): sem
+ * chip, nunca um número inventado.
+ * - destino direto com rascunho → `continue` (M1b) para ele;
+ * - dois ou mais rascunhos nas contas elegíveis (sem destino direto, ou o destino direto sem
+ *   rascunho) → `many` (M3), na ordem das contas;
+ * - sem destino direto e exatamente um rascunho → `continue` para ele;
+ * - o resto (nada começado; ou conta filtrada sem rascunho e só UMA outra com) → `null` (M2: o
+ *   atalho fica só no menu ⋯). Com a tela filtrada por uma conta, o chip não leva a outra conta.
+ */
+export function mobileShortcutChip({ target, accounts, draftByAccount }) {
+  if (!target || !draftByAccount) return null;
+  if (target.kind === "direct") {
+    const draft = draftByAccount[target.account.id];
+    if (draft) return { kind: "continue", account: target.account, draft };
+  }
+  const started = accounts.filter((a) => draftByAccount[a.id]).map((a) => ({ account: a, draft: draftByAccount[a.id] }));
+  if (started.length >= 2) return { kind: "many", started };
+  if (target.kind === "menu" && started.length === 1) return { kind: "continue", ...started[0] };
+  return null;
+}
