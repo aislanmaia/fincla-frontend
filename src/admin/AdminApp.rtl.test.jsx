@@ -236,6 +236,44 @@ describe("painel do administrador Fincla", () => {
     expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
   });
 
+  it("cria conta de teste sem organização, deixando a configuração para o onboarding da pessoa", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
+    mocks.getAdminPlans.mockResolvedValue({ items: [{ id: "pro", name: "Pro", is_active: true }] });
+    mocks.createAdminAccount.mockResolvedValue({
+      user_id: "user-4", organization_id: null, setup: "self_onboarding", email_sent: true,
+      initial_access: "courtesy", courtesy_until: "2026-12-06T12:00:00",
+    });
+    mocks.getAdminUser.mockResolvedValue({
+      id: "user-4", email: "lead@example.com", first_name: "Lead", last_name: null,
+      created_at: "2026-11-22", onboarding_completed: false, password_pending: true,
+      blocked_at: null, subscription: null, organizations: [], invoices: [],
+    });
+
+    render(<AdminApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Criar conta" }));
+    expect(screen.getByLabelText("Organização")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.queryByLabelText("Organização")).toBeNull();
+    expect(screen.queryByLabelText(/Renda mensal/)).toBeNull();
+    expect(screen.getByText(/ela faz o onboarding completo/)).toBeInTheDocument();
+    // A trial starts as a courtesy: the access is already preselected.
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Cortesia com prazo");
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Lead" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "lead@example.com" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
+
+    await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalled());
+    const sent = mocks.createAdminAccount.mock.calls.at(-1)[0];
+    expect(sent).toMatchObject({ setup: "self_onboarding", email: "lead@example.com", initial_access: "courtesy", courtesy_plan: "pro", courtesy_days: 14 });
+    expect(sent).not.toHaveProperty("organization_name");
+    expect(sent).not.toHaveProperty("monthly_income");
+    expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
+  });
+
   it("mostra mudança paga como pendente sem trocar o plano exibido", async () => {
     localStorage.setItem("auth_token", "admin-token");
     mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
