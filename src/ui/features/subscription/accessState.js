@@ -40,6 +40,20 @@ export function accessState(user, attempt, now = Date.now()) {
   return "unknown";
 }
 
+/**
+ * A running courtesy is a free trial: its holder may buy a plan at any time.
+ * One rule for every surface that offers "Assinar agora". Never to a member of
+ * someone else's account, a beta, a contract outside ASAAS (sponsored/manual)
+ * or an account already paying.
+ */
+export function canSubscribeDuringCourtesy(user, now = Date.now()) {
+  const subscription = user?.subscription;
+  if (!subscription || user?.role === "member") return false;
+  if (subscription.beta_enabled || subscription.gateway_provider !== "asaas" || subscription.status === "active") return false;
+  const end = subscription.courtesy_until ? new Date(subscription.courtesy_until).getTime() : NaN;
+  return Boolean(subscription.courtesy_plan) && Number.isFinite(end) && end > now;
+}
+
 export function accessCheckoutPath(user) {
   return checkoutPersona(user) === "consultant" ? "/consultant-checkout" : "/checkout";
 }

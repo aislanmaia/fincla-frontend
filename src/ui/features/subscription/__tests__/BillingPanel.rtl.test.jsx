@@ -217,6 +217,13 @@ describe("<BillingPanel>", () => {
     render(<BillingPanel SectionCard={SectionCard} SectionHeader={SectionHeader} onSubscribe={onSubscribe} />);
     await screen.findByText("Beta ativo");
     expect(screen.queryByRole("button", { name: "Assinar agora" })).toBeNull();
+    cleanup();
+
+    // A courtesy granted to someone already paying never invites a second purchase.
+    getCurrentSubscription.mockResolvedValue({ ...courtesy, status: "active" });
+    render(<BillingPanel SectionCard={SectionCard} SectionHeader={SectionHeader} onSubscribe={onSubscribe} />);
+    await screen.findByText("Cortesia ativa");
+    expect(screen.queryByRole("button", { name: "Assinar agora" })).toBeNull();
   });
 
   it("shows the empty-state when there are no recent invoices", async () => {

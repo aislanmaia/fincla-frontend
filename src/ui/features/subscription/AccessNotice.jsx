@@ -2,7 +2,7 @@ import { ArrowUpRight, CalendarDays } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
-import { accessCheckoutPath, expiringAccess } from "./accessState.js";
+import { accessCheckoutPath, canSubscribeDuringCourtesy, expiringAccess } from "./accessState.js";
 
 export function AccessNotice({ user }) {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export function AccessNotice({ user }) {
     <span style={{ flex: 1, minWidth: 190, fontSize: 13, lineHeight: 1.45 }}>
       {courtesy ? <>Sua cortesia termina em <strong>{date}</strong>. Assine quando quiser: o plano começa a contar no dia do pagamento.</> : <>Sua assinatura termina em <strong>{date}</strong>. Você mantém o acesso até lá.</>}
     </span>
-    {courtesy && user?.role !== "member" && <button type="button" onClick={() => navigate({ to: accessCheckoutPath(user) })} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, padding: 0, border: 0, background: "transparent", color: "#6D4613", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+    {courtesy && canSubscribeDuringCourtesy(user) && <button type="button" onClick={() => navigate({ to: accessCheckoutPath(user) })} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, padding: 0, border: 0, background: "transparent", color: "#6D4613", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
       Assinar agora <ArrowUpRight size={14} aria-hidden="true" />
     </button>}
     <button type="button" onClick={() => navigate({ to: "/access" })} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, padding: 0, border: 0, background: "transparent", color: "#6D4613", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>

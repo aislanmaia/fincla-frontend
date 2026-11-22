@@ -463,7 +463,7 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live", on
                 : monthlyPrice}
             </div>
           </div>
-          {courtesyActive && !subscription.beta_enabled && onSubscribe && (
+          {courtesyActive && status !== "active" && !subscription.beta_enabled && onSubscribe && (
             <button
               type="button"
               onClick={onSubscribe}

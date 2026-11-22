@@ -8,10 +8,10 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 import { AccessNotice } from "../AccessNotice.jsx";
 
 const inDays = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-const trialUser = (role = "owner") => ({
+const trialUser = (role = "owner", gateway = "asaas") => ({
   role,
   is_consultant: false,
-  subscription: { plan: "pro", status: "pending_payment", is_entitled: true, courtesy_plan: "pro", courtesy_until: inDays(3) },
+  subscription: { plan: "pro", gateway_provider: gateway, status: "pending_payment", is_entitled: true, courtesy_plan: "pro", courtesy_until: inDays(3) },
 });
 
 beforeEach(() => navigate.mockReset());
@@ -28,4 +28,9 @@ it("does not offer the purchase to a member of someone else's account", () => {
   render(<AccessNotice user={trialUser("member")} />);
   expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
   expect(screen.getByRole("button", { name: /Ver plano e acesso/ })).toBeInTheDocument();
+});
+
+it("does not send a sponsored client to a checkout they cannot use", () => {
+  render(<AccessNotice user={trialUser("owner", "sponsored")} />);
+  expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
 });

@@ -32,7 +32,7 @@ import {
 import { T } from "../tokens";
 import { G } from "../typography";
 import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
-import { accessCheckoutPath } from "../features/subscription/accessState.js";
+import { accessCheckoutPath, canSubscribeDuringCourtesy } from "../features/subscription/accessState.js";
 import { ConsultantSubscriptionPanel } from "../features/consultant/ConsultantSubscriptionPanel.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
@@ -796,7 +796,7 @@ export function ConfiguracoesPage({
       SectionCard={SectionCard}
       SectionHeader={SectionHeader}
       dataMode={dataMode}
-      onSubscribe={membershipRole === "member" ? null : () => navigate({ to: accessCheckoutPath(currentUser) })}
+      onSubscribe={canSubscribeDuringCourtesy(currentUser) ? () => navigate({ to: accessCheckoutPath(currentUser) }) : null}
     />
   );
 
