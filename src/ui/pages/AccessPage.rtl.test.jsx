@@ -102,6 +102,6 @@ it("never offers a member, or a beta account, to subscribe during a courtesy", a
   expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
   cleanup();
   render(<AccessPage session={session({ ...trial, beta_enabled: true })} />);
-  await screen.findByRole("heading");
+  expect(await screen.findByRole("heading", { name: "Seu Fincla está disponível." })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
 });
