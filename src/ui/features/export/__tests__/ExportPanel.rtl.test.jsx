@@ -779,3 +779,119 @@ describe("<ExportPanel> — layout da variante D (Owner 2026-11-21)", () => {
     expect(within(panel).queryByTestId("export-preview-page")).toBeNull();
   });
 });
+
+describe("<ExportPanel> — Incluir saldo (fincla-api#541)", () => {
+  const PERIOD = { organization_id: "org-1", date_start: "2026-10-01", date_end: "2026-10-31", account_id: ["acc-1"] };
+  const WITH_BALANCE = { ...ONE_CURRENCY, balance_statement: { available: true, reason: null, message: null } };
+  const FILTERED_MESSAGE =
+    "O saldo só aparece sem filtro de categoria, tipo, forma de pagamento, situação, valor, etiqueta ou busca.";
+  const WITHOUT_BALANCE = {
+    ...ONE_CURRENCY,
+    balance_statement: { available: false, reason: "filtered", message: FILTERED_MESSAGE },
+  };
+
+  const option = (panel) => within(panel).getByRole("checkbox", { name: /Incluir saldo/ });
+
+  it("disponível: vem marcada e o pedido leva include_balance=true; desmarcada, o pedido não leva", async () => {
+    const { panel } = renderPanel({ summary: WITH_BALANCE, filterParams: PERIOD });
+    expect(option(panel)).toBeChecked();
+    expect(option(panel)).toBeEnabled();
+    expect(panel).toHaveTextContent("Saldo anterior, a coluna Saldo e o saldo final, como no extrato do banco.");
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    expect(exportMock.mock.calls[0][0]).toMatchObject({ ...PERIOD, include_balance: true });
+  });
+
+  it("desmarcar tira o saldo do pedido e da prévia", async () => {
+    const { panel } = renderPanel({ summary: WITH_BALANCE, filterParams: PERIOD });
+    expect(within(panel).getByTestId("export-preview-pdf")).toHaveTextContent("Saldo anterior (30/09/2026)");
+    await userEvent.click(option(panel));
+    expect(option(panel)).not.toBeChecked();
+    expect(within(panel).getByTestId("export-preview-pdf")).not.toHaveTextContent("Saldo anterior");
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    expect(exportMock.mock.calls[0][0]).not.toHaveProperty("include_balance");
+  });
+
+  it("indisponível: desativada, com o motivo do servidor em texto, e o pedido não leva o saldo", async () => {
+    const { panel } = renderPanel({ summary: WITHOUT_BALANCE, filterParams: PERIOD });
+    expect(option(panel)).toBeDisabled();
+    expect(option(panel)).not.toBeChecked();
+    expect(within(panel).getByTestId("export-balance-option")).toHaveTextContent(FILTERED_MESSAGE);
+    expect(within(panel).getByTestId("export-preview-pdf")).not.toHaveTextContent("Saldo anterior");
+    await userEvent.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
+    expect(exportMock.mock.calls[0][0]).not.toHaveProperty("include_balance");
+  });
+
+  it("sem a resposta do servidor a opção não aparece (o painel não inventa a regra)", () => {
+    const { panel } = renderPanel({ summary: ONE_CURRENCY, filterParams: PERIOD });
+    expect(within(panel).queryByRole("checkbox", { name: /Incluir saldo/ })).toBeNull();
+  });
+
+  it("na seleção vale a resposta do resumo da seleção", () => {
+    const message = "O saldo não aparece em “Exportar seleção”: ele precisa de todos os lançamentos das contas no período.";
+    const { panel } = renderPanel({
+      summary: WITH_BALANCE,
+      filterParams: PERIOD,
+      selection: {
+        ids: [7], count: 1,
+        summary: { ...ONE_CURRENCY, balance_statement: { available: false, reason: "selection", message } },
+      },
+    });
+    expect(option(panel)).toBeDisabled();
+    expect(within(panel).getByTestId("export-balance-option")).toHaveTextContent(message);
+  });
+
+  it("a prévia do CSV e da planilha traz a coluna Saldo, o Saldo anterior do dia anterior e o Saldo final", async () => {
+    const { panel } = renderPanel({ summary: WITH_BALANCE, filterParams: PERIOD });
+    await userEvent.click(within(panel).getByRole("button", { name: /CSV/ }));
+    const csvText = within(panel).getByTestId("export-preview").textContent;
+    expect(csvText).toContain('"Data","Descrição","Categoria","Tipo","Valor","Moeda","Situação","Saldo","Observação"');
+    expect(csvText).toContain('"2026-09-30","Saldo anterior"');
+    expect(csvText).toContain('"2026-10-31","Saldo final"');
+    await userEvent.click(within(panel).getByRole("button", { name: /XLSX/ }));
+    const sheet = within(panel).getByTestId("export-preview-sheet");
+    expect(within(sheet).getAllByRole("columnheader").map((th) => th.textContent)).toContain("I");
+    expect(sheet).toHaveTextContent("Saldo anterior");
+    expect(sheet).toHaveTextContent("Observação");
+  });
+});
+
+describe("prévias com saldo (#541)", () => {
+  const totals = exportTotalsFromSummary(ONE_CURRENCY);
+  const balance = { from: "2026-03-01", to: "2026-03-31" };
+
+  it("CSV: nove colunas; Saldo anterior no fim do dia anterior (virada de mês) e Saldo final junto do RESULTADO", () => {
+    const lines = buildCsvPreview({ title: "T", filtersText: [], selection: null, totals, balance }).split("\n");
+    expect(lines).toContain('"Data","Descrição","Categoria","Tipo","Valor","Moeda","Situação","Saldo","Observação"');
+    expect(lines.find((line) => line.includes("Saldo anterior"))).toBe(
+      '"2026-02-28","Saldo anterior","","","","USD","","(saldo da conta)",""',
+    );
+    expect(lines.at(-1)).toBe('"2026-03-31","Saldo final","","","","USD","","(saldo da conta)",""');
+    expect(lines.at(-2)).toMatch(/^"","RESULTADO","","","769.60","USD","","",""$/);
+  });
+
+  it("planilha: os totais somam só os lançamentos (por Tipo), a partir da linha do Saldo anterior", () => {
+    const sheet = buildXlsxPreview({ title: "T", filtersText: [], selection: null, totals, balance });
+    const result = sheet.rows.find((row) => row.kind === "result" && row.formula);
+    expect(result.formula).toMatch(/^=SOMASE\(D\d+:D\d+;"Receita";E\d+:E\d+\)\+SOMASE\(D\d+:D\d+;"Despesa";E\d+:E\d+\)\+SOMASE/);
+    expect(result.formula).not.toContain("SOMA(");
+    const count = sheet.rows.find((row) => row.cells[0] === "LANÇAMENTOS");
+    expect(count.formula).toMatch(/^=CONT\.SE\(D\d+:D\d+;"Receita"\)\+CONT\.SE/);
+    expect(sheet.columns).toHaveLength(9);
+    const plain = buildXlsxPreview({ title: "T", filtersText: [], selection: null, totals });
+    expect(plain.columns).toHaveLength(7);
+    expect(plain.rows.find((row) => row.kind === "result" && row.formula).formula).toMatch(/^=SOMA\(E\d+:E\d+\)$/);
+  });
+
+  it("PDF: coluna Saldo e os dois saldos no resumo, também em 'Só o resumo'", () => {
+    const full = buildPdfPreview({ title: "T", filtersText: [], selection: null, totals, balance });
+    expect(full.columns.at(-1)).toBe("Saldo");
+    expect(full.balance.line).toBe("Saldo anterior (28/02/2026) · Saldo final (31/03/2026): saldo da conta");
+    const summaryOnly = buildPdfPreview({ title: "T", filtersText: [], selection: null, totals, balance, content: "summary" });
+    expect(summaryOnly.balance).not.toBeNull();
+    expect(summaryOnly.list).toBeNull();
+    expect(buildPdfPreview({ title: "T", filtersText: [], selection: null, totals }).balance).toBeNull();
+  });
+});
