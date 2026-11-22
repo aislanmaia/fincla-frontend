@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessCheckoutPath, accessState, expiringAccess } from "../accessState.js";
+import { accessCheckoutPath, accessState, canSubscribeDuringCourtesy, expiringAccess } from "../accessState.js";
 
 const now = new Date("2026-10-03T12:00:00Z").getTime();
 
@@ -32,5 +32,25 @@ describe("subscription access journey", () => {
 
   it("keeps a consultant in the consultant purchase flow after access ends", () => {
     expect(accessCheckoutPath(account({ status: "cancelled" }, { is_consultant: true }))).toBe("/consultant-checkout");
+  });
+});
+
+describe("subscribing during a courtesy", () => {
+  const trial = { status: "pending_payment", is_entitled: true, courtesy_plan: "pro", courtesy_until: "2026-10-10T12:00:00Z" };
+
+  it("is offered to the owner of a running ASAAS courtesy", () => {
+    expect(canSubscribeDuringCourtesy(account(trial, { role: "owner" }), now)).toBe(true);
+  });
+
+  it.each([
+    ["a member of someone else's account", account(trial, { role: "member" })],
+    ["a beta", account({ ...trial, beta_enabled: true })],
+    ["a sponsored contract", account({ ...trial, gateway_provider: "sponsored" })],
+    ["a manual contract", account({ ...trial, gateway_provider: "manual" })],
+    ["an account already paying", account({ ...trial, status: "active" })],
+    ["an ended courtesy", account({ ...trial, courtesy_until: "2026-10-01T12:00:00Z" })],
+    ["no courtesy", account({ status: "pending_payment" })],
+  ])("is never offered to %s", (_label, user) => {
+    expect(canSubscribeDuringCourtesy(user, now)).toBe(false);
   });
 });
