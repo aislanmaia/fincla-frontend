@@ -41,7 +41,7 @@ export const stepsLabel = (progress) => `${progress.done.toLocaleString("pt-BR")
  * @param filteredIds contas do filtro da tela.
  * @param onOpen (accountId, importId|null) → abre a conciliação (o rascunho, quando houver).
  */
-export function ReconcileShortcut({ data, accounts, filteredIds, baseCurrency = null, onOpen, compact = false }) {
+export function ReconcileShortcut({ data, accounts, filteredIds, baseCurrency = null, onOpen }) {
   const target = shortcutTarget({ accounts, filteredIds });
   const { draftByAccount, progressOf, loadProgress } = data;
 
@@ -115,7 +115,6 @@ export function ReconcileShortcut({ data, accounts, filteredIds, baseCurrency = 
           baseCurrency={baseCurrency}
           initialFocus={open}
           anchor={buttonRef.current}
-          compact={compact}
           onClose={close}
           onChoose={(accountId, importId) => { setOpen(null); onOpen(accountId, importId); }}
         />
@@ -164,7 +163,7 @@ function focusBeside(anchor, delta) {
  * ao botão, Tab/Shift+Tab fecham e o foco segue do botão para o próximo/anterior. Rolar a página
  * fecha o menu (ele é `position: fixed` e ficaria parado longe do botão).
  */
-function AccountMenu({ data, accounts, baseCurrency, initialFocus, anchor, compact, onClose, onChoose }) {
+function AccountMenu({ data, accounts, baseCurrency, initialFocus, anchor, onClose, onChoose }) {
   const wrapRef = useRef(null);
   const menuRef = useRef(null);
   const footerId = useId();
@@ -235,7 +234,7 @@ function AccountMenu({ data, accounts, baseCurrency, initialFocus, anchor, compa
   return createPortal(
     <div ref={wrapRef}
       style={{ ...G, position: "fixed", left: pos.left, top: pos.top, width: pos.width, boxSizing: "border-box",
-        maxHeight: compact ? "60dvh" : "70dvh", overflowY: "auto", background: T.surface, border: `1px solid ${T.border}`,
+        maxHeight: "70dvh", overflowY: "auto", background: T.surface, border: `1px solid ${T.border}`,
         borderRadius: 13, boxShadow: T.xl, padding: 6, zIndex: 150 }}>
       <div ref={menuRef} role="menu" aria-label={MENU_TITLE} aria-describedby={footerId} onKeyDown={onKeyDown}
         style={{ display: "flex", flexDirection: "column", gap: 2 }}>
