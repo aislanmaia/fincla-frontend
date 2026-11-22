@@ -82,3 +82,26 @@ it("explains a courtesy before expiry without suggesting an automatic charge", a
   expect(screen.queryByText("Sua assinatura está em dia.")).toBeNull();
   expect(screen.queryByRole("button", { name: /Escolher um plano/ })).toBeNull();
 });
+
+it("lets a running courtesy subscribe now, with the plan counted from the payment day", async () => {
+  const courtesyUntil = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
+  const trial = { status: "pending_payment", is_entitled: true, courtesy_plan: "pro", courtesy_until: courtesyUntil };
+  vi.mocked(getCurrentSubscription).mockResolvedValue({ plan: { name: "Fincla Pessoal" }, recent_invoices: [], ...trial });
+  render(<AccessPage session={session(trial)} />);
+  expect(await screen.findByText(/o plano começa a contar no dia do pagamento/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Assinar agora/ }));
+  expect(navigate).toHaveBeenCalledWith({ to: "/checkout" });
+});
+
+it("never offers a member, or a beta account, to subscribe during a courtesy", async () => {
+  const courtesyUntil = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString();
+  const trial = { status: "pending_payment", is_entitled: true, courtesy_plan: "pro", courtesy_until: courtesyUntil };
+  vi.mocked(getCurrentSubscription).mockResolvedValue({ plan: { name: "Fincla Pessoal" }, recent_invoices: [], ...trial });
+  render(<AccessPage session={session(trial, "member")} />);
+  expect(await screen.findByRole("heading", { name: "Sua cortesia está perto do fim." })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
+  cleanup();
+  render(<AccessPage session={session({ ...trial, beta_enabled: true })} />);
+  expect(await screen.findByRole("heading", { name: "Seu Fincla está disponível." })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Assinar agora/ })).toBeNull();
+});

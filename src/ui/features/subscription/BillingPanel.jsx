@@ -248,7 +248,7 @@ function InvoicesList({ invoices }) {
  * e re-uso evita duplicar o estilo). Cancel + change-plan abrem modais
  * locais — quem dispara a navegação pós-checkout é o `BillingReturnPage`.
  */
-export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) {
+export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live", onSubscribe = null }) {
   const enabled = dataMode === "live";
   const { subscription, isLoading, error, refresh } = useSubscriptionData({
     enabled,
@@ -463,6 +463,25 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
                 : monthlyPrice}
             </div>
           </div>
+          {courtesyActive && status !== "active" && !subscription.beta_enabled && onSubscribe && (
+            <button
+              type="button"
+              onClick={onSubscribe}
+              style={{
+                ...G,
+                padding: "8px 14px",
+                borderRadius: 9,
+                border: "none",
+                background: "linear-gradient(135deg, #7C3AED, #2563EB)",
+                color: "white",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Assinar agora
+            </button>
+          )}
           {!grantActive && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               type="button"
