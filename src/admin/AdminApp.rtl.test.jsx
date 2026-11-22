@@ -194,8 +194,16 @@ describe("painel do administrador Fincla", () => {
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "nova@example.com" } });
     fireEvent.change(screen.getByLabelText("Organização"), { target: { value: "Família Nova" } });
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
-    expect(await screen.findByText("Conta criada e convite enviado por e-mail.")).toBeInTheDocument();
+    expect(await screen.findByText("Conta criada e convite enviado por e-mail (o link vale 7 dias).")).toBeInTheDocument();
     expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
+    // Someone who never set a password gets the invite again, not a recovery link.
+    expect(await screen.findByText(/A pessoa ainda não definiu a senha/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar link de redefinição" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reenviar convite" }));
+    fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: "Não recebeu" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
+    await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-2", "Não recebeu"));
+    expect(await screen.findByText("Convite reenviado para nova@example.com. O novo link vale 7 dias.")).toBeInTheDocument();
   });
 
   it("cria conta e organização com a quantidade de dias gratuitos que o admin escolher", async () => {
