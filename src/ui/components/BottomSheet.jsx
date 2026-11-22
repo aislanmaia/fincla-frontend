@@ -4,9 +4,11 @@ import { X } from "lucide-react";
 
 import { T } from "../tokens";
 import { G } from "../typography";
+import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 
 const SHEET_SLIDE_MS = 380;
 const SHEET_EASE = "cubic-bezier(0.32,0.72,0,1)";
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Sheet de baixo do celular, PORTALIZADO no `body`: dentro do card ele herdaria o
@@ -22,6 +24,12 @@ export function BottomSheet({
   dismissible = true,
   /** `false` = o toque no FUNDO não fecha (ex.: há valores editados); ✕/Esc seguem fechando. */
   backdropDismissible = true,
+  /**
+   * `true` = o foco entra na folha ao abrir (no primeiro controle do conteúdo), o Tab fica preso
+   * dentro e, ao fechar, volta para `returnFocusTo` (ou para quem tinha o foco ao abrir).
+   */
+  trapFocus = false,
+  returnFocusTo = null,
 }) {
   const dismissibleRef = useRef(dismissible);
   dismissibleRef.current = dismissible;
@@ -43,6 +51,23 @@ export function BottomSheet({
   useEffect(() => () => {
     window.clearTimeout(timerRef.current);
     listenersCleanupRef.current?.();
+  }, []);
+  useFocusTrap(sheetRef, trapFocus);
+  const returnFocusRef = useRef(returnFocusTo);
+  returnFocusRef.current = returnFocusTo;
+  const bodyRef = useRef(null);
+  useEffect(() => {
+    if (!trapFocus) return undefined;
+    const opener = document.activeElement;
+    const first = bodyRef.current?.querySelector(FOCUSABLE) ?? sheetRef.current?.querySelector(FOCUSABLE);
+    first?.focus();
+    // Depois da limpeza do `useFocusTrap` (declarado antes): este destino é o que vale.
+    return () => {
+      const to = returnFocusRef.current ?? opener;
+      if (to && document.contains(to) && typeof to.focus === "function") to.focus();
+    };
+    // Só na montagem: o foco inicial não acompanha re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     const onKey = (e) => {
@@ -115,7 +140,7 @@ export function BottomSheet({
             <X size={18} color={T.inkMid} />
           </button>
         </div>
-        <div className="fincla-scroll" style={{ overflowY: "auto", minHeight: 0, flex: 1, padding: "8px 18px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))", overscrollBehavior: "contain" }}>
+        <div ref={bodyRef} className="fincla-scroll" style={{ overflowY: "auto", minHeight: 0, flex: 1, padding: "8px 18px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))", overscrollBehavior: "contain" }}>
           {children}
         </div>
         {footer ? (

@@ -2,7 +2,7 @@
 // leva, qual rascunho de cada conta vale e até quando foi a última conciliação concluída.
 import { describe, expect, it } from "vitest";
 
-import { latestConcludedEnd, latestDraftByAccount, shortcutTarget } from "../reconcileShortcut.js";
+import { latestConcludedEnd, latestDraftByAccount, mobileShortcutChip, shortcutTarget } from "../reconcileShortcut.js";
 
 const A = { id: "acc-a", label: "Corrente Smoke", currency: "BRL" };
 const B = { id: "acc-b", label: "Poupança Smoke", currency: "BRL" };
@@ -68,5 +68,55 @@ describe("latestConcludedEnd", () => {
   it("sem concluída: null", () => {
     expect(latestConcludedEnd([{ status: "undone", period: { end: "2026-11-30" } }])).toBeNull();
     expect(latestConcludedEnd([])).toBeNull();
+  });
+});
+
+describe("mobileShortcutChip (celular, decisão do Owner de 2026-11-22: M1b / M3 / M2)", () => {
+  const dA = { id: "d-a", account_id: "acc-a" };
+  const dB = { id: "d-b", account_id: "acc-b" };
+  const dC = { id: "d-c", account_id: "acc-c" };
+  const chip = (accounts, filteredIds, draftByAccount) =>
+    mobileShortcutChip({ target: shortcutTarget({ accounts, filteredIds }), accounts, draftByAccount });
+
+  it("sem destino (nenhuma conta elegível) ou rascunhos ainda não carregados/erro: sem chip", () => {
+    expect(chip([], [], {})).toBeNull();
+    expect(chip([A, B], [], null)).toBeNull();
+  });
+
+  it("M1b — conta filtrada com rascunho: continua a dela, mesmo com rascunhos em outras contas", () => {
+    expect(chip([A, B, C], ["acc-b"], { "acc-a": dA, "acc-b": dB, "acc-c": dC })).toEqual({ kind: "continue", account: B, draft: dB });
+  });
+
+  it("M1b — organização com UMA conta elegível, com rascunho", () => {
+    expect(chip([A], [], { "acc-a": dA })).toEqual({ kind: "continue", account: A, draft: dA });
+  });
+
+  it("M1b — sem destino direto e exatamente UM rascunho: leva a ele", () => {
+    expect(chip([A, B, C], [], { "acc-c": dC })).toEqual({ kind: "continue", account: C, draft: dC });
+  });
+
+  it("M3 — sem destino direto e dois ou mais rascunhos: a lista, na ordem das contas", () => {
+    expect(chip([A, B, C], [], { "acc-c": dC, "acc-a": dA })).toEqual({
+      kind: "many", started: [{ account: A, draft: dA }, { account: C, draft: dC }],
+    });
+  });
+
+  it("M3 — conta filtrada sem rascunho, mas duas outras com: a lista", () => {
+    expect(chip([A, B, C], ["acc-b"], { "acc-a": dA, "acc-c": dC })).toEqual({
+      kind: "many", started: [{ account: A, draft: dA }, { account: C, draft: dC }],
+    });
+  });
+
+  it("conta filtrada sem rascunho e UMA outra com: sem chip (não leva a outra conta com a tela filtrada)", () => {
+    expect(chip([A, B, C], ["acc-b"], { "acc-a": dA })).toBeNull();
+  });
+
+  it("M2 — nada começado: sem chip", () => {
+    expect(chip([A, B], [], {})).toBeNull();
+    expect(chip([A], [], {})).toBeNull();
+  });
+
+  it("rascunho de conta que não é elegível (desativada/cartão) não conta", () => {
+    expect(chip([A, B], [], { "acc-x": { id: "d-x", account_id: "acc-x" }, "acc-a": dA })).toEqual({ kind: "continue", account: A, draft: dA });
   });
 });

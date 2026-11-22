@@ -16,14 +16,14 @@ import { plural } from "../../plural.js";
 import { bankDateLabel } from "./StatementEntryCard.jsx";
 import { shortcutTarget } from "./reconcileShortcut.js";
 
-const MENU_TITLE = "Conciliar o extrato de qual conta?";
+export const MENU_TITLE = "Conciliar o extrato de qual conta?";
 const MENU_WIDTH = 340;
 const SIDE_GUTTER = 16;
 
 /** Ícone de duas setas (ida e volta): banco × Fincla. */
-function ReconcileIcon() {
+export function ReconcileIcon({ size = 13 }) {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none" }}>
       <path d="M4 7h11" />
       <path d="m12 4 3 3-3 3" />
@@ -33,7 +33,7 @@ function ReconcileIcon() {
   );
 }
 
-const stepsLabel = (progress) => `${progress.done.toLocaleString("pt-BR")} de ${plural(progress.total, "passo", "passos")}`;
+export const stepsLabel = (progress) => `${progress.done.toLocaleString("pt-BR")} de ${plural(progress.total, "passo", "passos")}`;
 
 /**
  * @param data o resultado de `useReconcileShortcutData` (no nível da página).
@@ -123,6 +123,19 @@ export function ReconcileShortcut({ data, accounts, filteredIds, baseCurrency = 
     </>
   );
 }
+
+/** A situação de uma conta na escolha (menu do computador, folha do celular). */
+export function accountChoiceStatus({ draft, progress, concluded }) {
+  if (draft) return progress ? `Conciliação começada · ${stepsLabel(progress)}` : "Conciliação começada";
+  if (concluded?.end) return `Última conciliação até ${bankDateLabel(concluded.end)}`;
+  if (concluded) return concluded.any ? "Nenhuma conciliação concluída ainda" : "Nenhum extrato importado ainda";
+  return null;
+}
+
+/** Conta em outra moeda que a base da organização: a moeda vai ao lado do nome. */
+export const isForeignAccount = (account, baseCurrency) => !!(baseCurrency && account.currency && account.currency !== baseCurrency);
+
+export const MENU_FOOTER = "Cartões de crédito não aparecem: a fatura não é conciliada por extrato.";
 
 /** Onde o menu fica: logo abaixo do botão, alinhado à direita dele, sem sair da tela. */
 function menuPosition(anchor) {
@@ -231,11 +244,8 @@ function AccountMenu({ data, accounts, baseCurrency, initialFocus, anchor, compa
           const draft = draftByAccount?.[account.id] ?? null;
           const progress = progressOf(draft);
           const concluded = concludedOf(account.id);
-          let status = null;
-          if (draft) status = progress ? `Conciliação começada · ${stepsLabel(progress)}` : "Conciliação começada";
-          else if (concluded?.end) status = `Última conciliação até ${bankDateLabel(concluded.end)}`;
-          else if (concluded) status = concluded.any ? "Nenhuma conciliação concluída ainda" : "Nenhum extrato importado ainda";
-          const foreign = baseCurrency && account.currency && account.currency !== baseCurrency;
+          const status = accountChoiceStatus({ draft, progress, concluded });
+          const foreign = isForeignAccount(account, baseCurrency);
           return (
             <button key={account.id} type="button" role="menuitem" tabIndex={-1}
               onClick={() => onChoose(account.id, draft ? draft.id : null)}
@@ -256,7 +266,7 @@ function AccountMenu({ data, accounts, baseCurrency, initialFocus, anchor, compa
       </div>
       {/* Fora do role="menu" (que só pode ter itens): descreve o menu pelo aria-describedby. */}
       <p id={footerId} style={{ fontSize: 11, color: T.inkLight, padding: "6px 10px 8px", borderTop: `1px solid ${T.border}`, margin: "4px 0 0" }}>
-        Cartões de crédito não aparecem: a fatura não é conciliada por extrato.
+        {MENU_FOOTER}
       </p>
     </div>,
     document.body,
