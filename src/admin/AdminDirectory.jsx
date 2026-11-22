@@ -102,10 +102,11 @@ export function AdminDirectory({ section, initialAction = "" }) {
     if (resetReason.trim().length < 3) return;
     setSavingReset(true); setError("");
     try {
-      await sendAdminPasswordReset(detail.id, resetReason.trim());
+      const { kind } = await sendAdminPasswordReset(detail.id, resetReason.trim());
       setAudit((await getAdminUserAudit(detail.id)).items);
       setResetOpen(false); setResetReason("");
-      setNotice(detail.password_pending ? `Convite reenviado para ${detail.email}. O novo link vale 7 dias.` : `Link de redefinição enviado para ${detail.email}.`);
+      // The backend decides which email goes out; trust its answer over the loaded detail.
+      setNotice((kind ?? (detail.password_pending ? "invite" : "recovery")) === "invite" ? `Convite reenviado para ${detail.email}. O novo link vale 7 dias.` : `Link de redefinição enviado para ${detail.email}.`);
     } catch (nextError) {
       setError(handleApiError(nextError));
       setAudit((await getAdminUserAudit(detail.id)).items);

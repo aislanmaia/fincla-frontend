@@ -199,11 +199,18 @@ describe("painel do administrador Fincla", () => {
     // Someone who never set a password gets the invite again, not a recovery link.
     expect(await screen.findByText(/A pessoa ainda não definiu a senha/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar link de redefinição" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Reenviar convite" }));
-    fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: "Não recebeu" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
-    await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-2", "Não recebeu"));
+    mocks.sendAdminPasswordReset.mockResolvedValueOnce({ email_sent: true, kind: "invite" }).mockResolvedValueOnce({ email_sent: true, kind: "recovery" });
+    const resend = async (reason) => {
+      fireEvent.click(screen.getByRole("button", { name: "Reenviar convite" }));
+      fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: reason } });
+      fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
+      await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-2", reason));
+    };
+    await resend("Não recebeu");
     expect(await screen.findByText("Convite reenviado para nova@example.com. O novo link vale 7 dias.")).toBeInTheDocument();
+    // The person set a password meanwhile: the backend sent a recovery link, and the notice says so.
+    await resend("Pediu de novo");
+    expect(await screen.findByText("Link de redefinição enviado para nova@example.com.")).toBeInTheDocument();
   });
 
   it("cria conta e organização com a quantidade de dias gratuitos que o admin escolher", async () => {
