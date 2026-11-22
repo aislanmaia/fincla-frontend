@@ -74,7 +74,7 @@ export function AccessPage({ session }) {
   const warning = expiringAccess(subscription);
   const courtesyActive = Boolean(subscription?.courtesy_plan && subscription?.courtesy_until && new Date(subscription.courtesy_until) > new Date() && subscription?.status !== "active");
   const copy = situation === "active" && warning?.kind === "courtesy"
-    ? { ...COPY.active, eyebrow: "CORTESIA ATIVA", title: "Sua cortesia está perto do fim.", body: "Continue usando o Fincla até a data indicada. Quando o período terminar, você poderá escolher um plano nesta conta." }
+    ? { ...COPY.active, eyebrow: "CORTESIA ATIVA", title: "Sua cortesia está perto do fim.", body: "Continue usando o Fincla até a data indicada. Se quiser, assine agora: o plano começa a contar no dia do pagamento." }
     : situation === "active" && warning?.kind === "cancel_scheduled"
       ? { ...COPY.active, eyebrow: "ENCERRAMENTO AGENDADO", title: "Seu acesso continua até o fim do período.", body: "Sua assinatura não vai renovar automaticamente. Quando o período terminar, você poderá contratar novamente nesta conta." }
       : COPY[situation];
@@ -131,6 +131,7 @@ export function AccessPage({ session }) {
             <h1 style={{ ...S, fontSize: "clamp(28px, 3.3vw, 43px)", lineHeight: 1.12, letterSpacing: "-.035em", margin: "15px 0 12px" }}>{copy.title}</h1>
             <p style={{ fontSize: 14, lineHeight: 1.65, color: "#D5E2ED", margin: "0 0 23px", maxWidth: 430 }}>{copy.body}</p>
             {actionAllowed && <button type="button" onClick={primaryAction} disabled={loading && situation === "processing"} style={{ ...G, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 44, padding: "10px 17px", border: 0, borderRadius: 10, background: "#D9F1DE", color: "#173E29", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{situation === "processing" ? <RefreshCw size={16} /> : null}{actionLabel}<ArrowRight size={16} /></button>}
+            {canPay && courtesyActive && <button type="button" onClick={() => navigate({ to: checkoutPath })} style={{ ...G, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 44, marginLeft: 10, padding: "10px 17px", border: "1px solid #BFD8ED", borderRadius: 10, background: "transparent", color: "#FFFFFF", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Assinar agora<ArrowRight size={16} /></button>}
             {!canPay && situation !== "active" && situation !== "sponsored" && <p style={{ fontSize: 12, lineHeight: 1.55, color: "#D5E2ED", margin: "16px 0 0" }}>Peça ao responsável pela assinatura para regularizar o acesso.</p>}
           </div>
           <div style={{ position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", padding: "32px clamp(25px, 4vw, 45px)", background: "#214565", borderLeft: "1px solid rgba(255,255,255,.1)" }}>

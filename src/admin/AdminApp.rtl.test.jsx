@@ -198,7 +198,7 @@ describe("painel do administrador Fincla", () => {
     expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
   });
 
-  it("cria conta e organização com um mês gratuito na mesma operação", async () => {
+  it("cria conta e organização com a quantidade de dias gratuitos que o admin escolher", async () => {
     localStorage.setItem("auth_token", "admin-token");
     mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
     mocks.getAdminPlans.mockResolvedValue({ items: [{ id: "pro", name: "Pro", is_active: true }] });
@@ -221,12 +221,18 @@ describe("painel do administrador Fincla", () => {
     fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
     fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
     fireEvent.click(await screen.findByRole("option", { name: "Pro" }));
+    const days = screen.getByLabelText("Dias gratuitos");
+    fireEvent.change(days, { target: { value: "400" } });
+    expect(screen.getByText("Informe de 1 a 365 dias.")).toBeInTheDocument();
+    fireEvent.change(days, { target: { value: "17" } });
+    expect(screen.getByText(/Acesso gratuito por 17 dias, até/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
 
     await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({
       email: "cortesia@example.com", organization_name: "Org Cortesia",
-      initial_access: "courtesy", courtesy_plan: "pro", courtesy_months: 1,
+      initial_access: "courtesy", courtesy_plan: "pro", courtesy_days: 17,
     })));
+    expect(mocks.createAdminAccount.mock.calls.at(-1)[0]).not.toHaveProperty("courtesy_months");
     expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
   });
 

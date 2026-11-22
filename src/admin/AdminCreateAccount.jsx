@@ -3,8 +3,17 @@ import { createAdminAccount, getAdminPlans } from "../api/admin";
 import { handleApiError } from "../api/client";
 import { AdminSelect } from "./AdminSelect";
 
+const MAX_COURTESY_DAYS = 365;
+
+function courtesyEndLabel(days) {
+  const count = Number(days);
+  if (!Number.isInteger(count) || count < 1 || count > MAX_COURTESY_DAYS) return null;
+  const end = new Date(Date.now() + count * 24 * 60 * 60 * 1000);
+  return end.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 export function AdminCreateAccount({ onCreated, onCancel }) {
-  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", organization_name: "", organization_type: "", monthly_income: "", initial_access: "none", courtesy_plan: "", courtesy_months: "1" });
+  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", organization_name: "", organization_type: "", monthly_income: "", initial_access: "none", courtesy_plan: "", courtesy_days: "14" });
   const [plans, setPlans] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +38,7 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
         initial_access: form.initial_access,
         ...(form.initial_access === "courtesy" ? {
           courtesy_plan: form.courtesy_plan,
-          courtesy_months: Number(form.courtesy_months),
+          courtesy_days: Number(form.courtesy_days),
         } : {}),
       });
       onCreated(result);
@@ -57,10 +66,12 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
         <label>Tipo de acesso<AdminSelect ariaLabel="Tipo de acesso inicial" value={form.initial_access} onChange={(value) => setForm((current) => ({ ...current, initial_access: value }))} options={[{ value: "none", label: "Sem acesso gratuito" }, { value: "courtesy", label: "Cortesia com prazo" }, { value: "beta", label: "Beta sem prazo" }]} /></label>
         {form.initial_access === "courtesy" && <>
           <label>Plano liberado<AdminSelect ariaLabel="Plano da cortesia" value={form.courtesy_plan} onChange={(value) => setForm((current) => ({ ...current, courtesy_plan: value }))} required options={[{ value: "", label: "Selecione um plano" }, ...plans.map((plan) => ({ value: plan.id, label: plan.name }))]} /></label>
-          <label>Meses gratuitos<input type="number" min="1" max="12" step="1" value={form.courtesy_months} onChange={(event) => setForm((current) => ({ ...current, courtesy_months: event.target.value }))} required /></label>
+          <label>Dias gratuitos<input type="number" inputMode="numeric" min="1" max={MAX_COURTESY_DAYS} step="1" value={form.courtesy_days} onChange={(event) => setForm((current) => ({ ...current, courtesy_days: event.target.value }))} required /></label>
         </>}
       </div>
-      {form.initial_access === "courtesy" && <p className="admin-create-access-note">Acesso gratuito por {form.courtesy_months || "—"} {Number(form.courtesy_months) === 1 ? "mês" : "meses"}, a partir da criação. Termina automaticamente, sem gerar cobrança.</p>}
+      {form.initial_access === "courtesy" && <p className="admin-create-access-note">{courtesyEndLabel(form.courtesy_days)
+        ? <>Acesso gratuito por {Number(form.courtesy_days)} {Number(form.courtesy_days) === 1 ? "dia" : "dias"}, até {courtesyEndLabel(form.courtesy_days)}. A pessoa pode assinar a qualquer momento: o plano passa a contar do dia do pagamento. Se não assinar, o acesso termina sem gerar cobrança.</>
+        : <>Informe de 1 a {MAX_COURTESY_DAYS} dias.</>}</p>}
       {form.initial_access === "beta" && <p className="admin-create-access-note">Acesso completo sem prazo. Só o admin poderá encerrá-lo ou alterar o plano.</p>}
     </div>
     {error && <div className="admin-error" role="alert">{error}</div>}

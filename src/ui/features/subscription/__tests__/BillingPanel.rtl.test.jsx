@@ -198,6 +198,27 @@ describe("<BillingPanel>", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a running courtesy to subscribe now, but not a beta", async () => {
+    const courtesy = {
+      ...baseSubscription,
+      status: "pending_payment",
+      courtesy_plan: "essential",
+      courtesy_until: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    getCurrentSubscription.mockResolvedValue(courtesy);
+    const onSubscribe = vi.fn();
+    const user = userEvent.setup();
+    render(<BillingPanel SectionCard={SectionCard} SectionHeader={SectionHeader} onSubscribe={onSubscribe} />);
+    await user.click(await screen.findByRole("button", { name: "Assinar agora" }));
+    expect(onSubscribe).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    getCurrentSubscription.mockResolvedValue({ ...courtesy, beta_enabled: true });
+    render(<BillingPanel SectionCard={SectionCard} SectionHeader={SectionHeader} onSubscribe={onSubscribe} />);
+    await screen.findByText("Beta ativo");
+    expect(screen.queryByRole("button", { name: "Assinar agora" })).toBeNull();
+  });
+
   it("shows the empty-state when there are no recent invoices", async () => {
     vi.mocked(getCurrentSubscription).mockResolvedValue({
       ...baseSubscription,
