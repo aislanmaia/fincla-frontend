@@ -40,10 +40,10 @@ import { saveBlob } from "./saveBlob.js";
  * prévia, também em tela cheia; voltar (botão, seta do cabeçalho ou Esc) devolve os passos. Formato e conteúdo vivem
  * no estado do painel, que não desmonta na troca, então a escolha se mantém.
  *
- * Layout lateral (≥ 700 px): o drawer cresce com a tela até um teto (`EXPORT_DRAWER_WIDTH`), a coluna dos passos tem
- * largura confortável e quase fixa (`EXPORT_STEPS_COLUMN`) e a prévia fica com o resto — numa tela menor é ela que
- * encolhe, não os passos. As duas colunas ocupam a altura do corpo e rolam cada uma por dentro, sem buraco embaixo;
- * o rodapé fica preso embaixo, com os botões na largura natural, à direita.
+ * Layout lateral (≥ 700 px), nas proporções da variante D aprovada: drawer de ~800 px (`EXPORT_DRAWER_WIDTH`), coluna
+ * dos passos de 300 px com as ações (Cancelar + o primário) presas ao fundo DELA, e a coluna da prévia, cinza, na altura
+ * toda. Dentro da prévia o arquivo é uma folha em pé (A4, `PAGE_RATIO`) que cabe na altura e não estica na largura;
+ * o que não couber rola dentro da folha. Numa tela menor é a prévia que encolhe, não os passos.
  */
 
 export const FORMAT_OPTIONS = {
@@ -68,14 +68,17 @@ const TEXTS = exportTexts("pt-BR");
 /** Abaixo de 700 px (o limite do painel, D4 da #520) a prévia lateral sai. */
 export const PREVIEW_MIN_WIDTH = 700;
 /**
- * Largura do drawer lateral: nunca menos que 880 px (passos legíveis + prévia útil), 62% da tela no meio do caminho e
- * no máximo 1200 px numa tela larga; abaixo de 880 px de tela, a tela toda. Percentual do contêiner fixo, nunca `vw`.
+ * Largura do drawer lateral (protótipo D: 820 px): 56% da tela entre 760 e 860 px — ~806 px numa tela de 1440, 860 px
+ * numa tela larga (mais que isso só sobraria cinza ao lado da folha em pé); abaixo de 760 px de tela, a tela toda.
+ * Percentual do contêiner fixo, nunca `vw`.
  */
-export const EXPORT_DRAWER_WIDTH = "min(100%, clamp(880px, 62%, 1200px))";
-/** Coluna dos passos: 320–380 px (40% do corpo no meio). A prévia fica com o resto e encolhe primeiro. */
-export const EXPORT_STEPS_COLUMN = "clamp(320px, 40%, 380px)";
-/** Largura máxima da folha do PDF na prévia: numa prévia larga a folha não estica como uma faixa. */
-export const PDF_PREVIEW_MAX_WIDTH = 760;
+export const EXPORT_DRAWER_WIDTH = "min(100%, clamp(760px, 56%, 860px))";
+/** Coluna dos passos: 300 px, como no protótipo. A prévia fica com o resto e encolhe primeiro. */
+export const EXPORT_STEPS_COLUMN = "300px";
+/** Proporção da folha da prévia: A4 em pé (altura = largura × 1,414). */
+export const PAGE_RATIO = 1.414;
+/** A folha cabe no palco da prévia: largura limitada pela largura do palco e pela altura ÷ 1,414 (container units). */
+export const PAGE_WIDTH = `min(100cqw, calc(100cqh / ${PAGE_RATIO}))`;
 
 function ExportStep({ n, title, children }) {
   return (
@@ -261,12 +264,13 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
     .join("\n");
 }
 
-function CsvPreview(props) {
+function CsvPreview({ fill = false, ...props }) {
   return (
     <pre
       style={{
-        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: 14, fontSize: 11,
-        lineHeight: 1.5, overflowX: "auto", margin: 0, color: T.ink, whiteSpace: "pre",
+        background: T.surface, border: fill ? 0 : `1px solid ${T.border}`, borderRadius: fill ? 0 : 6, padding: 14, fontSize: 11,
+        lineHeight: 1.5, overflowX: fill ? "visible" : "auto", margin: 0, color: T.ink, whiteSpace: "pre",
+        ...(fill ? { minHeight: "100%", boxSizing: "border-box", width: "max-content", minWidth: "100%" } : {}),
       }}
     >
       {buildCsvPreview(props)}
@@ -351,12 +355,12 @@ const SHEET_ROW_STYLE = {
   header: { fontWeight: 700, background: T.grayLight },
 };
 
-function XlsxPreview(props) {
+function XlsxPreview({ fill = false, ...props }) {
   const { rows, headerRow, formulas } = buildXlsxPreview(props);
   const resultFormula = rows.find((r) => r.formula)?.formula;
   const cellStyle = { border: `1px solid ${T.border}`, padding: "3px 6px", whiteSpace: "nowrap", fontSize: 11 };
   return (
-    <div data-testid="export-preview-sheet" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div data-testid="export-preview-sheet" style={{ display: "flex", flexDirection: "column", gap: 6, ...(fill ? { padding: 12 } : {}) }}>
       <span style={{ ...G, fontSize: 11, color: T.inkMid }}>
         ▲ Linhas 1–{headerRow} congeladas: título, filtros, totais e o cabeçalho da tabela ficam visíveis ao rolar.
         Abaixo dos lançamentos, só o Resultado.{" "}
@@ -444,7 +448,7 @@ export function buildPdfPreview({ title, filtersText, selection, totals, content
 
 const PDF_TONE = { green: T.green, red: T.red };
 
-function PdfPreview(props) {
+function PdfPreview({ fill = false, ...props }) {
   const pdf = buildPdfPreview(props);
   const small = { ...G, fontSize: 11, color: T.inkMid };
   const label = { ...G, fontSize: 11, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".05em" };
@@ -452,8 +456,10 @@ function PdfPreview(props) {
     <div
       data-testid="export-preview-pdf"
       style={{
-        ...G, maxWidth: PDF_PREVIEW_MAX_WIDTH, boxSizing: "border-box", margin: "0 auto", background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
+        ...G, background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
         display: "flex", flexDirection: "column", gap: 10, boxShadow: T.md,
+        // Dentro da folha em pé: a folha já é o papel; o conteúdo ocupa a página e o rodapé desce ao fim dela.
+        ...(fill ? { border: 0, borderRadius: 0, boxShadow: "none", minHeight: "100%", boxSizing: "border-box" } : {}),
       }}
     >
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
@@ -519,7 +525,7 @@ function PdfPreview(props) {
       {pdf.summaryNote && (
         <div style={{ ...small, color: T.inkLight, borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>{pdf.summaryNote}</div>
       )}
-      <div style={{ ...small, color: T.inkLight, display: "flex", justifyContent: "space-between" }}>
+      <div style={{ ...small, color: T.inkLight, display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
         <span>Fincla · Sua organização</span>
         <span>Página 1 de N</span>
       </div>
@@ -530,21 +536,46 @@ function PdfPreview(props) {
 /** Uma prévia por formato. */
 const PREVIEWS = { pdf: PdfPreview, csv: CsvPreview, xlsx: XlsxPreview };
 
-function FilePreview({ format, data, ownScroll = true }) {
+/**
+ * A prévia. Ao lado dos passos (`asPage`): coluna cinza na altura toda, com o arquivo numa folha A4 em pé que cabe no
+ * palco e rola por dentro. Na prévia em tela cheia do celular: o arquivo corre na largura, e o painel rola.
+ */
+function FilePreview({ format, data, asPage = true }) {
   const Preview = PREVIEWS[format];
+  const caption = (
+    <div style={{ ...G, flex: "none", fontSize: 11, color: T.inkLight, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>
+      Prévia do arquivo ({FORMAT_OPTIONS[format].label})
+    </div>
+  );
+  if (!asPage) {
+    return (
+      <div data-testid="export-preview" style={{ background: T.grayLight, borderRadius: 10, padding: 12, minWidth: 0 }}>
+        {caption}
+        <Preview {...data} />
+      </div>
+    );
+  }
   return (
     <div
       data-testid="export-preview"
-      className={ownScroll ? "fincla-scroll" : undefined}
       style={{
-        background: T.grayLight, borderRadius: 10, padding: 16, minWidth: 0, minHeight: 0,
-        overflow: ownScroll ? "auto" : "visible", ...(ownScroll ? { overscrollBehavior: "contain" } : {}),
+        background: T.grayLight, borderRadius: 10, padding: 12, minWidth: 0, minHeight: 0, overflow: "hidden",
+        display: "flex", flexDirection: "column",
       }}
     >
-      <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>
-        Prévia do arquivo ({FORMAT_OPTIONS[format].label})
+      {caption}
+      <div data-testid="export-preview-stage" style={{ flex: 1, minHeight: 0, containerType: "size" }}>
+        <div
+          data-testid="export-preview-page"
+          className="fincla-scroll"
+          style={{
+            width: PAGE_WIDTH, aspectRatio: `1 / ${PAGE_RATIO}`, margin: "0 auto", boxSizing: "border-box",
+            overflow: "auto", overscrollBehavior: "contain", background: T.surface, borderRadius: 4, boxShadow: T.md,
+          }}
+        >
+          <Preview {...data} fill />
+        </div>
       </div>
-      <Preview {...data} />
     </div>
   );
 }
@@ -609,12 +640,13 @@ export function ExportPanel({
     }
   };
 
-  const footer = (
+  // As ações: no celular, no rodapé do drawer; ao lado da prévia, presas ao fundo da coluna dos passos (protótipo D).
+  const actions = (
     <>
       {previewScreen
         ? <Btn variant="outGray" onClick={closePreview}>Voltar ao painel</Btn>
         : <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>}
-      <Btn variant="dark" full={fullScreen} disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
+      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
     </>
@@ -629,29 +661,33 @@ export function ExportPanel({
       view={previewScreen ? "preview" : "steps"}
       width={EXPORT_DRAWER_WIDTH}
       fullScreen={fullScreen}
-      footer={footer}
+      footer={fullScreen ? actions : null}
       testId="export-panel"
     >
       {previewScreen ? (
-        <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} ownScroll={false} />
+        <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} asPage={false} />
       ) : (
       <div
         data-testid="export-panel-layout"
         style={
           showPreview
             ? {
-                display: "grid", gridTemplateColumns: `${EXPORT_STEPS_COLUMN} minmax(0, 1fr)`, gap: 24,
+                display: "grid", gridTemplateColumns: `${EXPORT_STEPS_COLUMN} minmax(0, 1fr)`, gap: 18,
                 alignItems: "stretch", height: "100%", minHeight: 0,
               }
             : { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18, alignItems: "start" }
         }
       >
         <div
+          data-testid="export-steps-column"
+          style={showPreview ? { display: "flex", flexDirection: "column", gap: 14, minWidth: 0, minHeight: 0 } : { minWidth: 0 }}
+        >
+        <div
           data-testid="export-steps"
           className={showPreview ? "fincla-scroll" : undefined}
           style={{
             display: "flex", flexDirection: "column", gap: 18, minWidth: 0,
-            ...(showPreview ? { minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } : {}),
+            ...(showPreview ? { flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } : {}),
           }}
         >
           <ExportStep n={1} title="Lançamentos exportados">
@@ -688,6 +724,10 @@ export function ExportPanel({
           {status.error && (
             <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{status.error}</p>
           )}
+        </div>
+        {showPreview && (
+          <div data-testid="export-actions" style={{ flex: "none", display: "flex", gap: 8 }}>{actions}</div>
+        )}
         </div>
         {showPreview && PREVIEWS[format] && (
           <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} />

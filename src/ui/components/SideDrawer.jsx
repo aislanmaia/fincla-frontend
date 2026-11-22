@@ -18,7 +18,7 @@ import { G } from "../typography";
  * outros painéis em tela cheia do app; a altura vem do contêiner fixo (`inset: 0`), nunca de `vh`.
  *
  * `width` é a largura máxima em px (número) ou uma expressão CSS pronta (string, ex.: `min(100%, clamp(…))`), para
- * o painel que cresce com a tela. O rodapé alinha as ações à direita, na largura natural de cada botão.
+ * o painel que cresce com a tela. Sem `footer`, o próprio conteúdo põe as ações onde quiser.
  *
  * `view` troca o que o painel mostra sem desmontá-lo (ex.: os passos ↔ a prévia): a cada troca o foco volta ao
  * painel, para não ficar num controle que saiu da tela. `closeIcon` troca o ✕ (ex.: uma seta de "voltar").
@@ -121,7 +121,6 @@ export function SideDrawer({
               ...(fullScreen ? { paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))" } : {}),
               borderTop: `1px solid ${T.border}`,
               display: "flex",
-              justifyContent: "flex-end",
               gap: 8,
               flex: "none",
             }}

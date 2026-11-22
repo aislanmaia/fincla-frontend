@@ -14,7 +14,8 @@ import {
   EXPORT_DRAWER_WIDTH,
   EXPORT_STEPS_COLUMN,
   ExportPanel,
-  PDF_PREVIEW_MAX_WIDTH,
+  PAGE_RATIO,
+  PAGE_WIDTH,
   buildCsvPreview,
   buildPdfPreview,
   buildXlsxPreview,
@@ -696,7 +697,7 @@ describe("<ExportPanel> — a prévia do PDF se adapta à largura sem sobrepor t
   });
 });
 
-describe("<ExportPanel> — layout responsivo do drawer (Owner 2026-11-21)", () => {
+describe("<ExportPanel> — layout da variante D (Owner 2026-11-21)", () => {
   const stubViewport = (width) => {
     window.matchMedia = vi.fn((query) => {
       const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
@@ -709,55 +710,72 @@ describe("<ExportPanel> — layout responsivo do drawer (Owner 2026-11-21)", () 
   const original = window.matchMedia;
   afterEach(() => { window.matchMedia = original; });
 
-  // jsdom descarta `clamp()`/`min()` no CSSOM; as regras de largura ficam provadas pelas constantes que o painel usa.
-  it("o drawer cresce com a tela entre 880 px e 1200 px, nunca passa da tela e não usa vw/vh", () => {
-    expect(EXPORT_DRAWER_WIDTH).toBe("min(100%, clamp(880px, 62%, 1200px))");
+  // jsdom descarta `clamp()`/`min()`/container units no CSSOM; as larguras ficam provadas pelas constantes do painel.
+  it("drawer de 760 a 860 px (≈ 806 px em 1440), nunca maior que a tela, sem vw/vh; passos em 300 px", () => {
+    expect(EXPORT_DRAWER_WIDTH).toBe("min(100%, clamp(760px, 56%, 860px))");
     expect(EXPORT_DRAWER_WIDTH).not.toMatch(/v[wh]\b/);
+    expect(EXPORT_STEPS_COLUMN).toBe("300px");
   });
 
-  it("a coluna dos passos fica entre 320 px e 380 px; a folha do PDF não estica além de 760 px", () => {
-    expect(EXPORT_STEPS_COLUMN).toBe("clamp(320px, 40%, 380px)");
-    expect(PDF_PREVIEW_MAX_WIDTH).toBe(760);
+  it("a folha da prévia é A4 em pé e cabe no palco: largura limitada pela largura e pela altura ÷ 1,414", () => {
+    expect(PAGE_RATIO).toBe(1.414);
+    expect(PAGE_WIDTH).toBe("min(100cqw, calc(100cqh / 1.414))");
   });
 
-  it.each([700, 1440, 2000])("com %i px: passos e prévia em grade que ocupa a altura, cada coluna rolando por dentro", (width) => {
+  it.each([700, 1440, 2000])("com %i px: passos rolam por dentro e as ações ficam presas ao fundo da coluna deles", (width) => {
     stubViewport(width);
     const { panel } = renderPanel();
     const layout = within(panel).getByTestId("export-panel-layout");
     expect(layout.style.display).toBe("grid");
     expect(layout.style.height).toBe("100%");
     expect(layout.style.minHeight).toBe("0px");
-    expect(layout.style.alignItems).toBe("stretch");
 
-    const steps = within(panel).getByTestId("export-steps");
+    const column = within(panel).getByTestId("export-steps-column");
+    expect(column.style.display).toBe("flex");
+    expect(column.style.flexDirection).toBe("column");
+    expect(column.style.minHeight).toBe("0px");
+
+    const steps = within(column).getByTestId("export-steps");
+    expect(steps.style.flexGrow).toBe("1");
     expect(steps.style.overflowY).toBe("auto");
     expect(steps.style.minHeight).toBe("0px");
-    expect(steps).toHaveClass("fincla-scroll");
 
-    const preview = within(panel).getByTestId("export-preview");
-    expect(preview.style.overflow).toBe("auto");
-    expect(preview.style.minHeight).toBe("0px");
-    expect(preview).toHaveClass("fincla-scroll");
-
-    const pdf = within(preview).getByTestId("export-preview-pdf");
-    expect(pdf.style.maxWidth).toBe("760px");
-    expect(pdf.style.margin).toBe("0px auto");
+    // Sem rodapé atravessando o drawer: Cancelar + o primário (que ocupa o resto) vivem na coluna dos passos.
+    expect(screen.queryByTestId("export-panel-footer")).toBeNull();
+    const actions = within(column).getByTestId("export-actions");
+    expect(column.lastElementChild).toBe(actions);
+    expect(within(actions).getByRole("button", { name: "Cancelar" }).style.width).toBe("");
+    expect(within(actions).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
   });
 
-  it.each([700, 1440])("com %i px o rodapé alinha à direita e o Exportar fica na largura natural", (width) => {
-    stubViewport(width);
+  it.each(["PDF", "XLSX", "CSV"])("a prévia %s é uma folha em pé no palco cinza, na altura toda, rolando por dentro", async (label) => {
+    stubViewport(1440);
     const { panel } = renderPanel();
-    expect(screen.getByTestId("export-panel-footer").style.justifyContent).toBe("flex-end");
-    expect(within(panel).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("");
-    expect(within(panel).getByRole("button", { name: "Cancelar" }).style.width).toBe("");
+    await userEvent.click(within(panel).getByRole("button", { name: label }));
+    const preview = within(panel).getByTestId("export-preview");
+    expect(preview).toHaveTextContent(`Prévia do arquivo (${label})`);
+    expect(preview.style.display).toBe("flex");
+    expect(preview.style.flexDirection).toBe("column");
+    expect(preview.style.overflow).toBe("hidden");
+    const stage = within(preview).getByTestId("export-preview-stage");
+    expect(stage.style.flexGrow).toBe("1");
+    expect(stage.style.minHeight).toBe("0px");
+    const page = within(stage).getByTestId("export-preview-page");
+    expect(page.style.aspectRatio).toBe("1 / 1.414");
+    expect(page.style.overflow).toBe("auto");
+    expect(page.style.margin).toBe("0px auto");
+    expect(page).toHaveClass("fincla-scroll");
   });
 
-  it("em tela cheia (390 px) nada disso entra: coluna única que não fixa altura, e o Exportar segue largo", () => {
+  it("em tela cheia (390 px) nada disso entra: rodapé do drawer, coluna única e prévia sem folha", async () => {
     stubViewport(390);
     const { panel } = renderPanel();
-    const layout = within(panel).getByTestId("export-panel-layout");
-    expect(layout.style.height).toBe("");
-    expect(within(panel).getByTestId("export-steps").style.overflowY).toBe("");
-    expect(within(panel).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
+    expect(within(panel).getByTestId("export-panel-layout").style.height).toBe("");
+    expect(within(panel).queryByTestId("export-actions")).toBeNull();
+    const footer = screen.getByTestId("export-panel-footer");
+    expect(within(footer).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
+    await userEvent.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+    expect(within(panel).getByTestId("export-preview")).toBeInTheDocument();
+    expect(within(panel).queryByTestId("export-preview-page")).toBeNull();
   });
 });
