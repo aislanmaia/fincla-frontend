@@ -10,7 +10,15 @@ const saveBlobMock = vi.fn();
 vi.mock("../saveBlob.js", () => ({ saveBlob: (...args) => saveBlobMock(...args) }));
 
 import { setCurrencyRegistry } from "../../../money/currencyRegistry.js";
-import { ExportPanel, buildCsvPreview, buildPdfPreview, buildXlsxPreview } from "../ExportPanel.jsx";
+import {
+  EXPORT_DRAWER_WIDTH,
+  EXPORT_STEPS_COLUMN,
+  ExportPanel,
+  PDF_PREVIEW_MAX_WIDTH,
+  buildCsvPreview,
+  buildPdfPreview,
+  buildXlsxPreview,
+} from "../ExportPanel.jsx";
 import { exportTotalsFromSummary } from "../exportTotals.js";
 
 /**
@@ -685,5 +693,71 @@ describe("<ExportPanel> — a prévia do PDF se adapta à largura sem sobrepor t
   it("o título e o recorte do topo também quebram linha em vez de se espremer", () => {
     const top = within(pdfPreview()).getByText("Transações").parentElement.parentElement;
     expect(top.style.flexWrap).toBe("wrap");
+  });
+});
+
+describe("<ExportPanel> — layout responsivo do drawer (Owner 2026-11-21)", () => {
+  const stubViewport = (width) => {
+    window.matchMedia = vi.fn((query) => {
+      const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+      return {
+        matches: Number.isFinite(max) ? width <= max : false,
+        media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      };
+    });
+  };
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  // jsdom descarta `clamp()`/`min()` no CSSOM; as regras de largura ficam provadas pelas constantes que o painel usa.
+  it("o drawer cresce com a tela entre 880 px e 1200 px, nunca passa da tela e não usa vw/vh", () => {
+    expect(EXPORT_DRAWER_WIDTH).toBe("min(100%, clamp(880px, 62%, 1200px))");
+    expect(EXPORT_DRAWER_WIDTH).not.toMatch(/v[wh]\b/);
+  });
+
+  it("a coluna dos passos fica entre 320 px e 380 px; a folha do PDF não estica além de 760 px", () => {
+    expect(EXPORT_STEPS_COLUMN).toBe("clamp(320px, 40%, 380px)");
+    expect(PDF_PREVIEW_MAX_WIDTH).toBe(760);
+  });
+
+  it.each([700, 1440, 2000])("com %i px: passos e prévia em grade que ocupa a altura, cada coluna rolando por dentro", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    const layout = within(panel).getByTestId("export-panel-layout");
+    expect(layout.style.display).toBe("grid");
+    expect(layout.style.height).toBe("100%");
+    expect(layout.style.minHeight).toBe("0px");
+    expect(layout.style.alignItems).toBe("stretch");
+
+    const steps = within(panel).getByTestId("export-steps");
+    expect(steps.style.overflowY).toBe("auto");
+    expect(steps.style.minHeight).toBe("0px");
+    expect(steps).toHaveClass("fincla-scroll");
+
+    const preview = within(panel).getByTestId("export-preview");
+    expect(preview.style.overflow).toBe("auto");
+    expect(preview.style.minHeight).toBe("0px");
+    expect(preview).toHaveClass("fincla-scroll");
+
+    const pdf = within(preview).getByTestId("export-preview-pdf");
+    expect(pdf.style.maxWidth).toBe("760px");
+    expect(pdf.style.margin).toBe("0px auto");
+  });
+
+  it.each([700, 1440])("com %i px o rodapé alinha à direita e o Exportar fica na largura natural", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    expect(screen.getByTestId("export-panel-footer").style.justifyContent).toBe("flex-end");
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("");
+    expect(within(panel).getByRole("button", { name: "Cancelar" }).style.width).toBe("");
+  });
+
+  it("em tela cheia (390 px) nada disso entra: coluna única que não fixa altura, e o Exportar segue largo", () => {
+    stubViewport(390);
+    const { panel } = renderPanel();
+    const layout = within(panel).getByTestId("export-panel-layout");
+    expect(layout.style.height).toBe("");
+    expect(within(panel).getByTestId("export-steps").style.overflowY).toBe("");
+    expect(within(panel).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
   });
 });

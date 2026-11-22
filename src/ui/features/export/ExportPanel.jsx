@@ -38,7 +38,12 @@ import { saveBlob } from "./saveBlob.js";
  * Modo celular (#527): abaixo de 700 px de largura (o limite do próprio painel, D4 da #520) o painel ocupa a tela
  * inteira, só com os três passos — a prévia lateral não cabe. O link "Ver prévia do arquivo" troca os passos pela
  * prévia, também em tela cheia; voltar (botão, seta do cabeçalho ou Esc) devolve os passos. Formato e conteúdo vivem
- * no estado do painel, que não desmonta na troca, então a escolha se mantém. Acima de 700 px nada muda.
+ * no estado do painel, que não desmonta na troca, então a escolha se mantém.
+ *
+ * Layout lateral (≥ 700 px): o drawer cresce com a tela até um teto (`EXPORT_DRAWER_WIDTH`), a coluna dos passos tem
+ * largura confortável e quase fixa (`EXPORT_STEPS_COLUMN`) e a prévia fica com o resto — numa tela menor é ela que
+ * encolhe, não os passos. As duas colunas ocupam a altura do corpo e rolam cada uma por dentro, sem buraco embaixo;
+ * o rodapé fica preso embaixo, com os botões na largura natural, à direita.
  */
 
 export const FORMAT_OPTIONS = {
@@ -62,6 +67,15 @@ const PDF_CONTENT = [
 const TEXTS = exportTexts("pt-BR");
 /** Abaixo de 700 px (o limite do painel, D4 da #520) a prévia lateral sai. */
 export const PREVIEW_MIN_WIDTH = 700;
+/**
+ * Largura do drawer lateral: nunca menos que 880 px (passos legíveis + prévia útil), 62% da tela no meio do caminho e
+ * no máximo 1200 px numa tela larga; abaixo de 880 px de tela, a tela toda. Percentual do contêiner fixo, nunca `vw`.
+ */
+export const EXPORT_DRAWER_WIDTH = "min(100%, clamp(880px, 62%, 1200px))";
+/** Coluna dos passos: 320–380 px (40% do corpo no meio). A prévia fica com o resto e encolhe primeiro. */
+export const EXPORT_STEPS_COLUMN = "clamp(320px, 40%, 380px)";
+/** Largura máxima da folha do PDF na prévia: numa prévia larga a folha não estica como uma faixa. */
+export const PDF_PREVIEW_MAX_WIDTH = 760;
 
 function ExportStep({ n, title, children }) {
   return (
@@ -438,7 +452,7 @@ function PdfPreview(props) {
     <div
       data-testid="export-preview-pdf"
       style={{
-        ...G, background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
+        ...G, maxWidth: PDF_PREVIEW_MAX_WIDTH, boxSizing: "border-box", margin: "0 auto", background: T.surface, color: T.ink, border: `1px solid ${T.border}`, borderRadius: 4, padding: "18px 20px",
         display: "flex", flexDirection: "column", gap: 10, boxShadow: T.md,
       }}
     >
@@ -521,7 +535,11 @@ function FilePreview({ format, data, ownScroll = true }) {
   return (
     <div
       data-testid="export-preview"
-      style={{ background: T.grayLight, borderRadius: 10, padding: 12, minWidth: 0, minHeight: 0, overflow: ownScroll ? "auto" : "visible" }}
+      className={ownScroll ? "fincla-scroll" : undefined}
+      style={{
+        background: T.grayLight, borderRadius: 10, padding: 16, minWidth: 0, minHeight: 0,
+        overflow: ownScroll ? "auto" : "visible", ...(ownScroll ? { overscrollBehavior: "contain" } : {}),
+      }}
     >
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>
         Prévia do arquivo ({FORMAT_OPTIONS[format].label})
@@ -596,7 +614,7 @@ export function ExportPanel({
       {previewScreen
         ? <Btn variant="outGray" onClick={closePreview}>Voltar ao painel</Btn>
         : <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>}
-      <Btn variant="dark" full disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
+      <Btn variant="dark" full={fullScreen} disabled={status.busy || tooLarge || selectionTooLarge || !totals} onClick={runExport}>
         {status.busy ? "Gerando arquivo…" : `Exportar ${FORMAT_OPTIONS[format].label}`}
       </Btn>
     </>
@@ -609,7 +627,7 @@ export function ExportPanel({
       closeLabel={previewScreen ? "Voltar ao painel" : "Fechar"}
       closeIcon={previewScreen ? ArrowLeft : undefined}
       view={previewScreen ? "preview" : "steps"}
-      width={820}
+      width={EXPORT_DRAWER_WIDTH}
       fullScreen={fullScreen}
       footer={footer}
       testId="export-panel"
@@ -618,14 +636,24 @@ export function ExportPanel({
         <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} ownScroll={false} />
       ) : (
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: showPreview ? "minmax(240px, 300px) minmax(0, 1fr)" : "minmax(0, 1fr)",
-          gap: 18,
-          alignItems: "start",
-        }}
+        data-testid="export-panel-layout"
+        style={
+          showPreview
+            ? {
+                display: "grid", gridTemplateColumns: `${EXPORT_STEPS_COLUMN} minmax(0, 1fr)`, gap: 24,
+                alignItems: "stretch", height: "100%", minHeight: 0,
+              }
+            : { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18, alignItems: "start" }
+        }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+        <div
+          data-testid="export-steps"
+          className={showPreview ? "fincla-scroll" : undefined}
+          style={{
+            display: "flex", flexDirection: "column", gap: 18, minWidth: 0,
+            ...(showPreview ? { minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", paddingRight: 4 } : {}),
+          }}
+        >
           <ExportStep n={1} title="Lançamentos exportados">
             <ScopeStep selection={selection} count={sliceCount} countFailed={Boolean(totalsError)} filtersText={filtersText} />
             {tooLarge && (
