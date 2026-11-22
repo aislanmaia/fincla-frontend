@@ -310,7 +310,7 @@ describe("ReconcileShortcut — escolher a conta (T4)", () => {
 
   it("no celular (390px) o menu cabe na tela", async () => {
     window.innerWidth = 390;
-    renderShortcut({ compact: true });
+    renderShortcut();
     await userEvent.click(await screen.findByRole("button", { name: "Conciliar extrato…" }));
     // A caixa posicionada envolve o menu e o rodapé dos cartões.
     const box = (await screen.findByRole("menu")).parentElement;

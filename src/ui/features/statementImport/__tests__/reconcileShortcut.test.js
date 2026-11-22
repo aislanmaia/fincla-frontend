@@ -76,7 +76,7 @@ describe("mobileShortcutChip (celular, decisão do Owner de 2026-11-22: M1b / M3
   const dB = { id: "d-b", account_id: "acc-b" };
   const dC = { id: "d-c", account_id: "acc-c" };
   const chip = (accounts, filteredIds, draftByAccount) =>
-    mobileShortcutChip({ target: shortcutTarget({ accounts, filteredIds }), accounts, draftByAccount });
+    mobileShortcutChip({ target: shortcutTarget({ accounts, filteredIds }), accounts, filteredIds, draftByAccount });
 
   it("sem destino (nenhuma conta elegível) ou rascunhos ainda não carregados/erro: sem chip", () => {
     expect(chip([], [], {})).toBeNull();
@@ -101,10 +101,33 @@ describe("mobileShortcutChip (celular, decisão do Owner de 2026-11-22: M1b / M3
     });
   });
 
-  it("M3 — conta filtrada sem rascunho, mas duas outras com: a lista", () => {
-    expect(chip([A, B, C], ["acc-b"], { "acc-a": dA, "acc-c": dC })).toEqual({
-      kind: "many", started: [{ account: A, draft: dA }, { account: C, draft: dC }],
+  // Decisão do orquestrador (2026-11-22, G3 achado 3): com filtro de conta, só as conciliações
+  // começadas das contas FILTRADAS e ativas contam; o chip nunca leva para fora do recorte.
+  it("conta filtrada sem rascunho, mesmo com duas outras com: sem chip (fora do recorte)", () => {
+    expect(chip([A, B, C], ["acc-b"], { "acc-a": dA, "acc-c": dC })).toBeNull();
+  });
+
+  it("filtro A+B com rascunho só na C: sem chip", () => {
+    expect(chip([A, B, C], ["acc-a", "acc-b"], { "acc-c": dC })).toBeNull();
+  });
+
+  it("filtro A+B com rascunho em A e B (e na C): M3 só com A e B, na ordem das contas", () => {
+    expect(chip([A, B, C], ["acc-b", "acc-a"], { "acc-c": dC, "acc-b": dB, "acc-a": dA })).toEqual({
+      kind: "many", started: [{ account: A, draft: dA }, { account: B, draft: dB }],
     });
+  });
+
+  it("filtro A+B com rascunho só na A (e na C): M1b da A", () => {
+    expect(chip([A, B, C], ["acc-a", "acc-b"], { "acc-a": dA, "acc-c": dC })).toEqual({ kind: "continue", account: A, draft: dA });
+  });
+
+  it("filtro só por conta desativada: ela não vale e nenhuma outra entra (sem chip)", () => {
+    expect(chip([A, B], ["acc-old"], { "acc-a": dA, "acc-b": dB })).toBeNull();
+    expect(chip([A], ["acc-old"], { "acc-a": dA })).toBeNull();
+  });
+
+  it("filtro desativada + A: só a A conta", () => {
+    expect(chip([A, B], ["acc-old", "acc-a"], { "acc-a": dA, "acc-b": dB })).toEqual({ kind: "continue", account: A, draft: dA });
   });
 
   it("conta filtrada sem rascunho e UMA outra com: sem chip (não leva a outra conta com a tela filtrada)", () => {

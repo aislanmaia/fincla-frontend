@@ -37,24 +37,31 @@ export function latestConcludedEnd(items) {
 }
 
 /**
+ * As contas cujas conciliações começadas o atalho do CELULAR considera (decisão do orquestrador de
+ * 2026-11-22): com filtro de conta, só as FILTRADAS e elegíveis (uma conta desativada no filtro não
+ * vale, e nenhuma de fora entra no lugar dela); sem filtro, todas as elegíveis. Na ordem das contas.
+ */
+export function reconcileScopeAccounts({ accounts, filteredIds }) {
+  if (!filteredIds?.length) return accounts;
+  const filtered = new Set(filteredIds);
+  return accounts.filter((a) => filtered.has(a.id));
+}
+
+/**
  * O chip do CELULAR entre a busca e a lista (decisão do Owner de 2026-11-22). `target` vem de
  * `shortcutTarget`; `draftByAccount` é `null` enquanto os rascunhos não chegaram (ou falharam): sem
- * chip, nunca um número inventado.
- * - destino direto com rascunho → `continue` (M1b) para ele;
- * - dois ou mais rascunhos nas contas elegíveis (sem destino direto, ou o destino direto sem
- *   rascunho) → `many` (M3), na ordem das contas;
- * - sem destino direto e exatamente um rascunho → `continue` para ele;
- * - o resto (nada começado; ou conta filtrada sem rascunho e só UMA outra com) → `null` (M2: o
- *   atalho fica só no menu ⋯). Com a tela filtrada por uma conta, o chip não leva a outra conta.
+ * chip, nunca um número inventado. Só contam os rascunhos das contas de `reconcileScopeAccounts`,
+ * para o chip nunca levar a uma conta fora do recorte que a pessoa escolheu.
+ * - exatamente um rascunho nessas contas → `continue` (M1b) para ele;
+ * - dois ou mais → `many` (M3), na ordem das contas;
+ * - nenhum → `null` (M2: o atalho fica só no menu ⋯).
  */
-export function mobileShortcutChip({ target, accounts, draftByAccount }) {
+export function mobileShortcutChip({ target, accounts, filteredIds, draftByAccount }) {
   if (!target || !draftByAccount) return null;
-  if (target.kind === "direct") {
-    const draft = draftByAccount[target.account.id];
-    if (draft) return { kind: "continue", account: target.account, draft };
-  }
-  const started = accounts.filter((a) => draftByAccount[a.id]).map((a) => ({ account: a, draft: draftByAccount[a.id] }));
+  const started = reconcileScopeAccounts({ accounts, filteredIds })
+    .filter((a) => draftByAccount[a.id])
+    .map((a) => ({ account: a, draft: draftByAccount[a.id] }));
   if (started.length >= 2) return { kind: "many", started };
-  if (target.kind === "menu" && started.length === 1) return { kind: "continue", ...started[0] };
+  if (started.length === 1) return { kind: "continue", ...started[0] };
   return null;
 }

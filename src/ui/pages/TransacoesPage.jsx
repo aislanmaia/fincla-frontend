@@ -955,7 +955,10 @@ function TransacoesPageBody({
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef(null);
-  /** Folha do atalho de conciliação no celular: `{ mode: "started"|"choose", returnFocusTo }`. */
+  /**
+   * Folha do atalho de conciliação no celular: `{ mode: "started"|"choose", origin: "chip"|"menu",
+   * returnFocusTo }`.
+   */
   const [reconcileSheet, setReconcileSheet] = useState(null);
   const swipeActions = useSwipeActions();
   const [statsExpanded, setStatsExpanded] = useState(false);
@@ -1422,8 +1425,15 @@ function TransacoesPageBody({
     if (target.kind === "direct") {
       const draft = reconcileShortcutData.draftByAccount?.[target.account.id] ?? null;
       onReconcileStatement(target.account.id, draft ? draft.id : null);
-    } else setReconcileSheet({ mode: "choose", returnFocusTo: mobileMenuButtonRef.current });
+    } else setReconcileSheet({ mode: "choose", origin: "menu", returnFocusTo: mobileMenuButtonRef.current });
   };
+  /* A folha só existe no celular com o atalho ligado. Quando isso cai (girar para paisagem, contas
+     relidas; na troca de organização as contas zeram e o atalho desliga), ela fecha DE VEZ: sem
+     isto, o estado sobrevivia e a folha reabria sozinha quando a condição voltava. */
+  const reconcileSheetAllowed = isMobile && reconcileShortcutOn;
+  useEffect(() => {
+    if (!reconcileSheetAllowed) setReconcileSheet(null);
+  }, [reconcileSheetAllowed]);
   // No celular o chip da conta não aparece (decisão do Owner, 2026-11-17): o "Filtros 1" já indica
   // o recorte e a linha a mais apertava a lista. No computador ele continua (#279).
   const showsAccountChips = !isMobile && effectiveAccountSel.length > 0 && !!accountsForFilterById;
@@ -4667,13 +4677,15 @@ function TransacoesPageBody({
           accounts={accountsForFilter}
           filteredIds={effectiveAccountSel}
           onOpen={onReconcileStatement}
-          onOpenStarted={(el) => setReconcileSheet({ mode: "started", returnFocusTo: el })}
+          onOpenStarted={(el) => setReconcileSheet({ mode: "started", origin: "chip", returnFocusTo: el })}
+          expanded={reconcileSheet?.origin === "chip"}
         />
       ) : null}
-      {isMobile && reconcileShortcutOn && reconcileSheet ? (
+      {reconcileSheetAllowed && reconcileSheet ? (
         <MobileReconcileSheet
           data={reconcileShortcutData}
           accounts={accountsForFilter}
+          filteredIds={effectiveAccountSel}
           baseCurrency={orgBase.currency ?? null}
           mode={reconcileSheet.mode}
           returnFocusTo={reconcileSheet.returnFocusTo}

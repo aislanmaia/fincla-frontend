@@ -30,6 +30,11 @@ export function BottomSheet({
    */
   trapFocus = false,
   returnFocusTo = null,
+  /**
+   * Com `trapFocus`: quando muda, o conteúdo trocou dentro da MESMA folha (sem remontar) e o foco
+   * vai para o primeiro controle do conteúdo novo.
+   */
+  contentKey = null,
 }) {
   const dismissibleRef = useRef(dismissible);
   dismissibleRef.current = dismissible;
@@ -56,11 +61,16 @@ export function BottomSheet({
   const returnFocusRef = useRef(returnFocusTo);
   returnFocusRef.current = returnFocusTo;
   const bodyRef = useRef(null);
+  // `preventScroll`: no início da subida a folha ainda está fora da tela, e o iOS rolaria a página
+  // até ela.
+  const focusFirst = useCallback(() => {
+    const first = bodyRef.current?.querySelector(FOCUSABLE) ?? sheetRef.current?.querySelector(FOCUSABLE);
+    first?.focus({ preventScroll: true });
+  }, []);
   useEffect(() => {
     if (!trapFocus) return undefined;
     const opener = document.activeElement;
-    const first = bodyRef.current?.querySelector(FOCUSABLE) ?? sheetRef.current?.querySelector(FOCUSABLE);
-    first?.focus();
+    focusFirst();
     // Depois da limpeza do `useFocusTrap` (declarado antes): este destino é o que vale.
     return () => {
       const to = returnFocusRef.current ?? opener;
@@ -69,6 +79,12 @@ export function BottomSheet({
     // Só na montagem: o foco inicial não acompanha re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const shownContentKey = useRef(contentKey);
+  useEffect(() => {
+    if (!trapFocus || shownContentKey.current === contentKey) return;
+    shownContentKey.current = contentKey;
+    focusFirst();
+  }, [trapFocus, contentKey, focusFirst]);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") requestClose();

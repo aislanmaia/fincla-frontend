@@ -12,7 +12,7 @@ import React, { useEffect } from "react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { BottomSheet } from "../../components/BottomSheet.jsx";
-import { mobileShortcutChip, shortcutTarget } from "./reconcileShortcut.js";
+import { mobileShortcutChip, reconcileScopeAccounts, shortcutTarget } from "./reconcileShortcut.js";
 import {
   MENU_FOOTER, MENU_TITLE, ReconcileIcon, accountChoiceStatus, isForeignAccount, stepsLabel,
 } from "./ReconcileShortcut.jsx";
@@ -66,12 +66,14 @@ const chipLabel = { overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 };
 /**
  * A linha do chip (entre a busca e a lista). Sem conciliação começada, sem rascunhos (carregando ou
  * erro) ou sem destino: não renderiza nada.
+ * Com filtro de conta, só contam as conciliações começadas das contas filtradas (`mobileShortcutChip`).
  * @param onOpen (accountId, importId) → abre a conciliação.
  * @param onOpenStarted (chipElement) → abre a folha "Conciliações começadas".
+ * @param expanded a folha que este chip abriu está aberta (`aria-expanded`).
  */
-export function MobileReconcileChip({ data, accounts, filteredIds, onOpen, onOpenStarted }) {
+export function MobileReconcileChip({ data, accounts, filteredIds, onOpen, onOpenStarted, expanded = false }) {
   const target = shortcutTarget({ accounts, filteredIds });
-  const chip = mobileShortcutChip({ target, accounts, draftByAccount: data.draftByAccount });
+  const chip = mobileShortcutChip({ target, accounts, filteredIds, draftByAccount: data.draftByAccount });
   const { loadProgress, progressOf } = data;
   // M1b: só o detalhe do rascunho do chip (o "N de 8 passos"); na M3, só ao abrir a folha.
   const continueDraft = chip?.kind === "continue" ? chip.draft : null;
@@ -95,13 +97,14 @@ export function MobileReconcileChip({ data, accounts, filteredIds, onOpen, onOpe
       </button>
     );
   } else {
-    const n = chip.started.length;
+    const n = chip.started.length.toLocaleString("pt-BR");
+    // O nome começa pelo texto visível ("Continuar conciliações" + o número): controle por voz acha.
     button = (
-      <button type="button" aria-haspopup="dialog" aria-label={`Continuar ${n.toLocaleString("pt-BR")} conciliações começadas`}
+      <button type="button" aria-haspopup="dialog" aria-expanded={expanded} aria-label={`Continuar conciliações, ${n} começadas`}
         onClick={(e) => onOpenStarted(e.currentTarget)} style={chipStyle}>
         <ReconcileIcon size={14} />
         <span style={chipLabel}>Continuar conciliações</span>
-        <ChipBadge>{n.toLocaleString("pt-BR")}</ChipBadge>
+        <ChipBadge>{n}</ChipBadge>
         <Chevron />
       </button>
     );
@@ -119,6 +122,10 @@ const rowStyle = (started) => ({
   border: `1px solid ${started ? T.blueBar : T.border}`, background: started ? T.blueLight : T.surface,
 });
 
+/** O nome como aparece na linha: com a moeda ao lado quando não é a base da organização. */
+const accountNameText = (account, baseCurrency) =>
+  (isForeignAccount(account, baseCurrency) ? `${account.label} · ${account.currency}` : account.label);
+
 function AccountName({ account, baseCurrency }) {
   return (
     <b style={{ fontSize: 14, overflowWrap: "anywhere" }}>
@@ -128,10 +135,13 @@ function AccountName({ account, baseCurrency }) {
   );
 }
 
-/** M3: uma linha por conciliação começada, com o "N de 8 passos conferidos" e "Continuar". */
-function StartedList({ data, accounts, baseCurrency, onOpen, onChooseOther }) {
+/**
+ * M3: uma linha por conciliação começada, com o "N de 8 passos conferidos" e "Continuar". As mesmas
+ * contas que o chip contou (com filtro, só as filtradas).
+ */
+function StartedList({ data, accounts, filteredIds, baseCurrency, onOpen, onChooseOther }) {
   const { draftByAccount, progressOf, loadProgress } = data;
-  const started = accounts.filter((a) => draftByAccount?.[a.id]).map((a) => ({ account: a, draft: draftByAccount[a.id] }));
+  const started = reconcileScopeAccounts({ accounts, filteredIds }).filter((a) => draftByAccount?.[a.id]).map((a) => ({ account: a, draft: draftByAccount[a.id] }));
   const draftsKey = started.map((s) => s.draft.id).join("|");
   useEffect(() => {
     loadProgress(started.map((s) => s.draft));
@@ -143,8 +153,10 @@ function StartedList({ data, accounts, baseCurrency, onOpen, onChooseOther }) {
       <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: "0 0 4px" }}>Continue de onde parou em cada conta.</p>
       {started.map(({ account, draft }) => {
         const progress = progressOf(draft);
+        // O progresso entra no nome: é o que diferencia uma linha da outra no leitor de tela.
+        const name = `Continuar a conciliação da ${accountNameText(account, baseCurrency)}${progress ? `, ${stepsLabel(progress)} conferidos` : ""}`;
         return (
-          <button key={account.id} type="button" aria-label={`Continuar a conciliação da ${account.label}`}
+          <button key={account.id} type="button" aria-label={name}
             onClick={() => onOpen(account.id, draft.id)} style={rowStyle(true)}>
             <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
               <AccountName account={account} baseCurrency={baseCurrency} />
@@ -200,18 +212,22 @@ function AccountChoice({ data, accounts, baseCurrency, onOpen }) {
 /**
  * A folha de baixo do atalho no celular. `mode`: "started" (M3) ou "choose" (a escolha da conta).
  * Fecha por Esc, arrasto, toque fora ou ✕; o foco fica preso dentro e volta a `returnFocusTo`.
- * Escolher uma conta fecha a folha e abre a conciliação.
+ * Escolher uma conta fecha a folha e abre a conciliação. Trocar de `mode` mantém a MESMA folha (sem
+ * piscar o fundo nem subir de novo): só o título e o conteúdo trocam, e o foco vai ao primeiro
+ * controle do conteúdo novo.
  */
-export function MobileReconcileSheet({ data, accounts, baseCurrency = null, mode, onModeChange, returnFocusTo, onClose, onOpen }) {
+export function MobileReconcileSheet({
+  data, accounts, filteredIds = [], baseCurrency = null, mode, onModeChange, returnFocusTo, onClose, onOpen,
+}) {
   const open = (accountId, importId) => {
     onClose();
     onOpen(accountId, importId);
   };
   const title = mode === "started" ? STARTED_TITLE : MENU_TITLE;
   return (
-    <BottomSheet key={mode} title={title} testIdPrefix="reconcile-sheet" trapFocus returnFocusTo={returnFocusTo} onClose={onClose}>
+    <BottomSheet title={title} testIdPrefix="reconcile-sheet" trapFocus contentKey={mode} returnFocusTo={returnFocusTo} onClose={onClose}>
       {mode === "started" ? (
-        <StartedList data={data} accounts={accounts} baseCurrency={baseCurrency} onOpen={open}
+        <StartedList data={data} accounts={accounts} filteredIds={filteredIds} baseCurrency={baseCurrency} onOpen={open}
           onChooseOther={() => onModeChange("choose")} />
       ) : (
         <AccountChoice data={data} accounts={accounts} baseCurrency={baseCurrency} onOpen={open} />
