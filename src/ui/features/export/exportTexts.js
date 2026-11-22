@@ -62,6 +62,23 @@ const PT_BR = {
     if (to) return `Período: até ${this.day(to)}`;
     return "Período: todo o histórico";
   },
+  /** "Incluir saldo" (fincla-api#541): a opção do painel e as linhas que o arquivo ganha (iguais às do servidor). */
+  balanceOption: "Incluir saldo",
+  balanceHint: "Saldo anterior, a coluna Saldo e o saldo final, como no extrato do banco.",
+  balanceOpening: "Saldo anterior",
+  balanceClosing: "Saldo final",
+  balanceColumn: "Saldo",
+  noteColumn: "Observação",
+  /** O valor que a prévia não tem: o arquivo traz o saldo da conta (nunca um zero inventado). */
+  balancePending: "saldo da conta",
+  balanceAccounts: "Saldo de: as contas do recorte",
+  /** O dia anterior ao início do período ("2026-10-01" → "2026-09-30"): o Saldo anterior é o do fim desse dia. */
+  dayBefore(ymd) {
+    if (typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    const [y, m, d] = ymd.split("-").map(Number);
+    const date = new Date(y, m - 1, d - 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  },
   /** Etiquetas numa linha só; com duas ou mais, o modo escolhido (`modeLabel`, o texto do painel de Tags). */
   tags(labels, modeLabel) {
     const list = (labels ?? []).filter(Boolean);

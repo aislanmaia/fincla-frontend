@@ -179,5 +179,10 @@
         "approximate": false
       }
     ]
+  },
+  "balance_statement": {
+    "available": true,
+    "reason": null,
+    "message": null
   }
 }

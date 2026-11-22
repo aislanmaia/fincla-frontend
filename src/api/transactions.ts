@@ -201,6 +201,12 @@ export type ExportTransactionsRequest = ExportTransactionsQuery & {
   content?: 'full' | 'summary';
   /** "Exportar seleção" (#524): só estes lançamentos (até 500); os filtros do recorte são ignorados. */
   ids?: number[];
+  /**
+   * "Incluir saldo" (fincla-api#541): o arquivo vira extrato — Saldo anterior, coluna Saldo e Saldo final, do saldo
+   * da conta. Só quando o resumo do mesmo recorte disse `balance_statement.available`; fora disso, 422
+   * `balance_unavailable` com `reason`.
+   */
+  include_balance?: boolean;
 };
 
 export type ExportedFile = { blob: Blob; fileName: string | null };

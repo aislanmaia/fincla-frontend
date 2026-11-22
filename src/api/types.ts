@@ -936,6 +936,13 @@ export interface TransactionsSummaryResponse {
   unsettled_refunds: number;
   /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
   settled_balance: number;
+  /**
+   * Só com `slice_currency=true` (as telas que abrem o painel de exportação): se o arquivo do MESMO recorte pode
+   * trazer o saldo da conta ("Incluir saldo", fincla-api#541) e, se não, por quê. A regra é do servidor; o painel só
+   * mostra. `reason`: `selection` | `card` | `filtered` | `no_period` | `invalid_period` | `inactive_account` | `no_accounts` |
+   * `mixed_currencies`; `message` é a frase em pt-BR para o painel.
+   */
+  balance_statement?: { available: boolean; reason: string | null; message: string | null } | null;
   /** Opt-in, full filtered result. Values remain separate by currency. */
   breakdown?: {
     by_category: Array<{ category: string; amount: number; amount_currency?: string | null }>;

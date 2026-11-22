@@ -191,6 +191,42 @@ function FormatStep({ formats, format, onFormat, content, onContent }) {
   );
 }
 
+/**
+ * "Incluir saldo" (fincla-api#541). Quem decide se a opção existe é o servidor (`balance_statement` do resumo do
+ * mesmo recorte); o painel só mostra. Disponível: marcada por padrão. Indisponível: desativada, com o motivo em
+ * texto (a frase do servidor). Sem a resposta (resumo carregando), a opção não aparece.
+ */
+function BalanceOption({ availability, checked, onChange }) {
+  if (!availability) return null;
+  const available = Boolean(availability.available);
+  return (
+    <label
+      data-testid="export-balance-option"
+      style={{
+        ...G, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, padding: "7px 9px", borderRadius: 8,
+        border: `1px solid ${available && checked ? T.blue : T.border}`,
+        background: available && checked ? T.blueLight : T.surface,
+        cursor: available ? "pointer" : "default", color: available ? T.ink : T.inkMid,
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={available && checked}
+        disabled={!available}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-describedby="export-balance-hint"
+        style={{ marginTop: 2 }}
+      />
+      <span>
+        <b>{TEXTS.balanceOption}</b>
+        <span id="export-balance-hint" style={{ display: "block", fontSize: 11, color: available ? T.inkLight : T.inkMid }}>
+          {available ? TEXTS.balanceHint : availability.message || "O saldo não está disponível para este recorte."}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 const resultColor = (value) => (value == null ? T.amber : value < 0 ? T.red : T.green);
 
 function TotalCell({ label, value, color }) {
@@ -234,8 +270,15 @@ const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 const csvNumber = (value, currency) => (value == null ? UNAVAILABLE : Number(value).toFixed(currencyInfo(currency).decimalPlaces));
 
 /** Prévia montada no cliente com os mesmos dados do passo 3. Orienta; não é o arquivo final. */
-export function buildCsvPreview({ title, filtersText, selection, totals }) {
-  const line = (description, value = "", currency = "") => ["", description, "", "", value, currency, ""];
+export function buildCsvPreview({ title, filtersText, selection, totals, balance = null }) {
+  const width = balance ? 9 : 7;
+  const line = (description, value = "", currency = "") => {
+    const cells = Array(width).fill("");
+    cells[1] = description;
+    cells[4] = value;
+    cells[5] = currency;
+    return cells;
+  };
   const meta = [
     line(title),
     line("Sua organização · gerado agora"),
@@ -243,6 +286,7 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
   ];
   const note = conversionNote(totals);
   if (note) meta.push(line(note));
+  if (balance) meta.push(line(TEXTS.balanceAccounts));
   const cur = totals?.currency ?? "";
   const resultLine = line("RESULTADO", csvNumber(totals?.result, cur), cur);
   const block = totals
@@ -259,6 +303,23 @@ export function buildCsvPreview({ title, filtersText, selection, totals }) {
     : [];
   const header = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
   const rows = [line(`… ${TEXTS.entries(totals?.count)}, um por linha …`)];
+  if (balance) {
+    // O extrato (#541): Saldo anterior no topo, Saldo e Observação em cada linha, Saldo final junto do Total.
+    const balanceLine = (day, label) => {
+      const cells = line(label, "", cur);
+      cells[0] = day ?? "";
+      cells[7] = `(${TEXTS.balancePending})`;
+      return cells;
+    };
+    return [
+      ...meta, null, ...block, null, [...header, TEXTS.balanceColumn, TEXTS.noteColumn],
+      balanceLine(TEXTS.dayBefore(balance.from), TEXTS.balanceOpening),
+      line(`… ${TEXTS.entries(totals?.count)} e o que mexeu na conta (fatura paga, transferência, ajuste), com o saldo depois de cada linha …`),
+      null, resultLine, balanceLine(balance.to, TEXTS.balanceClosing),
+    ]
+      .map((cells) => (cells ? cells.map(csvCell).join(",") : ""))
+      .join("\n");
+  }
   return [...meta, null, ...block, null, header, ...rows, null, resultLine]
     .map((cells) => (cells ? cells.map(csvCell).join(",") : ""))
     .join("\n");
@@ -279,6 +340,7 @@ function CsvPreview({ fill = false, ...props }) {
 }
 
 const SHEET_COLUMNS = ["A", "B", "C", "D", "E", "F", "G"];
+const STATEMENT_SHEET_COLUMNS = [...SHEET_COLUMNS, "H", "I"];
 const TABLE_HEADER = ["Data", "Descrição", "Categoria", "Tipo", "Valor", "Moeda", "Situação"];
 
 /** Um número como a planilha o mostra em pt-BR: casas da moeda pelo registro, sem símbolo (a moeda vai na coluna F). */
@@ -289,7 +351,7 @@ const sheetNumber = (value, currency) => formatMoneyNumber(value, currency) ?? U
  * cabeçalho congelado, um marcador no lugar dos lançamentos, só o Resultado embaixo e o resumo por categoria.
  * Com uma moeda (e lançamentos) os totais são fórmulas; aqui elas aparecem como o Excel em pt-BR as mostra.
  */
-export function buildXlsxPreview({ title, filtersText, selection, totals }) {
+export function buildXlsxPreview({ title, filtersText, selection, totals, balance = null }) {
   const row = (cells, kind = "plain", formula = null) => ({ cells, kind, formula });
   const top = [
     row([title]),
@@ -300,6 +362,7 @@ export function buildXlsxPreview({ title, filtersText, selection, totals }) {
   ];
   const note = conversionNote(totals);
   if (note) top.push(row([note], totals?.unavailable ? "warning" : "muted"));
+  if (balance) top.push(row([TEXTS.balanceAccounts], "muted"));
   if (totals?.mixed) {
     const symbols = [...totals.byCurrency].sort((a, b) => a.currency.localeCompare(b.currency)).map((item) => currencyInfo(item.currency).symbol);
     top.push(row([TEXTS.fixedTotals(symbols)], "warning"));
@@ -309,19 +372,27 @@ export function buildXlsxPreview({ title, filtersText, selection, totals }) {
   const formulas = Boolean(totals) && count > 0 && !totals.mixed && !totals.unavailable;
   const blockSize = 6 + (totals?.mixed ? totals.byCurrency.length : 0);
   const headerRow = top.length + 1 + blockSize + 1 + 1; // 1-based: topo, branco, bloco, branco, cabeçalho
-  const span = (col) => `${col}${headerRow + 1}:${col}${headerRow + count}`;
-  const sumIf = (label) => `=SOMASE(${span("D")};"${label}";${span("E")})`;
+  // No extrato a tabela começa no Saldo anterior e traz linhas que não são lançamentos: os totais somam por Tipo.
+  const span = (col) => (balance ? `${col}${headerRow + 1}:${col}${headerRow + 1 + count}` : `${col}${headerRow + 1}:${col}${headerRow + count}`);
+  const sumIfTerm = (label) => `SOMASE(${span("D")};"${label}";${span("E")})`;
+  const sumIf = (label) => `=${sumIfTerm(label)}`;
   const fx = (formula) => (formulas ? formula : null);
+  const pad = balance ? ["", ""] : [];
   const total = (label, value, formula, kind = "total") =>
-    row([label, "", "", "", sheetNumber(value, cur), cur, ""], kind, fx(formula));
-  const resultFormula = `=SOMA(${span("E")})`;
+    row([label, "", "", "", sheetNumber(value, cur), cur, "", ...pad], kind, fx(formula));
+  const resultFormula = balance
+    ? `=${["Receita", "Despesa", "Estorno"].map(sumIfTerm).join("+")}`
+    : `=SOMA(${span("E")})`;
+  const countFormula = balance
+    ? `=${["Receita", "Despesa", "Estorno"].map((label) => `CONT.SE(${span("D")};"${label}")`).join("+")}`
+    : `=CONT.VALORES(${span("D")})`;
   const block = totals
     ? [
         total("RESULTADO", totals.result, resultFormula, "result"),
         total("RECEITAS", totals.income, sumIf("Receita")),
         total("DESPESAS", totals.expenses == null ? null : -totals.expenses, sumIf("Despesa")),
         total("ESTORNOS", totals.refunds, sumIf("Estorno")),
-        row([TEXTS.countLabel, "", "", "", TEXTS.number(count), "", ""], "total", fx(`=CONT.VALORES(${span("D")})`)),
+        row([TEXTS.countLabel, "", "", "", TEXTS.number(count), "", ""], "total", fx(countFormula)),
         row([TEXTS.pendingLabel, "", "", "", TEXTS.number(totals.pending), "", ""], "total",
           fx(`=CONT.VALORES(${span("G")})-CONT.SE(${span("G")};"Paga")`)),
         ...(totals.mixed
@@ -331,17 +402,31 @@ export function buildXlsxPreview({ title, filtersText, selection, totals }) {
       ]
     : [];
   const blank = row([]);
+  const balanceRow = (day, label) =>
+    row([day ? TEXTS.day(day) : "", label, "", "", "", cur, "", `(${TEXTS.balancePending})`, ""], "total");
+  const table = balance
+    ? [
+        row([...TABLE_HEADER, TEXTS.balanceColumn, TEXTS.noteColumn], "header"),
+        balanceRow(TEXTS.dayBefore(balance.from), TEXTS.balanceOpening),
+        row(["", `… ${TEXTS.entries(count)} e o que mexeu na conta, com o saldo depois de cada linha …`], "placeholder"),
+        ...(totals ? [total("RESULTADO", totals.result, resultFormula, "result")] : []),
+        balanceRow(balance.to, TEXTS.balanceClosing),
+      ]
+    : [
+        row(TABLE_HEADER, "header"),
+        row(["", `… ${TEXTS.entries(count)}, um por linha …`], "placeholder"),
+        ...(totals ? [total("RESULTADO", totals.result, resultFormula, "result")] : []),
+      ];
   return {
     formulas,
     headerRow,
+    columns: balance ? STATEMENT_SHEET_COLUMNS : SHEET_COLUMNS,
     rows: [
       ...top,
       blank,
       ...block,
       blank,
-      row(TABLE_HEADER, "header"),
-      row(["", `… ${TEXTS.entries(count)}, um por linha …`], "placeholder"),
-      ...(totals ? [total("RESULTADO", totals.result, resultFormula, "result")] : []),
+      ...table,
       blank,
       row(["Categoria", "Lançamentos", "", "", "Total líquido", "Moeda", ""], "header"),
       row(["… uma linha por categoria e moeda …"], "placeholder"),
@@ -356,7 +441,7 @@ const SHEET_ROW_STYLE = {
 };
 
 function XlsxPreview({ fill = false, ...props }) {
-  const { rows, headerRow, formulas } = buildXlsxPreview(props);
+  const { rows, headerRow, formulas, columns } = buildXlsxPreview(props);
   const resultFormula = rows.find((r) => r.formula)?.formula;
   const cellStyle = { border: `1px solid ${T.border}`, padding: "3px 6px", whiteSpace: "nowrap", fontSize: 11 };
   return (
@@ -376,7 +461,7 @@ function XlsxPreview({ fill = false, ...props }) {
             <thead>
               <tr>
                 <th aria-hidden="true" style={{ ...cellStyle, background: T.grayLight }} />
-                {SHEET_COLUMNS.map((col) => (
+                {columns.map((col) => (
                   <th key={col} scope="col" style={{ ...cellStyle, background: T.grayLight, fontWeight: 500, color: T.inkGhost }}>{col}</th>
                 ))}
               </tr>
@@ -389,8 +474,8 @@ function XlsxPreview({ fill = false, ...props }) {
                   style={{ ...SHEET_ROW_STYLE[r.kind], borderBottom: index + 1 === headerRow ? `3px solid ${T.inkGhost}` : undefined }}
                 >
                   <td style={{ ...cellStyle, background: T.grayLight, color: T.inkGhost, textAlign: "center" }}>{index + 1}</td>
-                  {SHEET_COLUMNS.map((col, j) => (
-                    <td key={col} title={j === 4 && r.formula ? r.formula : undefined} style={{ ...cellStyle, textAlign: j === 4 ? "right" : "left" }}>
+                  {columns.map((col, j) => (
+                    <td key={col} title={j === 4 && r.formula ? r.formula : undefined} style={{ ...cellStyle, textAlign: j === 4 || j === 7 ? "right" : "left" }}>
                       {r.cells[j] ?? ""}
                     </td>
                   ))}
@@ -410,7 +495,7 @@ function XlsxPreview({ fill = false, ...props }) {
  * categoria (marcador: o painel não tem as linhas) e, conforme `content`, a lista com o rodapé de totais ou a nota de
  * "Só o resumo". Orienta; não é o arquivo final.
  */
-export function buildPdfPreview({ title, filtersText, selection, totals, content = "full" }) {
+export function buildPdfPreview({ title, filtersText, selection, totals, content = "full", balance = null }) {
   const t = totals;
   const currency = t?.currency ?? "";
   const flow = t
@@ -441,7 +526,24 @@ export function buildPdfPreview({ title, filtersText, selection, totals, content
     byCurrency: byCurrencyLine(t, TEXTS),
     note: conversionNote(t),
     noteWarning: Boolean(t?.unavailable),
-    list: content === "full" ? { placeholder: `… ${TEXTS.entries(t?.count)}, um por linha …`, boxes } : null,
+    // O extrato (#541): Saldo anterior e Saldo final no resumo (também em "Só o resumo") e a coluna Saldo na lista.
+    balance: balance
+      ? {
+          line: `${TEXTS.balanceOpening} (${TEXTS.day(TEXTS.dayBefore(balance.from))}) · ${TEXTS.balanceClosing} (${TEXTS.day(balance.to)}): ${TEXTS.balancePending}`,
+          accounts: TEXTS.balanceAccounts,
+        }
+      : null,
+    columns: balance
+      ? ["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor", TEXTS.balanceColumn]
+      : ["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor"],
+    list: content === "full"
+      ? {
+          placeholder: balance
+            ? `${TEXTS.balanceOpening} no topo; … ${TEXTS.entries(t?.count)} e o que mexeu na conta, com o saldo depois de cada linha; ${TEXTS.balanceClosing} junto do Total …`
+            : `… ${TEXTS.entries(t?.count)}, um por linha …`,
+          boxes,
+        }
+      : null,
     summaryNote: content === "summary" ? TEXTS.summaryOnlyNote(t?.count) : null,
   };
 }
@@ -495,6 +597,12 @@ function PdfPreview({ fill = false, ...props }) {
       )}
       {pdf.byCurrency && <div style={{ ...small, ...NUM }}>Por moeda: {pdf.byCurrency}</div>}
       {pdf.note && <div style={{ ...small, color: pdf.noteWarning ? T.amber : T.inkMid }}>{pdf.note}</div>}
+      {pdf.balance && (
+        <div data-testid="export-preview-pdf-balance" style={{ ...small, ...NUM }}>
+          <div style={{ fontWeight: 700, color: T.ink }}>{pdf.balance.line}</div>
+          <div>{pdf.balance.accounts}</div>
+        </div>
+      )}
       <div style={{ fontSize: 12, fontWeight: 700 }}>Por categoria</div>
       <div style={{ ...small, color: T.inkGhost, fontStyle: "italic" }}>… uma linha por categoria e moeda: barra, quantidade e total líquido …</div>
       {pdf.list && (
@@ -503,8 +611,8 @@ function PdfPreview({ fill = false, ...props }) {
           {/* O cabeçalho nunca encolhe abaixo do texto: sem largura, rola na horizontal dentro da prévia. */}
           <div data-testid="export-preview-pdf-table" style={{ overflowX: "auto", borderBottom: `1.5px solid ${T.ink}`, paddingBottom: 3 }}>
             <div style={{ display: "flex", gap: 10 }}>
-              {["Data", "Descrição", "Categoria", "Tipo", "Situação", "Valor"].map((name) => (
-                <span key={name} style={{ ...label, flex: "1 0 auto", whiteSpace: "nowrap", textAlign: name === "Valor" ? "right" : "left" }}>{name}</span>
+              {pdf.columns.map((name) => (
+                <span key={name} style={{ ...label, flex: "1 0 auto", whiteSpace: "nowrap", textAlign: name === "Valor" || name === TEXTS.balanceColumn ? "right" : "left" }}>{name}</span>
               ))}
             </div>
           </div>
@@ -594,6 +702,8 @@ export function ExportPanel({
 }) {
   const [format, setFormat] = useState(() => initialExportFormat(formats));
   const [content, setContent] = useState("full");
+  // "Incluir saldo" (#541): marcada por padrão; só vale quando o servidor disse que o recorte tem saldo.
+  const [balanceChosen, setBalanceChosen] = useState(true);
   const [status, setStatus] = useState({ busy: false, error: "" });
   const fullScreen = useIsNarrow(PREVIEW_MIN_WIDTH - 1);
   const showPreview = !fullScreen;
@@ -617,6 +727,9 @@ export function ExportPanel({
   const selectionTooLarge = Boolean(selection) && sliceCount > SELECTION_MAX_IDS;
   const tooLarge = !selection && sliceCount != null && sliceCount > EXPORT_MAX_ROWS;
   const totalsError = selectionTooLarge ? "a seleção passou do limite." : selection ? selection.error : summaryError;
+  const balanceAvailability = (selection ? selection.summary : summary)?.balance_statement ?? null;
+  const includeBalance = Boolean(balanceAvailability?.available) && balanceChosen;
+  const balance = includeBalance ? { from: filterParams?.date_start ?? null, to: filterParams?.date_end ?? null } : null;
 
   const runExport = async () => {
     setStatus({ busy: true, error: "" });
@@ -626,6 +739,7 @@ export function ExportPanel({
         ...(selection ? { organization_id: filterParams.organization_id, ids: selection.ids } : filterParams),
         format,
         ...(format === "pdf" ? { content } : {}),
+        ...(includeBalance ? { include_balance: true } : {}),
         title,
         filters_text: selection ? [] : filtersText,
         file_prefix: filePrefix,
@@ -665,7 +779,7 @@ export function ExportPanel({
       testId="export-panel"
     >
       {previewScreen ? (
-        <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} asPage={false} />
+        <FilePreview format={format} data={{ title, filtersText, selection, totals, content, balance }} asPage={false} />
       ) : (
       <div
         data-testid="export-panel-layout"
@@ -704,6 +818,7 @@ export function ExportPanel({
           </ExportStep>
           <ExportStep n={2} title="Formato do arquivo">
             <FormatStep formats={formats} format={format} onFormat={setFormat} content={content} onContent={setContent} />
+            <BalanceOption availability={balanceAvailability} checked={balanceChosen} onChange={setBalanceChosen} />
           </ExportStep>
           <ExportStep n={3} title="Totais do relatório">
             <TotalsStep totals={totals} error={totalsError} />
@@ -730,7 +845,7 @@ export function ExportPanel({
         )}
         </div>
         {showPreview && PREVIEWS[format] && (
-          <FilePreview format={format} data={{ title, filtersText, selection, totals, content }} />
+          <FilePreview format={format} data={{ title, filtersText, selection, totals, content, balance }} />
         )}
       </div>
       )}
