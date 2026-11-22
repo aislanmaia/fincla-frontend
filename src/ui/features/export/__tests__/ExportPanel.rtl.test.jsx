@@ -10,7 +10,16 @@ const saveBlobMock = vi.fn();
 vi.mock("../saveBlob.js", () => ({ saveBlob: (...args) => saveBlobMock(...args) }));
 
 import { setCurrencyRegistry } from "../../../money/currencyRegistry.js";
-import { ExportPanel, buildCsvPreview, buildPdfPreview, buildXlsxPreview } from "../ExportPanel.jsx";
+import {
+  EXPORT_DRAWER_WIDTH,
+  EXPORT_STEPS_COLUMN,
+  ExportPanel,
+  PAGE_RATIO,
+  PAGE_WIDTH,
+  buildCsvPreview,
+  buildPdfPreview,
+  buildXlsxPreview,
+} from "../ExportPanel.jsx";
 import { exportTotalsFromSummary } from "../exportTotals.js";
 
 /**
@@ -685,5 +694,88 @@ describe("<ExportPanel> — a prévia do PDF se adapta à largura sem sobrepor t
   it("o título e o recorte do topo também quebram linha em vez de se espremer", () => {
     const top = within(pdfPreview()).getByText("Transações").parentElement.parentElement;
     expect(top.style.flexWrap).toBe("wrap");
+  });
+});
+
+describe("<ExportPanel> — layout da variante D (Owner 2026-11-21)", () => {
+  const stubViewport = (width) => {
+    window.matchMedia = vi.fn((query) => {
+      const max = Number(/max-width:\s*(\d+)px/.exec(query)?.[1]);
+      return {
+        matches: Number.isFinite(max) ? width <= max : false,
+        media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      };
+    });
+  };
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  // jsdom descarta `clamp()`/`min()`/container units no CSSOM; as larguras ficam provadas pelas constantes do painel.
+  it("drawer de 760 a 860 px (≈ 806 px em 1440), nunca maior que a tela, sem vw/vh; passos em 300 px", () => {
+    expect(EXPORT_DRAWER_WIDTH).toBe("min(100%, clamp(760px, 56%, 860px))");
+    expect(EXPORT_DRAWER_WIDTH).not.toMatch(/v[wh]\b/);
+    expect(EXPORT_STEPS_COLUMN).toBe("300px");
+  });
+
+  it("a folha da prévia é A4 em pé e cabe no palco: largura limitada pela largura e pela altura ÷ 1,414", () => {
+    expect(PAGE_RATIO).toBe(1.414);
+    expect(PAGE_WIDTH).toBe("min(100cqw, calc(100cqh / 1.414))");
+  });
+
+  it.each([700, 1440, 2000])("com %i px: passos rolam por dentro e as ações ficam presas ao fundo da coluna deles", (width) => {
+    stubViewport(width);
+    const { panel } = renderPanel();
+    const layout = within(panel).getByTestId("export-panel-layout");
+    expect(layout.style.display).toBe("grid");
+    expect(layout.style.height).toBe("100%");
+    expect(layout.style.minHeight).toBe("0px");
+
+    const column = within(panel).getByTestId("export-steps-column");
+    expect(column.style.display).toBe("flex");
+    expect(column.style.flexDirection).toBe("column");
+    expect(column.style.minHeight).toBe("0px");
+
+    const steps = within(column).getByTestId("export-steps");
+    expect(steps.style.flexGrow).toBe("1");
+    expect(steps.style.overflowY).toBe("auto");
+    expect(steps.style.minHeight).toBe("0px");
+
+    // Sem rodapé atravessando o drawer: Cancelar + o primário (que ocupa o resto) vivem na coluna dos passos.
+    expect(screen.queryByTestId("export-panel-footer")).toBeNull();
+    const actions = within(column).getByTestId("export-actions");
+    expect(column.lastElementChild).toBe(actions);
+    expect(within(actions).getByRole("button", { name: "Cancelar" }).style.width).toBe("");
+    expect(within(actions).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
+  });
+
+  it.each(["PDF", "XLSX", "CSV"])("a prévia %s é uma folha em pé no palco cinza, na altura toda, rolando por dentro", async (label) => {
+    stubViewport(1440);
+    const { panel } = renderPanel();
+    await userEvent.click(within(panel).getByRole("button", { name: label }));
+    const preview = within(panel).getByTestId("export-preview");
+    expect(preview).toHaveTextContent(`Prévia do arquivo (${label})`);
+    expect(preview.style.display).toBe("flex");
+    expect(preview.style.flexDirection).toBe("column");
+    expect(preview.style.overflow).toBe("hidden");
+    const stage = within(preview).getByTestId("export-preview-stage");
+    expect(stage.style.flexGrow).toBe("1");
+    expect(stage.style.minHeight).toBe("0px");
+    const page = within(stage).getByTestId("export-preview-page");
+    expect(page.style.aspectRatio).toBe("1 / 1.414");
+    expect(page.style.overflow).toBe("auto");
+    expect(page.style.margin).toBe("0px auto");
+    expect(page).toHaveClass("fincla-scroll");
+  });
+
+  it("em tela cheia (390 px) nada disso entra: rodapé do drawer, coluna única e prévia sem folha", async () => {
+    stubViewport(390);
+    const { panel } = renderPanel();
+    expect(within(panel).getByTestId("export-panel-layout").style.height).toBe("");
+    expect(within(panel).queryByTestId("export-actions")).toBeNull();
+    const footer = screen.getByTestId("export-panel-footer");
+    expect(within(footer).getByRole("button", { name: "Exportar PDF" }).style.width).toBe("100%");
+    await userEvent.click(within(panel).getByRole("button", { name: "Ver prévia do arquivo" }));
+    expect(within(panel).getByTestId("export-preview")).toBeInTheDocument();
+    expect(within(panel).queryByTestId("export-preview-page")).toBeNull();
   });
 });

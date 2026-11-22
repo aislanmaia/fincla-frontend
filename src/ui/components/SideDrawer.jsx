@@ -17,6 +17,9 @@ import { G } from "../typography";
  * Em tela cheia o cabeçalho e o rodapé respeitam a área segura do aparelho (entalhe e barra de gestos), como os
  * outros painéis em tela cheia do app; a altura vem do contêiner fixo (`inset: 0`), nunca de `vh`.
  *
+ * `width` é a largura máxima em px (número) ou uma expressão CSS pronta (string, ex.: `min(100%, clamp(…))`), para
+ * o painel que cresce com a tela. Sem `footer`, o próprio conteúdo põe as ações onde quiser.
+ *
  * `view` troca o que o painel mostra sem desmontá-lo (ex.: os passos ↔ a prévia): a cada troca o foco volta ao
  * painel, para não ficar num controle que saiu da tela. `closeIcon` troca o ✕ (ex.: uma seta de "voltar").
  */
@@ -74,7 +77,7 @@ export function SideDrawer({
         style={{
           ...G,
           background: T.surface,
-          width: fullScreen ? "100%" : `min(100%, ${width}px)`,
+          width: fullScreen ? "100%" : typeof width === "number" ? `min(100%, ${width}px)` : width,
           height: "100%",
           boxSizing: "border-box",
           boxShadow: fullScreen ? "none" : T.lg,
