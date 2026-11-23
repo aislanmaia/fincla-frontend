@@ -185,7 +185,7 @@ describe("Ver o que fica de fora", () => {
     expect(screen.queryByTestId("brought-back-bar")).not.toBeInTheDocument();
   });
 
-  it("BUG-03: Não registrar no cartão trazido de volta mantém o formulário à vista, inerte e listrado, com Fica de fora", async () => {
+  it("BUG-03: Não registrar no trazido de volta recolhe no clique (Fica de fora, Conferido); reaberto, o formulário fica inerte e listrado", async () => {
     await openDraft();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Antes do início da conta/ }));
@@ -195,22 +195,34 @@ describe("Ver o que fica de fora", () => {
     await user.click(within(card).getByRole("button", { name: /Não registrar/ }));
 
     await waitFor(() => expect(calls).toContainEqual({ patch: EARLY.id, body: { answer: "ignore" } }));
-    // O cartão não some: o lado do Fincla continua com o formulário, sem editar, listrado e com a nota.
-    await waitFor(() => expect(within(card).getByRole("button", { name: /Não registrar/ })).toHaveAttribute("aria-pressed", "true"));
-    expect(card).toBeInTheDocument();
-    const side = within(card).getByTestId("new-side-skipped");
+    // Regra 3: confirma e minimiza no clique, numa linha "Fica de fora" com Conferido, Alterar e Desfazer escolha.
+    const row = await screen.findByTestId("skipped-entry");
+    expect(screen.queryByRole("article", { name: `Lançamento ${EARLY.bank_description}` })).toBeNull();
+    expect(row).toHaveTextContent(EARLY.bank_description);
+    expect(row).toHaveTextContent("Fica de fora");
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
+
+    // Regra 6: reaberto ("Alterar"), o lado do Fincla continua à vista: o formulário inerte, listrado, com a nota.
+    await user.click(within(row).getByRole("button", { name: "Alterar" }));
+    const reopened = await screen.findByRole("article", { name: `Lançamento ${EARLY.bank_description}` });
+    const side = within(reopened).getByTestId("new-side-skipped");
     expect(side.style.background).toContain("repeating-linear-gradient");
     expect(within(side).getByRole("group", { name: /sem uso: não registrar/ })).toBeDisabled();
     expect(within(side).getByLabelText("Descrição")).toBeDisabled();
-    expect(within(card).getByTestId("skip-note")).toHaveTextContent("Fica de fora");
-    expect(screen.queryByTestId("before-start-entry")).toBeNull();
-    // Sem Confirmar num "Não registrar"; clicar de novo nele recolhe o cartão para fora.
-    expect(within(card).queryByRole("button", { name: "Confirmar" })).toBeNull();
-    await user.click(within(card).getByRole("button", { name: /Não registrar/ }));
-    await waitFor(() => expect(screen.getAllByTestId("before-start-entry").map((r) => r.textContent)).toEqual(
-      expect.arrayContaining([expect.stringContaining(EARLY.bank_description)]),
-    ));
-    expect(screen.queryByRole("article", { name: `Lançamento ${EARLY.bank_description}` })).toBeNull();
+    expect(within(reopened).getByTestId("skip-note")).toHaveTextContent("Fica de fora");
+    expect(within(reopened).queryByRole("button", { name: "Confirmar" })).toBeNull();
+    // Clicar de novo em "Não registrar", já marcado, só recolhe (sem gravar de novo).
+    const before = calls.length;
+    await user.click(within(reopened).getByRole("button", { name: /Não registrar/ }));
+    expect(await screen.findByTestId("skipped-entry")).toBeInTheDocument();
+    expect(calls).toHaveLength(before);
+
+    // "Desfazer escolha" volta a "Não, adicionar agora": a linha do trazido de volta, Conferido.
+    await user.click(within(screen.getByTestId("skipped-entry")).getByRole("button", { name: "Desfazer escolha" }));
+    await waitFor(() => expect(calls.at(-1)).toEqual({ patch: EARLY.id, body: { answer: "create" } }));
+    await waitFor(() => expect(screen.getAllByTestId("brought-back-entry").some((r) => r.textContent.includes(EARLY.bank_description))).toBe(true));
+    expect(screen.queryByTestId("skipped-entry")).toBeNull();
   });
 
   it("BUG-04: o trazido de volta tem Confirmar ao lado das respostas, desligado com a descrição vazia, e recolhe como Conferido", async () => {
