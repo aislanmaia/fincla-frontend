@@ -14,7 +14,7 @@
 //     ? <CurrentEntryFrame queue={queue} entry={e}>{cartão}</CurrentEntryFrame>
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
-import { Component, createContext, createRef, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, createRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -252,8 +252,21 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
       ? plural(queue.hidden, noun.answeredOne, noun.answeredMany)
       : plural(queue.hidden, noun.pendingOne, noun.pendingMany);
   }
+  // A altura do cabeçalho muda acima da lista (o "Tudo respondido…" ao responder o último pendente,
+  // a contagem que quebra a linha): a lista fica parada (BUG-09). Medido depois de toda mudança do
+  // commit, antes da pintura.
+  const ref = useRef(null);
+  const lastHeight = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const height = el.getBoundingClientRect().height;
+    const previous = lastHeight.current;
+    lastHeight.current = height;
+    if (previous !== null && Math.abs(height - previous) >= 0.5) keepBelowInPlace(el, height - previous);
+  });
   return (
-    <div data-testid="queue-header" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div ref={ref} data-testid="queue-header" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px", alignItems: "center" }}>
         <span role="status" data-testid="queue-position" style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.ink }}>
           {queue.position ? `${noun.title} ${queue.position.toLocaleString("pt-BR")} de ${queue.total.toLocaleString("pt-BR")}` : plural(queue.total, noun.one, noun.many)}
@@ -370,6 +383,30 @@ export function spacerNeeded({ target, clientHeight, contentHeight }) {
   return Math.ceil(target + clientHeight - contentHeight);
 }
 
+/** A folga entre o topo da área visível e o item que volta para ela (a mesma do `scrollMarginTop`). */
+export const ANCHOR_MARGIN = 16;
+
+/**
+ * Para onde rolar para o item que o olho acompanha (`oldTop` antes da troca, `newTop` agora, em
+ * px da tela) ficar no lugar certo. Todas as medidas na mesma régua (`viewTop` = topo da área
+ * visível da região que rola).
+ *
+ * - No topo antigo, o item na forma nova (`newHeight`) ainda aparece na área visível: fica
+ *   exatamente onde estava (nada pula, BUG-01), mesmo que para isso a região precise de um espaço
+ *   provisório embaixo.
+ * - No topo antigo ele ficaria inteiro ACIMA da área visível (cartão mais alto que a tela, a
+ *   pessoa rolou até os botões): manter esse topo deixaria a linha fora da tela e só espaço vazio
+ *   à vista (BUG-08). A linha vem para o topo da área visível, onde estava a parte do cartão que a
+ *   pessoa via; e, se isso deixaria vazio embaixo (fim da lista), a rolagem para no fim do
+ *   conteúdo: a linha fica à vista com a lista acima dela, sem espaço provisório.
+ */
+export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, clientHeight, contentHeight }) {
+  const keep = scrollTop + (newTop - oldTop);
+  if (oldTop + newHeight > viewTop + 0.5) return keep;
+  const toTop = scrollTop + (newTop - (viewTop + ANCHOR_MARGIN));
+  return Math.max(0, Math.min(toTop, contentHeight - clientHeight));
+}
+
 /**
  * O espaço provisório no fim da região que rola. Ele só segura a altura que a rolagem atual
  * precisa; encolhe (e some) assim que a pessoa rola ou navega e ele deixa de evitar um pulo.
@@ -442,12 +479,60 @@ function releaseAnchoring() {
   ownAnchoring.scroller = null;
 }
 
+/**
+ * A altura FINAL do conteúdo da região, sem o espaço provisório: um lugar que ainda anima a altura
+ * conta com a altura de chegada (senão o espaço seria medido curto no meio da animação e a
+ * rolagem seria cortada quando ela terminasse).
+ */
+function contentHeightOf(scroller) {
+  let height = scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
+  for (const slot of animating) {
+    const el = slot.ref.current;
+    if (el?.isConnected && slot.finalHeight !== null && scroller.contains(el)) height -= el.getBoundingClientRect().height - slot.finalHeight;
+  }
+  return height;
+}
+
+/** O topo da janela da região que rola, em px da tela (a borda de cima dela por dentro). */
+function scrollportTopOf(scroller) {
+  if (scroller === document.scrollingElement || scroller === document.documentElement) return 0;
+  return scroller.getBoundingClientRect().top + (scroller.clientTop || 0);
+}
+
+/**
+ * O topo da área VISÍVEL da região que rola, em px da tela: a janela dela menos o que fica grudado
+ * em cima (o topo fixo da conciliação reserva a altura dele no `scroll-padding-top`).
+ */
+function viewTopOf(scroller) {
+  return scrollportTopOf(scroller) + (Number.parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
+}
+
 /** Deixa a rolagem em `target` sem o navegador cortar: segura o espaço que faltar embaixo. */
 function holdScroll(scroller, target) {
   takeAnchoring(scroller);
-  const contentHeight = scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
+  const contentHeight = contentHeightOf(scroller);
   setSpacer(scroller, spacerNeeded({ target, clientHeight: scroller.clientHeight, contentHeight }));
   scroller.scrollTop = target;
+}
+
+/**
+ * Algo ACIMA da lista mudou de altura (ex.: "Tudo respondido neste passo" aparece no cabeçalho
+ * quando o último pendente é respondido, BUG-09): a rolagem anda o mesmo tanto e a lista, com o
+ * item respondido, fica parada. Roda no mesmo commit da mudança (efeito de layout), antes da
+ * pintura; a âncora das trocas cartão ↔ linha do mesmo commit mede depois disto e soma certo.
+ */
+export function keepBelowInPlace(el, delta) {
+  // Uma troca cartão ↔ linha no mesmo commit já ancora a rolagem medindo tudo no lugar final
+  // (inclusive esta mudança): compensar aqui também contaria duas vezes.
+  if (!delta || commit.expected) return;
+  // A pessoa mexeu no próprio cabeçalho (filtro, visualização, "Mostrar todos"): é ele que o olho
+  // acompanha, e ele fica onde está.
+  if (el.contains(document.activeElement)) return;
+  const scroller = scrollParentOf(el);
+  if (!scroller) return;
+  // Com o elemento descendo além do fim da área visível, nada da lista abaixo dele está à vista.
+  if (el.getBoundingClientRect().bottom > scrollportTopOf(scroller) + scroller.clientHeight) return;
+  holdScroll(scroller, Math.max(0, scroller.scrollTop + delta));
 }
 
 // Os lugares com animação andando: enquanto houver um, a altura da página ainda não é a final.
@@ -475,12 +560,24 @@ function flushCommit() {
   // Uma animação anterior ainda andando: termina já, para medir o lugar final de tudo.
   for (const slot of [...animating]) slot.stopMotion();
   const anchor = pickAnchor(changes);
+  let held = null;
   if (anchor) {
     // A região medida ANTES da troca: depois dela a página pode ter ficado curta demais para rolar.
     const scroller = anchor.scroller?.isConnected ? anchor.scroller : scrollParentOf(anchor.el);
     if (scroller) {
-      const delta = anchor.el.getBoundingClientRect().top - anchor.top;
-      holdScroll(scroller, scroller.scrollTop + delta);
+      const scrollTop = scroller.scrollTop;
+      const now = anchor.el.getBoundingClientRect();
+      const target = anchorTarget({
+        scrollTop,
+        oldTop: anchor.top,
+        newTop: now.top,
+        newHeight: now.height,
+        viewTop: anchor.viewTop ?? viewTopOf(scroller),
+        clientHeight: scroller.clientHeight,
+        contentHeight: contentHeightOf(scroller),
+      });
+      holdScroll(scroller, target);
+      held = { scroller, target };
     }
   }
   for (const change of changes) {
@@ -490,6 +587,10 @@ function flushCommit() {
     if (change.motion && !above) change.slot.play(change);
     else change.ghost?.remove();
   }
+  // Com a animação começando da altura antiga, a página volta a ser alta: o Chrome devolve a
+  // rolagem que só tinha sido cortada na medida (e o item escorregaria junto com a altura). A
+  // rolagem é posta de novo no alvo, agora com a altura do primeiro quadro.
+  if (held && Math.abs(held.scroller.scrollTop - held.target) >= 0.5) held.scroller.scrollTop = held.target;
 }
 
 /**
@@ -509,6 +610,9 @@ export class EntrySlot extends Component {
   animations = [];
 
   cleanup = null;
+
+  // A altura de chegada enquanto a altura anima (null parado).
+  finalHeight = null;
 
   componentDidMount() {
     mountedSlots += 1;
@@ -535,7 +639,8 @@ export class EntrySlot extends Component {
       queueMicrotask(() => { if (commit.expected) flushCommit(); });
     }
     commit.expected += 1;
-    return { height: rect.height, top: rect.top, focusInside, motion, ghost, scroller: scrollParentOf(el) };
+    const scroller = scrollParentOf(el);
+    return { height: rect.height, top: rect.top, focusInside, motion, ghost, scroller, viewTop: scroller ? viewTopOf(scroller) : 0 };
   }
 
   componentDidUpdate(_prevProps, _prevState, snap) {
@@ -584,11 +689,13 @@ export class EntrySlot extends Component {
       el.style.overflow = "";
       if (this.cleanup === cleanup) this.cleanup = null;
       animating.delete(this);
+      this.finalHeight = null;
       // A altura da página já é a final: o espaço provisório encolhe se não segura mais nada.
       releaseSpacer();
       releaseAnchoring();
     };
     this.cleanup = cleanup;
+    this.finalHeight = to;
     animating.add(this);
     grow.onfinish = cleanup;
     grow.oncancel = cleanup;
