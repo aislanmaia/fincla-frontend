@@ -392,7 +392,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
             <div style={{ width: 72, height: 72, borderRadius: 22, background: `linear-gradient(135deg, ${T.green}, #0891B2)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, boxShadow: T.md }}><Icon name="check" size={36} color="#fff" /></div>
             <div style={{ ...G, fontSize: 22, fontWeight: 800, color: T.ink }}>Cliente adicionado!</div>
             <div style={{ ...G, fontSize: 13.5, color: T.inkLight, maxWidth: 470, lineHeight: 1.6 }}>
-              A conta de <strong style={{ color: T.ink }}>{result.client_name}</strong> foi criada. Envie o link abaixo para {result.client_name.split(" ")[0]} <strong style={{ color: T.ink }}>definir a senha</strong> e acessar. O link expira e é de uso único; você pode gerar um novo depois na carteira.
+              A conta de <strong style={{ color: T.ink }}>{result.client_name}</strong> foi criada. Envie o link abaixo para {result.client_name.split(" ")[0]} <strong style={{ color: T.ink }}>definir a senha</strong> e acessar. O link vale 3 dias e é de uso único; você pode gerar um novo depois na carteira.
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", maxWidth: 560, marginTop: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px" }}>
               <input readOnly value={result.set_password_link} aria-label="Link de definição de senha" style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, color: T.inkMid }} />
