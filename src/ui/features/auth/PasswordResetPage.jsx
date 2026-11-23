@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Eye,
@@ -29,17 +29,26 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
   const [newLinkEmail, setNewLinkEmail] = useState("");
   const [newLinkState, setNewLinkState] = useState("idle"); // "idle" | "sending" | "sent"
   const [newLinkError, setNewLinkError] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  // Each forgot-password request voids the previous link: a second Enter while the
+  // first is in flight would send two e-mails and leave only the last one working.
+  const sendingNewLink = useRef(false);
 
   const requestNewLink = async () => {
     const email = newLinkEmail.trim();
     if (!/^\S+@\S+\.\S+$/.test(email)) { setNewLinkError("Informe o e-mail da sua conta."); return; }
+    if (sendingNewLink.current) return;
+    sendingNewLink.current = true;
     setNewLinkState("sending"); setNewLinkError("");
     try {
       await onRequestNewLink(email);
+      setSentTo(email);
       setNewLinkState("sent");
     } catch (nextError) {
       setNewLinkState("idle");
       setNewLinkError(nextError instanceof Error && nextError.message ? nextError.message : "Não foi possível enviar o e-mail. Tente novamente.");
+    } finally {
+      sendingNewLink.current = false;
     }
   };
   const canRequestNewLink = typeof onRequestNewLink === "function";
@@ -97,15 +106,15 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
       <div className="fincla-scroll" style={{ display:"flex", height:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflowY:"auto", alignItems:"safe center", justifyContent:"center", padding:24 }}>
         <div style={{ width:"100%", maxWidth:400 }}>
           <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, marginBottom:8 }}>
-            {success ? (firstPassword ? "Senha criada" : "Senha atualizada") : linkStatus === "invalid" ? "Link inválido ou expirado" : firstPassword ? "Crie sua senha" : "Nova senha"}
+            {success ? (firstPassword ? "Senha criada" : "Senha atualizada") : linkStatus === "invalid" ? (newLinkState === "sent" ? "Enviamos um novo link" : "Link inválido ou expirado") : firstPassword ? "Crie sua senha" : "Nova senha"}
           </div>
-          <div style={{ ...G, fontSize:14, color:T.inkMid, lineHeight:1.65, marginBottom:24 }}>
+          <div role="status" aria-live="polite" style={{ ...G, fontSize:14, color:T.inkMid, lineHeight:1.65, marginBottom:24 }}>
             {success
               ? (firstPassword ? "Sua senha foi criada. Você já pode entrar no Fincla." : "Sua senha foi redefinida. Você já pode entrar com a nova senha.")
               : linkStatus === "invalid"
                 ? (canRequestNewLink
                   ? (newLinkState === "sent"
-                    ? "Se este e-mail tiver conta no Fincla, enviamos um novo link. Confira a caixa de entrada e o spam."
+                    ? `Se ${sentTo} tiver conta no Fincla, enviamos um novo link para ele. Confira a caixa de entrada e o spam.`
                     : "Este link já foi utilizado ou expirou. Informe seu e-mail e enviamos um novo.")
                   : "Este link já foi utilizado ou expirou. Peça um novo link e tente novamente.")
                 : firstPassword ? "Escolha a senha que você vai usar para entrar no Fincla." : "Defina uma nova senha para sua conta Fincla."}
@@ -126,6 +135,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
                   type="email"
                   autoComplete="email"
                   value={newLinkEmail}
+                  readOnly={newLinkState === "sending"}
                   onChange={(e) => { setNewLinkEmail(e.target.value); setNewLinkError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") void requestNewLink(); }}
                   placeholder="seu@email.com"
@@ -144,7 +154,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
                   ? <><Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Enviando…</>
                   : "Enviar novo link",
               })}
-              <button type="button" onClick={onComplete}
+              <button type="button" onClick={onComplete} disabled={newLinkState === "sending"}
                 style={{ ...G, alignSelf:"center", background:"none", border:"none", padding:4, color:T.inkMid, fontSize:13, textDecoration:"underline", cursor:"pointer" }}>
                 Ir para o login
               </button>
@@ -156,6 +166,13 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
             disabled: false,
             children: "Ir para o login",
           })}
+
+          {!success && linkStatus === "invalid" && canRequestNewLink && newLinkState === "sent" && (
+            <button type="button" onClick={() => { setNewLinkState("idle"); setNewLinkError(""); }}
+              style={{ ...G, display:"block", margin:"12px auto 0", background:"none", border:"none", padding:4, color:T.inkMid, fontSize:13, textDecoration:"underline", cursor:"pointer" }}>
+              Usar outro e-mail
+            </button>
+          )}
 
           {!success && linkStatus === "ok" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>

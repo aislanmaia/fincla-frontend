@@ -56,7 +56,8 @@ describe("<PasswordResetPage> link vencido: pedir um novo ali mesmo", () => {
     expect(await screen.findByText("Link inválido ou expirado")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: " lead@exemplo.com " } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar novo link" }));
-    expect(await screen.findByText(/Se este e-mail tiver conta no Fincla, enviamos um novo link/)).toBeInTheDocument();
+    expect(await screen.findByText(/Se lead@exemplo.com tiver conta no Fincla, enviamos um novo link/)).toBeInTheDocument();
+    expect(screen.getByText("Enviamos um novo link")).toBeInTheDocument();
     expect(onRequestNewLink).toHaveBeenCalledWith("lead@exemplo.com");
     expect(screen.queryByLabelText("E-mail")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ir para o login" })).toBeInTheDocument();
@@ -83,5 +84,32 @@ describe("<PasswordResetPage> link vencido: pedir um novo ali mesmo", () => {
     expired();
     expect(await screen.findByText(/Peça um novo link e tente novamente/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar novo link" })).not.toBeInTheDocument();
+  });
+
+  it("Enter repetido durante o envio não manda um segundo link (revisão #348)", async () => {
+    let resolve;
+    const onRequestNewLink = vi.fn(() => new Promise((r) => { resolve = r; }));
+    expired({ onRequestNewLink });
+    const input = await screen.findByLabelText("E-mail");
+    fireEvent.change(input, { target: { value: "lead@exemplo.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /Enviando/ }));
+    expect(onRequestNewLink).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Ir para o login" })).toBeDisabled();
+    resolve();
+    expect(await screen.findByText("Enviamos um novo link")).toBeInTheDocument();
+  });
+
+  it("depois de enviar dá para corrigir o e-mail e pedir de novo", async () => {
+    const onRequestNewLink = vi.fn().mockResolvedValue(undefined);
+    expired({ onRequestNewLink });
+    fireEvent.change(await screen.findByLabelText("E-mail"), { target: { value: "lead@exemplo.con" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar novo link" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Usar outro e-mail" }));
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "lead@exemplo.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar novo link" }));
+    await waitFor(() => expect(onRequestNewLink).toHaveBeenLastCalledWith("lead@exemplo.com"));
+    expect(onRequestNewLink).toHaveBeenCalledTimes(2);
   });
 });
