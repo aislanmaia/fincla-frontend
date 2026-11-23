@@ -35,4 +35,12 @@ describe("<PasswordResetPage> token pre-validation", () => {
     render(<PasswordResetPage token="x" onValidateToken={onValidateToken} onResetPassword={vi.fn()} onComplete={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(/Salvar nova senha/i)).toBeInTheDocument());
   });
+
+  it("convite da primeira senha → fala em criar, não em redefinir (#342)", async () => {
+    const onValidateToken = vi.fn().mockResolvedValue({ valid: true, first_password: true });
+    render(<PasswordResetPage token="invite" onValidateToken={onValidateToken} onResetPassword={vi.fn()} onComplete={vi.fn()} />);
+    expect(await screen.findByText("Crie sua senha")).toBeInTheDocument();
+    expect(screen.getByText("Criar senha")).toBeInTheDocument();
+    expect(screen.queryByText(/nova senha/i)).not.toBeInTheDocument();
+  });
 });

@@ -144,8 +144,8 @@ export const forgotPassword = async (
  */
 export const validateResetToken = async (
   token: string
-): Promise<{ valid: boolean }> => {
-  const response = await apiClient.get<{ valid: boolean }>(
+): Promise<{ valid: boolean; first_password?: boolean }> => {
+  const response = await apiClient.get<{ valid: boolean; first_password?: boolean }>(
     '/auth/reset-password/validate',
     { params: { token } }
   );

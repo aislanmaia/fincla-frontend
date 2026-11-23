@@ -507,6 +507,7 @@ export default function App() {
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow
       isMobile={isMobile}
+      ownerName={[session.user?.first_name, session.user?.last_name].filter(Boolean).join(" ")}
       isSubmitting={onboardingSubmitting}
       errorMessage={onboardingError}
       onComplete={async (data) => {

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, ArrowUpRight, Building2, CreditCard, Gift, RefreshCw, ShieldAlert, TicketPercent, UserPlus, Users } from "lucide-react";
 import { getAdminOverview } from "../api/admin";
 import { handleApiError } from "../api/client";
+import { formatAdminDate } from "./adminDates";
 
 const number = (value) => new Intl.NumberFormat("pt-BR").format(value);
-const date = (value) => value ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—";
+const date = (value) => formatAdminDate(value, { day: "2-digit", month: "short", year: "numeric" });
 const name = (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 
 function StatCard({ icon: Icon, label, value, detail, tone = "default", onClick }) {

@@ -34,7 +34,12 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getAdminPlans().then((result) => setPlans(result.items.filter((plan) => plan.is_active && plan.id !== "beta")))
+    getAdminPlans().then((result) => {
+      const available = result.items.filter((plan) => plan.is_active && plan.id !== "beta");
+      setPlans(available);
+      // A single plan leaves nothing to choose: start with it selected.
+      if (available.length === 1) setForm((current) => (current.courtesy_plan ? current : { ...current, courtesy_plan: available[0].id }));
+    })
       .catch((nextError) => setError(handleApiError(nextError)));
   }, []);
 
