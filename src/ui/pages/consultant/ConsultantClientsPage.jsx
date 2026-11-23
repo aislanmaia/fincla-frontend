@@ -275,7 +275,7 @@ function ActivationLinkModal({ state, onClose }) {
         {state.link && (
           <>
             <div style={{ ...G, fontSize: 12.5, color: T.inkLight, lineHeight: 1.5 }}>
-              O link anterior foi invalidado. Envie este novo link para o cliente definir a senha. Expira e é de uso único.
+              O link anterior foi invalidado. Envie este novo link para o cliente definir a senha. Vale 3 dias e é de uso único.
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px" }}>
               <input readOnly value={state.link} aria-label="Link de definição de senha" style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, color: T.inkMid }} />
