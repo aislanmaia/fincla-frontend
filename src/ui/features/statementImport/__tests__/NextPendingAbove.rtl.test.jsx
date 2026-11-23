@@ -19,6 +19,8 @@ const INITIAL = [
 ];
 
 let api;
+// Cada resposta que um atalho mandou (na página, cada uma é um PATCH).
+let shortcutAnswers = [];
 
 function Harness({ initial = INITIAL }) {
   const [entries, setEntries] = useState(initial);
@@ -27,7 +29,11 @@ function Harness({ initial = INITIAL }) {
     setEntries((list) => list.map((e) => (e.id === id ? { ...e, answer: value } : e)));
     queue.advanceFrom(id);
   };
-  useQueueShortcuts(queue, { s: (e) => answer(e.id, "pair"), a: (e) => answer(e.id, "create"), n: (e) => answer(e.id) });
+  const byShortcut = (value) => (e) => {
+    shortcutAnswers.push([e.id, value]);
+    answer(e.id, value);
+  };
+  useQueueShortcuts(queue, { s: byShortcut("pair"), a: byShortcut("create"), n: byShortcut("ignore") });
   api = { queue, answer, setEntries };
   return (
     <div>
@@ -36,8 +42,10 @@ function Harness({ initial = INITIAL }) {
           {entry.id === queue.currentId ? (
             <CurrentEntryFrame queue={queue} entry={entry}>
               <div data-testid={`card-${entry.id}`}>
-                <button type="button" onClick={() => answer(entry.id)}>Não registrar {entry.id}</button>
                 <input aria-label={`campo ${entry.id}`} />
+                <div role="group" aria-label="Respostas" data-answer-row="">
+                  <button type="button" onClick={() => answer(entry.id)}>Não registrar {entry.id}</button>
+                </div>
               </div>
             </CurrentEntryFrame>
           ) : (
@@ -66,6 +74,7 @@ const button = () => screen.queryByTestId("next-pending-above");
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  shortcutAnswers = [];
 });
 
 afterEach(() => {
@@ -290,12 +299,18 @@ describe("Próximo pendente acima do item respondido", () => {
 
   describe("BUG-13: a pessoa chega ao pendente rolando por conta própria", () => {
     /** O cartão aberto (moldura) com o topo em `geo.top` px da tela; o resto sem medida. */
-    const geo = { top: -500 };
+    // `answers`: onde fica a fileira de respostas, em px abaixo do topo do cartão (null: sem medida).
+    const geo = { top: -500, answers: null };
     const realRect = Element.prototype.getBoundingClientRect;
     beforeEach(() => {
       geo.top = -500;
+      geo.answers = null;
       vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
         if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + 300, height: 300, left: 0, right: 0, width: 0 };
+        if (this.hasAttribute?.("data-answer-row") && geo.answers !== null) {
+          const top = geo.top + geo.answers;
+          return { top, bottom: top + 32, height: 32, left: 0, right: 0, width: 0 };
+        }
         if (this.dataset?.testid === "scroller") return { top: 0, bottom: 400, height: 400, left: 0, right: 0, width: 0 };
         return realRect.call(this);
       });
@@ -375,6 +390,78 @@ describe("Próximo pendente acima do item respondido", () => {
       // Um scroll sem o cartão sair do lugar onde estava quando o botão apareceu.
       fireEvent.scroll(scroller);
       expect(button()).toBeInTheDocument();
+    });
+
+    // OBS-40 (fincla-api#507, decisão do Owner): num cartão alto, o topo pode ficar escondido
+    // enquanto a fileira de respostas está inteira à vista. A pessoa vê o que vai responder: o
+    // pendente conta como alcançado, e o 1º S/A/N responde direto.
+    describe("OBS-40: a fileira de respostas do pendente à vista, com o topo do cartão escondido", () => {
+      it("o 1º S responde o pendente (uma resposta só) e o botão some, sem rolar", async () => {
+        const user = userEvent.setup();
+        answerLastInScroller();
+        // O topo do cartão 500 px acima da tela; as respostas em 220–252 px (área de 0 a 400).
+        geo.answers = 720;
+        expect(document.activeElement).toBe(button());
+
+        await user.keyboard("s");
+
+        expect(shortcutAnswers).toEqual([["a", "pair"]]);
+        expect(api.queue.entries.find((e) => e.id === "a").answer).toBe("pair");
+        expect(api.queue.entries.find((e) => e.id === "c").answer).toBeNull();
+        expect(button()).toBeNull();
+        expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+      });
+
+      for (const [label, answersAt] of [["abaixo do fim da área visível", 880], ["cortada pelo fim da área visível", 380], ["sem medida", null]]) {
+        it(`com a fileira de respostas ${label}, S faz o que o botão faz (leva, não responde)`, async () => {
+          const user = userEvent.setup();
+          answerLastInScroller();
+          geo.answers = answersAt === null ? null : 500 + answersAt;
+
+          await user.keyboard("s");
+
+          expect(shortcutAnswers).toEqual([]);
+          expect(api.queue.entries.find((e) => e.id === "a").answer).toBeNull();
+          expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+        });
+      }
+
+      it("com o topo grudado cobrindo a fileira de respostas, S faz o que o botão faz", async () => {
+        const user = userEvent.setup();
+        const scroller = answerLastInScroller();
+        // O topo grudado cobre até 80 px; as respostas em 60–92 px.
+        scroller.dataset.stickyCover = "80";
+        geo.answers = 560;
+
+        await user.keyboard("s");
+
+        expect(shortcutAnswers).toEqual([]);
+        expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+      });
+
+      it("rolando até a fileira de respostas ficar à vista (topo ainda escondido), o botão some sem mexer na rolagem", async () => {
+        const user = userEvent.setup();
+        const scroller = answerLastInScroller();
+        // Topo em -200; a fileira 330 px abaixo dele: 130–162 px, à vista.
+        geo.answers = 330;
+        scrollTo(scroller, -200);
+        const top = scroller.scrollTop;
+
+        expect(button()).toBeNull();
+        expect(scroller.scrollTop).toBe(top);
+        expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+
+        await user.keyboard("n");
+        expect(shortcutAnswers).toEqual([["a", "ignore"]]);
+        expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+      });
+
+      it("rolando sem a fileira de respostas ficar à vista, o botão continua", () => {
+        const scroller = answerLastInScroller();
+        geo.answers = 600; // -200 + 600 = 400: começa no fim da área visível
+        scrollTo(scroller, -200);
+        expect(button()).toBeInTheDocument();
+      });
     });
   });
 });

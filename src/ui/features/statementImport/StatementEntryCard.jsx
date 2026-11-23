@@ -247,7 +247,7 @@ function AnswerSegment({ entry, desc, busy = false, onChange, onSearch = null, o
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{label}</span>
-      <div role="group" aria-label={label} style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
+      <div role="group" data-answer-row="" aria-label={label} style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
         <button type="button" aria-pressed={entry.answer === "create"} disabled={busy} onClick={() => choose("create")} style={SEG_BTN(entry.answer === "create", "create")}>
           <Plus size={12} aria-hidden="true" />Não, adicionar agora
         </button>

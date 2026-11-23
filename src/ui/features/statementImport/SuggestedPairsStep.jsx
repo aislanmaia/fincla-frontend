@@ -221,7 +221,7 @@ function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
-      <div role="group" aria-label={label} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
+      <div role="group" data-answer-row="" aria-label={label} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
         {ANSWERS.map((a, index) => {
           const pressed = entry.answer === a.value;
           const unavailable = a.value === "pair" && !entry.fincla_match;

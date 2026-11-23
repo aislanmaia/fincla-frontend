@@ -984,7 +984,8 @@ export function NextPendingButton({ queue, fromId }) {
 
 /**
  * A pessoa chegou ao pendente ROLANDO por conta própria (BUG-13): com o topo do cartão dele dentro
- * da área visível (abaixo do topo grudado), o "Próximo pendente" já não aponta
+ * da área visível (abaixo do topo grudado), ou com a fileira de respostas dele inteira à vista
+ * (OBS-40, o topo de um cartão alto pode ficar escondido), o "Próximo pendente" já não aponta
  * para nada fora da vista. O botão some sem mexer na rolagem e os atalhos passam a responder esse
  * cartão (que está à vista). Só conta rolagem que moveu o cartão desde que o botão apareceu e que
  * não é da própria tela: a âncora do recolher, no mesmo commit, e a rolagem até o fim do conteúdo
@@ -1008,7 +1009,8 @@ function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
       const rect = card.getBoundingClientRect();
       if (!rect.height || startTop === undefined || Math.abs(rect.top - startTop) < 1) return;
       const { top, bottom } = visibleBand(card);
-      if (rect.top < top - 0.5 || rect.top >= bottom - 0.5) return;
+      const topInView = rect.top >= top - 0.5 && rect.top < bottom - 0.5;
+      if (!topInView && !answersInView(card)) return;
       // Sobra conteúdo embaixo para o botão sair sem cortar a rolagem? Então a rolagem nem é tocada.
       const extent = button.getBoundingClientRect().height + (Number.parseFloat(getComputedStyle(button).marginTop) || 0);
       const room = scroller ? scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop : Number.POSITIVE_INFINITY;
@@ -1027,6 +1029,22 @@ function visibleBand(el) {
   const scroller = scrollParentOf(el);
   if (!scroller) return { top: 0, bottom: globalThis.innerHeight ?? Number.POSITIVE_INFINITY };
   return { top: coverTopOf(scroller), bottom: scrollportTopOf(scroller) + scroller.clientHeight };
+}
+
+/**
+ * O grupo de botões de resposta de um cartão publica `data-answer-row` (as respostas S/A/N do
+ * passo). OBS-40: com ele inteiro na área visível (abaixo do topo grudado e acima do fim da
+ * região), a pessoa está vendo o que vai responder, mesmo com o topo de um cartão alto escondido.
+ * Sem medida (jsdom, altura zero), não conta.
+ */
+const ANSWER_ROW_ATTR = "data-answer-row";
+
+function answersInView(card) {
+  const row = card.querySelector(`[${ANSWER_ROW_ATTR}]`);
+  const rect = row?.getBoundingClientRect();
+  if (!rect?.height) return false;
+  const { top, bottom } = visibleBand(card);
+  return rect.top >= top - 0.5 && rect.bottom <= bottom + 0.5;
 }
 
 /**
@@ -1073,12 +1091,20 @@ export function useQueueShortcuts(queue, answers, { disabled = false } = {}) {
       // Um atalho nunca responde um cartão que a pessoa não está vendo (OBS-28). Enquanto o
       // "Próximo pendente" está na tela (a pessoa ainda não chegou ao pendente: chegando rolando, o
       // botão some, BUG-13), S/A/N fazem o que o botão faz: levam até o pendente e põem o foco nele.
+      // Com a fileira de respostas do pendente inteira à vista (OBS-40), a pessoa já está vendo o
+      // que responde: o botão sai e o atalho responde direto.
       const nextButton = q.nextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
+      const card = currentCardOf(q.current.id);
+      if (nextButton && card && answersInView(card)) {
+        if (document.activeElement === nextButton) card.focus({ preventScroll: true });
+        q.dismissNextAbove();
+        answer(q.current);
+        return;
+      }
       if (nextButton) {
         nextButton.click();
         return;
       }
-      const card = currentCardOf(q.current.id);
       if (card && !onScreen(card)) {
         card.scrollIntoView?.({ behavior: prefersReducedMotion() ? "instant" : "smooth", block: "start" });
         card.focus({ preventScroll: true });
