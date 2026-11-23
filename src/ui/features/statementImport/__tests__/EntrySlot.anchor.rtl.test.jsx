@@ -407,6 +407,68 @@ describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha res
     expect(spacerHeight()).toBeGreaterThan(0);
   });
 
+  // BUG-12 (computador 1440x900): a linha recolhida final mede 80 px; o topo grudado cobre até
+  // 74 px desta região (160 px da tela no navegador). Topo do cartão X px atrás dessa borda: fica
+  // parada se pelo menos metade da linha (40 px) continua à vista; senão vem para a vista.
+  const QA_OFFSETS = [16, 20, 24, 30, 36, 40, 60];
+  const stays = (offset) => 80 - offset >= 40;
+
+  it("BUG-12: regra da metade com a geometria do QA (linha final de 80 px), direto no cálculo", () => {
+    for (const offset of QA_OFFSETS) {
+      const oldTop = 160 - offset;
+      const geometry = { scrollTop: 500, oldTop, newTop: oldTop, newHeight: 80, viewTop: 172, coverTop: 160, clientHeight: 844, contentHeight: 3000 };
+      if (stays(offset)) expect(anchorTarget(geometry), `${offset} px`).toBe(500);
+      else expect(anchorTarget(geometry), `${offset} px`).toBe(500 + oldTop - (172 + ANCHOR_MARGIN));
+    }
+  });
+
+  for (const offset of QA_OFFSETS) {
+    it(`BUG-12, fim da página: topo do cartão ${offset} px atrás do topo grudado → ${stays(offset) ? "fica parada (0 px)" : "vem para a vista"}`, () => {
+      ROW = 80;
+      VIEW = 728;
+      // O cartão do último ("f") mais alto que a tela, com a página no fim: o topo dele fica X px
+      // acima da borda do topo grudado (74 px).
+      openHeight = 654 + offset;
+      const { rerender } = render(<List open="f" />);
+      scroller.dataset.stickyCover = "74";
+      scroller.style.scrollPaddingTop = "86px";
+      scrollToEnd();
+      const before = topOf("f");
+      expect(before).toBe(74 - offset);
+      screen.getByRole("button", { name: "Confirmar f" }).focus();
+
+      rerender(<List open={null} />);
+
+      const after = topOf("f");
+      if (stays(offset)) {
+        expect(after).toBe(before);
+      } else {
+        // Inteira à vista abaixo do topo grudado, com conteúdo na tela.
+        expect(after).toBeGreaterThanOrEqual(74);
+        expect(after + 80).toBeLessThanOrEqual(VIEW);
+        expect(visibleContent()).toBeGreaterThan(0);
+      }
+    });
+
+    it(`BUG-12, meio da lista (o próximo abre abaixo): ${offset} px atrás → ${stays(offset) ? "fica parada (0 px)" : "vem para logo abaixo do topo grudado"}`, () => {
+      ROW = 80;
+      VIEW = 728;
+      openHeight = 670;
+      const { rerender } = render(<List open="c" />);
+      scroller.dataset.stickyCover = "74";
+      scroller.style.scrollPaddingTop = "86px";
+      // "c" começa em 160 px do conteúdo (a e b recolhidas).
+      act(() => { scroller.scrollTop = 160 - 74 + offset; });
+      const before = topOf("c");
+      expect(before).toBe(74 - offset);
+      screen.getByRole("button", { name: "Confirmar c" }).focus();
+
+      rerender(<List open="d" />);
+
+      expect(topOf("c")).toBe(stays(offset) ? before : 86 + ANCHOR_MARGIN);
+    });
+  }
+
   it("o caso do BUG-01 (topo à vista) continua exatamente parado, mesmo com o cartão alto", () => {
     openHeight = 380;
     const { rerender } = render(<List open="f" />);

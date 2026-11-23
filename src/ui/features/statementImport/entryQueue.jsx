@@ -465,7 +465,8 @@ export const ANCHOR_MARGIN = 16;
  */
 export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, coverTop = viewTop, clientHeight, contentHeight }) {
   const keep = scrollTop + (newTop - oldTop);
-  if (oldTop + newHeight / 2 > coverTop + 0.5) return keep;
+  // "Pelo menos metade": exatamente a metade à vista também fica (meio px de folga para o arredondamento).
+  if (oldTop + newHeight / 2 >= coverTop - 0.5) return keep;
   const toTop = scrollTop + (newTop - (viewTop + ANCHOR_MARGIN));
   return Math.max(0, Math.min(toTop, contentHeight - clientHeight));
 }
@@ -642,8 +643,10 @@ function flushCommit() {
       const scrollTop = scroller.scrollTop;
       const now = anchor.el.getBoundingClientRect();
       // A altura do item em si (o primeiro filho): o "Próximo pendente" embaixo dele não conta.
-      // É a altura da linha AGORA; a releitura do rascunho pode fazê-la crescer depois (para baixo,
-      // o que só aumenta a parte à vista): se a metade aparece agora, continua aparecendo.
+      // A linha já nasce na forma respondida final (a tela põe o lançamento devolvido pelo PATCH
+      // no mesmo commit do recolher), então esta é a altura que ela vai ter: a releitura do
+      // rascunho não a faz crescer depois (BUG-12: medir a linha provisória de 44 px em vez da
+      // final de 80 px fazia a regra da metade errar entre 22 e 40 px atrás do topo grudado).
       const own = anchor.el.firstElementChild?.getBoundingClientRect().height || now.height;
       const target = anchorTarget({
         scrollTop,
@@ -876,6 +879,20 @@ export function NextPendingButton({ queue, fromId }) {
 
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
+/**
+ * Algum pedaço do elemento aparece na área visível da região que rola (abaixo do topo grudado)?
+ * Sem medida (altura zero, como no jsdom), conta como à vista.
+ */
+function onScreen(el) {
+  const rect = el.getBoundingClientRect();
+  if (!rect.height) return true;
+  const scroller = scrollParentOf(el);
+  if (!scroller) return true;
+  const top = coverTopOf(scroller);
+  const bottom = scrollportTopOf(scroller) + scroller.clientHeight;
+  return rect.bottom > top + 0.5 && rect.top < bottom - 0.5;
+}
+
 /** Algum diálogo da página está aberto (busca no Fincla, modais)? Os atalhos ficam desligados. */
 const dialogOpen = () => Boolean(document.querySelector("[role='dialog'], [role='alertdialog'], [aria-modal='true'], dialog[open]"));
 
@@ -905,6 +922,19 @@ export function useQueueShortcuts(queue, answers, { disabled = false } = {}) {
       const answer = a?.[key];
       if (!answer || !q.current) return;
       event.preventDefault();
+      // Um atalho nunca responde um cartão que a pessoa não está vendo (OBS-28). Com o "Próximo
+      // pendente" à vista, S/A/N fazem o que o botão faz: levam até o pendente e põem o foco nele.
+      const nextButton = q.nextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
+      if (nextButton) {
+        nextButton.click();
+        return;
+      }
+      const card = currentCardOf(q.current.id);
+      if (card && !onScreen(card)) {
+        card.scrollIntoView?.({ behavior: prefersReducedMotion() ? "instant" : "smooth", block: "start" });
+        card.focus({ preventScroll: true });
+        return;
+      }
       answer(q.current);
     };
     document.addEventListener("keydown", onKeyDown);

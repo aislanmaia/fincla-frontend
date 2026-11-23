@@ -852,14 +852,20 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // `onSaved` roda assim que o backend aceita a mudança, antes de reler o rascunho: é onde uma
   // resposta minimiza o cartão (no clique, como nos outros passos). O lançamento gravado já entra
   // na tela, para a linha minimizada mostrar a resposta nova sem esperar a releitura.
+  // O lançamento que o PATCH devolveu entra na tela NO MESMO commit em que o cartão recolhe: a
+  // linha nasce na forma respondida final ("Conferido", o resumo da resposta) e não cresce depois
+  // da releitura do rascunho. A âncora do recolher mede essa linha final (BUG-12: com a linha
+  // provisória de "Falta responder", 44 px em vez de 80, a regra da metade errava e a linha pulava).
+  const showSaved = useCallback((entryId, saved) => {
+    if (saved?.id !== entryId) return;
+    setStatementImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
+  }, []);
+
   const changeEntry = async (entryId, body, { onSaved = null } = {}) => {
     setAnswering(true);
     setActionError("");
     try {
-      const saved = await updateStatementEntry(accountId, organizationId, importId, entryId, body);
-      if (saved?.id === entryId) {
-        setStatementImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
-      }
+      showSaved(entryId, await updateStatementEntry(accountId, organizationId, importId, entryId, body));
       onSaved?.();
       await reload();
       return true;
@@ -904,7 +910,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer });
+      showSaved(entry.id, await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer }));
       setAnswerHistory((prev) => ({
         ...prev,
         [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }],
@@ -945,7 +951,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entry.id, body);
+      showSaved(entry.id, await updateStatementEntry(accountId, organizationId, importId, entry.id, body));
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), answerSnapshot(entry)] }));
       setWantPair((prev) => { const next = new Set(prev); next.delete(entry.id); return next; });
       // "Desfazer lá" responde OUTRO lançamento: o atual continua aberto.

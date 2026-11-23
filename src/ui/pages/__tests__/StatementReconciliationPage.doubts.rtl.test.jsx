@@ -619,6 +619,37 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
     expect(patches()).toEqual([]);
   });
 
+  it("BUG-12: a linha recolhida já nasce respondida (Conferido), sem esperar a releitura do rascunho, e não muda quando ela chega", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    // A releitura do rascunho fica presa: o que aparece no recolher vem só do PATCH.
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let reloads = 0;
+    server.use(http.get(`${BASE}/${IMPORT}`, async () => {
+      await gate;
+      reloads += 1;
+      return HttpResponse.json(draft);
+    }));
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    const row = () => screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+    // Nunca a linha provisória de "Falta responder" (44 px no navegador, que crescia para 80 px).
+    expect(row()).not.toHaveTextContent("Falta responder");
+    expect(row()).toHaveTextContent("Fica fora do Fincla");
+    expect(within(row()).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row()).getByRole("button", { name: /Desfazer escolha/ })).toBeInTheDocument();
+    const atCollapse = row().outerHTML;
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(reloads).toBe(1));
+    await act(async () => {});
+    // A releitura não muda nada na linha: nenhuma altura nova empurra a tela depois do recolher.
+    expect(row().outerHTML).toBe(atCollapse);
+  });
+
   it("a linha minimizada mostra o selo Conferido ao lado de Desfazer escolha", async () => {
     const user = userEvent.setup();
     await openDraft();

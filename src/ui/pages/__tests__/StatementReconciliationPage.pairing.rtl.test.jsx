@@ -340,6 +340,32 @@ describe("o passo Confirmar lançamentos encontrados", () => {
 describe("Confirmar ao lado das respostas (fincla-api#507)", () => {
   const question = () => within(padariaCard()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
 
+  it("BUG-12: Confirmar sugestão recolhe numa linha já confirmada (Conferido) antes da releitura do rascunho, e ela não muda depois", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let reloads = 0;
+    server.use(http.get(`${BASE}/${IMPORT}`, async () => {
+      await gate;
+      reloads += 1;
+      return HttpResponse.json(draft);
+    }));
+
+    await user.click(within(padariaCard()).getByRole("button", { name: "Confirmar sugestão" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PIX QRS PADARIA 02 10/ })).toBeNull());
+    const row = () => rows().find((r) => r.textContent.includes("PADARIA"));
+    expect(within(row()).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(row()).toHaveTextContent("Sim, é Padaria do bairro");
+    const atCollapse = row().outerHTML;
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(reloads).toBe(1));
+    await act(async () => {});
+    expect(row().outerHTML).toBe(atCollapse);
+  });
+
   it("na sugestão sem mudança: Confirmar sugestão ao lado das respostas, que confirma e minimiza", async () => {
     const user = userEvent.setup();
     await openDraft();

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { CurrentEntryFrame, EntrySlot, useEntryQueue } from "../entryQueue.jsx";
+import { CurrentEntryFrame, EntrySlot, useEntryQueue, useQueueShortcuts } from "../entryQueue.jsx";
 
 const INITIAL = [
   { id: "a", date: "2026-10-03", bank_description: "PIX ENVIADO MERCADO", answer: null },
@@ -27,6 +27,7 @@ function Harness({ initial = INITIAL }) {
     setEntries((list) => list.map((e) => (e.id === id ? { ...e, answer: value } : e)));
     queue.advanceFrom(id);
   };
+  useQueueShortcuts(queue, { s: (e) => answer(e.id, "pair"), a: (e) => answer(e.id, "create"), n: (e) => answer(e.id) });
   api = { queue, answer, setEntries };
   return (
     <div>
@@ -227,5 +228,63 @@ describe("Próximo pendente acima do item respondido", () => {
     expect(button()).toBeInTheDocument();
     act(() => api.setEntries((list) => list.map((e) => (e.id === "d" ? { ...e, answer: "ignore" } : e))));
     expect(button()).toBeInTheDocument();
+  });
+
+  describe("OBS-28: atalhos nunca respondem um cartão fora da vista", () => {
+    for (const key of ["n", "s", "a"]) {
+      it(`com o foco no "Próximo pendente", ${key.toUpperCase()} faz o que o botão faz: leva ao pendente, sem responder`, async () => {
+        const user = userEvent.setup();
+        answerLast();
+        expect(document.activeElement).toBe(button());
+
+        await user.keyboard(key);
+
+        // O pendente de cima continua sem resposta e aberto; a tela foi até ele, com o foco nele.
+        expect(api.queue.current.answer).toBeNull();
+        expect(api.queue.currentId).toBe("a");
+        expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+        expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+        expect(button()).toBeNull();
+
+        // Agora à vista: o mesmo atalho responde.
+        await user.keyboard(key);
+        expect(api.queue.entries.find((e) => e.id === "a").answer).not.toBeNull();
+      });
+    }
+
+    it("o botão à vista vale mesmo com o foco fora dele (clique na página): o atalho leva, não responde", async () => {
+      const user = userEvent.setup();
+      answerLast();
+      act(() => document.activeElement.blur());
+      await user.keyboard("n");
+      expect(api.queue.entries.find((e) => e.id === "a").answer).toBeNull();
+      expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+    });
+
+    it("sem o botão, com o cartão aberto todo fora da área visível: o atalho traz o cartão, não responde", async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <div data-testid="scroller" style={{ overflowY: "auto" }}><Harness /></div>,
+      );
+      const scroller = container.querySelector("[data-testid='scroller']");
+      Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
+      Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+      act(() => api.queue.open("c"));
+      const card = screen.getByTestId("current-entry");
+      // A região começa no topo da tela; o cartão está 300 px abaixo do fim dela.
+      vi.spyOn(scroller, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 400, height: 400, left: 0, right: 0, width: 0 });
+      vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ top: 700, bottom: 900, height: 200, left: 0, right: 0, width: 0 });
+
+      await user.keyboard("n");
+
+      expect(api.queue.entries.find((e) => e.id === "c").answer).toBeNull();
+      expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(card);
+      expect(document.activeElement).toBe(card);
+
+      // Uma parte dele à vista: responde.
+      card.getBoundingClientRect.mockReturnValue({ top: 350, bottom: 550, height: 200, left: 0, right: 0, width: 0 });
+      await user.keyboard("n");
+      expect(api.queue.entries.find((e) => e.id === "c").answer).toBe("ignore");
+    });
   });
 });
