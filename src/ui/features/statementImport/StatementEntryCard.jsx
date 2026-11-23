@@ -286,12 +286,13 @@ function SelectBox({ entry, selected, onSelect }) {
 
 /**
  * Um lançamento "Não registrar" minimizado (fincla-api#513): continua visível, com selo e fundo
- * próprios, "Alterar" no começo da linha e "Desfazer". Clicar em qualquer ponto livre da linha a
+ * próprios, "Alterar" no começo da linha, "Conferido" e "Desfazer escolha" (volta à resposta de
+ * antes; sem uma anterior, a "Não, adicionar agora"). Clicar em qualquer ponto livre da linha a
  * reabre (fincla-api#517); a caixa de marcar e os botões fazem só a ação deles. Teclado e leitor
  * de tela chegam a tudo pelos controles. `focus` leva o foco ao "Alterar" quando a linha acaba de
  * aparecer no lugar do cartão.
  */
-export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, focus = false }) {
+export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, busy = false, focus = false }) {
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
@@ -312,8 +313,8 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
       <SkipBadge />
       <span style={{ fontSize: 12, color: T.inkLight }}>fica fora do Fincla</span>
       <ConferidoBadge />
-      <Btn variant="ghost" small onClick={() => onUndo(entry.id)}>
-        Desfazer
+      <Btn variant="ghost" small disabled={busy} onClick={() => onUndo(entry.id)}>
+        Desfazer escolha
       </Btn>
     </div>
   );
@@ -321,9 +322,10 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
 
 /**
  * Um lançamento que vai ser adicionado, minimizado numa linha (fincla-api#517): o que vai virar no
- * Fincla (descrição e categoria) cabe nela. Clicar em qualquer ponto livre a reabre.
+ * Fincla (descrição e categoria) cabe nela. Clicar em qualquer ponto livre a reabre. Respondido
+ * nesta visita ("Confirmar" no cartão), mostra "Desfazer escolha" (`onUndo`), como nos outros passos.
  */
-export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, focus = false }) {
+export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, onUndo = null, busy = false, focus = false }) {
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
@@ -351,6 +353,11 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
         {unclassified ? <Badge color={T.amber} bg={T.amberLight}>{categoryText}</Badge> : categoryText}
       </span>
       {isAnswered(entry) ? <ConferidoBadge /> : null}
+      {onUndo ? (
+        <Btn variant="ghost" small disabled={busy} onClick={() => onUndo(entry.id)}>
+          Desfazer escolha
+        </Btn>
+      ) : null}
     </div>
   );
 });

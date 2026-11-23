@@ -391,7 +391,7 @@ describe("adicionar lançamentos novos", () => {
     expect(within(card("REMUNERACAO SALARIO")).getByText("Escolha uma categoria para ver as etiquetas dela.")).toBeInTheDocument();
   });
 
-  it("Não registrar tem selo e fundo próprios, fica minimizado e visível, com Alterar e Desfazer", async () => {
+  it("Não registrar tem selo e fundo próprios, fica minimizado e visível, com Alterar, Conferido e Desfazer escolha (BUG-07)", async () => {
     const user = await openDraft({ step: "Adicionar lançamentos novos" });
 
     const fee = screen.getByTestId("ignored-entry");
@@ -410,7 +410,7 @@ describe("adicionar lançamentos novos", () => {
     await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
     expect(screen.getByTestId("ignored-entry")).toHaveTextContent("TARIFA PACOTE");
 
-    await user.click(within(screen.getByTestId("ignored-entry")).getByRole("button", { name: "Desfazer" }));
+    await user.click(within(screen.getByTestId("ignored-entry")).getByRole("button", { name: "Desfazer escolha" }));
 
     await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
     await waitFor(() => expect(screen.queryByTestId("ignored-entry")).toBeNull());
@@ -438,9 +438,9 @@ describe("adicionar lançamentos novos", () => {
     expect(screen.getAllByTestId("statement-entry")).toHaveLength(1);
     expect(calls.filter((c) => c.patch)).toEqual([]);
 
-    // O Desfazer da linha desfaz e não reabre (uma ação por clique).
+    // O Desfazer escolha da linha desfaz e não reabre (uma ação por clique).
     await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
-    await user.click(within(fee()).getByRole("button", { name: "Desfazer" }));
+    await user.click(within(fee()).getByRole("button", { name: "Desfazer escolha" }));
     await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
     expect(calls.filter((c) => c.patch)).toHaveLength(1);
     await waitFor(() => expect(screen.getAllByTestId("entry-row").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true));
@@ -778,5 +778,59 @@ describe("Confirmar ao lado das respostas nos lançamentos novos (fincla-api#507
       const described = !r.textContent.includes("(sem descrição)");
       expect(Boolean(within(r).queryByTestId("conferido-badge"))).toBe(described);
     }
+  });
+});
+
+// BUG-07 (fincla-api#507, regra 5): nos lançamentos novos, a linha minimizada tem "Conferido",
+// "Alterar" e "Desfazer escolha", como nos outros passos; desfazer devolve a resposta de antes.
+describe("Desfazer escolha nos lançamentos novos (BUG-07)", () => {
+  const rowOf = (text) => [...screen.queryAllByTestId("entry-row"), ...screen.queryAllByTestId("ignored-entry")].find((r) => r.textContent.includes(text));
+  const buttonsOf = (row) => within(row).getAllByRole("button").map((b) => b.textContent.trim());
+
+  it("Confirmar (Adicionar agora): a linha tem Conferido, Alterar e Desfazer escolha; desfazer devolve a descrição de antes e reabre o cartão", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    await user.type(within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição"), "Conta de luz");
+    await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(rowOf("PAG BOLETO ENERGIA")).toHaveTextContent("Conta de luz"));
+    const row = rowOf("PAG BOLETO ENERGIA");
+    expect(within(row).getByTestId("conferido-badge")).toHaveTextContent("Conferido");
+    expect(buttonsOf(row)).toEqual(expect.arrayContaining([expect.stringContaining("Alterar"), "Desfazer escolha"]));
+
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { description: "" } }));
+    // Uma ação só: a resposta (adicionar agora) não muda, e o cartão volta aberto como estava.
+    expect(calls.filter((c) => c.patch === ENERGY)).toHaveLength(2);
+    const back = await waitFor(() => {
+      const opened = screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes("PAG BOLETO ENERGIA"));
+      expect(opened).toBeTruthy();
+      return opened;
+    });
+    expect(within(back).getByLabelText("Descrição")).toHaveValue("");
+    expect(within(back).getByRole("button", { name: /Não, adicionar agora/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Não registrar no cartão: a linha tem Conferido, Alterar e Desfazer escolha; desfazer devolve a resposta e o confirmado de antes", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: /Não registrar/ }));
+
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(true));
+    const row = screen.getAllByTestId("ignored-entry").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"));
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Alterar" })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Desfazer" })).toBeNull();
+
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { answer: "create", confirmed: false } }));
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false));
+    expect(entry(ENERGY)).toMatchObject({ answer: "create", confirmed: false });
+  });
+
+  it("sem resposta desta visita para voltar, a linha de adicionar não oferece Desfazer escolha", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    for (const r of screen.getAllByTestId("entry-row")) expect(within(r).queryByRole("button", { name: "Desfazer escolha" })).toBeNull();
   });
 });

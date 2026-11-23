@@ -1,10 +1,10 @@
 // "Revisar rendimentos pequenos" e "Adicionar lançamentos novos" (fincla-api#513).
 //
-// Cada lançamento: adicionar (cartão completo) ou "Não registrar" (minimizado, com Alterar e
-// Desfazer). Em lote: categoria, Não registrar e "Somar em um só lançamento", sempre com a barra
-// de desfazer. As somas aparecem como cartões próprios, com os lançamentos somados dentro e
+// Cada lançamento: adicionar (cartão completo) ou "Não registrar". Respondido, minimiza numa linha
+// com "Conferido", "Alterar" e "Desfazer escolha", como nos outros passos (fincla-api#507). Em
+// lote: categoria, Não registrar e "Somar em um só lançamento", sempre com a barra de desfazer. As somas aparecem como cartões próprios, com os lançamentos somados dentro e
 // "Tirar da soma" / "Desfazer soma". Tudo é gravado no rascunho; as contagens vêm do backend.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Layers, Lock, X } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -252,7 +252,37 @@ export function NewEntriesStep({
 
   const select = useStableCallback((id, on) => setSelectedIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id))));
   const expand = useStableCallback((id) => queue.open(id));
-  const undoIgnore = useStableCallback((id) => onChangeEntry(id, { answer: "create" }));
+  // "Desfazer escolha" (fincla-api#507): por lançamento, como ele estava quando o cartão abriu, a
+  // cada vez que uma resposta o minimizou nesta visita ("Confirmar", "Não registrar").
+  const [history, setHistory] = useState({});
+  const openedAs = useRef({});
+  const currentEntry = queue.currentId ? byId.get(queue.currentId) : null;
+  useEffect(() => {
+    if (!currentEntry) return;
+    openedAs.current[currentEntry.id] = { answer: currentEntry.answer, confirmed: currentEntry.confirmed, description: currentEntry.description ?? "" };
+  }, [currentEntry?.id]); // só a abertura conta, não cada mudança no cartão aberto
+  const answered = (id) => {
+    const before = openedAs.current[id];
+    if (before) setHistory((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), before] }));
+    queue.advanceFrom(id);
+  };
+  const undoChoice = useStableCallback(async (id) => {
+    const entry = byId.get(id);
+    if (!entry) return;
+    const previous = history[id]?.at(-1);
+    const body = {};
+    if (previous && previous.answer !== entry.answer && (previous.answer === "create" || previous.answer === "ignore")) {
+      body.answer = previous.answer;
+      body.confirmed = previous.confirmed;
+    }
+    if (previous && previous.description !== (entry.description ?? "")) body.description = previous.description;
+    // Sem resposta diferente para voltar, o "Não registrar" volta a "Não, adicionar agora".
+    if (entry.answer === "ignore" && !body.answer) body.answer = "create";
+    if (Object.keys(body).length && (await onChangeEntry(id, body)) === false) return;
+    if (previous) setHistory((prev) => ({ ...prev, [id]: (prev[id] ?? []).slice(0, -1) }));
+    // O "Confirmar" do adicionar agora só minimizou: desfazer devolve o cartão aberto, como antes.
+    if (entry.answer === "create" && (body.answer ?? "create") === "create") queue.open(id);
+  });
 
   const run = async (work) => {
     setBusy(true);
@@ -396,7 +426,8 @@ export function NewEntriesStep({
               selected={selectedIds.includes(entry.id)}
               onSelect={select}
               onExpand={expand}
-              onUndo={undoIgnore}
+              onUndo={undoChoice}
+              busy={answering}
             />
           ) : (
             <NewEntryRow
@@ -407,6 +438,8 @@ export function NewEntriesStep({
               selected={selectedIds.includes(entry.id)}
               onSelect={select}
               onExpand={expand}
+              onUndo={history[entry.id]?.length ? undoChoice : null}
+              busy={answering}
             />
           );
         } else {
@@ -423,11 +456,11 @@ export function NewEntriesStep({
                 onSelect={select}
                 onCollapse={(id) => queue.close(id)}
                 onSearch={onSearch}
-                onConfirm={(e) => queue.advanceFrom(e.id)}
+                onConfirm={(e) => answered(e.id)}
                 onChange={(id, change) => onChangeEntry(id, change, {
                   // "Não registrar" escolhido no cartão: minimiza assim que o backend aceita a
                   // resposta (como nos outros passos), sem esperar a releitura do rascunho.
-                  onSaved: change.answer === "ignore" ? () => queue.advanceFrom(id) : null,
+                  onSaved: change.answer === "ignore" ? () => answered(id) : null,
                 })}
               />
             </CurrentEntryFrame>
