@@ -19,7 +19,9 @@ import {
 } from "./StatementEntryCard.jsx";
 import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, openOnRowClick, useStableCallback } from "./entryQueue.jsx";
+import {
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
+} from "./entryQueue.jsx";
 
 const QUESTION = "Este lançamento do banco já está no Fincla?";
 
@@ -269,7 +271,7 @@ function rowSummary(entry) {
  */
 export const DoubtRow = memo(function DoubtRowView({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div data-testid="doubt-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", background: entry.answer === "ignore" ? SKIP_BG : T.surface, border: `1px solid ${T.border}`, borderRadius: 12, ...G, fontSize: 12, color: T.inkMid }}>
       <Btn
@@ -287,6 +289,7 @@ export const DoubtRow = memo(function DoubtRowView({ entry, canUndo, focus = fal
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       {entry.answer === null ? <Badge color={T.amber} bg={T.amberLight}>Falta responder</Badge> : <StatusBadge entry={entry} />}
       <span style={{ flex: 1, minWidth: 160 }}>{entry.answer === null ? <span style={{ color: T.inkLight }}>{doubtHint(entry)}</span> : rowSummary(entry)}</span>
+      {isAnswered(entry) ? <ConferidoBadge /> : null}
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
@@ -312,8 +315,10 @@ export function DoubtStep({
       <p role="status" style={{ ...G, ...NUM, fontSize: 13, color: pending ? T.amber : T.green, margin: 0 }}>
         {pending ? `${plural(pending, "lançamento para responder", "lançamentos para responder")} de ${entries.length}` : "Todos respondidos"}
       </p>
-      {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
-        <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+      {entries.filter(queue.shown).map((entry) => (
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
+        {entry.id === queue.currentId ? (
+        <CurrentEntryFrame queue={queue} entry={entry}>
           <DoubtCard
             entry={entry}
             entries={allEntries}
@@ -337,8 +342,10 @@ export function DoubtStep({
           />
         </CurrentEntryFrame>
       ) : (
-        <DoubtRow key={entry.id} entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
-      )))}
+        <DoubtRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
+        )}
+        </EntrySlot>
+      ))}
     </div>
   );
 }

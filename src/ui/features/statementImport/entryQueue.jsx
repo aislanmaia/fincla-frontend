@@ -14,12 +14,12 @@
 //     ? <CurrentEntryFrame queue={queue} entry={e}>{cartão}</CurrentEntryFrame>
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, createRef, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Btn } from "../../components/primitives";
+import { Badge, Btn } from "../../components/primitives";
 import { plural } from "../../plural.js";
 
 /**
@@ -305,7 +305,8 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
   const { takeFocus, focusTick } = queue;
   // biome-ignore lint/correctness/useExhaustiveDependencies: o pedido de foco é o tick; takeFocus muda a cada render.
   useEffect(() => {
-    if (takeFocus(entry.id)) ref.current?.focus();
+    // preventScroll: a tela não pula para o próximo cartão; quem fica parado é o que minimizou.
+    if (takeFocus(entry.id)) ref.current?.focus({ preventScroll: true });
   }, [focusTick, entry.id]);
   return (
     <div
@@ -318,6 +319,148 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
       {children}
     </div>
   );
+}
+
+/**
+ * Selo "Conferido" da linha minimizada (como no protótipo), ao lado de Alterar/Desfazer escolha.
+ * `data-okb` é onde a animação de recolher dá o "pop" do selo.
+ */
+export function ConferidoBadge() {
+  return (
+    <span data-okb="" data-testid="conferido-badge" style={{ display: "inline-flex" }}>
+      <Badge color={T.green} bg={T.greenLight}>
+        <Check size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Conferido
+      </Badge>
+    </span>
+  );
+}
+
+/** A cor da resposta no brilho da linha que acabou de minimizar (a do protótipo). */
+export function answerTone(answer) {
+  if (answer === "create") return T.green;
+  if (answer === "ignore") return T.inkLight;
+  return T.blue;
+}
+
+const prefersReducedMotion = () => Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+
+/** A região que rola em volta do elemento (cada tela é dona do seu scroll, ver CLAUDE.md). */
+function scrollParentOf(el) {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
+  }
+  return document.scrollingElement ?? null;
+}
+
+// Quem fica parado na tela numa troca cartão ↔ linha: o item com o foco (o que a pessoa apertou).
+// Vale só durante um commit do React: todas as fotos (antes) saem antes de qualquer `componentDidUpdate`.
+let focusClaimed = false;
+
+/**
+ * O lugar de um lançamento na lista (cartão aberto ou linha minimizada). Quando ele troca de forma,
+ * a altura anda da antiga para a nova (o cartão recolhe na linha, e vice-versa) com o conteúdo
+ * antigo sumindo por cima, e a rolagem fica ancorada no item que o olho acompanha: nada pula.
+ *
+ * A animação é só visual: o estado já mudou antes dela começar, nada espera por ela e nenhum
+ * temporizador entra (fincla-api#507). A limpeza (tirar a cópia antiga, devolver o `overflow`)
+ * roda no fim OU no cancelamento da animação, e de novo na próxima troca ou ao desmontar: nunca
+ * fica um estado "recolhendo" preso. Sem `Element.animate` (jsdom) ou com movimento reduzido, só a
+ * âncora da rolagem vale.
+ */
+export class EntrySlot extends Component {
+  ref = createRef();
+
+  cleanup = null;
+
+  getSnapshotBeforeUpdate(prevProps) {
+    if (prevProps.open === this.props.open) return null;
+    const el = this.ref.current;
+    if (!el) return null;
+    this.cleanup?.();
+    const rect = el.getBoundingClientRect();
+    const focusInside = el.contains(document.activeElement) && document.activeElement !== document.body;
+    if (focusInside) {
+      focusClaimed = true;
+      queueMicrotask(() => { focusClaimed = false; });
+    }
+    const motion = typeof el.animate === "function" && !prefersReducedMotion();
+    let ghost = null;
+    if (motion && el.firstElementChild) {
+      ghost = el.firstElementChild.cloneNode(true);
+      for (const node of [ghost, ...ghost.querySelectorAll("[id]")]) node.removeAttribute("id");
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.setAttribute("inert", "");
+      ghost.removeAttribute("data-testid");
+      for (const node of ghost.querySelectorAll("[data-testid]")) node.removeAttribute("data-testid");
+    }
+    return { height: rect.height, top: rect.top, focusInside, motion, ghost };
+  }
+
+  componentDidUpdate(_prevProps, _prevState, snap) {
+    if (!snap) return;
+    const el = this.ref.current;
+    if (!el) return;
+    const collapsing = !this.props.open;
+    const content = el.firstElementChild;
+    const to = el.getBoundingClientRect().height;
+    if (snap.motion) {
+      const ease = "cubic-bezier(.2,.7,.2,1)";
+      const { ghost } = snap;
+      el.style.overflow = "hidden";
+      if (ghost) {
+        Object.assign(ghost.style, { position: "absolute", left: "0", right: "0", top: "0", margin: "0", pointerEvents: "none" });
+        el.appendChild(ghost);
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: "forwards" });
+      }
+      content?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: 80, fill: "backwards" });
+      const grow = el.animate([{ height: `${snap.height}px` }, { height: `${to}px` }], {
+        duration: Math.min(460, 220 + Math.abs(to - snap.height) * 0.35),
+        easing: ease,
+      });
+      let done = false;
+      const cleanup = () => {
+        if (done) return;
+        done = true;
+        ghost?.remove();
+        el.style.overflow = "";
+        if (this.cleanup === cleanup) this.cleanup = null;
+      };
+      this.cleanup = cleanup;
+      grow.onfinish = cleanup;
+      grow.oncancel = cleanup;
+      if (collapsing && content) {
+        // A linha que acabou de ficar no lugar brilha na cor da resposta e o selo "Conferido" aparece.
+        const tone = this.props.tone ?? T.blue;
+        const on = `inset 4px 0 0 ${tone}, inset 0 0 0 1.5px ${tone}`;
+        const off = "inset 4px 0 0 transparent, inset 0 0 0 1.5px transparent";
+        content.animate([{ boxShadow: on, offset: 0 }, { boxShadow: on, offset: 0.25 }, { boxShadow: off }], { duration: 1600, easing: "ease-out" });
+        el.querySelector("[data-okb]")?.animate(
+          [{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "none" }],
+          { duration: 420, delay: 180, fill: "backwards", easing: "cubic-bezier(.3,1.5,.5,1)" },
+        );
+      }
+    }
+    // A âncora: o item com o foco; sem foco em nenhum, o que recolheu. Ele fica onde estava na tela.
+    const anchor = snap.focusInside || (collapsing && !focusClaimed);
+    if (!anchor) return;
+    const delta = el.getBoundingClientRect().top - snap.top;
+    const scroller = delta ? scrollParentOf(el) : null;
+    if (scroller) scroller.scrollTop += delta;
+  }
+
+  componentWillUnmount() {
+    this.cleanup?.();
+  }
+
+  render() {
+    const { open, children } = this.props;
+    return (
+      <div ref={this.ref} data-testid="entry-slot" data-open={open ? "true" : "false"} style={{ position: "relative", overflowAnchor: "none", borderRadius: 12, minWidth: 0 }}>
+        {children}
+      </div>
+    );
+  }
 }
 
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);

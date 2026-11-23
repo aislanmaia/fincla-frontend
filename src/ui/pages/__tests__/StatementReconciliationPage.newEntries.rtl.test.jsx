@@ -666,4 +666,91 @@ describe("Confirmar ao lado das respostas nos lançamentos novos (fincla-api#507
     expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true);
     expect(calls.filter((c) => c.patch)).toEqual([]);
   });
+
+  it("a nota Escreva a descrição para confirmar descreve o Confirmar desligado (aria-describedby)", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    const confirm = within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" });
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAccessibleDescription("Escreva a descrição para confirmar.");
+  });
+
+  it("duplo clique no Confirmar manda um PATCH só, e o botão fica desligado enquanto ele está no ar", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    await user.type(within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição"), "Conta de luz");
+    const confirm = within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" });
+
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(confirm).toBeDisabled();
+
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(calls.filter((c) => c.patch === ENERGY)).toEqual([{ patch: ENERGY, body: { description: "Conta de luz" } }]);
+  });
+
+  it("Não registrar minimiza assim que o backend aceita, sem esperar a releitura; enquanto grava, as respostas ficam desligadas", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    let releasePatch;
+    let releaseGet;
+    const patchGate = new Promise((resolve) => { releasePatch = resolve; });
+    const getGate = new Promise((resolve) => { releaseGet = resolve; });
+    server.use(
+      http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
+        const body = await request.json();
+        calls.push({ patch: p.entryId, body });
+        await patchGate;
+        applyEntry(entry(p.entryId), body);
+        recompute();
+        return HttpResponse.json(entry(p.entryId));
+      }),
+      http.get(`${BASE}/${IMPORT}`, async () => {
+        await getGate;
+        return HttpResponse.json(draft);
+      }),
+    );
+    const energy = card("PAG BOLETO ENERGIA");
+
+    await user.click(within(energy).getByRole("button", { name: /Não registrar/ }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { answer: "ignore" } }));
+    expect(within(energy).getByRole("button", { name: /Não registrar/ })).toBeDisabled();
+    expect(within(energy).getByRole("button", { name: /Não, adicionar agora/ })).toBeDisabled();
+
+    releasePatch();
+    // A releitura ainda não voltou e o lançamento já é uma linha "Não registrar", com o selo Conferido.
+    const row = await waitFor(() => {
+      const found = screen.getAllByTestId("ignored-entry").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"));
+      expect(found).toBeTruthy();
+      return found;
+    });
+    expect(within(row).getByTestId("conferido-badge")).toHaveTextContent("Conferido");
+    expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false);
+    releaseGet();
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(2));
+    expect(calls.filter((c) => c.patch)).toHaveLength(1);
+  });
+
+  it("o próximo cartão recebe o foco sem rolar a tela (preventScroll)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: /Não registrar/ }));
+      await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(true));
+      const programmatic = focus.mock.contexts
+        .map((el, i) => ({ el, args: focus.mock.calls[i] }))
+        .filter(({ el }) => el.dataset?.testid === "current-entry" || el.textContent?.includes("Alterar"));
+      expect(programmatic.length).toBeGreaterThan(0);
+      for (const { args } of programmatic) expect(args[0]).toEqual({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
+  it("a linha de um lançamento a adicionar já descrito mostra o selo Conferido", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    const rows = screen.getAllByTestId("entry-row");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      const described = !r.textContent.includes("(sem descrição)");
+      expect(Boolean(within(r).queryByTestId("conferido-badge"))).toBe(described);
+    }
+  });
 });

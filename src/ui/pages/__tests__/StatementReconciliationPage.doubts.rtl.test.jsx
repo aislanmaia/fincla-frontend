@@ -566,4 +566,37 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
     await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
     expect(patches()).toEqual([]);
   });
+
+  it("o atalho S faz o mesmo que o botão: com Sim, é esta já marcado, minimiza sem gravar", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(within(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("JULIA"))).getByRole("button", { name: /Alterar/ }));
+    const julia = card("PIX TRANSF JULIA F04 10");
+    expect(within(julia).getByRole("button", { name: "Sim, é esta" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.keyboard("s");
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+    expect(screen.getAllByTestId("doubt-row").some((r) => r.textContent.includes("JULIA"))).toBe(true);
+    expect(patches()).toEqual([]);
+  });
+
+  it("a linha minimizada mostra o selo Conferido ao lado de Desfazer escolha", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    const row = await waitFor(() => {
+      const found = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+      expect(found).toBeTruthy();
+      return found;
+    });
+    const badge = within(row).getByTestId("conferido-badge");
+    expect(badge).toHaveTextContent("Conferido");
+    expect(badge.nextElementSibling).toHaveTextContent("Desfazer escolha");
+    // Uma linha ainda sem resposta não diz Conferido.
+    const pending = screen.getAllByTestId("doubt-row").filter((r) => r.textContent.includes("Falta responder"));
+    for (const r of pending) expect(within(r).queryByTestId("conferido-badge")).toBeNull();
+  });
 });

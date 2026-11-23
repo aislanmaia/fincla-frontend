@@ -24,7 +24,8 @@ import {
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
-  CurrentEntryFrame, EntryQueueHeader, InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact, useStableCallback,
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, InlineFields, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useCompact,
+  useStableCallback,
 } from "./entryQueue.jsx";
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
@@ -324,7 +325,7 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
   // Quando a linha acaba de tomar o lugar do cartão, o foco vem para o "Alterar" dela (o botão
   // que a pessoa apertou saiu da tela).
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div data-testid="pair-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
       <Btn
@@ -342,6 +343,7 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       <StatusBadge entry={entry} />
       <span style={{ flex: 1, minWidth: 160 }}>{rowSummary(entry)}</span>
+      {isAnswered(entry) ? <ConferidoBadge /> : null}
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
@@ -394,8 +396,10 @@ export function SuggestedPairsStep({
           <Btn variant="outGray" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
         </div>
       ) : null}
-      {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
-        <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+      {entries.filter(queue.shown).map((entry) => (
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
+        {entry.id === queue.currentId ? (
+        <CurrentEntryFrame queue={queue} entry={entry}>
           <PairCard
             entry={entry}
             isMobile={isMobile}
@@ -413,10 +417,12 @@ export function SuggestedPairsStep({
           />
         </CurrentEntryFrame>
       ) : (
-        <div key={entry.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
           <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
         </div>
-      )))}
+        )}
+        </EntrySlot>
+      ))}
     </div>
   );
 }

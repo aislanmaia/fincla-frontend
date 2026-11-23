@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -6,7 +6,7 @@ import { G, NUM } from "../../typography";
 import { Badge, Btn, Select } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
-import { InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact } from "./entryQueue.jsx";
+import { ConferidoBadge, InlineFields, ROW_CLICKABLE, isAnswered, openOnRowClick, useCompact } from "./entryQueue.jsx";
 
 /** "2026-10-02" → "02/10/2026", sem passar por `Date` (que leria em UTC e voltaria um dia). */
 export function bankDateLabel(ymd) {
@@ -89,14 +89,40 @@ export function SkipNote({ children }) {
  * formulário de adicionar item novo ("Confirmar", desligado enquanto a descrição está vazia). Toda
  * outra resposta já confirma e minimiza no clique. `onMouseDown` não tira o foco do campo antes do
  * clique: o próprio Confirmar grava a descrição.
+ *
+ * Um clique só vale uma vez: enquanto o `onConfirm` (que pode devolver uma promessa) não termina, o
+ * botão fica desligado e novos cliques (duplo clique, Enter repetido) são ignorados, para não sair
+ * um segundo PATCH. A nota de bloqueio fica ligada ao botão por `aria-describedby`.
  */
 export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm }) {
+  const noteId = useId();
+  const inFlight = useRef(false);
+  const [pending, setPending] = useState(false);
+  const showNote = disabled && Boolean(blockedNote);
+  const run = async () => {
+    if (inFlight.current || disabled) return;
+    inFlight.current = true;
+    setPending(true);
+    try {
+      await onConfirm();
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <Btn variant="dark" small disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={onConfirm}>
+      <Btn
+        variant="dark"
+        small
+        disabled={disabled || pending}
+        aria-describedby={showNote ? noteId : undefined}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={run}
+      >
         <Check size={13} aria-hidden="true" />{label}
       </Btn>
-      {disabled && blockedNote ? <span style={{ ...G, fontSize: 12, color: T.inkLight }}>{blockedNote}</span> : null}
+      {showNote ? <span id={noteId} style={{ ...G, fontSize: 12, color: T.inkLight }}>{blockedNote}</span> : null}
     </span>
   );
 }
@@ -169,10 +195,11 @@ const SEG_BTN = (pressed, tone) => ({
  * `onConfirm` (cartão de uma lista) liga o Confirmar ao lado das respostas no formulário do item
  * novo, e clicar de novo em "Não registrar" já marcado minimiza o cartão.
  */
-function AnswerSegment({ entry, draft, onChange, onSearch = null, onConfirm = null }) {
+function AnswerSegment({ entry, draft, busy = false, onChange, onSearch = null, onConfirm = null }) {
   const label = "Este lançamento do banco já está no Fincla?";
   const blank = !draft.trim();
   const choose = (answer) => {
+    if (busy) return;
     if (entry.answer !== answer) onChange(entry.id, { answer });
     else if (answer === "ignore" && onConfirm) onConfirm(entry);
   };
@@ -180,22 +207,22 @@ function AnswerSegment({ entry, draft, onChange, onSearch = null, onConfirm = nu
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{label}</span>
       <div role="group" aria-label={label} style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
-        <button type="button" aria-pressed={entry.answer === "create"} onClick={() => choose("create")} style={SEG_BTN(entry.answer === "create", "create")}>
+        <button type="button" aria-pressed={entry.answer === "create"} disabled={busy} onClick={() => choose("create")} style={SEG_BTN(entry.answer === "create", "create")}>
           <Plus size={12} aria-hidden="true" />Não, adicionar agora
         </button>
-        <button type="button" aria-pressed={entry.answer === "ignore"} onClick={() => choose("ignore")} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}` }}>
+        <button type="button" aria-pressed={entry.answer === "ignore"} disabled={busy} onClick={() => choose("ignore")} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}` }}>
           <Ban size={12} aria-hidden="true" />Não registrar
         </button>
       </div>
       {onConfirm && entry.answer === "create" ? (
         <ConfirmAnswerButton
-          disabled={blank}
-          blockedNote={CONFIRM_BLOCKED_NOTE}
+          disabled={busy || blank}
+          blockedNote={blank ? CONFIRM_BLOCKED_NOTE : ""}
           onConfirm={() => confirmNewEntry(entry, draft, onChange, onConfirm)}
         />
       ) : null}
       {onSearch ? (
-        <Btn variant="outGray" small onClick={() => onSearch(entry)} style={{ alignSelf: "flex-start" }}>
+        <Btn variant="outGray" small disabled={busy} onClick={() => onSearch(entry)} style={{ alignSelf: "flex-start" }}>
           Está no Fincla com outros dados…
         </Btn>
       ) : null}
@@ -225,7 +252,7 @@ function SelectBox({ entry, selected, onSelect }) {
  */
 export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, focus = false }) {
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div
       data-testid="ignored-entry"
@@ -243,6 +270,7 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
       <span style={{ ...NUM, fontSize: 13, color: T.inkMid, opacity: 0.7 }}>{formatMoney(entry.amount, entry.currency)}</span>
       <SkipBadge />
       <span style={{ fontSize: 12, color: T.inkLight }}>fica fora do Fincla</span>
+      <ConferidoBadge />
       <Btn variant="ghost" small onClick={() => onUndo(entry.id)}>
         Desfazer
       </Btn>
@@ -256,7 +284,7 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
  */
 export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, focus = false }) {
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div
       data-testid="entry-row"
@@ -281,6 +309,7 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
         Adicionar ao Fincla: <b>{entry.description || "(sem descrição)"}</b> ·{" "}
         {unclassified ? <Badge color={T.amber} bg={T.amberLight}>{categoryText}</Badge> : categoryText}
       </span>
+      {isAnswered(entry) ? <ConferidoBadge /> : null}
     </div>
   );
 });
@@ -427,7 +456,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
 export function StatementEntryCard({
   entry, categories, details = [], fallbackLabel, isMobile, onChange,
   selected = false, onSelect = null, onCollapse = null, embedded = false, onSearch = null,
-  onConfirm = null, draft: embeddedDraft, onDraft, skipped = false,
+  onConfirm = null, draft: embeddedDraft, onDraft, skipped = false, busy = false,
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
@@ -490,7 +519,7 @@ export function StatementEntryCard({
           draft={ownDraft} onDraft={setOwnDraft} skipped={ignored}
         />
       </div>
-      <AnswerSegment entry={entry} draft={ownDraft} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm} />
+      <AnswerSegment entry={entry} draft={ownDraft} busy={busy} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm} />
       <OutcomeLine>
         {ignored ? (
           <>Este lançamento não entra no Fincla. Ele aparece na conferência de saldo.</>

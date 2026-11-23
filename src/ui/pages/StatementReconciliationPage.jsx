@@ -743,7 +743,11 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // lançamento (para "Desfazer escolha") e a última confirmação em lote.
   const [answerHistory, setAnswerHistory] = useState({});
   const [lastBulk, setLastBulk] = useState(null);
-  const [answering, setAnswering] = useState(false);
+  // Quantos pedidos de resposta estão no ar: enquanto houver um, as respostas ficam desligadas
+  // (nada de um segundo PATCH por duplo clique). Um contador, para dois pedidos não se atropelarem.
+  const [inFlight, setInFlight] = useState(0);
+  const answering = inFlight > 0;
+  const setAnswering = useCallback((on) => setInFlight((n) => Math.max(0, n + (on ? 1 : -1))), []);
   // Dúvidas (fincla-api#511): "Sim, é esta" dito sem escolher qual, e o lançamento da busca aberta.
   const [wantPair, setWantPair] = useState(() => new Set());
   const [searchFor, setSearchFor] = useState(null);
@@ -836,15 +840,25 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       .catch((err) => setActionError(handleApiError(err)));
   };
 
-  const changeEntry = async (entryId, body) => {
+  // `onSaved` roda assim que o backend aceita a mudança, antes de reler o rascunho: é onde uma
+  // resposta minimiza o cartão (no clique, como nos outros passos). O lançamento gravado já entra
+  // na tela, para a linha minimizada mostrar a resposta nova sem esperar a releitura.
+  const changeEntry = async (entryId, body, { onSaved = null } = {}) => {
+    setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entryId, body);
+      const saved = await updateStatementEntry(accountId, organizationId, importId, entryId, body);
+      if (saved?.id === entryId) {
+        setStatementImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
+      }
+      onSaved?.();
       await reload();
       return true;
     } catch (err) {
       setActionError(handleApiError(err));
       return false;
+    } finally {
+      setAnswering(false);
     }
   };
 
@@ -1059,7 +1073,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       advanceAfter(entry, answer);
       return;
     }
-    if (await changeEntry(entry.id, { answer })) advanceAfter(entry, answer);
+    await changeEntry(entry.id, { answer }, { onSaved: () => advanceAfter(entry, answer) });
   };
   // S/A/N respondem o lançamento aberto, como os botões do cartão de cada passo.
   const shortcutAnswers = {
@@ -1069,7 +1083,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       n: (e) => answerPair(e, "ignore"),
     },
     doubt: {
-      s: (e) => doubtYes(e, doubtProps),
+      // Como o botão: "Sim, é esta" já marcado só minimiza (como o N num "Não registrar" já marcado).
+      s: (e) => (e.answer === "pair" ? advanceAfter(e, "pair") : doubtYes(e, doubtProps)),
       a: (e) => e.answer !== "create" && answerDoubt(e, { answer: "create" }),
       n: (e) => (e.answer === "ignore" ? advanceAfter(e, "ignore") : answerDoubt(e, { answer: "ignore" })),
     },
@@ -1173,6 +1188,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               fallbackLabel={fallbackLabel}
               isMobile={isMobile}
               onChangeEntry={changeEntry}
+              answering={answering}
               onBatch={batch}
               onCreateGroup={createGroup}
               onUpdateGroup={updateGroup}

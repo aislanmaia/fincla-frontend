@@ -21,7 +21,7 @@ const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : fo
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
+import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
 export function longDateLabel(ymd) {
@@ -722,8 +722,10 @@ export function BalanceCheckStep({
             </div>
           ) : null}
           {chosen.length ? <SelectionBar items={chosen} busy={busy} onClear={() => setSelected(new Set())} onBatch={batch} /> : null}
-          {items.filter(queue.shown).map((item) => (item.id === queue.currentId ? (
-            <CurrentEntryFrame key={item.id} queue={queue} entry={item} noun={TRANSACTION_NOUN}>
+          {items.filter(queue.shown).map((item) => (
+            <EntrySlot key={item.id} open={item.id === queue.currentId} tone={T.inkLight}>
+            {item.id === queue.currentId ? (
+            <CurrentEntryFrame queue={queue} entry={item} noun={TRANSACTION_NOUN}>
               <UnmatchedCard
                 item={item}
                 hintEntry={item.hint_entry_id ? byId.get(item.hint_entry_id) : null}
@@ -739,7 +741,6 @@ export function BalanceCheckStep({
             </CurrentEntryFrame>
           ) : (
             <UnmatchedRow
-              key={item.id}
               item={item}
               periodEnd={periodEnd}
               selected={selected.has(item.transaction_id)}
@@ -748,7 +749,9 @@ export function BalanceCheckStep({
               onOpen={(i) => queue.open(i.id)}
               onUndo={undo}
             />
-          )))}
+            )}
+            </EntrySlot>
+          ))}
         </>
       ) : null}
       {transfers.map((t) => <UnmatchedTransferRow key={t.transfer_id} transfer={t} />)}
