@@ -15,7 +15,7 @@ import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
 import {
-  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, StatementEntryCard, bankDateLabel, confirmNewEntry, useDescriptionDraft,
+  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, StatementEntryCard, bankDateLabel, useDescriptionDraft,
 } from "./StatementEntryCard.jsx";
 import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
@@ -79,7 +79,7 @@ function outcomeText(entry, accountName) {
  * dúvida, então não há "Confirmar sugestão"). Clicar de novo numa resposta já dada ("Sim, é esta"
  * ou "Não registrar") minimiza o cartão (`onConfirm`), como o atalho.
  */
-function Answers({ entry, busy, wantPair, draft, onYes, onAnswer, onChange, onSearch, onConfirm = null }) {
+function Answers({ entry, busy, wantPair, desc, onYes, onAnswer, onChange, onSearch, onConfirm = null }) {
   const buttons = [
     { value: "pair", label: "Sim, é esta", tone: T.blue, pressed: entry.answer === "pair" || (entry.answer === null && wantPair) },
     { value: "create", label: "Não, adicionar agora", tone: T.green, pressed: entry.answer === "create" },
@@ -115,9 +115,9 @@ function Answers({ entry, busy, wantPair, draft, onYes, onAnswer, onChange, onSe
       </div>
       {entry.answer === "create" && onConfirm ? (
         <ConfirmAnswerButton
-          disabled={busy || !draft.trim()}
-          blockedNote={draft.trim() ? "" : CONFIRM_BLOCKED_NOTE}
-          onConfirm={() => confirmNewEntry(entry, draft, onChange, onConfirm)}
+          disabled={busy || !desc.value.trim()}
+          blockedNote={desc.value.trim() ? "" : CONFIRM_BLOCKED_NOTE}
+          onConfirm={() => desc.confirm(onConfirm)}
         />
       ) : null}
       <Btn variant="outGray" small onClick={() => onSearch(entry)} disabled={busy} style={{ alignSelf: "flex-start" }}>
@@ -194,7 +194,7 @@ export function DoubtCard({
   onAnswer, onPick, onWantPair, onChange, onUndoChoice, onUndoThere, onSearch, onMinimize, onConfirm = null,
 }) {
   const options = (entry.candidates ?? []).filter((o) => !o.taken_by_entry_id);
-  const [draft, setDraft] = useDescriptionDraft(entry);
+  const desc = useDescriptionDraft(entry, onChange);
   const onYes = () => doubtYes(entry, { onPick, onWantPair, onSearch });
   const highlightDate = entry.answer === "pair"
     ? Boolean(entry.fincla_match?.differences.includes("date"))
@@ -204,7 +204,7 @@ export function DoubtCard({
     right = (
       <StatementEntryCard
         entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
-        embedded draft={draft} onDraft={setDraft}
+        embedded desc={desc}
       />
     );
   } else if (entry.answer === "ignore") {
@@ -236,7 +236,7 @@ export function DoubtCard({
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
         <Answers
-          entry={entry} busy={busy} wantPair={wantPair} draft={draft}
+          entry={entry} busy={busy} wantPair={wantPair} desc={desc}
           onYes={onYes} onAnswer={onAnswer} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm}
         />
       </footer>

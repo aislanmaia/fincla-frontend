@@ -4,7 +4,7 @@
 // só mostra. O painel diz se os saldos batem e o PRIMEIRO dia em que se separam; a lista mostra as
 // transações do Fincla sem par no extrato, com Abrir / Mudar data / Excluir / Está certa assim
 // (uma por vez, no mecanismo de lista da #517, ou várias marcadas). Excluir e mudar data só valem ao
-// concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer". As
+// concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer escolha". As
 // transferências sem par (G3-3-10) entram na mesma lista, só para ver: a conciliação nunca altera
 // transferência, então elas têm "Abrir" e nada mais.
 import { memo, useState } from "react";
@@ -19,9 +19,9 @@ import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 /** Com sinal (−/+), e zero sem sinal: "R$ 0,00". */
 const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : formatMoneySigned(value, currency));
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
-import { MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
+import { DELETE_BG, DELETE_CARD_BG, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
+import { ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
 export function longDateLabel(ymd) {
@@ -219,11 +219,14 @@ const REFUSAL_TEXT = {
 /** O estado da resposta, com o desfazer: neutro no cartão (desfazer uma escolha não apaga nada); discreto (`inRow`) na linha minimizada, já clicável. */
 function CheckState({ item, periodEnd, onUndo, busy, inRow = false }) {
   const undoVariant = inRow ? "ghost" : "outGray";
+  // Na linha minimizada, como nos outros passos: selo "Conferido", "Alterar" (na linha) e "Desfazer escolha".
+  const conferido = inRow ? <ConferidoBadge /> : null;
   if (item.check === "delete") {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <Badge color={T.red} bg={T.redLight}>Será excluída ao concluir</Badge>
-        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer exclusão</Btn>
+        {conferido}
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer escolha</Btn>
       </span>
     );
   }
@@ -236,7 +239,8 @@ function CheckState({ item, periodEnd, onUndo, busy, inRow = false }) {
           <s style={{ color: T.inkLight }}>{bankDateLabel(item.day)}</s> → <b>{bankDateLabel(item.new_date)}</b>
           {out ? " · sai desta conferência" : ""}
         </span>
-        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer</Btn>
+        {conferido}
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer escolha</Btn>
       </span>
     );
   }
@@ -244,7 +248,8 @@ function CheckState({ item, periodEnd, onUndo, busy, inRow = false }) {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <Badge color={T.green} bg={T.greenLight}>Você disse que está certa</Badge>
-        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer</Btn>
+        {conferido}
+        <Btn variant={undoVariant} small disabled={busy} onClick={onUndo}>Desfazer escolha</Btn>
       </span>
     );
   }
@@ -342,7 +347,12 @@ function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, onSelect, o
   const deleted = item.check === "delete";
   const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
   return (
-    <div data-testid="unmatched-transaction" data-current="true" style={{ ...ROW, flexDirection: "column", alignItems: "stretch", borderColor: T.blue }}>
+    <div
+      data-testid="unmatched-transaction"
+      data-current="true"
+      data-check={item.check ?? undefined}
+      style={{ ...ROW, flexDirection: "column", alignItems: "stretch", borderColor: T.blue, ...(deleted ? { background: DELETE_CARD_BG, borderColor: T.redBar } : null) }}
+    >
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
         <UnmatchedSummary item={item} selected={selected} onSelect={onSelect} busy={busy} />
       </div>
@@ -387,7 +397,12 @@ function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, onSelect, o
 /** A linha minimizada: o estado da resposta e "Alterar"; clique em qualquer ponto reabre. */
 const UnmatchedRow = memo(function UnmatchedRowView({ item, periodEnd, selected, busy, onSelect, onOpen, onUndo }) {
   return (
-    <div data-testid="unmatched-transaction" onClick={openOnRowClick(() => onOpen(item))} style={{ ...ROW, ...ROW_CLICKABLE, flexDirection: "column", alignItems: "stretch" }}>
+    <div
+      data-testid="unmatched-transaction"
+      data-check={item.check ?? undefined}
+      onClick={openOnRowClick(() => onOpen(item))}
+      style={{ ...ROW, ...ROW_CLICKABLE, flexDirection: "column", alignItems: "stretch", ...(item.check === "delete" ? { background: DELETE_BG, borderColor: T.redBar } : null) }}
+    >
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
         <Btn variant="ghost" small onClick={() => onOpen(item)} style={{ color: T.blue }}>Alterar</Btn>
         <UnmatchedSummary item={item} selected={selected} onSelect={onSelect} busy={busy} />

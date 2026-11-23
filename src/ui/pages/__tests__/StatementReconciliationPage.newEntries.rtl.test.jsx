@@ -6,7 +6,7 @@
 // verdade é garantida pelos testes de API. Aqui: o que a pessoa vê e o que a tela manda.
 import React from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -196,6 +196,20 @@ const card = (bankText) => {
   return screen.getAllByTestId("statement-entry").find(has);
 };
 const markBox = (date) => screen.getByRole("checkbox", { name: `Marcar lançamento de ${date}` });
+
+/**
+ * BUG-02: o duplo clique de verdade no Confirmar. O 1º clique não tira o foco do campo (o
+ * `mousedown` é cancelado) e começa a gravar; o 2º cai no botão já desligado, cujo `mousedown`
+ * não chega ao React, então o campo perde o foco (o `blur` que grava a descrição) e o clique não
+ * conta. Tudo antes de o PATCH voltar.
+ */
+const doubleClickConfirm = (input, confirm) => {
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+  act(() => input.blur());
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+};
 
 describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
   it("abre nos rendimentos: a soma mostra os lançamentos somados, a soma exata e a data do último", async () => {
@@ -682,6 +696,18 @@ describe("Confirmar ao lado das respostas nos lançamentos novos (fincla-api#507
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     expect(confirm).toBeDisabled();
+
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(calls.filter((c) => c.patch === ENERGY)).toEqual([{ patch: ENERGY, body: { description: "Conta de luz" } }]);
+  });
+
+  it("BUG-02: duplo clique no Confirmar com a descrição mudada manda UM PATCH (o blur do 2º clique não grava de novo)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const input = within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição");
+    await user.type(input, "Conta de luz");
+    expect(input).toHaveFocus();
+
+    doubleClickConfirm(input, within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
     expect(calls.filter((c) => c.patch === ENERGY)).toEqual([{ patch: ENERGY, body: { description: "Conta de luz" } }]);

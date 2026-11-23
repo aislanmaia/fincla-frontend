@@ -19,7 +19,7 @@ export function confirmAllLabel(count) {
   return count === 1 ? "Confirmar este lançamento" : `Confirmar os ${count.toLocaleString("pt-BR")} de uma vez`;
 }
 import {
-  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel, confirmNewEntry, useDescriptionDraft,
+  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel, useDescriptionDraft,
 } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
@@ -204,7 +204,7 @@ export function StatusBadge({ entry }) {
  */
 export const untouchedSuggestion = (entry) => entry.answer === "pair" && !entry.confirmed && Boolean(entry.fincla_match);
 
-function AnswerButtons({ entry, busy, draft, onAnswer, onChange, onConfirm }) {
+function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
   const label = "Este lançamento do banco já está no Fincla?";
   let confirm = null;
   if (untouchedSuggestion(entry)) {
@@ -212,9 +212,9 @@ function AnswerButtons({ entry, busy, draft, onAnswer, onChange, onConfirm }) {
   } else if (entry.answer === "create" && onConfirm) {
     confirm = (
       <ConfirmAnswerButton
-        disabled={busy || !draft.trim()}
-        blockedNote={draft.trim() ? "" : CONFIRM_BLOCKED_NOTE}
-        onConfirm={() => confirmNewEntry(entry, draft, onChange, onConfirm)}
+        disabled={busy || !desc.value.trim()}
+        blockedNote={desc.value.trim() ? "" : CONFIRM_BLOCKED_NOTE}
+        onConfirm={() => desc.confirm(onConfirm)}
       />
     );
   }
@@ -264,13 +264,13 @@ export function UndoChoiceButton({ entry, onUndoChoice, inRow = false }) {
 function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, accountName, onAnswer, onChange, onUndoChoice, onMinimize, onConfirm = null }) {
   const dateDiffers = entry.answer === "pair" && Boolean(entry.fincla_match?.differences.includes("date"));
   const outcome = outcomeText(entry);
-  const [draft, setDraft] = useDescriptionDraft(entry);
+  const desc = useDescriptionDraft(entry, onChange);
   let right;
   if (entry.answer === "create") {
     right = (
       <StatementEntryCard
         entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
-        embedded draft={draft} onDraft={setDraft}
+        embedded desc={desc}
       />
     );
   } else if (entry.answer === "ignore") {
@@ -298,7 +298,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
         <div style={{ display: "flex", flex: 1, minWidth: 0 }}>{right}</div>
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
-        <AnswerButtons entry={entry} busy={busy} draft={draft} onAnswer={onAnswer} onChange={onChange} onConfirm={onConfirm} />
+        <AnswerButtons entry={entry} busy={busy} desc={desc} onAnswer={onAnswer} onChange={onChange} onConfirm={onConfirm} />
       </footer>
       {outcome ? (
         <p data-testid="pair-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "8px 14px", borderTop: `1px solid ${T.border}` }}>

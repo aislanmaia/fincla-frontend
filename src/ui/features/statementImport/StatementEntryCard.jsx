@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -60,6 +60,10 @@ export function LockedValue({ children, testId, title }) {
 
 /** Fundo listrado de "Não registrar" (o mesmo do protótipo): não se confunde com nada adicionado. */
 export const SKIP_BG = `repeating-linear-gradient(135deg, ${T.surfaceHov} 0 7px, ${T.border} 7px 8px)`;
+/** "Excluir" (Sobrando no Fincla): o mesmo listrado, em vermelho claro (o `.crow.del` do protótipo). */
+export const DELETE_BG = `repeating-linear-gradient(135deg, ${T.redLight} 0 7px, color-mix(in srgb, ${T.red} 16%, ${T.surface}) 7px 8px)`;
+/** O cartão reaberto de uma transação a excluir (o `.ccard.del` do protótipo): listras mais largas. */
+export const DELETE_CARD_BG = `repeating-linear-gradient(135deg, ${T.redLight} 0 9px, color-mix(in srgb, ${T.red} 12%, ${T.surface}) 9px 18px)`;
 
 /** Selo "Não registrar": escuro, com o ícone de proibido. */
 export function SkipBadge() {
@@ -127,24 +131,61 @@ export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blo
   );
 }
 
-/** A descrição sendo digitada no formulário do item novo, para o Confirmar ao lado das respostas. */
-export function useDescriptionDraft(entry) {
-  const [draft, setDraft] = useState(entry.description ?? "");
-  useEffect(() => setDraft(entry.description ?? ""), [entry.description]);
-  return [draft, setDraft];
-}
-
 /**
- * Confirmar o formulário do item novo: grava a descrição digitada (se mudou) e só então minimiza.
- * `onChange` devolve `false` quando não gravou: o cartão fica aberto com o erro da página.
+ * A descrição sendo digitada no formulário do item novo, com as duas formas de gravá-la: ao sair do
+ * campo (`save`) e pelo Confirmar ao lado das respostas (`confirm`, grava e só então minimiza).
+ *
+ * As duas passam pela mesma trava, marcada antes do primeiro `await`: um duplo clique no Confirmar
+ * (o 2º clique cai no botão já desligado e tira o foco do campo, o que dispara o `save` do blur)
+ * sai como UM pedido só. O mesmo texto já a caminho não sai de novo; um Confirmar em andamento
+ * ignora os seguintes. `onChange` devolve `false` quando não gravou: o cartão fica aberto com o
+ * erro da página.
  */
-export async function confirmNewEntry(entry, draft, onChange, onConfirm) {
-  if (!draft.trim()) return;
-  if (draft !== (entry.description ?? "")) {
-    const saved = await onChange(entry.id, { description: draft });
-    if (saved === false) return;
-  }
-  onConfirm(entry);
+export function useDescriptionDraft(entry, onChange) {
+  const [value, setValue] = useState(entry.description ?? "");
+  const flight = useRef({ text: null, promise: null, saved: null, confirming: false });
+  useEffect(() => {
+    setValue(entry.description ?? "");
+    flight.current.saved = null;
+  }, [entry.description]);
+  const latest = useRef({ entry, onChange, value });
+  latest.current = { entry, onChange, value };
+
+  const save = useCallback(() => {
+    const { entry: current, onChange: change, value: text } = latest.current;
+    const f = flight.current;
+    if (f.promise && f.text === text) return f.promise;
+    if (text === (current.description ?? "") || text === f.saved) return Promise.resolve(true);
+    const promise = Promise.resolve(change(current.id, { description: text }))
+      .then((ok) => {
+        if (ok !== false) f.saved = text;
+        return ok;
+      })
+      .finally(() => {
+        if (f.promise === promise) {
+          f.promise = null;
+          f.text = null;
+        }
+      });
+    f.text = text;
+    f.promise = promise;
+    return promise;
+  }, []);
+
+  const confirm = useCallback(async (onConfirm) => {
+    const f = flight.current;
+    const { entry: current, value: text } = latest.current;
+    if (f.confirming || !text.trim()) return;
+    f.confirming = true;
+    try {
+      if ((await save()) === false) return;
+      onConfirm(current);
+    } finally {
+      f.confirming = false;
+    }
+  }, [save]);
+
+  return { value, set: setValue, save, confirm };
 }
 
 export const CONFIRM_BLOCKED_NOTE = "Escreva a descrição para confirmar.";
@@ -195,9 +236,9 @@ const SEG_BTN = (pressed, tone) => ({
  * `onConfirm` (cartão de uma lista) liga o Confirmar ao lado das respostas no formulário do item
  * novo, e clicar de novo em "Não registrar" já marcado minimiza o cartão.
  */
-function AnswerSegment({ entry, draft, busy = false, onChange, onSearch = null, onConfirm = null }) {
+function AnswerSegment({ entry, desc, busy = false, onChange, onSearch = null, onConfirm = null }) {
   const label = "Este lançamento do banco já está no Fincla?";
-  const blank = !draft.trim();
+  const blank = !desc.value.trim();
   const choose = (answer) => {
     if (busy) return;
     if (entry.answer !== answer) onChange(entry.id, { answer });
@@ -218,7 +259,7 @@ function AnswerSegment({ entry, draft, busy = false, onChange, onSearch = null, 
         <ConfirmAnswerButton
           disabled={busy || blank}
           blockedNote={blank ? CONFIRM_BLOCKED_NOTE : ""}
-          onConfirm={() => confirmNewEntry(entry, draft, onChange, onConfirm)}
+          onConfirm={() => desc.confirm(onConfirm)}
         />
       ) : null}
       {onSearch ? (
@@ -318,16 +359,16 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
  * O lado "No Fincla · nova transação": a transação que o lançamento vai virar ao concluir. Data e
  * valor vêm do banco e ficam travados; descrição, tipo, forma de pagamento (sugerida pelo texto do
  * banco), categoria (sugerida pelo histórico) e etiquetas da categoria são da pessoa. A descrição é
- * gravada ao sair do campo (ou pelo Confirmar). `draft`/`onDraft` vêm do cartão, que mostra o
- * Confirmar ao lado das respostas; sem eles, o editor guarda o texto sozinho.
+ * gravada ao sair do campo (ou pelo Confirmar). `desc` (`useDescriptionDraft`) vem do cartão, que
+ * mostra o Confirmar ao lado das respostas; sem ele, o editor guarda o texto sozinho.
  *
  * `skipped` ("Não registrar"): o formulário continua à vista, sem poder editar, com o fundo
  * listrado do lado do banco e a nota "Fica de fora".
  */
-function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, draft, onDraft, skipped = false }) {
-  const [ownDraft, setOwnDraft] = useDescriptionDraft(entry);
-  const description = draft ?? ownDraft;
-  const setDescription = onDraft ?? setOwnDraft;
+function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, desc: givenDesc, skipped = false }) {
+  const ownDesc = useDescriptionDraft(entry, onChange);
+  const desc = givenDesc ?? ownDesc;
+  const description = desc.value;
 
   const moneyIn = entry.amount > 0;
   const type = entry.transaction_type ?? (moneyIn ? "income" : "expense");
@@ -336,9 +377,6 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
 
-  const saveDescription = () => {
-    if (description !== (entry.description ?? "")) onChange(entry.id, { description });
-  };
 
   return (
     <section
@@ -359,8 +397,8 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             id={fieldId("description")}
             value={description}
             maxLength={255}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={saveDescription}
+            onChange={(e) => desc.set(e.target.value)}
+            onBlur={() => desc.save()}
             aria-invalid={blank}
             style={{ ...INPUT, borderColor: blank ? T.red : T.border }}
           />
@@ -451,17 +489,18 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
  *
  * `embedded`: só o lado "No Fincla · nova transação", sem moldura, para o cartão de um par sugerido
  * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco. Quem embute
- * passa `draft`/`onDraft` para o Confirmar dele ler a descrição digitada; `skipped` o mostra inerte.
+ * passa `desc` (`useDescriptionDraft`) para o Confirmar dele ler e gravar a descrição digitada pela
+ * mesma trava do campo; `skipped` o mostra inerte.
  */
 export function StatementEntryCard({
   entry, categories, details = [], fallbackLabel, isMobile, onChange,
   selected = false, onSelect = null, onCollapse = null, embedded = false, onSearch = null,
-  onConfirm = null, draft: embeddedDraft, onDraft, skipped = false, busy = false,
+  onConfirm = null, desc: embeddedDesc, skipped = false, busy = false,
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
   const compact = useCompact();
-  const [ownDraft, setOwnDraft] = useDescriptionDraft(entry);
+  const ownDesc = useDescriptionDraft(entry, onChange);
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const tags = detailLabels(details, entry.detail_tag_ids);
 
@@ -472,7 +511,7 @@ export function StatementEntryCard({
       <article data-testid="statement-entry-new-side" aria-label="Nova transação" style={{ display: "flex", minWidth: 0 }}>
         <NewTransactionEditor
           entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
-          draft={embeddedDraft} onDraft={onDraft} skipped={skipped}
+          desc={embeddedDesc} skipped={skipped}
         />
       </article>
     );
@@ -516,10 +555,10 @@ export function StatementEntryCard({
 
         <NewTransactionEditor
           entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
-          draft={ownDraft} onDraft={setOwnDraft} skipped={ignored}
+          desc={ownDesc} skipped={ignored}
         />
       </div>
-      <AnswerSegment entry={entry} draft={ownDraft} busy={busy} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm} />
+      <AnswerSegment entry={entry} desc={ownDesc} busy={busy} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm} />
       <OutcomeLine>
         {ignored ? (
           <>Este lançamento não entra no Fincla. Ele aparece na conferência de saldo.</>
