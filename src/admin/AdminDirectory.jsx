@@ -6,10 +6,11 @@ import { AdminCreateAccount } from "./AdminCreateAccount";
 import { AdminGrants } from "./AdminGrants";
 import { AdminBillingActions } from "./AdminBillingActions";
 import { AdminSelect } from "./AdminSelect";
+import { formatAdminDate } from "./adminDates";
 
 const PAGE_SIZE = 20;
 const money = (cents) => cents == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-const date = (value) => value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "—";
+const date = (value) => formatAdminDate(value);
 const courtesyDate = (value) => value ? value.slice(0, 10).split("-").reverse().join("/") : "—";
 const displayName = (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 const auditLabels = { block: "Bloqueio", unblock: "Desbloqueio", password_reset_email: "E-mail de senha", create_account: "Criação assistida", beta_enable: "Beta ativado", beta_end: "Beta encerrado", courtesy_grant: "Cortesia concedida", courtesy_end: "Cortesia encerrada", cancel_renewal: "Renovação cancelada", plan_change_requested: "Mudança solicitada", plan_change_withdrawn: "Solicitação retirada", coupon_reprice_retry: "Reajuste de cupom" };

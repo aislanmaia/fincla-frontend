@@ -47,4 +47,18 @@ describe("OnboardingFlow — foco nos inputs", () => {
     expect(screen.getByPlaceholderText(/4 últimos dígitos/i).value).toBe("1234");
     expect(screen.queryByText(/Informe os 4 últimos dígitos/i)).toBeNull();
   });
+
+  it("no passo de membros o dono é a pessoa, não a organização (#343)", async () => {
+    const user = userEvent.setup();
+    render(<OnboardingFlow onComplete={() => {}} ownerName="Lara Souza" />);
+
+    await user.click(screen.getByRole("button", { name: /Começar configuração/i }));
+    await user.type(screen.getByPlaceholderText(/Família Alves/i), "Casa da Lara");
+    for (let i = 0; i < 4; i += 1) await user.click(screen.getByRole("button", { name: /Pular etapa/i }));
+
+    expect(screen.getByText("Quem mais faz parte?")).toBeTruthy();
+    expect(screen.getByText(/Lara Souza/)).toBeTruthy();
+    expect(screen.getByText("(dono)")).toBeTruthy();
+    expect(screen.queryByText(/\(owner\)/)).toBeNull();
+  });
 });

@@ -21,6 +21,9 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
   // Pré-validação do token: "checking" | "ok" | "invalid". Sem token → inválido.
   // Sem `onValidateToken` (ou erro de rede) → segue para o form (fail-open).
   const [linkStatus, setLinkStatus] = useState(() => (token?.trim() ? "checking" : "invalid"));
+  // The API says when the link is an invite to create the FIRST password (#342);
+  // without that answer (older API, network error) the screen keeps the reset copy.
+  const [firstPassword, setFirstPassword] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +32,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
     if (typeof onValidateToken !== "function") { setLinkStatus("ok"); return; }
     setLinkStatus("checking");
     onValidateToken(t)
-      .then((res) => { if (!cancelled) setLinkStatus(res?.valid ? "ok" : "invalid"); })
+      .then((res) => { if (!cancelled) { setLinkStatus(res?.valid ? "ok" : "invalid"); setFirstPassword(res?.valid === true && res?.first_password === true); } })
       .catch(() => { if (!cancelled) setLinkStatus("ok"); }); // rede falhou → deixa tentar
     return () => { cancelled = true; };
   }, [token, onValidateToken]);
@@ -74,14 +77,14 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
       <div className="fincla-scroll" style={{ display:"flex", height:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflowY:"auto", alignItems:"safe center", justifyContent:"center", padding:24 }}>
         <div style={{ width:"100%", maxWidth:400 }}>
           <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, marginBottom:8 }}>
-            {success ? "Senha atualizada" : linkStatus === "invalid" ? "Link inválido ou expirado" : "Nova senha"}
+            {success ? (firstPassword ? "Senha criada" : "Senha atualizada") : linkStatus === "invalid" ? "Link inválido ou expirado" : firstPassword ? "Crie sua senha" : "Nova senha"}
           </div>
           <div style={{ ...G, fontSize:14, color:T.inkMid, lineHeight:1.65, marginBottom:24 }}>
             {success
-              ? "Sua senha foi redefinida. Você já pode entrar com a nova senha."
+              ? (firstPassword ? "Sua senha foi criada. Você já pode entrar no Fincla." : "Sua senha foi redefinida. Você já pode entrar com a nova senha.")
               : linkStatus === "invalid"
                 ? "Este link já foi utilizado ou expirou. Peça um novo link e tente novamente."
-                : "Defina uma nova senha para sua conta Fincla."}
+                : firstPassword ? "Escolha a senha que você vai usar para entrar no Fincla." : "Defina uma nova senha para sua conta Fincla."}
           </div>
 
           {!success && linkStatus === "checking" && (
@@ -99,7 +102,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
           {!success && linkStatus === "ok" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div>
-                <label style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", display:"block", marginBottom:7 }}>Nova senha</label>
+                <label style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", display:"block", marginBottom:7 }}>{firstPassword ? "Senha" : "Nova senha"}</label>
                 <div style={{ position:"relative" }}>
                   <div style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                     <Lock size={15} color={T.inkMid} />
@@ -138,7 +141,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
                 disabled: loading,
                 children: loading
                   ? <><Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Salvando…</>
-                  : "Salvar nova senha",
+                  : firstPassword ? "Criar senha" : "Salvar nova senha",
               })}
             </div>
           )}

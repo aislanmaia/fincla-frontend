@@ -299,8 +299,8 @@ describe("painel do administrador Fincla", () => {
     fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
     fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Lead" } });
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "lead@example.com" } });
-    fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Pro" }));
+    // The only plan comes preselected (#341): nothing to pick before creating.
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Plano da cortesia" })).toHaveTextContent("Pro"));
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
 
     await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalled());

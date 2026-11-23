@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { cancelAdminRenewal, getAdminPlanRequests, getAdminPlans, requestAdminPlanChange, withdrawAdminPlanChange } from "../api/admin";
 import { handleApiError } from "../api/client";
 import { AdminSelect } from "./AdminSelect";
+import { formatAdminDate } from "./adminDates";
 
-const date = (value) => value ? new Intl.DateTimeFormat("pt-BR").format(new Date(value)) : "—";
+const date = (value) => formatAdminDate(value);
 
 export function AdminBillingActions({ userId, subscription, onChanged }) {
   const [requests, setRequests] = useState([]);
