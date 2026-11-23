@@ -11,7 +11,7 @@ import { G } from "../../typography";
 
 /* ─── RESET PASSWORD (token na URL) ───────────────────────── */
 /* ─── RESET PASSWORD (token na URL) ───────────────────────── */
-export function PasswordResetPage({ token, onResetPassword, onComplete, onValidateToken }) {
+export function PasswordResetPage({ token, onResetPassword, onComplete, onValidateToken, onRequestNewLink }) {
   const [password, setPassword] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -24,6 +24,25 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
   // The API says when the link is an invite to create the FIRST password (#342);
   // without that answer (older API, network error) the screen keeps the reset copy.
   const [firstPassword, setFirstPassword] = useState(false);
+  // An expired invite (3 days) reaches people who never logged in and don't know
+  // "Esqueci minha senha": the expired screen asks for a new link right there.
+  const [newLinkEmail, setNewLinkEmail] = useState("");
+  const [newLinkState, setNewLinkState] = useState("idle"); // "idle" | "sending" | "sent"
+  const [newLinkError, setNewLinkError] = useState("");
+
+  const requestNewLink = async () => {
+    const email = newLinkEmail.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) { setNewLinkError("Informe o e-mail da sua conta."); return; }
+    setNewLinkState("sending"); setNewLinkError("");
+    try {
+      await onRequestNewLink(email);
+      setNewLinkState("sent");
+    } catch (nextError) {
+      setNewLinkState("idle");
+      setNewLinkError(nextError instanceof Error && nextError.message ? nextError.message : "Não foi possível enviar o e-mail. Tente novamente.");
+    }
+  };
+  const canRequestNewLink = typeof onRequestNewLink === "function";
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +103,11 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
             {success
               ? (firstPassword ? "Sua senha foi criada. Você já pode entrar no Fincla." : "Sua senha foi redefinida. Você já pode entrar com a nova senha.")
               : linkStatus === "invalid"
-                ? "Este link já foi utilizado ou expirou. Peça um novo link e tente novamente."
+                ? (canRequestNewLink
+                  ? (newLinkState === "sent"
+                    ? "Se este e-mail tiver conta no Fincla, enviamos um novo link. Confira a caixa de entrada e o spam."
+                    : "Este link já foi utilizado ou expirou. Informe seu e-mail e enviamos um novo.")
+                  : "Este link já foi utilizado ou expirou. Peça um novo link e tente novamente.")
                 : firstPassword ? "Escolha a senha que você vai usar para entrar no Fincla." : "Defina uma nova senha para sua conta Fincla."}
           </div>
 
@@ -94,7 +117,41 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
             </div>
           )}
 
-          {!success && linkStatus === "invalid" && BtnPrimary({
+          {!success && linkStatus === "invalid" && canRequestNewLink && newLinkState !== "sent" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div>
+                <label htmlFor="new-link-email" style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", display:"block", marginBottom:7 }}>E-mail</label>
+                <input
+                  id="new-link-email"
+                  type="email"
+                  autoComplete="email"
+                  value={newLinkEmail}
+                  onChange={(e) => { setNewLinkEmail(e.target.value); setNewLinkError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") void requestNewLink(); }}
+                  placeholder="seu@email.com"
+                  style={{ ...G, width:"100%", padding:"13px 14px", border:`1.5px solid ${newLinkError ? T.red+"66" : T.border}`, borderRadius:11, fontSize:14, color:T.ink, background:T.surface, outline:"none", boxSizing:"border-box" }}
+                />
+              </div>
+              {newLinkError && (
+                <div role="alert" style={{ ...G, fontSize:12, color:T.red, display:"flex", alignItems:"center", gap:6 }}>
+                  <AlertTriangle size={13}/> {newLinkError}
+                </div>
+              )}
+              {BtnPrimary({
+                onClick: () => { void requestNewLink(); },
+                disabled: newLinkState === "sending",
+                children: newLinkState === "sending"
+                  ? <><Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Enviando…</>
+                  : "Enviar novo link",
+              })}
+              <button type="button" onClick={onComplete}
+                style={{ ...G, alignSelf:"center", background:"none", border:"none", padding:4, color:T.inkMid, fontSize:13, textDecoration:"underline", cursor:"pointer" }}>
+                Ir para o login
+              </button>
+            </div>
+          )}
+
+          {!success && linkStatus === "invalid" && (!canRequestNewLink || newLinkState === "sent") && BtnPrimary({
             onClick: onComplete,
             disabled: false,
             children: "Ir para o login",
