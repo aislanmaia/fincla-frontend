@@ -505,3 +505,65 @@ describe("as outras telas mostram o par de #511", () => {
     expect(screen.getByRole("button", { name: "Concluir conciliação" })).toBeDisabled();
   });
 });
+
+// Decisão do Owner (fincla-api#507, 2026-11-23): numa dúvida nada vem pré-marcado, então não há
+// "Confirmar sugestão"; o Confirmar só aparece no formulário do item novo. Escolher, "Não
+// registrar" e clicar de novo na escolha já feita minimizam no clique.
+describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => {
+  const paulo = () => card("PIX TRANSF PAULO V06 10");
+  const question = () => within(paulo()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+  const confirmButtons = (el) => within(el).queryAllByRole("button", { name: /^Confirmar( sugestão)?$/ });
+
+  it("sem resposta não há Confirmar; Não, adicionar agora mostra o Confirmar ao lado das respostas, que minimiza", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    expect(confirmButtons(paulo())).toEqual([]);
+
+    await user.click(within(question()).getByRole("button", { name: "Não, adicionar agora" }));
+
+    await waitFor(() => expect(within(paulo()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    const confirm = within(paulo()).getByRole("button", { name: "Confirmar" });
+    expect(confirm.closest("footer")).toBe(question().closest("footer"));
+    await user.click(confirm);
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    expect(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"))).toHaveTextContent("Adicionar ao Fincla");
+    expect(patches()).toEqual([{ patch: PAULO, body: { answer: "create" } }]);
+  });
+
+  it("Não registrar minimiza no clique; reaberto, as opções continuam à vista, listradas, sem clique, com Fica de fora", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    const row = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+
+    const side = within(paulo()).getByTestId("pair-ignored-side");
+    expect(side).toHaveTextContent("Corte de cabelo");
+    expect(side).toHaveTextContent("Fica de fora");
+    for (const box of within(side).getAllByTestId("fincla-side-skipped")) expect(box.style.background).toContain("repeating-linear-gradient");
+    expect(within(side).queryAllByRole("button")).toEqual([]);
+    expect(within(paulo()).getByTestId("bank-side").style.background).toContain("repeating-linear-gradient");
+    expect(confirmButtons(paulo())).toEqual([]);
+  });
+
+  it("clicar de novo na opção já escolhida (ou em Sim, é esta já marcado) só minimiza, sem gravar", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    const julia = () => card("PIX TRANSF JULIA F04 10");
+    const openJulia = () => user.click(within(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("JULIA"))).getByRole("button", { name: /Alterar/ }));
+
+    await openJulia();
+    expect(confirmButtons(julia())).toEqual([]);
+    await user.click(within(julia()).getByRole("button", { name: /Aula de violão/, pressed: true }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+
+    await openJulia();
+    await user.click(within(julia()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+    expect(patches()).toEqual([]);
+  });
+});

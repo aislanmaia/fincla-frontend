@@ -2,7 +2,7 @@
 //
 // Todos os lançamentos do passo aparecem como linhas compactas e só o ATUAL fica aberto como
 // cartão. Responder abre o próximo sem resposta (exceto "Não, adicionar agora", que deixa o cartão
-// aberto com "Próximo sem resposta →"). O cabeçalho mostra "Lançamento 3 de 30" e quantos faltam;
+// aberto com o formulário e o "Confirmar" ao lado das respostas). O cabeçalho mostra "Lançamento 3 de 30" e quantos faltam;
 // o filtro Todos / Falta responder / Respondidos esconde linhas, sempre com o aviso "Mostrar
 // todos" (nada some sem aviso). Atalhos: S/A/N respondem, J/K andam; nunca dentro de campos nem
 // com um diálogo aberto.
@@ -297,7 +297,8 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
 /**
  * Moldura do cartão aberto: destaque e foco. Quando a pessoa avança (responder, J/K, reabrir uma
  * linha), o foco vem para cá, para teclado e leitor de tela continuarem no lançamento atual.
- * Depois de "Não, adicionar agora" o cartão fica aberto e ganha "Próximo sem resposta →".
+ * Depois de "Não, adicionar agora" o cartão fica aberto; o "Confirmar" ao lado das respostas
+ * (no próprio cartão) o minimiza.
  */
 export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children }) {
   const ref = useRef(null);
@@ -306,7 +307,6 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
   useEffect(() => {
     if (takeFocus(entry.id)) ref.current?.focus();
   }, [focusTick, entry.id]);
-  const showNext = entry.answer === "create" && queue.hasNextUnanswered;
   return (
     <div
       ref={ref}
@@ -316,11 +316,6 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
       style={{ borderRadius: 16, boxShadow: `0 0 0 3px ${T.blueLight}`, outline: "none", display: "flex", flexDirection: "column", gap: 8, scrollMarginTop: 16 }}
     >
       {children}
-      {showNext ? (
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px 6px" }}>
-          <Btn variant="outGray" small onClick={() => queue.nextUnanswered()}>Próximo sem resposta →</Btn>
-        </div>
-      ) : null}
     </div>
   );
 }

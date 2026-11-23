@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { Ban, ChevronRight, Layers, Lock, Plus } from "lucide-react";
+import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -70,6 +70,59 @@ export function SkipBadge() {
   );
 }
 
+/**
+ * A nota "Fica de fora" no lado do Fincla de um "Não registrar": o lado continua à vista (o item
+ * sugerido, as opções ou o formulário, sem poder editar) e diz o que acontece com ele.
+ */
+export function SkipNote({ children }) {
+  return (
+    <div data-testid="skip-note" style={{ ...G, fontSize: 12, color: T.inkMid, marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.inkFaint}`, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap", lineHeight: 1.5 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.surface, border: `1px solid ${T.inkFaint}`, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap" }}>Fica de fora</span>
+      <span style={{ flex: "1 1 180px", minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
+
+/**
+ * O "Confirmar" que fica ao lado dos botões de resposta (decisão do Owner, fincla-api#507). Só
+ * aparece em dois casos: a sugestão do Fincla sem nenhuma mudança ("Confirmar sugestão") e o
+ * formulário de adicionar item novo ("Confirmar", desligado enquanto a descrição está vazia). Toda
+ * outra resposta já confirma e minimiza no clique. `onMouseDown` não tira o foco do campo antes do
+ * clique: o próprio Confirmar grava a descrição.
+ */
+export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <Btn variant="dark" small disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={onConfirm}>
+        <Check size={13} aria-hidden="true" />{label}
+      </Btn>
+      {disabled && blockedNote ? <span style={{ ...G, fontSize: 12, color: T.inkLight }}>{blockedNote}</span> : null}
+    </span>
+  );
+}
+
+/** A descrição sendo digitada no formulário do item novo, para o Confirmar ao lado das respostas. */
+export function useDescriptionDraft(entry) {
+  const [draft, setDraft] = useState(entry.description ?? "");
+  useEffect(() => setDraft(entry.description ?? ""), [entry.description]);
+  return [draft, setDraft];
+}
+
+/**
+ * Confirmar o formulário do item novo: grava a descrição digitada (se mudou) e só então minimiza.
+ * `onChange` devolve `false` quando não gravou: o cartão fica aberto com o erro da página.
+ */
+export async function confirmNewEntry(entry, draft, onChange, onConfirm) {
+  if (!draft.trim()) return;
+  if (draft !== (entry.description ?? "")) {
+    const saved = await onChange(entry.id, { description: draft });
+    if (saved === false) return;
+  }
+  onConfirm(entry);
+}
+
+export const CONFIRM_BLOCKED_NOTE = "Escreva a descrição para confirmar.";
+
 export function SummedBadge({ children = "Somada" }) {
   return (
     <Badge color={T.purple} bg={T.purpleLight}>
@@ -113,20 +166,34 @@ const SEG_BTN = (pressed, tone) => ({
 /**
  * "Este lançamento do banco já está no Fincla?" — nos lançamentos novos: adicionar agora ou não
  * registrar; `onSearch` (fincla-api#511) acrescenta "Está no Fincla com outros dados…".
+ * `onConfirm` (cartão de uma lista) liga o Confirmar ao lado das respostas no formulário do item
+ * novo, e clicar de novo em "Não registrar" já marcado minimiza o cartão.
  */
-function AnswerSegment({ entry, onChange, onSearch = null }) {
+function AnswerSegment({ entry, draft, onChange, onSearch = null, onConfirm = null }) {
   const label = "Este lançamento do banco já está no Fincla?";
+  const blank = !draft.trim();
+  const choose = (answer) => {
+    if (entry.answer !== answer) onChange(entry.id, { answer });
+    else if (answer === "ignore" && onConfirm) onConfirm(entry);
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{label}</span>
       <div role="group" aria-label={label} style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
-        <button type="button" aria-pressed={entry.answer === "create"} onClick={() => entry.answer !== "create" && onChange(entry.id, { answer: "create" })} style={SEG_BTN(entry.answer === "create", "create")}>
+        <button type="button" aria-pressed={entry.answer === "create"} onClick={() => choose("create")} style={SEG_BTN(entry.answer === "create", "create")}>
           <Plus size={12} aria-hidden="true" />Não, adicionar agora
         </button>
-        <button type="button" aria-pressed={entry.answer === "ignore"} onClick={() => entry.answer !== "ignore" && onChange(entry.id, { answer: "ignore" })} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}` }}>
+        <button type="button" aria-pressed={entry.answer === "ignore"} onClick={() => choose("ignore")} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}` }}>
           <Ban size={12} aria-hidden="true" />Não registrar
         </button>
       </div>
+      {onConfirm && entry.answer === "create" ? (
+        <ConfirmAnswerButton
+          disabled={blank}
+          blockedNote={CONFIRM_BLOCKED_NOTE}
+          onConfirm={() => confirmNewEntry(entry, draft, onChange, onConfirm)}
+        />
+      ) : null}
       {onSearch ? (
         <Btn variant="outGray" small onClick={() => onSearch(entry)} style={{ alignSelf: "flex-start" }}>
           Está no Fincla com outros dados…
@@ -222,16 +289,21 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
  * O lado "No Fincla · nova transação": a transação que o lançamento vai virar ao concluir. Data e
  * valor vêm do banco e ficam travados; descrição, tipo, forma de pagamento (sugerida pelo texto do
  * banco), categoria (sugerida pelo histórico) e etiquetas da categoria são da pessoa. A descrição é
- * gravada ao sair do campo.
+ * gravada ao sair do campo (ou pelo Confirmar). `draft`/`onDraft` vêm do cartão, que mostra o
+ * Confirmar ao lado das respostas; sem eles, o editor guarda o texto sozinho.
+ *
+ * `skipped` ("Não registrar"): o formulário continua à vista, sem poder editar, com o fundo
+ * listrado do lado do banco e a nota "Fica de fora".
  */
-function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange }) {
-  const [description, setDescription] = useState(entry.description ?? "");
-  useEffect(() => setDescription(entry.description ?? ""), [entry.description]);
+function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, draft, onDraft, skipped = false }) {
+  const [ownDraft, setOwnDraft] = useDescriptionDraft(entry);
+  const description = draft ?? ownDraft;
+  const setDescription = onDraft ?? setOwnDraft;
 
   const moneyIn = entry.amount > 0;
   const type = entry.transaction_type ?? (moneyIn ? "income" : "expense");
   const options = categoriesForType(categories, type).filter((c) => !c.is_fallback);
-  const blank = !description.trim();
+  const blank = !skipped && !description.trim();
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
 
@@ -240,11 +312,18 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   };
 
   return (
-    <section style={{ ...BOX, borderColor: T.greenBorder }}>
+    <section
+      data-testid={skipped ? "new-side-skipped" : undefined}
+      style={{ ...BOX, ...(skipped ? { background: SKIP_BG, borderColor: T.inkFaint } : { borderColor: T.greenBorder }) }}
+    >
       <div style={BOX_LABEL}>
-        No Fincla · nova transação <Badge color={T.green} bg={T.greenLight}>Entra ao concluir</Badge>
+        No Fincla · nova transação {skipped ? <SkipBadge /> : <Badge color={T.green} bg={T.greenLight}>Entra ao concluir</Badge>}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+      <fieldset
+        disabled={skipped}
+        aria-label={skipped ? "Formulário da nova transação, sem uso: não registrar" : undefined}
+        style={{ border: 0, margin: 0, padding: 0, minWidth: 0, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, ...(skipped ? { opacity: 0.6 } : null) }}
+      >
         <div style={{ gridColumn: "1 / -1" }}>
           <label htmlFor={fieldId("description")} style={FIELD_LABEL}>Descrição</label>
           <input
@@ -325,26 +404,35 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             onChange={(next) => onChange(entry.id, { detail_tag_ids: next })}
           />
         </div>
-      </div>
+      </fieldset>
+      {skipped ? (
+        <SkipNote>Este lançamento não entra no Fincla: nada é adicionado. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo.</SkipNote>
+      ) : null}
     </section>
   );
 }
 
 /**
  * Um lançamento novo: à esquerda o que o banco registrou, à direita a transação que ele vai
- * virar ao concluir (`NewTransactionEditor`). "Não registrar" troca o lado direito por um aviso,
- * com fundo próprio.
+ * virar ao concluir (`NewTransactionEditor`). "Não registrar" mantém o lado direito à vista, sem
+ * poder editar, com o fundo listrado e a nota "Fica de fora".
+ *
+ * `onConfirm` (cartão aberto de uma lista): o Confirmar ao lado das respostas grava a descrição e
+ * minimiza o cartão; clicar de novo em "Não registrar" já marcado também minimiza.
  *
  * `embedded`: só o lado "No Fincla · nova transação", sem moldura, para o cartão de um par sugerido
- * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco.
+ * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco. Quem embute
+ * passa `draft`/`onDraft` para o Confirmar dele ler a descrição digitada; `skipped` o mostra inerte.
  */
 export function StatementEntryCard({
   entry, categories, details = [], fallbackLabel, isMobile, onChange,
   selected = false, onSelect = null, onCollapse = null, embedded = false, onSearch = null,
+  onConfirm = null, draft: embeddedDraft, onDraft, skipped = false,
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
   const compact = useCompact();
+  const [ownDraft, setOwnDraft] = useDescriptionDraft(entry);
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const tags = detailLabels(details, entry.detail_tag_ids);
 
@@ -353,7 +441,10 @@ export function StatementEntryCard({
     // "Não, adicionar agora" (fincla-api#510) já mostra o lado do banco e a pergunta.
     return (
       <article data-testid="statement-entry-new-side" aria-label="Nova transação" style={{ display: "flex", minWidth: 0 }}>
-        <NewTransactionEditor entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} />
+        <NewTransactionEditor
+          entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
+          draft={embeddedDraft} onDraft={onDraft} skipped={skipped}
+        />
       </article>
     );
   }
@@ -394,18 +485,12 @@ export function StatementEntryCard({
           )}
         </section>
 
-        {ignored ? (
-          <section data-testid="entry-not-recorded" style={{ ...BOX, borderStyle: "dashed", borderColor: T.inkFaint }}>
-            <div style={BOX_LABEL}>No Fincla <SkipBadge /></div>
-            <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
-              Este lançamento não entra no Fincla. O saldo do Fincla vai ficar sem este valor, e a diferença aparece na conferência de saldo.
-            </p>
-          </section>
-        ) : (
-          <NewTransactionEditor entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} />
-        )}
+        <NewTransactionEditor
+          entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
+          draft={ownDraft} onDraft={setOwnDraft} skipped={ignored}
+        />
       </div>
-      <AnswerSegment entry={entry} onChange={onChange} onSearch={onSearch} />
+      <AnswerSegment entry={entry} draft={ownDraft} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm} />
       <OutcomeLine>
         {ignored ? (
           <>Este lançamento não entra no Fincla. Ele aparece na conferência de saldo.</>

@@ -387,7 +387,12 @@ describe("adicionar lançamentos novos", () => {
 
     await user.click(within(fee).getByRole("button", { name: "Alterar" }));
     const opened = card("TARIFA PACOTE");
-    expect(within(opened).getByTestId("entry-not-recorded")).toHaveTextContent("Este lançamento não entra no Fincla");
+    // O formulário continua à vista, sem poder editar, listrado e com "Fica de fora".
+    const skipped = within(opened).getByTestId("new-side-skipped");
+    expect(skipped).toHaveTextContent("Este lançamento não entra no Fincla");
+    expect(skipped).toHaveTextContent("Fica de fora");
+    expect(skipped.style.background).toContain("repeating-linear-gradient");
+    expect(within(skipped).getByLabelText("Descrição")).toBeDisabled();
     await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
     expect(screen.getByTestId("ignored-entry")).toHaveTextContent("TARIFA PACOTE");
 
@@ -415,7 +420,7 @@ describe("adicionar lançamentos novos", () => {
     // Um clique solto na linha a reabre como o cartão atual.
     await user.click(within(fee()).getByText("fica fora do Fincla"));
     const opened = screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes("TARIFA PACOTE"));
-    expect(within(opened).getByTestId("entry-not-recorded")).toBeInTheDocument();
+    expect(within(opened).getByTestId("new-side-skipped")).toBeInTheDocument();
     expect(screen.getAllByTestId("statement-entry")).toHaveLength(1);
     expect(calls.filter((c) => c.patch)).toEqual([]);
 
@@ -558,7 +563,7 @@ describe("adicionar lançamentos novos", () => {
     await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: SALARY, answer: "ignore" }, { id: ENERGY, answer: "ignore" }] }));
     // A energia é o lançamento aberto (estava sem descrição): continua cartão, agora "Não registrar".
     await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(2));
-    expect(within(card("PAG BOLETO ENERGIA")).getByTestId("entry-not-recorded")).toBeInTheDocument();
+    expect(within(card("PAG BOLETO ENERGIA")).getByTestId("new-side-skipped")).toBeInTheDocument();
     const bar = screen.getByTestId("undo-bar");
     expect(bar).toHaveTextContent("2 lançamentos marcados como não registrar");
 
@@ -624,4 +629,41 @@ describe("revisar e concluir", () => {
 // Evita aviso de variável não usada quando a fixture muda de ordem: a ordem é presa aqui.
 it("a fixture tem os lançamentos na ordem que estes testes usam", () => {
   expect(Object.keys(E)).toEqual(["PIX0", "REMUNERACAO1", "PAG2", "REND3", "REND4", "TARIFA5"]);
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-23): no formulário do item novo o Confirmar fica ao
+// lado das respostas, desligado sem descrição; "Não registrar" (de novo, já marcado) minimiza no clique.
+describe("Confirmar ao lado das respostas nos lançamentos novos (fincla-api#507)", () => {
+  const question = (el) => within(el).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+
+  it("o Confirmar fica ao lado das respostas, desligado sem descrição; confirmar grava a descrição e minimiza", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const energy = () => card("PAG BOLETO ENERGIA");
+
+    const confirm = () => within(energy()).getByRole("button", { name: "Confirmar" });
+    expect(confirm().parentElement.parentElement).toBe(question(energy()).parentElement);
+    expect(confirm()).toBeDisabled();
+    expect(energy()).toHaveTextContent("Escreva a descrição para confirmar.");
+
+    await user.type(within(energy()).getByLabelText("Descrição"), "Conta de luz");
+    expect(confirm()).toBeEnabled();
+    await user.click(confirm());
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { description: "Conta de luz" } }));
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false);
+    expect(calls.filter((c) => c.patch && c.patch === ENERGY)).toHaveLength(1);
+  });
+
+  it("Não registrar não tem Confirmar; clicar de novo nele, já marcado, minimiza sem gravar", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const fee = card("TARIFA PACOTE");
+    expect(within(fee).queryByRole("button", { name: "Confirmar" })).toBeNull();
+
+    await user.click(within(question(fee)).getByRole("button", { name: /Não registrar/ }));
+
+    await waitFor(() => expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("TARIFA PACOTE"))).toBe(false));
+    expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true);
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
 });

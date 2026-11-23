@@ -424,6 +424,7 @@ export function NewEntriesStep({
               onSelect={select}
               onCollapse={(id) => queue.close(id)}
               onSearch={onSearch}
+              onConfirm={(e) => queue.advanceFrom(e.id)}
               onChange={async (id, body) => {
                 const done = await onChangeEntry(id, body);
                 // "Não registrar" escolhido no cartão: ele minimiza (continua na lista) e o próximo abre.

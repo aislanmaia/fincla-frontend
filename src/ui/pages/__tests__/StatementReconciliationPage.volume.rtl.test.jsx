@@ -148,7 +148,7 @@ describe("lista com só o atual aberto", () => {
     expect(pending()).toBe("1 sem resposta");
   });
 
-  it("Não, adicionar agora mantém o cartão aberto com Próximo sem resposta →", async () => {
+  it("Não, adicionar agora mantém o cartão aberto; o Confirmar ao lado das respostas o minimiza", async () => {
     const user = await openDraft();
 
     await user.click(within(current()).getByRole("button", { name: "Não, adicionar agora" }));
@@ -157,7 +157,8 @@ describe("lista com só o atual aberto", () => {
     currentIs("PIX PADARIA 001");
     expect(position()).toBe("Lançamento 1 de 5");
 
-    await user.click(within(current()).getByRole("button", { name: "Próximo sem resposta →" }));
+    expect(within(current()).queryByRole("button", { name: "Próximo sem resposta →" })).toBeNull();
+    await user.click(within(current()).getByRole("button", { name: "Confirmar" }));
 
     currentIs("PIX PADARIA 002");
     expect(answers()).toEqual([{ patch: "s1", body: { answer: "create" } }]);

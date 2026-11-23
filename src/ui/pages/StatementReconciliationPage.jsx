@@ -868,8 +868,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     applyWhole(() => updateStatementGroup(accountId, organizationId, importId, groupId, body));
   const deleteGroup = (groupId) => applyWhole(() => deleteStatementGroup(accountId, organizationId, importId, groupId));
 
-  // Responder abre o próximo sem resposta; "Não, adicionar agora" deixa o cartão aberto para
-  // conferir a transação nova (com "Próximo sem resposta →").
+  // Responder confirma e minimiza na hora do clique, abrindo o próximo sem resposta, sem espera
+  // (decisão do Owner, fincla-api#507). "Não, adicionar agora" deixa o cartão aberto com o
+  // formulário da transação nova e o "Confirmar" ao lado das respostas.
   const advanceAfter = (entry, answer) => { if (answer && answer !== "create") queue.advanceFrom(entry.id); };
 
   const answerPair = async (entry, answer) => {
@@ -1186,6 +1187,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
                   canUndo={Boolean(answerHistory[entry.id]?.length)}
                   onWantPair={() => setSearchFor(entry)}
                   onMinimize={(e) => queue.close(e.id)}
+                  onConfirm={(e) => queue.advanceFrom(e.id)}
                 />
               ) : (
                 <DoubtRow

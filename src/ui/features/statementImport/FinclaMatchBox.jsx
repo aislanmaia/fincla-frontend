@@ -10,7 +10,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
-import { bankDateLabel } from "./StatementEntryCard.jsx";
+import { SKIP_BG, SkipBadge, SkipNote, bankDateLabel } from "./StatementEntryCard.jsx";
 import { InlineFields, useCompact } from "./entryQueue.jsx";
 
 export const MATCH_BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
@@ -155,10 +155,14 @@ function MatchRows({ entry, match, highlight }) {
 /**
  * Uma transação/transferência do Fincla. `onPick` a torna uma opção clicável (`aria-pressed` =
  * `pressed`); `takenBy` a mostra desativada, com o lançamento que já a usa e "Desfazer lá".
+ * `skipNote` ("Não registrar", decisão do Owner em fincla-api#507): a caixa continua à vista, sem
+ * clique, com o fundo listrado do lado do banco e a nota "Fica de fora" (o texto é `skipNote`;
+ * `true` = só o fundo, sem nota).
  */
 export function FinclaMatchBox({
   entry, match, accountName, suggested = false, pressed = false, onPick = null,
   takenBy = null, onUndoThere = null, ifChosen = false, consequences = true, testId = "fincla-side", onConfirm = null,
+  skipNote = null,
 }) {
   const pad = useCompact() ? { padding: "8px 10px" } : null;
   const consequencesId = useId();
@@ -166,8 +170,20 @@ export function FinclaMatchBox({
     <div style={BOX_LABEL}>
       No Fincla <Badge>{KIND_LABEL[match.type] ?? match.type}</Badge>
       {suggested ? <SuggestedBadge /> : null}
+      {skipNote ? <SkipBadge /> : null}
     </div>
   );
+  if (skipNote) {
+    return (
+      <section data-testid="fincla-side-skipped" style={{ ...MATCH_BOX, ...pad, background: SKIP_BG, borderColor: T.inkFaint }}>
+        {label}
+        <div style={{ opacity: 0.6 }}>
+          <MatchRows entry={entry} match={match} highlight={false} />
+        </div>
+        {skipNote === true ? null : <SkipNote>{skipNote}</SkipNote>}
+      </section>
+    );
+  }
   if (takenBy) {
     return (
       <div data-testid="match-taken" aria-disabled="true" style={{ ...MATCH_BOX, ...pad, background: T.grayLight, opacity: 0.85 }}>
