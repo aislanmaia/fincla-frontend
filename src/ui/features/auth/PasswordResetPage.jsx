@@ -31,6 +31,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
     if (!t) { setLinkStatus("invalid"); return; }
     if (typeof onValidateToken !== "function") { setLinkStatus("ok"); return; }
     setLinkStatus("checking");
+    setFirstPassword(false);
     onValidateToken(t)
       .then((res) => { if (!cancelled) { setLinkStatus(res?.valid ? "ok" : "invalid"); setFirstPassword(res?.valid === true && res?.first_password === true); } })
       .catch(() => { if (!cancelled) setLinkStatus("ok"); }); // rede falhou → deixa tentar

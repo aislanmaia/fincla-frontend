@@ -17,7 +17,7 @@ const STEPS = [
   { id:"categorias", leftBg:"#14532D", leftAcc:"#86EFAC", accent:"#166534", accentBg:"#ECFDF5",            leftDec:null,  leftNum:"02", leftH:"Onde vai o seu dinheiro?",  leftS:"As categorias selecionadas aparecem primeiro ao lançar transações — menos cliques no dia a dia." },
   { id:"cartoes",    leftBg:"#4C1D95", leftAcc:"#C4B5FD", accent:"#4C1D95", accentBg:"#F5F3FF",            leftDec:null,  leftNum:"03", leftH:"Cartões de crédito?",       leftS:"Se você usa cartões, o Fincla rastreia faturas, parcelas e assinaturas automaticamente." },
   { id:"receita",    leftBg:"#064E3B", leftAcc:"#6EE7B7", accent:"#065F46", accentBg:"#ECFDF5",            leftDec:null,  leftNum:"04", leftH:"Sua receita mensal",        leftS:"Registre uma receita recorrente agora para que os relatórios já nasçam calibrados para a sua realidade." },
-  { id:"membros",    leftBg:"#1E1B4B", leftAcc:"#A5B4FC", accent:"#1E1B4B", accentBg:"#EEF2FF",            leftDec:null,  leftNum:"05", leftH:"Quem mais faz parte?",      leftS:"Convide membros para lançar transações juntos. Você é o dono — só você pode convidar ou remover." },
+  { id:"membros",    leftBg:"#1E1B4B", leftAcc:"#A5B4FC", accent:"#1E1B4B", accentBg:"#EEF2FF",            leftDec:null,  leftNum:"05", leftH:"Quem mais faz parte?",      leftS:"Convide membros para lançar transações juntos. Só você pode convidar ou remover pessoas." },
   { id:"pronto",     leftBg:"#0F0F0D", leftAcc:"#F8F7F5", accent:"#0F0F0D", accentBg:"rgba(15,15,13,0.06)", leftDec:"✓", leftNum:null, leftH:"Tudo pronto!",              leftS:"Sua organização está configurada. Vamos ao dashboard." },
 ];
 
@@ -486,7 +486,7 @@ export const OnboardingFlow = ({
                 <div>
                   <h2 style={{...G,fontSize:mobile?24:31,fontWeight:800,color:T.ink,lineHeight:1.15,marginBottom:7}}>Convidar membros</h2>
                   <p style={{...G,fontSize:14,color:T.inkMid,lineHeight:1.65}}>
-                    Membros podem lançar transações. Apenas você, como dono, pode convidar ou remover pessoas e acessar configurações da conta.
+                    Membros podem lançar transações. Apenas você pode convidar ou remover pessoas e acessar configurações da conta.
                   </p>
                 </div>
                 {/* owner */}
@@ -498,7 +498,7 @@ export const OnboardingFlow = ({
                   </div>
                   <div style={{flex:1}}>
                     <div style={{...G,fontSize:13,fontWeight:600,color:T.ink}}>
-                      {ownerLabel} <span style={{color:T.inkLight,fontWeight:400}}>(dono)</span>
+                      {ownerLabel} <span style={{color:T.inkLight,fontWeight:400}}>(administra a conta)</span>
                     </div>
                     <div style={{...G,fontSize:11,color:T.inkLight}}>Acesso total · não pode ser removido</div>
                   </div>

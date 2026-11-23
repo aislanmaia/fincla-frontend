@@ -10,11 +10,22 @@ export function parseAdminDate(value) {
   if (value instanceof Date) return value;
   const text = String(value);
   if (DATE_ONLY.test(text)) return new Date(`${text}T12:00:00Z`);
-  return new Date(HAS_OFFSET.test(text) ? text : `${text}Z`);
+  // FastAPI sends microseconds; JS only promises to parse milliseconds (Safari).
+  const trimmed = text.replace(/(\.\d{3})\d+/, "$1");
+  return new Date(HAS_OFFSET.test(trimmed) ? trimmed : `${trimmed}Z`);
 }
 
 export function formatAdminDate(value, options = {}) {
   const parsed = parseAdminDate(value);
   if (!parsed || Number.isNaN(parsed.getTime())) return "—";
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", ...options }).format(parsed);
+}
+
+// Billing periods are calendar days stored as midnight without an offset
+// ("2026-12-06T00:00:00"); read as an instant they would land on the previous
+// day in Brasília. Show the day as written.
+export function formatAdminDay(value) {
+  if (!value) return "—";
+  const day = String(value).slice(0, 10);
+  return DATE_ONLY.test(day) ? day.split("-").reverse().join("/") : "—";
 }

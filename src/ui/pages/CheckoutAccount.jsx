@@ -18,15 +18,17 @@ export function RegisteredCheckoutAccount({ details, email, user }) {
   const name = details?.name || [user?.first_name, user?.last_name].filter(Boolean).join(" ");
   const cpfCnpj = details?.cpfCnpj || "";
   const phone = details?.phone || user?.phone || "";
+  // No details = a session that already existed, not an account made in this checkout.
+  const existing = !details;
   return <section aria-label="Dados de acesso registrados" style={{ marginTop: 2 }}>
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 99, background: "#E8F6EE", color: T.green, fontSize: 12, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 16, height: 16, borderRadius: 99, background: T.green, color: "#fff", fontSize: 11 }}>✓</span>Conta criada para {shownEmail}</div>
-    <p style={{ color: T.inkMid, margin: "14px 0 18px", lineHeight: 1.55, fontSize: 13 }}>Estes são os dados que serão usados para acessar o Fincla após a confirmação do pagamento.</p>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 99, background: "#E8F6EE", color: T.green, fontSize: 12, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 16, height: 16, borderRadius: 99, background: T.green, color: "#fff", fontSize: 11 }}>✓</span>{existing ? `Você está entrando como ${shownEmail}` : `Conta criada para ${shownEmail}`}</div>
+    <p style={{ color: T.inkMid, margin: "14px 0 18px", lineHeight: 1.55, fontSize: 13 }}>{existing ? "A assinatura fica nesta conta, com os dados que você já usa no Fincla." : "Estes são os dados que serão usados para acessar o Fincla após a confirmação do pagamento."}</p>
     <div style={{ display: "grid", gap: 15, opacity: 0.78 }}>
       {name && <CheckoutField label="Nome" name="registered-name" value={name} disabled />}
       <CheckoutField label="Email" name="registered-email" type="email" value={shownEmail} disabled />
       {cpfCnpj && <CheckoutField label="CPF/CNPJ" name="registered-document" value={cpfCnpj} disabled />}
       {phone && <CheckoutField label="Celular com DDD" name="registered-phone" value={phone} disabled />}
-      <CheckoutField label="Senha" name="registered-password" type="password" value="senha-definida" disabled />
+      {!existing && <CheckoutField label="Senha" name="registered-password" type="password" value="senha-definida" disabled />}
     </div>
   </section>;
 }

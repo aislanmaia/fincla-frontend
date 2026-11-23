@@ -58,7 +58,7 @@ describe("OnboardingFlow — foco nos inputs", () => {
 
     expect(screen.getByText("Quem mais faz parte?")).toBeTruthy();
     expect(screen.getByText(/Lara Souza/)).toBeTruthy();
-    expect(screen.getByText("(dono)")).toBeTruthy();
+    expect(screen.getByText("(administra a conta)")).toBeTruthy();
     expect(screen.queryByText(/\(owner\)/)).toBeNull();
   });
 });

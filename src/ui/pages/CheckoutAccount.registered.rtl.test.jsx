@@ -13,6 +13,9 @@ describe("<RegisteredCheckoutAccount> (#344)", () => {
     expect(screen.getByDisplayValue("lara@example.com")).toBeInTheDocument();
     expect(screen.queryByLabelText("CPF/CNPJ")).toBeNull();
     expect(screen.queryByLabelText("Celular com DDD")).toBeNull();
+    expect(screen.getByText("Você está entrando como lara@example.com")).toBeInTheDocument();
+    expect(screen.queryByText(/Conta criada/)).toBeNull();
+    expect(screen.queryByLabelText("Senha")).toBeNull();
   });
 
   it("cadastro feito no próprio checkout mostra o que a pessoa digitou", () => {
@@ -20,5 +23,6 @@ describe("<RegisteredCheckoutAccount> (#344)", () => {
     expect(screen.getByDisplayValue("Ana")).toBeInTheDocument();
     expect(screen.getByDisplayValue("123.456.789-09")).toBeInTheDocument();
     expect(screen.getByDisplayValue("(11) 91234-5678")).toBeInTheDocument();
+    expect(screen.getByText("Conta criada para ana@example.com")).toBeInTheDocument();
   });
 });

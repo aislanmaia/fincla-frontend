@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAdminDate } from "./adminDates";
+import { formatAdminDate, formatAdminDay } from "./adminDates";
 
 describe("formatAdminDate (#340)", () => {
   it("lê data-hora sem fuso como UTC e mostra o dia de Brasília", () => {
@@ -23,5 +23,13 @@ describe("formatAdminDate (#340)", () => {
     expect(formatAdminDate(null)).toBe("—");
     expect(formatAdminDate("")).toBe("—");
     expect(formatAdminDate("not a date")).toBe("—");
+  });
+});
+
+describe("formatAdminDay (revisão do #345)", () => {
+  it("período gravado à meia-noite sem fuso mostra o próprio dia", () => {
+    expect(formatAdminDay("2026-12-06T00:00:00")).toBe("06/12/2026");
+    expect(formatAdminDay("2026-12-06")).toBe("06/12/2026");
+    expect(formatAdminDay(null)).toBe("—");
   });
 });
