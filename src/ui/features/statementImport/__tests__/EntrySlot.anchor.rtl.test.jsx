@@ -159,6 +159,14 @@ describe("pickAnchor / spacerNeeded / anchorTarget", () => {
     expect(anchorTarget({ scrollTop: 539, oldTop: 144, newTop: 144, newHeight: 80, viewTop: 172, clientHeight: 844, contentHeight: 1000 })).toBe(539);
   });
 
+  it("só uma fresta da linha apareceria atrás do topo grudado (BUG-10): ela vem para a área visível", () => {
+    // Celular: cartão alto centralizado, topo 1 px acima da tela, área visível a partir de 123 px;
+    // a linha de 126 px no mesmo topo mostraria 2 px. No fim da lista, a rolagem para no fim do conteúdo.
+    expect(anchorTarget({ scrollTop: 1597, oldTop: -1, newTop: -1, newHeight: 126, viewTop: 123, clientHeight: 844, contentHeight: 2200 })).toBe(2200 - 844);
+    // No meio da lista: a linha vai para o topo da área visível (com a folga).
+    expect(anchorTarget({ scrollTop: 1597, oldTop: -1, newTop: -1, newHeight: 126, viewTop: 123, clientHeight: 844, contentHeight: 6000 })).toBe(1597 - 1 - 123 - ANCHOR_MARGIN);
+  });
+
   it("topo acima da tela: a linha vem para o topo da área visível; no fim da lista, a rolagem para no fim do conteúdo", () => {
     // No meio da lista: há conteúdo embaixo, a linha fica no topo (com a folga).
     expect(anchorTarget({ scrollTop: 800, oldTop: -300, newTop: -300, viewTop: 0, clientHeight: 400, contentHeight: 3000 })).toBe(500 - ANCHOR_MARGIN);

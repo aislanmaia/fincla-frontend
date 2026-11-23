@@ -467,7 +467,7 @@ export function NewEntriesStep({
           );
         }
         return (
-          <EntrySlot key={entry.id} open={current} tone={answerTone(entry.answer)}>
+          <EntrySlot key={entry.id} open={current} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
             {body}
           </EntrySlot>
         );

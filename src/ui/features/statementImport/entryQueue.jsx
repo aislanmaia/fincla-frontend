@@ -15,7 +15,7 @@
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
 import { Component, createContext, createRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { ArrowUp, Check } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -62,6 +62,9 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   const servedTick = useRef(0);
   // O lançamento que acabou de minimizar sem outro abrir: o foco vai para o "Alterar" da linha dele.
   const [rowFocusId, setRowFocusId] = useState(null);
+  // O próximo pendente abriu ACIMA do item respondido (ex.: respondeu o último da lista): embaixo da
+  // linha recolhida aparece "Próximo pendente" (fincla-api#507). { step, fromId, targetId, sig }.
+  const [aboveRequest, setAboveRequest] = useState(null);
 
   const stored = currentByStep[stepKey];
   const ids = useMemo(() => new Set(entries.map((e) => e.id)), [entries]);
@@ -85,6 +88,8 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   const setCurrent = useCallback((id, { focus = true, rowFocus = null } = {}) => {
     setCurrentByStep((prev) => ({ ...prev, [stepKey]: id }));
     setRowFocusId(id === null ? rowFocus : null);
+    // Abrir ou responder qualquer outro some com o "Próximo pendente" (quem o põe é o `advanceFrom`).
+    setAboveRequest(null);
     if (focus && id !== null) setFocusRequest((prev) => ({ id, tick: prev.tick + 1 }));
   }, [stepKey]);
 
@@ -96,7 +101,34 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     const { entries: list } = latest.current;
     const next = nextUnanswered(list, fromId, answered);
     setCurrent(next, { rowFocus: fromId });
-  }, [answered, setCurrent]);
+    const index = (id) => list.findIndex((e) => e.id === id);
+    if (next !== null && index(next) < index(fromId)) {
+      setAboveRequest({ step: stepKey, fromId, targetId: next, sig: answeredSignature(list, fromId, answered) });
+    }
+  }, [answered, setCurrent, stepKey]);
+
+  // Some sem temporizador: ao chegar no pendente (botão, foco dentro dele), ao responder ele ou
+  // qualquer outro (as respostas mudam, fora a do próprio item recolhido), ao abrir outro.
+  const nextAbove = aboveRequest
+    && aboveRequest.step === stepKey
+    && currentId === aboveRequest.targetId
+    && ids.has(aboveRequest.fromId)
+    && answeredSignature(entries, aboveRequest.fromId, answered) === aboveRequest.sig
+    ? { fromId: aboveRequest.fromId, target: entries.find((e) => e.id === aboveRequest.targetId) }
+    : null;
+  const dismissNextAbove = useCallback(() => {
+    // O botão sai de baixo da linha: a rolagem fica onde está (sem o fim da página puxá-la).
+    const button = document.querySelector("[data-testid='next-pending-above']");
+    const scroller = button ? scrollParentOf(button) : null;
+    if (scroller) Object.assign(heldAfterDismiss, { scroller, top: scroller.scrollTop });
+    setAboveRequest(null);
+  }, []);
+  useLayoutEffect(() => {
+    const { scroller, top } = heldAfterDismiss;
+    if (!scroller) return;
+    heldAfterDismiss.scroller = null;
+    if (scroller.isConnected) holdScroll(scroller, top);
+  });
 
   const move = useCallback((delta) => {
     const { visible: list, currentId: id } = latest.current;
@@ -131,6 +163,8 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     rowFocusId,
     shown,
     answered,
+    nextAbove,
+    dismissNextAbove,
     hasNextUnanswered: currentId !== null && nextUnanswered(entries, currentId, answered) !== null,
     setFilter: (value) => setFilterByStep((prev) => ({ ...prev, [stepKey]: value })),
     open: (id) => setCurrent(id),
@@ -139,6 +173,19 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     nextUnanswered: () => advanceFrom(latest.current.currentId),
     move,
   };
+}
+
+/** As respostas da lista numa assinatura, fora a do item `exceptId` (a dele ainda pode chegar). */
+function answeredSignature(list, exceptId, answered) {
+  return list.map((e) => (e.id === exceptId ? "-" : answered(e) ? "1" : "0")).join("");
+}
+
+const heldAfterDismiss = { scroller: null, top: 0 };
+
+/** "2026-10-07" → "07/10", sem converter fuso. */
+function shortDate(ymd) {
+  const [, m, d] = String(ymd ?? "").split("-");
+  return m && d ? `${d.slice(0, 2)}/${m}` : "";
 }
 
 /** Visualização dos cartões: Detalhada (padrão) ou Compacta, lembrada por pessoa no backend. */
@@ -321,11 +368,17 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
     // preventScroll: a tela não pula para o próximo cartão; quem fica parado é o que minimizou.
     if (takeFocus(entry.id)) ref.current?.focus({ preventScroll: true });
   }, [focusTick, entry.id]);
+  // A pessoa chegou no pendente apontado por "Próximo pendente" (o foco entrou num controle dele).
+  const onFocus = (event) => {
+    if (event.target !== ref.current && queue.nextAbove?.target?.id === entry.id) queue.dismissNextAbove();
+  };
   return (
     <div
       ref={ref}
       tabIndex={-1}
+      onFocus={onFocus}
       data-testid="current-entry"
+      data-entry-id={entry.id}
       aria-label={`${noun.title} ${queue.position} de ${queue.total}`}
       style={{ borderRadius: 16, boxShadow: `0 0 0 3px ${T.blueLight}`, outline: "none", display: "flex", flexDirection: "column", gap: 8, scrollMarginTop: 16 }}
     >
@@ -391,18 +444,19 @@ export const ANCHOR_MARGIN = 16;
  * px da tela) ficar no lugar certo. Todas as medidas na mesma régua (`viewTop` = topo da área
  * visível da região que rola).
  *
- * - No topo antigo, o item na forma nova (`newHeight`) ainda aparece na área visível: fica
- *   exatamente onde estava (nada pula, BUG-01), mesmo que para isso a região precise de um espaço
- *   provisório embaixo.
+ * - No topo antigo, o item na forma nova (`newHeight`, a linha sem o "Próximo pendente" de baixo)
+ *   ainda aparece pelo menos pela metade na área visível: fica exatamente onde estava (nada pula,
+ *   BUG-01), mesmo que para isso a região precise de um espaço provisório embaixo.
  * - No topo antigo ele ficaria inteiro ACIMA da área visível (cartão mais alto que a tela, a
  *   pessoa rolou até os botões): manter esse topo deixaria a linha fora da tela e só espaço vazio
  *   à vista (BUG-08). A linha vem para o topo da área visível, onde estava a parte do cartão que a
- *   pessoa via; e, se isso deixaria vazio embaixo (fim da lista), a rolagem para no fim do
+ *   pessoa via (também quando só uma fresta dela apareceria atrás do topo grudado, BUG-10); e, se
+ *   isso deixaria vazio embaixo (fim da lista), a rolagem para no fim do
  *   conteúdo: a linha fica à vista com a lista acima dela, sem espaço provisório.
  */
 export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, clientHeight, contentHeight }) {
   const keep = scrollTop + (newTop - oldTop);
-  if (oldTop + newHeight > viewTop + 0.5) return keep;
+  if (oldTop + newHeight / 2 > viewTop + 0.5) return keep;
   const toTop = scrollTop + (newTop - (viewTop + ANCHOR_MARGIN));
   return Math.max(0, Math.min(toTop, contentHeight - clientHeight));
 }
@@ -567,11 +621,13 @@ function flushCommit() {
     if (scroller) {
       const scrollTop = scroller.scrollTop;
       const now = anchor.el.getBoundingClientRect();
+      // A altura do item em si (o primeiro filho): o "Próximo pendente" embaixo dele não conta.
+      const own = anchor.el.firstElementChild?.getBoundingClientRect().height || now.height;
       const target = anchorTarget({
         scrollTop,
         oldTop: anchor.top,
         newTop: now.top,
-        newHeight: now.height,
+        newHeight: own,
         viewTop: anchor.viewTop ?? viewTopOf(scroller),
         clientHeight: scroller.clientHeight,
         contentHeight: contentHeightOf(scroller),
@@ -717,13 +773,73 @@ export class EntrySlot extends Component {
   }
 
   render() {
-    const { open, children } = this.props;
+    const { open, children, queue = null, entryId = null } = this.props;
     return (
       <div ref={this.ref} data-testid="entry-slot" data-open={open ? "true" : "false"} style={{ position: "relative", overflowAnchor: "none", borderRadius: 12, minWidth: 0 }}>
         {children}
+        {queue && !open ? <NextPendingButton queue={queue} fromId={entryId} /> : null}
       </div>
     );
   }
+}
+
+/** O cartão aberto de um lançamento (a moldura `CurrentEntryFrame`). */
+function currentCardOf(id) {
+  return document.querySelector(`[data-testid="current-entry"][data-entry-id=${JSON.stringify(String(id))}]`);
+}
+
+/**
+ * "↑ Próximo pendente: 07/10 PIX ..." logo abaixo da linha que acabou de recolher, quando o próximo
+ * pendente abriu ACIMA dela (fincla-api#507): o item respondido fica parado e a tela nunca fica sem
+ * indicação de onde continuar. O clique rola suave até o pendente (na hora com movimento reduzido)
+ * e, terminada a rolagem, põe o foco nele sem rolar de novo.
+ */
+export function NextPendingButton({ queue, fromId }) {
+  const info = queue.nextAbove;
+  if (!info || info.fromId !== fromId || !info.target) return null;
+  const { target } = info;
+  const memo = target.bank_description ?? target.description ?? "";
+  const label = [shortDate(target.date ?? target.day), memo].filter(Boolean).join(" ");
+  const go = () => {
+    const card = currentCardOf(target.id);
+    if (!card) {
+      queue.dismissNextAbove();
+      return;
+    }
+    const reach = () => {
+      card.focus({ preventScroll: true });
+      queue.dismissNextAbove();
+    };
+    const reduced = prefersReducedMotion();
+    const scroller = scrollParentOf(card);
+    // Onde a rolagem vai parar (o cartão no topo da área visível, ou o fim do conteúdo): sem
+    // distância a andar não vem `scrollend`, e o foco vai na hora.
+    let moves = false;
+    if (scroller) {
+      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const wanted = scroller.scrollTop + card.getBoundingClientRect().top - (viewTopOf(scroller) + ANCHOR_MARGIN);
+      moves = Math.abs(Math.max(0, Math.min(wanted, max)) - scroller.scrollTop) >= 1;
+    }
+    card.scrollIntoView?.({ behavior: reduced ? "instant" : "smooth", block: "start" });
+    const root = scroller === document.scrollingElement || scroller === document.documentElement;
+    const events = root ? document : scroller;
+    if (!reduced && moves && events && "onscrollend" in globalThis) events.addEventListener("scrollend", reach, { once: true });
+    else reach();
+  };
+  return (
+    <Btn
+      variant="outGray"
+      full
+      data-testid="next-pending-above"
+      onClick={go}
+      style={{ marginTop: 8, justifyContent: "flex-start", padding: "9px 14px", fontSize: 13, color: T.inkMid, background: T.surface }}
+    >
+      <ArrowUp size={14} aria-hidden="true" style={{ flexShrink: 0, color: T.blue }} />
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontWeight: 600 }}>Próximo pendente:</span> <span style={{ ...NUM, fontWeight: 500 }}>{label}</span>
+      </span>
+    </Btn>
+  );
 }
 
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
