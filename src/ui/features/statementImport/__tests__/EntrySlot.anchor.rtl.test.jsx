@@ -215,6 +215,25 @@ describe("EntrySlot: o item respondido fica parado (BUG-01)", () => {
     expect(spacerOf()).toHaveAttribute("aria-hidden", "true");
   });
 
+  it("BUG-12 (Conferir o saldo): enquanto a linha anima (cresce com o Próximo pendente embaixo), a ancoragem do navegador fica desligada; volta no fim", () => {
+    // Sem espaço provisório (a rolagem cabe), a âncora soltava a ancoragem antes de a animação
+    // começar; com conteúdo abaixo da lista, o navegador rolava junto com o crescimento e a
+    // linha subia 45 px depois de recolher.
+    const animations = fakeAnimate();
+    const { rerender } = render(<List open="c" />);
+    act(() => { scroller.scrollTop = 150; });
+    screen.getByRole("button", { name: "Confirmar c" }).focus();
+
+    rerender(<List open="d" />);
+
+    const growing = animations.filter((x) => x.keyframes[0].height !== undefined);
+    expect(growing.length).toBeGreaterThan(0);
+    expect(spacerOf()).toBeNull();
+    expect(scroller.style.overflowAnchor).toBe("none");
+    act(() => { for (const x of growing) x.a.finish(); });
+    expect(scroller.style.overflowAnchor).toBe("");
+  });
+
   it("(a) o espaço provisório encolhe com a rolagem da pessoa e some quando não segura mais nada", () => {
     const { rerender } = render(<List open="f" />);
     scrollToEnd();

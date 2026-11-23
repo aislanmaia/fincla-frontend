@@ -666,8 +666,15 @@ function flushCommit() {
     // Acima da âncora, trocar de forma animando empurraria o item que o olho acompanha a cada
     // quadro: ali a troca é na hora, já compensada pela rolagem acima.
     const above = anchor && change !== anchor && Boolean(change.el.compareDocumentPosition(anchor.el) & Node.DOCUMENT_POSITION_FOLLOWING);
-    if (change.motion && !above) change.slot.play(change);
-    else change.ghost?.remove();
+    if (change.motion && !above) {
+      change.slot.play(change);
+      // Enquanto a altura anima, a ancoragem do navegador fica desligada nesta região: sem isso,
+      // com algo abaixo da lista (no "Conferir o saldo", as notas e o que fica de fora), o
+      // navegador ancorava nesse conteúdo e rolava junto com a linha que crescia (o "Próximo
+      // pendente" aparecendo embaixo dela): a linha subia 45 px depois de recolher.
+      const region = change.scroller?.isConnected ? change.scroller : scrollParentOf(change.el);
+      if (region) takeAnchoring(region);
+    } else change.ghost?.remove();
   }
   // Com a animação começando da altura antiga, a página volta a ser alta: o Chrome devolve a
   // rolagem que só tinha sido cortada na medida (e o item escorregaria junto com a altura). A
