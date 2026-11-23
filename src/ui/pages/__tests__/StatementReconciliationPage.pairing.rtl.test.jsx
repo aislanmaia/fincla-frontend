@@ -5,7 +5,7 @@
 // API; aqui conferimos o que a pessoa vê, o que a tela manda e que nada some sem desfazer.
 import React from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -89,6 +89,20 @@ const railStatus = (title) => {
   const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
   const step = within(rail).getAllByRole("button").find((b) => within(b).getByTestId("step-title").textContent === title);
   return step.textContent.replace(title, "").replace(/^\d/, "");
+};
+
+/**
+ * BUG-02: o duplo clique de verdade no Confirmar. O 1º clique não tira o foco do campo (o
+ * `mousedown` é cancelado) e começa a gravar; o 2º cai no botão já desligado, cujo `mousedown`
+ * não chega ao React, então o campo perde o foco (o `blur` que grava a descrição) e o clique não
+ * conta. Tudo antes de o PATCH voltar.
+ */
+const doubleClickConfirm = (input, confirm) => {
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+  act(() => input.blur());
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
 };
 
 describe("o passo Confirmar lançamentos encontrados", () => {
@@ -247,9 +261,12 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(rows().find((r) => r.textContent.includes("ALUGUEL")).style.background).not.toContain("repeating-linear-gradient");
 
     await user.click(within(row).getByRole("button", { name: /Alterar/ }));
-    const side = within(padariaCard()).getByTestId("pair-ignored-side");
+    // O lado do Fincla não some: a sugestão continua à vista, listrada, com "Fica de fora".
+    const side = within(within(padariaCard()).getByTestId("pair-ignored-side")).getByTestId("fincla-side-skipped");
     expect(side.style.background).toContain("repeating-linear-gradient");
     expect(side).toHaveTextContent("Não registrar");
+    expect(side).toHaveTextContent("Fica de fora");
+    expect(within(padariaCard()).getByTestId("bank-side").style.background).toContain("repeating-linear-gradient");
   });
 
   it("minimizar o cartão leva o foco ao Alterar da linha que fica no lugar (G3-2-10)", async () => {
@@ -314,5 +331,139 @@ describe("o passo Confirmar lançamentos encontrados", () => {
 
     expect(await screen.findByTestId("summary-to-pair")).toHaveTextContent("2");
     expect(screen.getByTestId("summary-to-create")).toHaveTextContent("2");
+  });
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-23): o Confirmar fica ao lado das respostas e só
+// aparece na sugestão sem mudança e no formulário do item novo; toda outra resposta confirma e
+// minimiza no clique; "Não registrar" mantém o lado do Fincla à vista, listrado.
+describe("Confirmar ao lado das respostas (fincla-api#507)", () => {
+  const question = () => within(padariaCard()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+
+  it("BUG-12: Confirmar sugestão recolhe numa linha já confirmada (Conferido) antes da releitura do rascunho, e ela não muda depois", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let reloads = 0;
+    server.use(http.get(`${BASE}/${IMPORT}`, async () => {
+      await gate;
+      reloads += 1;
+      return HttpResponse.json(draft);
+    }));
+
+    await user.click(within(padariaCard()).getByRole("button", { name: "Confirmar sugestão" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PIX QRS PADARIA 02 10/ })).toBeNull());
+    const row = () => rows().find((r) => r.textContent.includes("PADARIA"));
+    expect(within(row()).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(row()).toHaveTextContent("Sim, é Padaria do bairro");
+    const atCollapse = row().outerHTML;
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(reloads).toBe(1));
+    await act(async () => {});
+    expect(row().outerHTML).toBe(atCollapse);
+  });
+
+  it("na sugestão sem mudança: Confirmar sugestão ao lado das respostas, que confirma e minimiza", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    const confirm = within(padariaCard()).getByRole("button", { name: "Confirmar sugestão" });
+    // Ao lado dos botões de resposta (mesma linha), não no cabeçalho do cartão.
+    expect(confirm.closest("footer")).toBe(question().closest("footer"));
+    expect(confirm.closest("header")).toBeNull();
+    expect(within(padariaCard()).queryByRole("button", { name: "Confirmar" })).toBeNull();
+
+    await user.click(confirm);
+
+    await waitFor(() => expect(calls).toEqual([{ patch: PADARIA, body: { answer: "pair" } }]));
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(screen.queryByRole("article", { name: /PIX QRS PADARIA 02 10/ })).toBeNull();
+    expect(rows().find((r) => r.textContent.includes("PADARIA"))).toHaveTextContent("Sim, é Padaria do bairro");
+  });
+
+  it("trocar para Não, adicionar agora: sem Confirmar sugestão, Confirmar desligado sem descrição; confirmar grava e minimiza", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não, adicionar agora" }));
+    await waitFor(() => expect(within(padariaCard()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    // O cartão fica aberto: o formulário pede o Confirmar.
+    expect(rows()).toHaveLength(1);
+    expect(within(padariaCard()).queryByRole("button", { name: "Confirmar sugestão" })).toBeNull();
+    const confirm = () => within(padariaCard()).getByRole("button", { name: "Confirmar" });
+    expect(confirm().closest("footer")).toBe(question().closest("footer"));
+    expect(confirm()).toBeEnabled();
+
+    const description = within(padariaCard()).getByLabelText("Descrição");
+    await user.clear(description);
+    expect(confirm()).toBeDisabled();
+    expect(padariaCard()).toHaveTextContent("Escreva a descrição para confirmar.");
+
+    await user.type(description, "Pão da manhã");
+    expect(confirm()).toBeEnabled();
+    await user.click(confirm());
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(calls.filter((c) => c.patch)).toEqual([
+      { patch: PADARIA, body: { answer: "create" } },
+      { patch: PADARIA, body: { description: "Pão da manhã" } },
+    ]);
+    expect(rows().find((r) => r.textContent.includes("PADARIA"))).toHaveTextContent("Adicionar ao Fincla: Pão da manhã");
+  });
+
+  it("BUG-02: duplo clique no Confirmar do item novo com a descrição mudada manda UM PATCH", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(within(question()).getByRole("button", { name: "Não, adicionar agora" }));
+    await waitFor(() => expect(within(padariaCard()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    const input = within(padariaCard()).getByLabelText("Descrição");
+    await user.clear(input);
+    await user.type(input, "Pão da manhã");
+
+    doubleClickConfirm(input, within(padariaCard()).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(calls.filter((c) => c.patch)).toEqual([
+      { patch: PADARIA, body: { answer: "create" } },
+      { patch: PADARIA, body: { description: "Pão da manhã" } },
+    ]);
+  });
+
+  it("Não registrar minimiza no clique; reaberto, o lado do Fincla continua com a sugestão, listrado e sem clique", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(screen.queryByRole("article", { name: /PIX QRS PADARIA 02 10/ })).toBeNull();
+
+    await user.click(within(rows().find((r) => r.textContent.includes("PADARIA"))).getByRole("button", { name: /Alterar/ }));
+    const side = within(padariaCard()).getByTestId("fincla-side-skipped");
+    expect(side).toHaveTextContent("Padaria do bairro");
+    expect(side).toHaveTextContent("Fica de fora");
+    expect(side).toHaveTextContent("Continua no Fincla como está, sem mudança.");
+    expect(side.style.background).toContain("repeating-linear-gradient");
+    expect(within(side).queryAllByRole("button")).toEqual([]);
+    expect(within(padariaCard()).queryByRole("button", { name: "Confirmar sugestão" })).toBeNull();
+    expect(within(padariaCard()).queryByRole("button", { name: "Confirmar" })).toBeNull();
+  });
+
+  it("uma sugestão já confirmada, reaberta, não mostra Confirmar; clicar de novo em Sim, é esta só minimiza", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(rows()[0]).getByRole("button", { name: /Alterar/ }));
+    const aluguel = screen.getByRole("article", { name: /ALUGUEL/ });
+    expect(within(aluguel).queryByRole("button", { name: "Confirmar sugestão" })).toBeNull();
+    expect(within(aluguel).queryByRole("button", { name: "Confirmar" })).toBeNull();
+
+    await user.click(within(aluguel).getByRole("button", { name: "Sim, é esta" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /ALUGUEL/ })).toBeNull());
+    expect(calls.filter((c) => c.patch)).toEqual([]);
   });
 });

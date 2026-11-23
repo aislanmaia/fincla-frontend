@@ -18,11 +18,14 @@ import { plural } from "../../plural.js";
 export function confirmAllLabel(count) {
   return count === 1 ? "Confirmar este lançamento" : `Confirmar os ${count.toLocaleString("pt-BR")} de uma vez`;
 }
-import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import {
+  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel, useDescriptionDraft,
+} from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
 import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
-  CurrentEntryFrame, EntryQueueHeader, InlineFields, ROW_CLICKABLE, openOnRowClick, useCompact, useStableCallback,
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, InlineFields, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useCompact,
+  useStableCallback,
 } from "./entryQueue.jsx";
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
@@ -38,9 +41,11 @@ const ANSWERS = [
 export function BankSide({ entry, dateDiffers }) {
   const moneyIn = entry.amount > 0;
   const compact = useCompact();
+  // "Não registrar": o fundo listrado, o mesmo do lado do Fincla e da linha minimizada.
+  const background = entry.answer === "ignore" ? SKIP_BG : T.bg;
   if (compact) {
     return (
-      <section data-testid="bank-side" style={{ ...BOX, background: T.bg, padding: "8px 10px" }}>
+      <section data-testid="bank-side" style={{ ...BOX, background, padding: "8px 10px" }}>
         <div style={{ ...BOX_LABEL, marginBottom: 4 }}>No extrato do banco</div>
         <InlineFields
           testId="bank-inline"
@@ -54,7 +59,7 @@ export function BankSide({ entry, dateDiffers }) {
     );
   }
   return (
-    <section data-testid="bank-side" style={{ ...BOX, background: T.bg }}>
+    <section data-testid="bank-side" style={{ ...BOX, background }}>
       <div style={BOX_LABEL}>No extrato do banco</div>
       <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, wordBreak: "break-word" }}>{entry.bank_description}</div>
       <div style={{ ...G, ...NUM, fontSize: 12, color: dateDiffers ? T.amber : T.inkLight, fontWeight: dateDiffers ? 700 : 400, marginTop: 6 }}>
@@ -93,6 +98,11 @@ export function Connector({ answer, isMobile }) {
   );
 }
 
+/** A sugestão do Fincla era esta transação/transferência? (selo "Sugerido pelo Fincla"). */
+const isSuggestedMatch = (entry, match) => (match.kind === "transfer"
+  ? match.transfer_id === entry.suggested_transfer_id
+  : match.transaction_id === entry.suggested_transaction_id);
+
 /**
  * A transação (ou transferência, fincla-api#511) do Fincla como ela está hoje, com o selo e o que
  * muda ao concluir.
@@ -109,9 +119,7 @@ function FinclaSide({ entry, accountName, onConfirm = null }) {
       </section>
     );
   }
-  const suggested = match.kind === "transfer"
-    ? match.transfer_id === entry.suggested_transfer_id
-    : match.transaction_id === entry.suggested_transaction_id;
+  const suggested = isSuggestedMatch(entry, match);
   return (
     <FinclaMatchBox
       entry={entry}
@@ -124,17 +132,44 @@ function FinclaSide({ entry, accountName, onConfirm = null }) {
   );
 }
 
-/** "Não registrar" com o selo e o fundo listrado próprios, os mesmos do passo de lançamentos novos. */
-export function IgnoredSide() {
+/** O que acontece com o que estava no lado do Fincla quando a resposta é "Não registrar". */
+export function skipNoteText(count) {
+  return count > 1
+    ? "Continuam no Fincla como estão, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece na conferência de saldo."
+    : "Continua no Fincla como está, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece na conferência de saldo.";
+}
+
+/**
+ * "Não registrar" (decisão do Owner em fincla-api#507): o lado do Fincla não some. Continua
+ * mostrando o que estava lá (`matches`: a sugestão, ou as opções de uma dúvida), sem clique, com o
+ * fundo listrado do lado do banco e a nota "Fica de fora". Sem nada para mostrar, só o aviso.
+ */
+export function IgnoredSide({ entry = null, matches = [], accountName = "", suggestedOf = () => false }) {
+  if (!entry || !matches.length) {
+    return (
+      <section data-testid="pair-ignored-side" style={{ ...BOX, background: SKIP_BG, borderColor: T.inkFaint }}>
+        <div style={BOX_LABEL}>
+          No Fincla <SkipBadge />
+        </div>
+        <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
+          Este lançamento não entra no Fincla. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo.
+        </p>
+      </section>
+    );
+  }
   return (
-    <section data-testid="pair-ignored-side" style={{ ...BOX, background: SKIP_BG }}>
-      <div style={BOX_LABEL}>
-        No Fincla <SkipBadge />
-      </div>
-      <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
-        Este lançamento não entra no Fincla. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo.
-      </p>
-    </section>
+    <div data-testid="pair-ignored-side" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minWidth: 0 }}>
+      {matches.map((match, index) => (
+        <FinclaMatchBox
+          key={`${match.kind}-${match.transaction_id ?? match.transfer_id}`}
+          entry={entry}
+          match={match}
+          accountName={accountName}
+          suggested={suggestedOf(match)}
+          skipNote={index === matches.length - 1 ? skipNoteText(matches.length) : true}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -163,8 +198,26 @@ export function StatusBadge({ entry }) {
   return <SkipBadge />;
 }
 
-function AnswerButtons({ entry, busy, onAnswer }) {
+/**
+ * A sugestão do Fincla sem nenhuma mudança: "Sim, é esta" já vem marcado e falta confirmar. Só aí
+ * (e no formulário do item novo) aparece o Confirmar ao lado das respostas.
+ */
+export const untouchedSuggestion = (entry) => entry.answer === "pair" && !entry.confirmed && Boolean(entry.fincla_match);
+
+function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
   const label = "Este lançamento do banco já está no Fincla?";
+  let confirm = null;
+  if (untouchedSuggestion(entry)) {
+    confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} onConfirm={() => onAnswer(entry, "pair")} />;
+  } else if (entry.answer === "create" && onConfirm) {
+    confirm = (
+      <ConfirmAnswerButton
+        disabled={busy || !desc.value.trim()}
+        blockedNote={desc.value.trim() ? "" : CONFIRM_BLOCKED_NOTE}
+        onConfirm={() => desc.confirm(onConfirm)}
+      />
+    );
+  }
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
@@ -190,6 +243,7 @@ function AnswerButtons({ entry, busy, onAnswer }) {
           );
         })}
       </div>
+      {confirm}
     </div>
   );
 }
@@ -203,15 +257,25 @@ export function UndoChoiceButton({ entry, onUndoChoice, inRow = false }) {
   );
 }
 
-/** O cartão aberto de um par sugerido. */
-function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, accountName, onAnswer, onChange, onUndoChoice, onMinimize }) {
+/**
+ * O cartão aberto de um par sugerido. `onConfirm` minimiza o cartão (o Confirmar do formulário do
+ * item novo); as outras respostas já confirmam e minimizam pela página.
+ */
+function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbackLabel, accountName, onAnswer, onChange, onUndoChoice, onMinimize, onConfirm = null }) {
   const dateDiffers = entry.answer === "pair" && Boolean(entry.fincla_match?.differences.includes("date"));
   const outcome = outcomeText(entry);
+  const desc = useDescriptionDraft(entry, onChange);
   let right;
   if (entry.answer === "create") {
-    right = <StatementEntryCard entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} embedded />;
+    right = (
+      <StatementEntryCard
+        entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
+        embedded desc={desc}
+      />
+    );
   } else if (entry.answer === "ignore") {
-    right = <IgnoredSide />;
+    const matches = entry.fincla_match ? [entry.fincla_match] : [];
+    right = <IgnoredSide entry={entry} matches={matches} accountName={accountName} suggestedOf={(m) => isSuggestedMatch(entry, m)} />;
   } else {
     right = <FinclaSide entry={entry} accountName={accountName} onConfirm={busy ? null : () => onAnswer(entry, "pair")} />;
   }
@@ -234,7 +298,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
         <div style={{ display: "flex", flex: 1, minWidth: 0 }}>{right}</div>
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
-        <AnswerButtons entry={entry} busy={busy} onAnswer={onAnswer} />
+        <AnswerButtons entry={entry} busy={busy} desc={desc} onAnswer={onAnswer} onChange={onChange} onConfirm={onConfirm} />
       </footer>
       {outcome ? (
         <p data-testid="pair-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "8px 14px", borderTop: `1px solid ${T.border}` }}>
@@ -261,7 +325,7 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
   // Quando a linha acaba de tomar o lugar do cartão, o foco vem para o "Alterar" dela (o botão
   // que a pessoa apertou saiu da tela).
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div data-testid="pair-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderBottom: `1px solid ${T.border}`, background: entry.answer === "ignore" ? SKIP_BG : "transparent", ...G, fontSize: 12, color: T.inkMid }}>
       <Btn
@@ -279,6 +343,7 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       <StatusBadge entry={entry} />
       <span style={{ flex: 1, minWidth: 160 }}>{rowSummary(entry)}</span>
+      {isAnswered(entry) ? <ConferidoBadge /> : null}
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
@@ -331,8 +396,10 @@ export function SuggestedPairsStep({
           <Btn variant="outGray" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
         </div>
       ) : null}
-      {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
-        <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+      {entries.filter(queue.shown).map((entry) => (
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+        {entry.id === queue.currentId ? (
+        <CurrentEntryFrame queue={queue} entry={entry}>
           <PairCard
             entry={entry}
             isMobile={isMobile}
@@ -346,13 +413,16 @@ export function SuggestedPairsStep({
             onChange={onChange}
             onUndoChoice={onUndoChoice}
             onMinimize={(e) => queue.close(e.id)}
+            onConfirm={(e) => queue.advanceFrom(e.id)}
           />
         </CurrentEntryFrame>
       ) : (
-        <div key={entry.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
           <PairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
         </div>
-      )))}
+        )}
+        </EntrySlot>
+      ))}
     </div>
   );
 }

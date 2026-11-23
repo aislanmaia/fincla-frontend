@@ -6,8 +6,8 @@
 // do Nubank; a TED é uma transferência sugerida. A gravação é garantida pelos testes de API;
 // aqui conferimos o que a pessoa vê, o que a tela manda e que nada some sem desfazer.
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -128,6 +128,20 @@ const goTo = async (user, title) => {
   const rail = screen.getByRole("navigation", { name: "Passos da conciliação" });
   await user.click(within(rail).getAllByRole("button").find((b) => within(b).getByTestId("step-title").textContent === title));
   await screen.findByRole("heading", { name: title });
+};
+
+/**
+ * BUG-02: o duplo clique de verdade no Confirmar. O 1º clique não tira o foco do campo (o
+ * `mousedown` é cancelado) e começa a gravar; o 2º cai no botão já desligado, cujo `mousedown`
+ * não chega ao React, então o campo perde o foco (o `blur` que grava a descrição) e o clique não
+ * conta. Tudo antes de o PATCH voltar.
+ */
+const doubleClickConfirm = (input, confirm) => {
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+  act(() => input.blur());
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
 };
 
 describe("a diferença de saldo no topo (história 24, G3-3-02)", () => {
@@ -275,9 +289,15 @@ describe("a diferença de saldo fica fixa no topo ao rolar", () => {
 
     expect(scroller.style.scrollPaddingTop).toMatch(/^\d+px$/);
     expect(scroller.style.scrollPaddingTop).not.toBe("4px");
+    // A borda que o topo fixo cobre de fato (sem a folga de foco) fica publicada para a âncora da
+    // lista medir a metade da linha à vista (BUG-11): a reserva é ela + 12 px.
+    const cover = Number(scroller.dataset.stickyCover);
+    expect(Number.isFinite(cover)).toBe(true);
+    expect(Number.parseFloat(scroller.style.scrollPaddingTop)).toBe(cover + 12);
 
     unmount();
     expect(scroller.style.scrollPaddingTop).toBe("4px");
+    expect(scroller.dataset.stickyCover).toBeUndefined();
     scroller.remove();
   });
 });
@@ -503,5 +523,207 @@ describe("as outras telas mostram o par de #511", () => {
     expect(changes).toHaveTextContent("1 transação é movida para esta conta");
     expect(screen.getByTestId("conclude-blocked")).toHaveTextContent("1 lançamento sem resposta. Responda todos para concluir (em Decidir casos com dúvida).");
     expect(screen.getByRole("button", { name: "Concluir conciliação" })).toBeDisabled();
+  });
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-23): numa dúvida nada vem pré-marcado, então não há
+// "Confirmar sugestão"; o Confirmar só aparece no formulário do item novo. Escolher, "Não
+// registrar" e clicar de novo na escolha já feita minimizam no clique.
+describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => {
+  const paulo = () => card("PIX TRANSF PAULO V06 10");
+  const question = () => within(paulo()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+  const confirmButtons = (el) => within(el).queryAllByRole("button", { name: /^Confirmar( sugestão)?$/ });
+
+  it("sem resposta não há Confirmar; Não, adicionar agora mostra o Confirmar ao lado das respostas, que minimiza", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    expect(confirmButtons(paulo())).toEqual([]);
+
+    await user.click(within(question()).getByRole("button", { name: "Não, adicionar agora" }));
+
+    await waitFor(() => expect(within(paulo()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    const confirm = within(paulo()).getByRole("button", { name: "Confirmar" });
+    expect(confirm.closest("footer")).toBe(question().closest("footer"));
+    await user.click(confirm);
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    expect(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"))).toHaveTextContent("Adicionar ao Fincla");
+    expect(patches()).toEqual([{ patch: PAULO, body: { answer: "create" } }]);
+  });
+
+  it("BUG-02: duplo clique no Confirmar do item novo com a descrição mudada manda UM PATCH", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(within(question()).getByRole("button", { name: "Não, adicionar agora" }));
+    await waitFor(() => expect(within(paulo()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    const input = within(paulo()).getByLabelText("Descrição");
+    await user.clear(input);
+    await user.type(input, "Presente do Paulo");
+
+    doubleClickConfirm(input, within(paulo()).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    expect(patches()).toEqual([
+      { patch: PAULO, body: { answer: "create" } },
+      { patch: PAULO, body: { description: "Presente do Paulo" } },
+    ]);
+  });
+
+  it("Não registrar minimiza no clique; reaberto, as opções continuam à vista, listradas, sem clique, com Fica de fora", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    const row = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+
+    const side = within(paulo()).getByTestId("pair-ignored-side");
+    expect(side).toHaveTextContent("Corte de cabelo");
+    expect(side).toHaveTextContent("Fica de fora");
+    for (const box of within(side).getAllByTestId("fincla-side-skipped")) expect(box.style.background).toContain("repeating-linear-gradient");
+    expect(within(side).queryAllByRole("button")).toEqual([]);
+    expect(within(paulo()).getByTestId("bank-side").style.background).toContain("repeating-linear-gradient");
+    expect(confirmButtons(paulo())).toEqual([]);
+  });
+
+  it("clicar de novo na opção já escolhida (ou em Sim, é esta já marcado) só minimiza, sem gravar", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    const julia = () => card("PIX TRANSF JULIA F04 10");
+    const openJulia = () => user.click(within(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("JULIA"))).getByRole("button", { name: /Alterar/ }));
+
+    await openJulia();
+    expect(confirmButtons(julia())).toEqual([]);
+    await user.click(within(julia()).getByRole("button", { name: /Aula de violão/, pressed: true }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+
+    await openJulia();
+    await user.click(within(julia()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+    expect(patches()).toEqual([]);
+  });
+
+  it("o atalho S faz o mesmo que o botão: com Sim, é esta já marcado, minimiza sem gravar", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(within(screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("JULIA"))).getByRole("button", { name: /Alterar/ }));
+    const julia = card("PIX TRANSF JULIA F04 10");
+    expect(within(julia).getByRole("button", { name: "Sim, é esta" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.keyboard("s");
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /JULIA/ })).toBeNull());
+    expect(screen.getAllByTestId("doubt-row").some((r) => r.textContent.includes("JULIA"))).toBe(true);
+    expect(patches()).toEqual([]);
+  });
+
+  it("BUG-12: a linha recolhida já nasce respondida (Conferido), sem esperar a releitura do rascunho, e não muda quando ela chega", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    // A releitura do rascunho fica presa: o que aparece no recolher vem só do PATCH.
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let reloads = 0;
+    server.use(http.get(`${BASE}/${IMPORT}`, async () => {
+      await gate;
+      reloads += 1;
+      return HttpResponse.json(draft);
+    }));
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    await waitFor(() => expect(screen.queryByRole("article", { name: /PAULO/ })).toBeNull());
+    const row = () => screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+    // Nunca a linha provisória de "Falta responder" (44 px no navegador, que crescia para 80 px).
+    expect(row()).not.toHaveTextContent("Falta responder");
+    expect(row()).toHaveTextContent("Fica fora do Fincla");
+    expect(within(row()).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row()).getByRole("button", { name: /Desfazer escolha/ })).toBeInTheDocument();
+    const atCollapse = row().outerHTML;
+
+    await act(async () => { release(); });
+    await waitFor(() => expect(reloads).toBe(1));
+    await act(async () => {});
+    // A releitura não muda nada na linha: nenhuma altura nova empurra a tela depois do recolher.
+    expect(row().outerHTML).toBe(atCollapse);
+  });
+
+  it("a linha minimizada mostra o selo Conferido ao lado de Desfazer escolha", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(question()).getByRole("button", { name: "Não registrar" }));
+
+    const row = await waitFor(() => {
+      const found = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+      expect(found).toBeTruthy();
+      return found;
+    });
+    const badge = within(row).getByTestId("conferido-badge");
+    expect(badge).toHaveTextContent("Conferido");
+    expect(badge.nextElementSibling).toHaveTextContent("Desfazer escolha");
+    // Uma linha ainda sem resposta não diz Conferido.
+    const pending = screen.getAllByTestId("doubt-row").filter((r) => r.textContent.includes("Falta responder"));
+    for (const r of pending) expect(within(r).queryByTestId("conferido-badge")).toBeNull();
+  });
+
+  describe("BUG-13: com o 'Próximo pendente' na tela, chegar ao pendente rolando", () => {
+    /** O cartão aberto com o topo em `geo.top` px da tela (a página rola na janela de 768 px). */
+    const geo = { top: -600 };
+    const realRect = Element.prototype.getBoundingClientRect;
+    beforeEach(() => {
+      geo.top = -600;
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+        if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + 400, height: 400, left: 0, right: 0, width: 0 };
+        return realRect.call(this);
+      });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Uber (a última dúvida) sem resposta; responder ela abre o Paulo ACIMA, fora da vista. */
+    const answerUber = async (user) => {
+      draft.entries.find((e) => e.id === UBER).answer = null;
+      draft.entries.find((e) => e.id === UBER).confirmed = false;
+      await openDraft();
+      const uberRow = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("UBERX"));
+      await user.click(within(uberRow).getByRole("button", { name: /Alterar/ }));
+      await user.click(within(card("RSHOP UBERX 04 10")).getByRole("button", { name: "Não registrar" }));
+      await waitFor(() => expect(patches()).toHaveLength(1));
+      await screen.findByTestId("next-pending-above");
+      calls.length = 0;
+    };
+
+    it("o topo do cartão do Paulo entra na área visível: o botão some e o 1º N responde o Paulo (1 PATCH)", async () => {
+      const user = userEvent.setup();
+      await answerUber(user);
+
+      geo.top = 140;
+      fireEvent.scroll(document);
+      expect(screen.queryByTestId("next-pending-above")).toBeNull();
+
+      await user.keyboard("n");
+      await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "ignore" } }]));
+    });
+
+    it("o cartão do Paulo ainda fora da vista: N age como o botão (leva até ele), 0 PATCH", async () => {
+      const user = userEvent.setup();
+      Element.prototype.scrollIntoView = vi.fn();
+      try {
+        await answerUber(user);
+
+        geo.top = -200;
+        fireEvent.scroll(document);
+        expect(screen.getByTestId("next-pending-above")).toBeInTheDocument();
+
+        await user.keyboard("n");
+        await act(async () => {});
+        expect(patches()).toEqual([]);
+        expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+      } finally {
+        delete Element.prototype.scrollIntoView;
+      }
+    });
   });
 });

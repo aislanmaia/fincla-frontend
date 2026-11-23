@@ -14,10 +14,14 @@ import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
-import { SKIP_BG, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import {
+  CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, StatementEntryCard, bankDateLabel, useDescriptionDraft,
+} from "./StatementEntryCard.jsx";
 import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, ROW_CLICKABLE, openOnRowClick, useStableCallback } from "./entryQueue.jsx";
+import {
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
+} from "./entryQueue.jsx";
 
 const QUESTION = "Este lançamento do banco já está no Fincla?";
 
@@ -70,7 +74,12 @@ function outcomeText(entry, accountName) {
   return null;
 }
 
-function Answers({ entry, busy, wantPair, onYes, onAnswer, onSearch }) {
+/**
+ * As respostas, com o Confirmar ao lado só no formulário do item novo (nada vem pré-marcado numa
+ * dúvida, então não há "Confirmar sugestão"). Clicar de novo numa resposta já dada ("Sim, é esta"
+ * ou "Não registrar") minimiza o cartão (`onConfirm`), como o atalho.
+ */
+function Answers({ entry, busy, wantPair, desc, onYes, onAnswer, onChange, onSearch, onConfirm = null }) {
   const buttons = [
     { value: "pair", label: "Sim, é esta", tone: T.blue, pressed: entry.answer === "pair" || (entry.answer === null && wantPair) },
     { value: "create", label: "Não, adicionar agora", tone: T.green, pressed: entry.answer === "create" },
@@ -86,7 +95,14 @@ function Answers({ entry, busy, wantPair, onYes, onAnswer, onSearch }) {
             type="button"
             aria-pressed={b.pressed}
             disabled={busy}
-            onClick={() => (b.value === "pair" ? onYes() : entry.answer !== b.value && onAnswer(entry, { answer: b.value }))}
+            onClick={() => {
+              if (entry.answer === b.value) {
+                if (b.value !== "create" && onConfirm) onConfirm(entry);
+                return;
+              }
+              if (b.value === "pair") onYes();
+              else onAnswer(entry, { answer: b.value });
+            }}
             style={{
               ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
               border: 0, borderRight: index < buttons.length - 1 ? `1px solid ${T.border}` : 0,
@@ -97,6 +113,13 @@ function Answers({ entry, busy, wantPair, onYes, onAnswer, onSearch }) {
           </button>
         ))}
       </div>
+      {entry.answer === "create" && onConfirm ? (
+        <ConfirmAnswerButton
+          disabled={busy || !desc.value.trim()}
+          blockedNote={desc.value.trim() ? "" : CONFIRM_BLOCKED_NOTE}
+          onConfirm={() => desc.confirm(onConfirm)}
+        />
+      ) : null}
       <Btn variant="outGray" small onClick={() => onSearch(entry)} disabled={busy} style={{ alignSelf: "flex-start" }}>
         Está no Fincla com outros dados…
       </Btn>
@@ -108,7 +131,7 @@ function Answers({ entry, busy, wantPair, onYes, onAnswer, onSearch }) {
  * As opções do Fincla para o lançamento: as candidatas (a escolhida pressionada), as já escolhidas
  * por outro lançamento desativadas com "Desfazer lá", e a escolhida pela busca quando não é candidata.
  */
-function Options({ entry, entries, accountName, busy, onPick, onUndoThere, onSearch }) {
+function Options({ entry, entries, accountName, busy, onPick, onUndoThere, onSearch, onConfirm = null }) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const options = entry.candidates ?? [];
   const chosen = entry.answer === "pair" ? entry.fincla_match : null;
@@ -142,7 +165,11 @@ function Options({ entry, entries, accountName, busy, onPick, onUndoThere, onSea
           pressed={sameMatch(match, chosen)}
           takenBy={match.taken_by_entry_id ? byId.get(match.taken_by_entry_id) ?? { id: match.taken_by_entry_id, date: "", bank_description: "outro lançamento" } : null}
           onUndoThere={onUndoThere}
-          onPick={busy ? null : (picked) => !sameMatch(picked, chosen) && onPick(entry, picked)}
+          onPick={busy ? null : (picked) => {
+            // Clicar de novo na opção já escolhida só minimiza (a escolha já está gravada).
+            if (sameMatch(picked, chosen)) onConfirm?.(entry);
+            else onPick(entry, picked);
+          }}
         />
       ))}
     </div>
@@ -164,20 +191,28 @@ export function doubtYes(entry, { onPick, onWantPair, onSearch }) {
 /** O cartão aberto de um lançamento em dúvida (também usado para um lançamento novo pareado pela busca). */
 export function DoubtCard({
   entry, entries, isMobile, busy, canUndo, wantPair = false, categories, details, fallbackLabel, accountName,
-  onAnswer, onPick, onWantPair, onChange, onUndoChoice, onUndoThere, onSearch, onMinimize,
+  onAnswer, onPick, onWantPair, onChange, onUndoChoice, onUndoThere, onSearch, onMinimize, onConfirm = null,
 }) {
   const options = (entry.candidates ?? []).filter((o) => !o.taken_by_entry_id);
+  const desc = useDescriptionDraft(entry, onChange);
   const onYes = () => doubtYes(entry, { onPick, onWantPair, onSearch });
   const highlightDate = entry.answer === "pair"
     ? Boolean(entry.fincla_match?.differences.includes("date"))
     : entry.answer === null && options.some((o) => o.differences.includes("date"));
   let right;
   if (entry.answer === "create") {
-    right = <StatementEntryCard entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange} embedded />;
+    right = (
+      <StatementEntryCard
+        entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
+        embedded desc={desc}
+      />
+    );
   } else if (entry.answer === "ignore") {
-    right = <IgnoredSide />;
+    // "Não registrar": as opções continuam à vista, listradas e sem clique, com "Fica de fora".
+    const shown = entry.fincla_match && !options.some((o) => sameMatch(o, entry.fincla_match)) ? [entry.fincla_match, ...options] : options;
+    right = <IgnoredSide entry={entry} matches={shown} accountName={accountName} />;
   } else {
-    right = <Options entry={entry} entries={entries} accountName={accountName} busy={busy} onPick={onPick} onUndoThere={onUndoThere} onSearch={onSearch} />;
+    right = <Options entry={entry} entries={entries} accountName={accountName} busy={busy} onPick={onPick} onUndoThere={onUndoThere} onSearch={onSearch} onConfirm={onConfirm} />;
   }
   const outcome = outcomeText(entry, accountName);
   return (
@@ -200,7 +235,10 @@ export function DoubtCard({
         <div style={{ display: "flex", flex: 1, minWidth: 0 }}>{right}</div>
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
-        <Answers entry={entry} busy={busy} wantPair={wantPair} onYes={onYes} onAnswer={onAnswer} onSearch={onSearch} />
+        <Answers
+          entry={entry} busy={busy} wantPair={wantPair} desc={desc}
+          onYes={onYes} onAnswer={onAnswer} onChange={onChange} onSearch={onSearch} onConfirm={onConfirm}
+        />
       </footer>
       {outcome ? (
         <p data-testid="doubt-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "8px 14px", borderTop: `1px solid ${T.border}` }}>
@@ -233,7 +271,7 @@ function rowSummary(entry) {
  */
 export const DoubtRow = memo(function DoubtRowView({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
   const alterRef = useRef(null);
-  useEffect(() => { if (focus) alterRef.current?.focus(); }, [focus]);
+  useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div data-testid="doubt-row" onClick={openOnRowClick(() => onOpen(entry))} style={{ ...ROW_CLICKABLE, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", background: entry.answer === "ignore" ? SKIP_BG : T.surface, border: `1px solid ${T.border}`, borderRadius: 12, ...G, fontSize: 12, color: T.inkMid }}>
       <Btn
@@ -251,6 +289,7 @@ export const DoubtRow = memo(function DoubtRowView({ entry, canUndo, focus = fal
       <span style={{ ...NUM, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
       {entry.answer === null ? <Badge color={T.amber} bg={T.amberLight}>Falta responder</Badge> : <StatusBadge entry={entry} />}
       <span style={{ flex: 1, minWidth: 160 }}>{entry.answer === null ? <span style={{ color: T.inkLight }}>{doubtHint(entry)}</span> : rowSummary(entry)}</span>
+      {isAnswered(entry) ? <ConferidoBadge /> : null}
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
     </div>
   );
@@ -276,8 +315,10 @@ export function DoubtStep({
       <p role="status" style={{ ...G, ...NUM, fontSize: 13, color: pending ? T.amber : T.green, margin: 0 }}>
         {pending ? `${plural(pending, "lançamento para responder", "lançamentos para responder")} de ${entries.length}` : "Todos respondidos"}
       </p>
-      {entries.filter(queue.shown).map((entry) => (entry.id === queue.currentId ? (
-        <CurrentEntryFrame key={entry.id} queue={queue} entry={entry}>
+      {entries.filter(queue.shown).map((entry) => (
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+        {entry.id === queue.currentId ? (
+        <CurrentEntryFrame queue={queue} entry={entry}>
           <DoubtCard
             entry={entry}
             entries={allEntries}
@@ -297,11 +338,14 @@ export function DoubtStep({
             onUndoThere={onUndoThere}
             onSearch={onSearch}
             onMinimize={(e) => queue.close(e.id)}
+            onConfirm={(e) => queue.advanceFrom(e.id)}
           />
         </CurrentEntryFrame>
       ) : (
-        <DoubtRow key={entry.id} entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
-      )))}
+        <DoubtRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
+        )}
+        </EntrySlot>
+      ))}
     </div>
   );
 }

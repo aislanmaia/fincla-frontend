@@ -4,8 +4,12 @@
 // - Já conferidos: vieram de uma importação anterior; não viram nada e não mudam.
 // - Antes do início da conta / do último ajuste de saldo: o saldo do Fincla já inclui esses
 //   movimentos, então ficam fora por padrão. "Trazer de volta" marca o lançamento para adicionar
-//   (o cartão completo aparece, com "Não registrar" e a barra de desfazer para voltar atrás); a
-//   transação criada fica antes do início do saldo e não o muda.
+//   (o cartão completo aparece, com o formulário do item novo, o "Confirmar" ao lado das respostas,
+//   "Não registrar" e a barra de desfazer para voltar atrás); a transação criada fica antes do início
+//   do saldo e não o muda. Confirmar recolhe o cartão numa linha "Conferido" com "Alterar" e
+//   "Desfazer escolha", como nos outros passos (fincla-api#507). "Não registrar" no cartão também
+//   confirma e recolhe no clique, numa linha "Fica de fora" com "Conferido", "Alterar" e "Desfazer
+//   escolha"; reaberta ("Alterar"), o formulário continua à vista, inerte e listrado, com "Fica de fora".
 // - Valor zero: não move dinheiro, não vira transação.
 import { useState } from "react";
 import { Check, ChevronRight, Info, Link2 } from "lucide-react";
@@ -14,7 +18,8 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn, Card } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
-import { StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
+import { ConferidoBadge, EntrySlot, ROW_CLICKABLE, answerTone, openOnRowClick } from "./entryQueue.jsx";
 import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 
 const ROW = { ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface };
@@ -119,6 +124,51 @@ function LeftOutRow({ entry, busy, onBringBack }) {
   );
 }
 
+/**
+ * O trazido de volta que a pessoa decidiu "Não registrar" no cartão, minimizado: "Fica de fora",
+ * "Conferido", "Alterar" (reabre o cartão com o formulário inerte) e "Desfazer escolha" (volta a
+ * "Não, adicionar agora").
+ */
+function SkippedRow({ entry, busy, onOpen, onUndoChoice }) {
+  return (
+    <div
+      data-testid="skipped-entry"
+      role="group"
+      aria-label={`Lançamento ${entry.bank_description} fora do Fincla por escolha`}
+      onClick={openOnRowClick(() => onOpen(entry))}
+      style={{ ...ROW, ...ROW_CLICKABLE, background: SKIP_BG }}
+    >
+      <Btn variant="ghost" small onClick={() => onOpen(entry)} style={{ color: T.blue }}>Alterar</Btn>
+      <EntryFacts entry={entry} />
+      <SkipBadge />
+      <span style={{ fontSize: 12, color: T.inkLight }}>Fica de fora</span>
+      <ConferidoBadge />
+      <Btn variant="ghost" small disabled={busy} onClick={() => onUndoChoice(entry)}>Desfazer escolha</Btn>
+    </div>
+  );
+}
+
+/** O trazido de volta já confirmado, minimizado: clique em qualquer ponto (ou "Alterar") reabre. */
+function BroughtBackRow({ entry, busy, onOpen, onUndoChoice }) {
+  return (
+    <div
+      data-testid="brought-back-entry"
+      role="group"
+      aria-label={`Lançamento ${entry.bank_description} trazido de volta`}
+      onClick={openOnRowClick(() => onOpen(entry))}
+      style={{ ...ROW, ...ROW_CLICKABLE }}
+    >
+      <Btn variant="ghost" small onClick={() => onOpen(entry)} style={{ color: T.blue }}>Alterar</Btn>
+      <EntryFacts entry={entry} />
+      <span style={{ fontSize: 12, color: T.inkMid, flex: "1 1 100%", minWidth: 0, wordBreak: "break-word" }}>
+        Adicionar ao Fincla: <b>{entry.description || "(sem descrição)"}</b>
+      </span>
+      <ConferidoBadge />
+      <Btn variant="ghost" small disabled={busy} onClick={() => onUndoChoice(entry)}>Desfazer escolha</Btn>
+    </div>
+  );
+}
+
 function BroughtBackBar({ entry, onUndo }) {
   return (
     <div role="status" data-testid="brought-back-bar" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -138,7 +188,29 @@ export function OutsideStep({
   // O último "Trazer de volta": a barra desfaz devolvendo o lançamento para fora.
   const [lastBroughtBack, setLastBroughtBack] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Os cartões abertos nesta visita: o que acabou de voltar e o reaberto por "Alterar". O resto
+  // fica minimizado ("Fica de fora" ou a linha "Conferido" do trazido de volta).
+  const [openIds, setOpenIds] = useState(() => new Set());
   const texts = beforeStartTexts(leftOut);
+  const setOpen = (id, on) => setOpenIds((prev) => {
+    if (prev.has(id) === on) return prev;
+    const next = new Set(prev);
+    if (on) next.add(id);
+    else next.delete(id);
+    return next;
+  });
+  // Um trazido de volta sem descrição ainda falta responder: fica aberto até ter uma.
+  // Os que a pessoa trouxe de volta e depois decidiu "Não registrar" nesta visita: a linha deles é
+  // a de uma resposta dada ("Conferido"), não a do "fica de fora" padrão com "Trazer de volta".
+  const [skippedIds, setSkippedIds] = useState(() => new Set());
+  const setSkipped = (id, on) => setSkippedIds((prev) => {
+    if (prev.has(id) === on) return prev;
+    const next = new Set(prev);
+    if (on) next.add(id);
+    else next.delete(id);
+    return next;
+  });
+  const isOpen = (entry) => openIds.has(entry.id) || (entry.answer === "create" && !String(entry.description ?? "").trim());
 
   const run = async (work) => {
     setBusy(true);
@@ -148,11 +220,25 @@ export function OutsideStep({
     // `false` = não gravou (a página mostra o motivo): nada a desfazer.
     if ((await onChangeEntry(entry.id, { answer: "create" })) === false) return;
     setLastBroughtBack({ id: entry.id, bank_description: entry.bank_description, confirmed: entry.confirmed });
+    setOpen(entry.id, true);
   });
   const undoBringBack = () => run(async () => {
     const last = lastBroughtBack;
     setLastBroughtBack(null);
-    if (last) await onChangeEntry(last.id, { answer: "ignore", confirmed: last.confirmed });
+    if (!last) return;
+    setOpen(last.id, false);
+    setSkipped(last.id, false);
+    await onChangeEntry(last.id, { answer: "ignore", confirmed: last.confirmed });
+  });
+  // "Desfazer escolha" na linha minimizada: o trazido de volta volta para fora; o "Não registrar"
+  // escolhido no cartão volta a "Não, adicionar agora".
+  const undoChoice = (entry) => run(async () => {
+    if (lastBroughtBack?.id === entry.id) setLastBroughtBack(null);
+    await onChangeEntry(entry.id, { answer: "ignore" });
+  });
+  const undoSkip = (entry) => run(async () => {
+    if ((await onChangeEntry(entry.id, { answer: "create" })) === false) return;
+    setSkipped(entry.id, false);
   });
 
   if (!entries.length) {
@@ -201,25 +287,48 @@ export function OutsideStep({
                 <span>{texts.hint}</span>
               </div>
               {lastBroughtBack ? <BroughtBackBar entry={lastBroughtBack} onUndo={undoBringBack} /> : null}
-              {beforeStart.map((entry) => (
-                entry.answer === "ignore" ? (
-                  <LeftOutRow key={entry.id} entry={entry} busy={busy} onBringBack={bringBack} />
-                ) : (
-                  <StatementEntryCard
-                    key={entry.id}
-                    entry={entry}
-                    categories={categories}
-                    details={details}
-                    fallbackLabel={fallbackLabel}
-                    isMobile={isMobile}
-                    onChange={(id, body) => {
-                      // "Não registrar" no cartão devolve o lançamento para fora: a barra perde o sentido.
-                      if (body.answer === "ignore") setLastBroughtBack(null);
-                      return onChangeEntry(id, body);
-                    }}
-                  />
-                )
-              ))}
+              {beforeStart.map((entry) => {
+                const open = isOpen(entry);
+                let body;
+                if (open) {
+                  body = (
+                    <StatementEntryCard
+                      entry={entry}
+                      categories={categories}
+                      details={details}
+                      fallbackLabel={fallbackLabel}
+                      isMobile={isMobile}
+                      busy={busy}
+                      // O Confirmar ao lado das respostas (formulário do item novo) e o "Não
+                      // registrar" clicado de novo (já marcado, no cartão reaberto) recolhem o cartão.
+                      onConfirm={(e) => setOpen(e.id, false)}
+                      onChange={async (id, change) => {
+                        const ok = await onChangeEntry(id, change);
+                        if (ok !== false && change.answer === "ignore") {
+                          // "Não registrar" confirma e recolhe no clique (regra 3), como nos outros
+                          // passos; a barra de "trazido de volta" perde o sentido.
+                          if (lastBroughtBack?.id === id) setLastBroughtBack(null);
+                          setSkipped(id, true);
+                          setOpen(id, false);
+                        }
+                        if (ok !== false && change.answer === "create") setSkipped(id, false);
+                        return ok;
+                      }}
+                    />
+                  );
+                } else if (entry.answer === "ignore" && skippedIds.has(entry.id)) {
+                  body = <SkippedRow entry={entry} busy={busy} onOpen={(e) => setOpen(e.id, true)} onUndoChoice={undoSkip} />;
+                } else if (entry.answer === "ignore") {
+                  body = <LeftOutRow entry={entry} busy={busy} onBringBack={bringBack} />;
+                } else {
+                  body = <BroughtBackRow entry={entry} busy={busy} onOpen={(e) => setOpen(e.id, true)} onUndoChoice={undoChoice} />;
+                }
+                return (
+                  <EntrySlot key={entry.id} open={open} tone={answerTone(entry.answer)}>
+                    {body}
+                  </EntrySlot>
+                );
+              })}
             </div>
           ) : null}
         </section>

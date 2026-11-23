@@ -159,8 +159,12 @@ describe("Ver o que fica de fora", () => {
       + "de 08/09/2026.",
     );
     expect(screen.getByRole("note")).not.toHaveTextContent("não bater");
-    // O já trazido de volta aparece como cartão de lançamento novo; o outro, minimizado com o botão.
-    expect(screen.getByRole("article", { name: `Lançamento ${BROUGHT_BACK.bank_description}` })).toBeInTheDocument();
+    // O já trazido de volta (respondido, com descrição) aparece minimizado como "Conferido"; o
+    // outro, minimizado com o "Trazer de volta".
+    const done = screen.getByTestId("brought-back-entry");
+    expect(done).toHaveTextContent(BROUGHT_BACK.bank_description);
+    expect(within(done).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: `Lançamento ${BROUGHT_BACK.bank_description}` })).toBeNull();
     const early = screen.getByTestId("before-start-entry");
     expect(early).toHaveTextContent(EARLY.bank_description);
     expect(early).toHaveTextContent("Fica de fora");
@@ -181,16 +185,80 @@ describe("Ver o que fica de fora", () => {
     expect(screen.queryByTestId("brought-back-bar")).not.toBeInTheDocument();
   });
 
-  it("Não registrar no cartão trazido de volta o devolve para fora", async () => {
+  it("BUG-03: Não registrar no trazido de volta recolhe no clique (Fica de fora, Conferido); reaberto, o formulário fica inerte e listrado", async () => {
     await openDraft();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Antes do início da conta/ }));
-    const card = screen.getByRole("article", { name: `Lançamento ${BROUGHT_BACK.bank_description}` });
+    await user.click(within(screen.getByTestId("before-start-entry")).getByRole("button", { name: "Trazer de volta" }));
+    const card = await screen.findByRole("article", { name: `Lançamento ${EARLY.bank_description}` });
 
     await user.click(within(card).getByRole("button", { name: /Não registrar/ }));
 
-    await waitFor(() => expect(calls).toContainEqual({ patch: BROUGHT_BACK.id, body: { answer: "ignore" } }));
-    await waitFor(() => expect(screen.getAllByTestId("before-start-entry")).toHaveLength(2));
+    await waitFor(() => expect(calls).toContainEqual({ patch: EARLY.id, body: { answer: "ignore" } }));
+    // Regra 3: confirma e minimiza no clique, numa linha "Fica de fora" com Conferido, Alterar e Desfazer escolha.
+    const row = await screen.findByTestId("skipped-entry");
+    expect(screen.queryByRole("article", { name: `Lançamento ${EARLY.bank_description}` })).toBeNull();
+    expect(row).toHaveTextContent(EARLY.bank_description);
+    expect(row).toHaveTextContent("Fica de fora");
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
+
+    // Regra 6: reaberto ("Alterar"), o lado do Fincla continua à vista: o formulário inerte, listrado, com a nota.
+    await user.click(within(row).getByRole("button", { name: "Alterar" }));
+    const reopened = await screen.findByRole("article", { name: `Lançamento ${EARLY.bank_description}` });
+    const side = within(reopened).getByTestId("new-side-skipped");
+    expect(side.style.background).toContain("repeating-linear-gradient");
+    expect(within(side).getByRole("group", { name: /sem uso: não registrar/ })).toBeDisabled();
+    expect(within(side).getByLabelText("Descrição")).toBeDisabled();
+    expect(within(reopened).getByTestId("skip-note")).toHaveTextContent("Fica de fora");
+    expect(within(reopened).queryByRole("button", { name: "Confirmar" })).toBeNull();
+    // Clicar de novo em "Não registrar", já marcado, só recolhe (sem gravar de novo).
+    const before = calls.length;
+    await user.click(within(reopened).getByRole("button", { name: /Não registrar/ }));
+    expect(await screen.findByTestId("skipped-entry")).toBeInTheDocument();
+    expect(calls).toHaveLength(before);
+
+    // "Desfazer escolha" volta a "Não, adicionar agora": a linha do trazido de volta, Conferido.
+    await user.click(within(screen.getByTestId("skipped-entry")).getByRole("button", { name: "Desfazer escolha" }));
+    await waitFor(() => expect(calls.at(-1)).toEqual({ patch: EARLY.id, body: { answer: "create" } }));
+    await waitFor(() => expect(screen.getAllByTestId("brought-back-entry").some((r) => r.textContent.includes(EARLY.bank_description))).toBe(true));
+    expect(screen.queryByTestId("skipped-entry")).toBeNull();
+  });
+
+  it("BUG-04: o trazido de volta tem Confirmar ao lado das respostas, desligado com a descrição vazia, e recolhe como Conferido", async () => {
+    await openDraft();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Antes do início da conta/ }));
+    await user.click(within(screen.getByTestId("before-start-entry")).getByRole("button", { name: "Trazer de volta" }));
+    const card = await screen.findByRole("article", { name: `Lançamento ${EARLY.bank_description}` });
+
+    const confirm = within(card).getByRole("button", { name: "Confirmar" });
+    expect(confirm).toBeEnabled();
+    const input = within(card).getByLabelText("Descrição");
+    await user.clear(input);
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAccessibleDescription("Escreva a descrição para confirmar.");
+    await user.type(input, "Feira do bairro");
+    expect(confirm).toBeEnabled();
+
+    await user.click(confirm);
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: EARLY.id, body: { description: "Feira do bairro" } }));
+    // Recolhe numa linha como a dos outros passos: "Conferido", "Alterar" e "Desfazer escolha".
+    const row = await screen.findByText((_, el) => el?.dataset?.testid === "brought-back-entry" && el.textContent.includes(EARLY.bank_description));
+    expect(screen.queryByRole("article", { name: `Lançamento ${EARLY.bank_description}` })).toBeNull();
+    expect(row).toHaveTextContent("Adicionar ao Fincla: Feira do bairro");
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(calls.filter((c) => c.patch === EARLY.id && c.body.description)).toHaveLength(1);
+
+    // "Alterar" reabre o cartão; "Desfazer escolha" na linha devolve para fora.
+    await user.click(within(row).getByRole("button", { name: "Alterar" }));
+    const reopened = await screen.findByRole("article", { name: `Lançamento ${EARLY.bank_description}` });
+    await user.click(within(reopened).getByRole("button", { name: "Confirmar" }));
+    const again = await screen.findByText((_, el) => el?.dataset?.testid === "brought-back-entry" && el.textContent.includes(EARLY.bank_description));
+    await user.click(within(again).getByRole("button", { name: "Desfazer escolha" }));
+    await waitFor(() => expect(calls.at(-1)).toEqual({ patch: EARLY.id, body: { answer: "ignore" } }));
+    await waitFor(() => expect(screen.getAllByTestId("before-start-entry").some((r) => r.textContent.includes(EARLY.bank_description))).toBe(true));
   });
 
   it("antes do último ajuste de saldo diz que é o ajuste que já inclui os movimentos", async () => {

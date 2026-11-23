@@ -6,7 +6,7 @@
 // verdade é garantida pelos testes de API. Aqui: o que a pessoa vê e o que a tela manda.
 import React from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -197,6 +197,20 @@ const card = (bankText) => {
 };
 const markBox = (date) => screen.getByRole("checkbox", { name: `Marcar lançamento de ${date}` });
 
+/**
+ * BUG-02: o duplo clique de verdade no Confirmar. O 1º clique não tira o foco do campo (o
+ * `mousedown` é cancelado) e começa a gravar; o 2º cai no botão já desligado, cujo `mousedown`
+ * não chega ao React, então o campo perde o foco (o `blur` que grava a descrição) e o clique não
+ * conta. Tudo antes de o PATCH voltar.
+ */
+const doubleClickConfirm = (input, confirm) => {
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+  act(() => input.blur());
+  fireEvent.mouseDown(confirm);
+  fireEvent.click(confirm);
+};
+
 describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
   it("abre nos rendimentos: a soma mostra os lançamentos somados, a soma exata e a data do último", async () => {
     await openDraft();
@@ -377,7 +391,7 @@ describe("adicionar lançamentos novos", () => {
     expect(within(card("REMUNERACAO SALARIO")).getByText("Escolha uma categoria para ver as etiquetas dela.")).toBeInTheDocument();
   });
 
-  it("Não registrar tem selo e fundo próprios, fica minimizado e visível, com Alterar e Desfazer", async () => {
+  it("Não registrar tem selo e fundo próprios, fica minimizado e visível, com Alterar, Conferido e Desfazer escolha (BUG-07)", async () => {
     const user = await openDraft({ step: "Adicionar lançamentos novos" });
 
     const fee = screen.getByTestId("ignored-entry");
@@ -387,11 +401,16 @@ describe("adicionar lançamentos novos", () => {
 
     await user.click(within(fee).getByRole("button", { name: "Alterar" }));
     const opened = card("TARIFA PACOTE");
-    expect(within(opened).getByTestId("entry-not-recorded")).toHaveTextContent("Este lançamento não entra no Fincla");
+    // O formulário continua à vista, sem poder editar, listrado e com "Fica de fora".
+    const skipped = within(opened).getByTestId("new-side-skipped");
+    expect(skipped).toHaveTextContent("Este lançamento não entra no Fincla");
+    expect(skipped).toHaveTextContent("Fica de fora");
+    expect(skipped.style.background).toContain("repeating-linear-gradient");
+    expect(within(skipped).getByLabelText("Descrição")).toBeDisabled();
     await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
     expect(screen.getByTestId("ignored-entry")).toHaveTextContent("TARIFA PACOTE");
 
-    await user.click(within(screen.getByTestId("ignored-entry")).getByRole("button", { name: "Desfazer" }));
+    await user.click(within(screen.getByTestId("ignored-entry")).getByRole("button", { name: "Desfazer escolha" }));
 
     await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
     await waitFor(() => expect(screen.queryByTestId("ignored-entry")).toBeNull());
@@ -415,13 +434,13 @@ describe("adicionar lançamentos novos", () => {
     // Um clique solto na linha a reabre como o cartão atual.
     await user.click(within(fee()).getByText("fica fora do Fincla"));
     const opened = screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes("TARIFA PACOTE"));
-    expect(within(opened).getByTestId("entry-not-recorded")).toBeInTheDocument();
+    expect(within(opened).getByTestId("new-side-skipped")).toBeInTheDocument();
     expect(screen.getAllByTestId("statement-entry")).toHaveLength(1);
     expect(calls.filter((c) => c.patch)).toEqual([]);
 
-    // O Desfazer da linha desfaz e não reabre (uma ação por clique).
+    // O Desfazer escolha da linha desfaz e não reabre (uma ação por clique).
     await user.click(within(opened).getByRole("button", { name: "Minimizar" }));
-    await user.click(within(fee()).getByRole("button", { name: "Desfazer" }));
+    await user.click(within(fee()).getByRole("button", { name: "Desfazer escolha" }));
     await waitFor(() => expect(calls).toContainEqual({ patch: FEE, body: { answer: "create" } }));
     expect(calls.filter((c) => c.patch)).toHaveLength(1);
     await waitFor(() => expect(screen.getAllByTestId("entry-row").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true));
@@ -558,7 +577,7 @@ describe("adicionar lançamentos novos", () => {
     await waitFor(() => expect(calls).toContainEqual({ batch: [{ id: SALARY, answer: "ignore" }, { id: ENERGY, answer: "ignore" }] }));
     // A energia é o lançamento aberto (estava sem descrição): continua cartão, agora "Não registrar".
     await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(2));
-    expect(within(card("PAG BOLETO ENERGIA")).getByTestId("entry-not-recorded")).toBeInTheDocument();
+    expect(within(card("PAG BOLETO ENERGIA")).getByTestId("new-side-skipped")).toBeInTheDocument();
     const bar = screen.getByTestId("undo-bar");
     expect(bar).toHaveTextContent("2 lançamentos marcados como não registrar");
 
@@ -624,4 +643,194 @@ describe("revisar e concluir", () => {
 // Evita aviso de variável não usada quando a fixture muda de ordem: a ordem é presa aqui.
 it("a fixture tem os lançamentos na ordem que estes testes usam", () => {
   expect(Object.keys(E)).toEqual(["PIX0", "REMUNERACAO1", "PAG2", "REND3", "REND4", "TARIFA5"]);
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-23): no formulário do item novo o Confirmar fica ao
+// lado das respostas, desligado sem descrição; "Não registrar" (de novo, já marcado) minimiza no clique.
+describe("Confirmar ao lado das respostas nos lançamentos novos (fincla-api#507)", () => {
+  const question = (el) => within(el).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+
+  it("o Confirmar fica ao lado das respostas, desligado sem descrição; confirmar grava a descrição e minimiza", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const energy = () => card("PAG BOLETO ENERGIA");
+
+    const confirm = () => within(energy()).getByRole("button", { name: "Confirmar" });
+    expect(confirm().parentElement.parentElement).toBe(question(energy()).parentElement);
+    expect(confirm()).toBeDisabled();
+    expect(energy()).toHaveTextContent("Escreva a descrição para confirmar.");
+
+    await user.type(within(energy()).getByLabelText("Descrição"), "Conta de luz");
+    expect(confirm()).toBeEnabled();
+    await user.click(confirm());
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { description: "Conta de luz" } }));
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false);
+    expect(calls.filter((c) => c.patch && c.patch === ENERGY)).toHaveLength(1);
+  });
+
+  it("Não registrar não tem Confirmar; clicar de novo nele, já marcado, minimiza sem gravar", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const fee = card("TARIFA PACOTE");
+    expect(within(fee).queryByRole("button", { name: "Confirmar" })).toBeNull();
+
+    await user.click(within(question(fee)).getByRole("button", { name: /Não registrar/ }));
+
+    await waitFor(() => expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("TARIFA PACOTE"))).toBe(false));
+    expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("TARIFA PACOTE"))).toBe(true);
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+
+  it("a nota Escreva a descrição para confirmar descreve o Confirmar desligado (aria-describedby)", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    const confirm = within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" });
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAccessibleDescription("Escreva a descrição para confirmar.");
+  });
+
+  it("duplo clique no Confirmar manda um PATCH só, e o botão fica desligado enquanto ele está no ar", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    await user.type(within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição"), "Conta de luz");
+    const confirm = within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" });
+
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(confirm).toBeDisabled();
+
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(calls.filter((c) => c.patch === ENERGY)).toEqual([{ patch: ENERGY, body: { description: "Conta de luz" } }]);
+  });
+
+  it("BUG-02: duplo clique no Confirmar com a descrição mudada manda UM PATCH (o blur do 2º clique não grava de novo)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const input = within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição");
+    await user.type(input, "Conta de luz");
+    expect(input).toHaveFocus();
+
+    doubleClickConfirm(input, within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toHaveTextContent("Conta de luz"));
+    expect(calls.filter((c) => c.patch === ENERGY)).toEqual([{ patch: ENERGY, body: { description: "Conta de luz" } }]);
+  });
+
+  it("Não registrar minimiza assim que o backend aceita, sem esperar a releitura; enquanto grava, as respostas ficam desligadas", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    let releasePatch;
+    let releaseGet;
+    const patchGate = new Promise((resolve) => { releasePatch = resolve; });
+    const getGate = new Promise((resolve) => { releaseGet = resolve; });
+    server.use(
+      http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
+        const body = await request.json();
+        calls.push({ patch: p.entryId, body });
+        await patchGate;
+        applyEntry(entry(p.entryId), body);
+        recompute();
+        return HttpResponse.json(entry(p.entryId));
+      }),
+      http.get(`${BASE}/${IMPORT}`, async () => {
+        await getGate;
+        return HttpResponse.json(draft);
+      }),
+    );
+    const energy = card("PAG BOLETO ENERGIA");
+
+    await user.click(within(energy).getByRole("button", { name: /Não registrar/ }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { answer: "ignore" } }));
+    expect(within(energy).getByRole("button", { name: /Não registrar/ })).toBeDisabled();
+    expect(within(energy).getByRole("button", { name: /Não, adicionar agora/ })).toBeDisabled();
+
+    releasePatch();
+    // A releitura ainda não voltou e o lançamento já é uma linha "Não registrar", com o selo Conferido.
+    const row = await waitFor(() => {
+      const found = screen.getAllByTestId("ignored-entry").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"));
+      expect(found).toBeTruthy();
+      return found;
+    });
+    expect(within(row).getByTestId("conferido-badge")).toHaveTextContent("Conferido");
+    expect(screen.queryAllByTestId("statement-entry").some((c) => c.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false);
+    releaseGet();
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry")).toHaveLength(2));
+    expect(calls.filter((c) => c.patch)).toHaveLength(1);
+  });
+
+  it("o próximo cartão recebe o foco sem rolar a tela (preventScroll)", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: /Não registrar/ }));
+      await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(true));
+      const programmatic = focus.mock.contexts
+        .map((el, i) => ({ el, args: focus.mock.calls[i] }))
+        .filter(({ el }) => el.dataset?.testid === "current-entry" || el.textContent?.includes("Alterar"));
+      expect(programmatic.length).toBeGreaterThan(0);
+      for (const { args } of programmatic) expect(args[0]).toEqual({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
+  it("a linha de um lançamento a adicionar já descrito mostra o selo Conferido", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    const rows = screen.getAllByTestId("entry-row");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      const described = !r.textContent.includes("(sem descrição)");
+      expect(Boolean(within(r).queryByTestId("conferido-badge"))).toBe(described);
+    }
+  });
+});
+
+// BUG-07 (fincla-api#507, regra 5): nos lançamentos novos, a linha minimizada tem "Conferido",
+// "Alterar" e "Desfazer escolha", como nos outros passos; desfazer devolve a resposta de antes.
+describe("Desfazer escolha nos lançamentos novos (BUG-07)", () => {
+  const rowOf = (text) => [...screen.queryAllByTestId("entry-row"), ...screen.queryAllByTestId("ignored-entry")].find((r) => r.textContent.includes(text));
+  const buttonsOf = (row) => within(row).getAllByRole("button").map((b) => b.textContent.trim());
+
+  it("Confirmar (Adicionar agora): a linha tem Conferido, Alterar e Desfazer escolha; desfazer devolve a descrição de antes e reabre o cartão", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+    await user.type(within(card("PAG BOLETO ENERGIA")).getByLabelText("Descrição"), "Conta de luz");
+    await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(rowOf("PAG BOLETO ENERGIA")).toHaveTextContent("Conta de luz"));
+    const row = rowOf("PAG BOLETO ENERGIA");
+    expect(within(row).getByTestId("conferido-badge")).toHaveTextContent("Conferido");
+    expect(buttonsOf(row)).toEqual(expect.arrayContaining([expect.stringContaining("Alterar"), "Desfazer escolha"]));
+
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { description: "" } }));
+    // Uma ação só: a resposta (adicionar agora) não muda, e o cartão volta aberto como estava.
+    expect(calls.filter((c) => c.patch === ENERGY)).toHaveLength(2);
+    const back = await waitFor(() => {
+      const opened = screen.getAllByTestId("statement-entry").find((c) => c.textContent.includes("PAG BOLETO ENERGIA"));
+      expect(opened).toBeTruthy();
+      return opened;
+    });
+    expect(within(back).getByLabelText("Descrição")).toHaveValue("");
+    expect(within(back).getByRole("button", { name: /Não, adicionar agora/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("Não registrar no cartão: a linha tem Conferido, Alterar e Desfazer escolha; desfazer devolve a resposta e o confirmado de antes", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos" });
+
+    await user.click(within(card("PAG BOLETO ENERGIA")).getByRole("button", { name: /Não registrar/ }));
+
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(true));
+    const row = screen.getAllByTestId("ignored-entry").find((r) => r.textContent.includes("PAG BOLETO ENERGIA"));
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Alterar" })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Desfazer" })).toBeNull();
+
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: ENERGY, body: { answer: "create", confirmed: false } }));
+    await waitFor(() => expect(screen.getAllByTestId("ignored-entry").some((r) => r.textContent.includes("PAG BOLETO ENERGIA"))).toBe(false));
+    expect(entry(ENERGY)).toMatchObject({ answer: "create", confirmed: false });
+  });
+
+  it("sem resposta desta visita para voltar, a linha de adicionar não oferece Desfazer escolha", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    for (const r of screen.getAllByTestId("entry-row")) expect(within(r).queryByRole("button", { name: "Desfazer escolha" })).toBeNull();
+  });
 });

@@ -245,26 +245,45 @@ describe("Conferir o saldo: transações sem par", () => {
     expect(screen.getByText("Transações do Fincla sem par no extrato").closest("h3")).toHaveTextContent(/sem par no extrato\s?3$/);
   });
 
-  it("Está certa assim grava a resposta e Desfazer a esquece", async () => {
+  it("Está certa assim grava a resposta e Desfazer escolha a esquece", async () => {
     const user = await openPage();
 
     await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Está certa assim" }));
 
     expect(lastChecks()).toEqual([{ transaction_id: 97, action: "keep", new_date: null }]);
     await waitFor(() => expect(rowOf("Farmácia")).toHaveTextContent("Você disse que está certa"));
-    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Desfazer" }));
+    // BUG-05: a linha minimizada é como a dos outros passos: "Conferido", "Alterar" e "Desfazer escolha".
+    const row = rowOf("Farmácia");
+    expect(within(row).getByTestId("conferido-badge")).toHaveTextContent("Conferido");
+    expect(within(row).getByRole("button", { name: "Alterar" })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Desfazer" })).toBeNull();
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
     expect(lastChecks()).toEqual([{ transaction_id: 97, action: null, new_date: null }]);
   });
 
-  it("Excluir deixa a transação riscada à vista, e Desfazer exclusão devolve a resposta anterior", async () => {
+  it("Excluir deixa a transação riscada à vista, e Desfazer escolha devolve a resposta anterior", async () => {
     const user = await openPage();
     await user.click(within(rowOf("Conta de luz")).getByRole("button", { name: "Alterar" }));
+    // Antes de excluir, o cartão aberto não tem o listrado vermelho.
+    expect(rowOf("Conta de luz").style.background).not.toContain("repeating-linear-gradient");
 
     await user.click(within(rowOf("Conta de luz")).getByRole("button", { name: "Excluir" }));
 
     expect(lastChecks()).toEqual([{ transaction_id: 95, action: "delete", new_date: null }]);
     await waitFor(() => expect(rowOf("Conta de luz")).toHaveTextContent("Será excluída ao concluir"));
-    await user.click(within(rowOf("Conta de luz")).getByRole("button", { name: "Desfazer exclusão" }));
+    // BUG-06: a linha minimizada fica listrada em vermelho claro (o `.crow.del` do protótipo)…
+    const row = rowOf("Conta de luz");
+    expect(row).toHaveAttribute("data-check", "delete");
+    expect(row.style.background).toMatch(/^repeating-linear-gradient\(135deg, rgb\(254, 242, 242\) 0 7px, color-mix\(in srgb, rgb\(220, 38, 38\) 16%/);
+    // …com o selo "Conferido" e "Desfazer escolha" (BUG-05).
+    expect(within(row).getByTestId("conferido-badge")).toBeInTheDocument();
+    // …e o cartão reaberto também (o `.ccard.del`).
+    await user.click(within(row).getByRole("button", { name: "Alterar" }));
+    const card = rowOf("Conta de luz");
+    expect(card).toHaveAttribute("data-current", "true");
+    expect(card.style.background).toMatch(/^repeating-linear-gradient\(135deg, rgb\(254, 242, 242\) 0 9px/);
+    expect(within(card).queryByTestId("conferido-badge")).toBeNull();
+    await user.click(within(card).getByRole("button", { name: "Desfazer escolha" }));
     // Antes de excluir, a data mudava: é isso que volta.
     expect(lastChecks()).toEqual([{ transaction_id: 95, action: "change_date", new_date: "2026-10-07" }]);
   });

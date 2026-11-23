@@ -479,6 +479,16 @@ function StepRail({ statementImport, current, passed, onOpen }) {
 const STICKY_FOCUS_GAP = 12;
 
 /**
+ * O que o topo fixo cobre no alto da área que rola: a altura dele em `data-sticky-cover` (onde a
+ * área visível começa de fato, lida pela âncora da lista) e, com a folga, no `scroll-padding-top`
+ * (onde o foco que a página move para).
+ */
+function reserveStickyTop(scroller, height) {
+  scroller.dataset.stickyCover = String(height);
+  scroller.style.scrollPaddingTop = `${height + STICKY_FOCUS_GAP}px`;
+}
+
+/**
  * O topo fixo da conciliação: gruda no alto da área que rola, com fundo próprio para o que passa
  * por baixo não aparecer. `top: 0` grudaria ABAIXO do padding do alto da área que rola (20px no
  * computador, 14px no celular) e deixaria ali uma faixa onde o conteúdo aparece cortado (BUG-01 da
@@ -497,20 +507,19 @@ function StickyTop({ children, style = null }) {
     const paddingTop = Number.parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
     setTop(paddingTop ? -paddingTop : 0);
     const previous = scroller.style.scrollPaddingTop;
-    const reserve = () => { scroller.style.scrollPaddingTop = `${(ref.current?.offsetHeight ?? 0) + STICKY_FOCUS_GAP}px`; };
+    const reserve = () => reserveStickyTop(scroller, ref.current?.offsetHeight ?? 0);
     reserve();
     window.addEventListener("resize", reserve);
     return () => {
       window.removeEventListener("resize", reserve);
       scroller.style.scrollPaddingTop = previous;
+      delete scroller.dataset.stickyCover;
       scrollerRef.current = null;
     };
   }, []);
   // A altura muda com o conteúdo (o valor, a quebra de linha): a reserva acompanha a cada render.
   useEffect(() => {
-    if (scrollerRef.current && ref.current) {
-      scrollerRef.current.style.scrollPaddingTop = `${ref.current.offsetHeight + STICKY_FOCUS_GAP}px`;
-    }
+    if (scrollerRef.current && ref.current) reserveStickyTop(scrollerRef.current, ref.current.offsetHeight);
   });
   return (
     <div
@@ -743,7 +752,11 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // lançamento (para "Desfazer escolha") e a última confirmação em lote.
   const [answerHistory, setAnswerHistory] = useState({});
   const [lastBulk, setLastBulk] = useState(null);
-  const [answering, setAnswering] = useState(false);
+  // Quantos pedidos de resposta estão no ar: enquanto houver um, as respostas ficam desligadas
+  // (nada de um segundo PATCH por duplo clique). Um contador, para dois pedidos não se atropelarem.
+  const [inFlight, setInFlight] = useState(0);
+  const answering = inFlight > 0;
+  const setAnswering = useCallback((on) => setInFlight((n) => Math.max(0, n + (on ? 1 : -1))), []);
   // Dúvidas (fincla-api#511): "Sim, é esta" dito sem escolher qual, e o lançamento da busca aberta.
   const [wantPair, setWantPair] = useState(() => new Set());
   const [searchFor, setSearchFor] = useState(null);
@@ -836,15 +849,31 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       .catch((err) => setActionError(handleApiError(err)));
   };
 
-  const changeEntry = async (entryId, body) => {
+  // `onSaved` roda assim que o backend aceita a mudança, antes de reler o rascunho: é onde uma
+  // resposta minimiza o cartão (no clique, como nos outros passos). O lançamento gravado já entra
+  // na tela, para a linha minimizada mostrar a resposta nova sem esperar a releitura.
+  // O lançamento que o PATCH devolveu entra na tela NO MESMO commit em que o cartão recolhe: a
+  // linha nasce na forma respondida final ("Conferido", o resumo da resposta) e não cresce depois
+  // da releitura do rascunho. A âncora do recolher mede essa linha final (BUG-12: com a linha
+  // provisória de "Falta responder", 44 px em vez de 80, a regra da metade errava e a linha pulava).
+  const showSaved = useCallback((entryId, saved) => {
+    if (saved?.id !== entryId) return;
+    setStatementImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
+  }, []);
+
+  const changeEntry = async (entryId, body, { onSaved = null } = {}) => {
+    setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entryId, body);
+      showSaved(entryId, await updateStatementEntry(accountId, organizationId, importId, entryId, body));
+      onSaved?.();
       await reload();
       return true;
     } catch (err) {
       setActionError(handleApiError(err));
       return false;
+    } finally {
+      setAnswering(false);
     }
   };
 
@@ -868,8 +897,9 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     applyWhole(() => updateStatementGroup(accountId, organizationId, importId, groupId, body));
   const deleteGroup = (groupId) => applyWhole(() => deleteStatementGroup(accountId, organizationId, importId, groupId));
 
-  // Responder abre o próximo sem resposta; "Não, adicionar agora" deixa o cartão aberto para
-  // conferir a transação nova (com "Próximo sem resposta →").
+  // Responder confirma e minimiza na hora do clique, abrindo o próximo sem resposta, sem espera
+  // (decisão do Owner, fincla-api#507). "Não, adicionar agora" deixa o cartão aberto com o
+  // formulário da transação nova e o "Confirmar" ao lado das respostas.
   const advanceAfter = (entry, answer) => { if (answer && answer !== "create") queue.advanceFrom(entry.id); };
 
   const answerPair = async (entry, answer) => {
@@ -880,7 +910,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer });
+      showSaved(entry.id, await updateStatementEntry(accountId, organizationId, importId, entry.id, { answer }));
       setAnswerHistory((prev) => ({
         ...prev,
         [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }],
@@ -921,7 +951,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
     setAnswering(true);
     setActionError("");
     try {
-      await updateStatementEntry(accountId, organizationId, importId, entry.id, body);
+      showSaved(entry.id, await updateStatementEntry(accountId, organizationId, importId, entry.id, body));
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), answerSnapshot(entry)] }));
       setWantPair((prev) => { const next = new Set(prev); next.delete(entry.id); return next; });
       // "Desfazer lá" responde OUTRO lançamento: o atual continua aberto.
@@ -1058,7 +1088,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       advanceAfter(entry, answer);
       return;
     }
-    if (await changeEntry(entry.id, { answer })) advanceAfter(entry, answer);
+    await changeEntry(entry.id, { answer }, { onSaved: () => advanceAfter(entry, answer) });
   };
   // S/A/N respondem o lançamento aberto, como os botões do cartão de cada passo.
   const shortcutAnswers = {
@@ -1068,7 +1098,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       n: (e) => answerPair(e, "ignore"),
     },
     doubt: {
-      s: (e) => doubtYes(e, doubtProps),
+      // Como o botão: "Sim, é esta" já marcado só minimiza (como o N num "Não registrar" já marcado).
+      s: (e) => (e.answer === "pair" ? advanceAfter(e, "pair") : doubtYes(e, doubtProps)),
       a: (e) => e.answer !== "create" && answerDoubt(e, { answer: "create" }),
       n: (e) => (e.answer === "ignore" ? advanceAfter(e, "ignore") : answerDoubt(e, { answer: "ignore" })),
     },
@@ -1172,6 +1203,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               fallbackLabel={fallbackLabel}
               isMobile={isMobile}
               onChangeEntry={changeEntry}
+              answering={answering}
               onBatch={batch}
               onCreateGroup={createGroup}
               onUpdateGroup={updateGroup}
@@ -1186,6 +1218,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
                   canUndo={Boolean(answerHistory[entry.id]?.length)}
                   onWantPair={() => setSearchFor(entry)}
                   onMinimize={(e) => queue.close(e.id)}
+                  onConfirm={(e) => queue.advanceFrom(e.id)}
                 />
               ) : (
                 <DoubtRow
