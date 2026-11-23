@@ -479,6 +479,16 @@ function StepRail({ statementImport, current, passed, onOpen }) {
 const STICKY_FOCUS_GAP = 12;
 
 /**
+ * O que o topo fixo cobre no alto da área que rola: a altura dele em `data-sticky-cover` (onde a
+ * área visível começa de fato, lida pela âncora da lista) e, com a folga, no `scroll-padding-top`
+ * (onde o foco que a página move para).
+ */
+function reserveStickyTop(scroller, height) {
+  scroller.dataset.stickyCover = String(height);
+  scroller.style.scrollPaddingTop = `${height + STICKY_FOCUS_GAP}px`;
+}
+
+/**
  * O topo fixo da conciliação: gruda no alto da área que rola, com fundo próprio para o que passa
  * por baixo não aparecer. `top: 0` grudaria ABAIXO do padding do alto da área que rola (20px no
  * computador, 14px no celular) e deixaria ali uma faixa onde o conteúdo aparece cortado (BUG-01 da
@@ -497,20 +507,19 @@ function StickyTop({ children, style = null }) {
     const paddingTop = Number.parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
     setTop(paddingTop ? -paddingTop : 0);
     const previous = scroller.style.scrollPaddingTop;
-    const reserve = () => { scroller.style.scrollPaddingTop = `${(ref.current?.offsetHeight ?? 0) + STICKY_FOCUS_GAP}px`; };
+    const reserve = () => reserveStickyTop(scroller, ref.current?.offsetHeight ?? 0);
     reserve();
     window.addEventListener("resize", reserve);
     return () => {
       window.removeEventListener("resize", reserve);
       scroller.style.scrollPaddingTop = previous;
+      delete scroller.dataset.stickyCover;
       scrollerRef.current = null;
     };
   }, []);
   // A altura muda com o conteúdo (o valor, a quebra de linha): a reserva acompanha a cada render.
   useEffect(() => {
-    if (scrollerRef.current && ref.current) {
-      scrollerRef.current.style.scrollPaddingTop = `${ref.current.offsetHeight + STICKY_FOCUS_GAP}px`;
-    }
+    if (scrollerRef.current && ref.current) reserveStickyTop(scrollerRef.current, ref.current.offsetHeight);
   });
   return (
     <div

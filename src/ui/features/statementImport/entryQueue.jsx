@@ -363,14 +363,21 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
 export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children }) {
   const ref = useRef(null);
   const { takeFocus, focusTick } = queue;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: o pedido de foco é o tick; takeFocus muda a cada render.
+  const isNextAbove = queue.nextAbove?.target?.id === entry.id;
+  // O pedido de foco é o tick (takeFocus muda a cada render).
   useEffect(() => {
     // preventScroll: a tela não pula para o próximo cartão; quem fica parado é o que minimizou.
-    if (takeFocus(entry.id)) ref.current?.focus({ preventScroll: true });
+    if (!takeFocus(entry.id)) return;
+    // Este cartão abriu ACIMA do item respondido, fora da tela: o foco vai para o "Próximo
+    // pendente", à vista logo abaixo da linha (o primeiro Tab não entra num cartão que a pessoa
+    // não vê, OBS-22). Enter/clique nele leva até aqui. Sem o botão (linha escondida pelo filtro),
+    // o foco vem para o cartão, como sempre.
+    const button = isNextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
+    (button ?? ref.current)?.focus({ preventScroll: true });
   }, [focusTick, entry.id]);
   // A pessoa chegou no pendente apontado por "Próximo pendente" (o foco entrou num controle dele).
   const onFocus = (event) => {
-    if (event.target !== ref.current && queue.nextAbove?.target?.id === entry.id) queue.dismissNextAbove();
+    if (event.target !== ref.current && isNextAbove) queue.dismissNextAbove();
   };
   return (
     <div
@@ -441,8 +448,10 @@ export const ANCHOR_MARGIN = 16;
 
 /**
  * Para onde rolar para o item que o olho acompanha (`oldTop` antes da troca, `newTop` agora, em
- * px da tela) ficar no lugar certo. Todas as medidas na mesma régua (`viewTop` = topo da área
- * visível da região que rola).
+ * px da tela) ficar no lugar certo. Todas as medidas na mesma régua: `coverTop` = onde a área
+ * visível começa de fato (a borda de baixo do topo grudado); `viewTop` = onde um item que volta
+ * para a vista para (essa borda mais a folga de foco do `scroll-padding-top`). A regra da metade
+ * mede contra `coverTop`: a folga de foco não esconde nada (BUG-11, 12 px que viravam um pulo).
  *
  * - No topo antigo, o item na forma nova (`newHeight`, a linha sem o "Próximo pendente" de baixo)
  *   ainda aparece pelo menos pela metade na área visível: fica exatamente onde estava (nada pula,
@@ -454,9 +463,9 @@ export const ANCHOR_MARGIN = 16;
  *   isso deixaria vazio embaixo (fim da lista), a rolagem para no fim do
  *   conteúdo: a linha fica à vista com a lista acima dela, sem espaço provisório.
  */
-export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, clientHeight, contentHeight }) {
+export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, coverTop = viewTop, clientHeight, contentHeight }) {
   const keep = scrollTop + (newTop - oldTop);
-  if (oldTop + newHeight / 2 > viewTop + 0.5) return keep;
+  if (oldTop + newHeight / 2 > coverTop + 0.5) return keep;
   const toTop = scrollTop + (newTop - (viewTop + ANCHOR_MARGIN));
   return Math.max(0, Math.min(toTop, contentHeight - clientHeight));
 }
@@ -561,6 +570,17 @@ function viewTopOf(scroller) {
   return scrollportTopOf(scroller) + (Number.parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
 }
 
+/**
+ * Onde a área visível da região que rola começa DE FATO, em px da tela: a borda de baixo do que
+ * fica grudado em cima. O topo fixo da conciliação publica a altura dele em `data-sticky-cover`
+ * (o `scroll-padding-top` soma a ela uma folga de foco, que não cobre nada). Sem isso, o
+ * `scroll-padding-top` é a melhor estimativa.
+ */
+function coverTopOf(scroller) {
+  const cover = Number.parseFloat(scroller.dataset?.stickyCover);
+  return Number.isFinite(cover) ? scrollportTopOf(scroller) + cover : viewTopOf(scroller);
+}
+
 /** Deixa a rolagem em `target` sem o navegador cortar: segura o espaço que faltar embaixo. */
 function holdScroll(scroller, target) {
   takeAnchoring(scroller);
@@ -622,6 +642,8 @@ function flushCommit() {
       const scrollTop = scroller.scrollTop;
       const now = anchor.el.getBoundingClientRect();
       // A altura do item em si (o primeiro filho): o "Próximo pendente" embaixo dele não conta.
+      // É a altura da linha AGORA; a releitura do rascunho pode fazê-la crescer depois (para baixo,
+      // o que só aumenta a parte à vista): se a metade aparece agora, continua aparecendo.
       const own = anchor.el.firstElementChild?.getBoundingClientRect().height || now.height;
       const target = anchorTarget({
         scrollTop,
@@ -629,6 +651,7 @@ function flushCommit() {
         newTop: now.top,
         newHeight: own,
         viewTop: anchor.viewTop ?? viewTopOf(scroller),
+        coverTop: anchor.coverTop ?? coverTopOf(scroller),
         clientHeight: scroller.clientHeight,
         contentHeight: contentHeightOf(scroller),
       });
@@ -696,7 +719,16 @@ export class EntrySlot extends Component {
     }
     commit.expected += 1;
     const scroller = scrollParentOf(el);
-    return { height: rect.height, top: rect.top, focusInside, motion, ghost, scroller, viewTop: scroller ? viewTopOf(scroller) : 0 };
+    return {
+      height: rect.height,
+      top: rect.top,
+      focusInside,
+      motion,
+      ghost,
+      scroller,
+      viewTop: scroller ? viewTopOf(scroller) : 0,
+      coverTop: scroller ? coverTopOf(scroller) : 0,
+    };
   }
 
   componentDidUpdate(_prevProps, _prevState, snap) {

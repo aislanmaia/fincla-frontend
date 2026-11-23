@@ -289,9 +289,15 @@ describe("a diferença de saldo fica fixa no topo ao rolar", () => {
 
     expect(scroller.style.scrollPaddingTop).toMatch(/^\d+px$/);
     expect(scroller.style.scrollPaddingTop).not.toBe("4px");
+    // A borda que o topo fixo cobre de fato (sem a folga de foco) fica publicada para a âncora da
+    // lista medir a metade da linha à vista (BUG-11): a reserva é ela + 12 px.
+    const cover = Number(scroller.dataset.stickyCover);
+    expect(Number.isFinite(cover)).toBe(true);
+    expect(Number.parseFloat(scroller.style.scrollPaddingTop)).toBe(cover + 12);
 
     unmount();
     expect(scroller.style.scrollPaddingTop).toBe("4px");
+    expect(scroller.dataset.stickyCover).toBeUndefined();
     scroller.remove();
   });
 });

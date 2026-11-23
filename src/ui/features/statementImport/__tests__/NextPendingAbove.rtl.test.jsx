@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { CurrentEntryFrame, EntrySlot, useEntryQueue } from "../entryQueue.jsx";
 
@@ -48,6 +49,7 @@ function Harness({ initial = INITIAL }) {
           )}
         </EntrySlot>
       ))}
+      <button type="button">Concluir passo</button>
     </div>
   );
 }
@@ -100,6 +102,47 @@ describe("Próximo pendente acima do item respondido", () => {
     fireEvent.click(screen.getByRole("button", { name: "Não registrar d" }));
     expect(api.queue.currentId).toBeNull();
     expect(button()).toBeNull();
+  });
+
+  it("OBS-22: ao aparecer, o botão recebe o foco (sem rolar), não o cartão fora da tela", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    answerLast();
+    expect(document.activeElement).toBe(button());
+    const call = focus.mock.calls.find((_, i) => focus.mock.contexts[i] === button());
+    expect(call).toEqual([{ preventScroll: true }]);
+    // O cartão do pendente não recebeu o foco.
+    expect(focus.mock.contexts).not.toContain(screen.getByTestId("current-entry"));
+    focus.mockRestore();
+  });
+
+  it("OBS-22: sem o botão (o próximo abre abaixo), o foco vai para o cartão aberto, como antes", () => {
+    render(<Harness />);
+    act(() => api.queue.open("a"));
+    fireEvent.click(screen.getByRole("button", { name: "Não registrar a" }));
+    expect(button()).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+  });
+
+  it("OBS-22: com o foco no botão, Enter leva ao pendente e põe o foco nele; o botão some", async () => {
+    const user = userEvent.setup();
+    answerLast();
+    expect(document.activeElement).toBe(button());
+    await user.keyboard("{Enter}");
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+    expect(button()).toBeNull();
+  });
+
+  it("OBS-22: Tab a partir do botão segue para o próximo controle depois dele, e o botão continua", async () => {
+    const user = userEvent.setup();
+    answerLast();
+    expect(document.activeElement).toBe(button());
+    await user.tab();
+    // O próximo controle na ordem da página (abaixo), não o cartão de cima.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Concluir passo" }));
+    expect(button()).toBeInTheDocument();
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(button());
   });
 
   it("o clique rola suave até o pendente e põe o foco nele sem rolar de novo; depois some", () => {

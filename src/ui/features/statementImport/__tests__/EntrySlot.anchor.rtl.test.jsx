@@ -14,8 +14,8 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 
 import { ANCHOR_MARGIN, EntryQueueHeader, EntrySlot, anchorTarget, pickAnchor, spacerNeeded } from "../entryQueue.jsx";
 
-const ROW = 100;
-const VIEW = 400;
+let ROW = 100;
+let VIEW = 400;
 const HEADER = 52;
 const NOTE = 24;
 const IDS = ["a", "b", "c", "d", "e", "f"];
@@ -49,6 +49,8 @@ const realRect = Element.prototype.getBoundingClientRect;
 beforeEach(() => {
   scrollTop = 0;
   openHeight = 300;
+  ROW = 100;
+  VIEW = 400;
   chromeLike = false;
   Element.prototype.getBoundingClientRect = function rect() {
     const kind = this.dataset?.testid;
@@ -157,6 +159,23 @@ describe("pickAnchor / spacerNeeded / anchorTarget", () => {
   it("topo um pouco acima (atrás do topo grudado), mas a linha ainda aparece ali: fica onde estava, sem pulo", () => {
     // Computador: o topo do cartão 28 px atrás do topo grudado; a linha de 80 px no mesmo topo aparece.
     expect(anchorTarget({ scrollTop: 539, oldTop: 144, newTop: 144, newHeight: 80, viewTop: 172, clientHeight: 844, contentHeight: 1000 })).toBe(539);
+  });
+
+  it("BUG-11: a metade é medida contra a borda do topo grudado, não contra a folga de foco do scroll-padding", () => {
+    // Medido no navegador (computador 1440x900, página no fim, rolagem 539 de 539): a região que
+    // rola começa em 56 px, o topo grudado tem 104 px (cobre até 160 px) e o scroll-padding-top
+    // soma a folga de foco de 12 px (116 px: 172 px). O topo do cartão está em 144,1875 px. Na
+    // hora de recolher, a linha ainda é a de antes da releitura do rascunho: 44 px (depois cresce
+    // para 80 px, para baixo). Abaixo de 160 px aparecem 28,2 dos 44 px (64%): fica parada.
+    const bug11 = { scrollTop: 539, oldTop: 144.1875, newTop: 144.1875, newHeight: 44, viewTop: 172, clientHeight: 728, contentHeight: 689 };
+    expect(anchorTarget({ ...bug11, coverTop: 160 })).toBe(539);
+    // Medida contra 172 px (a folga de foco contada como coberta), a metade dava 166,2 ≤ 172,5 e a
+    // linha ia para a vista: o pulo de 581 px do BUG-11.
+    expect(anchorTarget(bug11)).not.toBe(539);
+    // Com a linha já na altura final (80 px), também fica.
+    expect(anchorTarget({ ...bug11, newHeight: 80, coverTop: 160 })).toBe(539);
+    // Menos da metade abaixo da borda (21 de 44 px): a linha vem para a vista, como no BUG-10.
+    expect(anchorTarget({ ...bug11, oldTop: 137, newTop: 137, coverTop: 160 })).not.toBe(539);
   });
 
   it("só uma fresta da linha apareceria atrás do topo grudado (BUG-10): ela vem para a área visível", () => {
@@ -366,6 +385,26 @@ describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha res
     rerender(<List open="d" />);
 
     expect(topOf("c")).toBe(60 + ANCHOR_MARGIN);
+  });
+
+  it("BUG-11: o topo grudado publica a borda que cobre; 28 dos 44 px da linha à vista abaixo dela: a linha fica parada (0 px)", () => {
+    // A geometria do BUG-11 nesta região simulada: linha de 44 px (a altura na hora de recolher),
+    // cartão de 670 px, área de 728 px, página no fim. O topo do "f" fica em 58 px; o topo grudado
+    // cobre até 74 px (data-sticky-cover) e o scroll-padding-top soma a folga de foco (86 px).
+    ROW = 44;
+    VIEW = 728;
+    openHeight = 670;
+    const { rerender } = render(<List open="f" />);
+    scroller.dataset.stickyCover = "74";
+    scroller.style.scrollPaddingTop = "86px";
+    scrollToEnd();
+    expect(topOf("f")).toBe(58);
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
+
+    rerender(<List open={null} />);
+
+    expect(topOf("f")).toBe(58);
+    expect(spacerHeight()).toBeGreaterThan(0);
   });
 
   it("o caso do BUG-01 (topo à vista) continua exatamente parado, mesmo com o cartão alto", () => {
