@@ -561,6 +561,7 @@ export default function App() {
           token={entry.token}
           onValidateToken={validateResetToken}
           onResetPassword={session.resetPasswordWithToken}
+          onRequestNewLink={session.requestPasswordReset}
           onComplete={() => {
             stripAuthEntryQueryAndHash();
             window.location.reload();
