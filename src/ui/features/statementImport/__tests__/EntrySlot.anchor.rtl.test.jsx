@@ -8,11 +8,21 @@
 //
 // jsdom não tem layout: aqui uma região que rola é simulada (alturas por estado do lugar, rolagem
 // cortada como no navegador), e `Element.animate` é falso quando a animação importa.
-import React from "react";
+import React, { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { ANCHOR_MARGIN, EntryQueueHeader, EntrySlot, anchorTarget, pickAnchor, spacerNeeded } from "../entryQueue.jsx";
+import {
+  ANCHOR_MARGIN,
+  CurrentEntryFrame,
+  EntryQueueHeader,
+  EntrySlot,
+  SETTLE_SPACER_RATIO,
+  anchorTarget,
+  pickAnchor,
+  spacerNeeded,
+  useEntryQueue,
+} from "../entryQueue.jsx";
 
 let ROW = 100;
 let VIEW = 400;
@@ -54,6 +64,8 @@ beforeEach(() => {
   chromeLike = false;
   Element.prototype.getBoundingClientRect = function rect() {
     const kind = this.dataset?.testid;
+    // A moldura do cartão aberto ocupa o lugar dele inteiro.
+    if (kind === "current-entry" && this.parentElement?.dataset.testid === "entry-slot") return this.parentElement.getBoundingClientRect();
     // A região pelo DOM (o `ref` dela ainda não chegou na 1ª medida do cabeçalho, ao montar).
     const root = this.closest?.("[data-testid='scroller']");
     if ((kind !== "entry-slot" && kind !== "queue-header") || !root) return realRect.call(this);
@@ -567,5 +579,228 @@ describe("'Tudo respondido neste passo' no cabeçalho (BUG-09): o item respondid
 
     expect(topOf("a")).toBe(before);
     expect(scroller.scrollTop).toBe(NOTE);
+  });
+});
+
+// OBS-26 (fincla-api#507, decisão do Owner): no fim da lista, segurar o item respondido parado
+// pode exigir um espaço provisório enorme embaixo (a tela vira um vão vazio). Acima de 40% da
+// altura visível da região, a página não segura: assenta no fim do conteúdo, com rolagem suave
+// (na hora com movimento reduzido). Até 40%, segura como antes.
+describe("OBS-26: espaço provisório grande demais → a página assenta no fim do conteúdo", () => {
+  let frames;
+  let scrollToCalls;
+  const flushFrames = () => act(() => { for (const cb of frames.splice(0)) cb(0); });
+
+  beforeEach(() => {
+    frames = [];
+    scrollToCalls = [];
+    vi.stubGlobal("requestAnimationFrame", (cb) => frames.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", (id) => { frames[id - 1] = () => {}; });
+  });
+
+  /** A lista simulada, com `scrollTo` registrando o pedido (quem anda a rolagem é o teste). */
+  function SimList(props) {
+    return (
+      <div
+        ref={(el) => {
+          if (el) el.firstElementChild.scrollTo = (options) => scrollToCalls.push(options);
+        }}
+      >
+        <List {...props} />
+      </div>
+    );
+  }
+
+  /** A rolagem suave andando até `top`: `scroll` em cada passo, como no navegador. */
+  const scrollThrough = (...tops) => act(() => {
+    for (const top of tops) {
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new Event("scroll"));
+    }
+  });
+
+  it("a regra é 40% da altura visível", () => {
+    expect(SETTLE_SPACER_RATIO).toBe(0.4);
+  });
+
+  it("espaço > 40%: o quadro da troca ainda segura (nada pula); depois a página rola suave até o fim do conteúdo, sem vão", () => {
+    // 5 × 100 + 300 − 400: o "f" no fim; segurá-lo pediria 200 px (50% de 400) embaixo.
+    const { rerender } = render(<SimList open="f" />);
+    scrollToEnd();
+    const before = topOf("f");
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
+
+    rerender(<SimList open={null} />);
+
+    // O primeiro quadro: o item no lugar, nada de pulo.
+    expect(topOf("f")).toBe(before);
+    expect(spacerHeight()).toBe(200);
+    expect(scrollToCalls).toEqual([]);
+
+    flushFrames();
+
+    // O fim do conteúdo final: 6 × 100 − 400.
+    expect(scrollToCalls).toEqual([{ top: 200, behavior: "smooth" }]);
+    scrollThrough(300, 200);
+    expect(spacerOf()).toBeNull();
+    expect(visibleContent()).toBe(VIEW);
+    // A linha respondida inteira à vista, no fim da tela, com a lista acima dela.
+    expect(topOf("f")).toBe(VIEW - ROW);
+  });
+
+  it("com movimento reduzido, a página vai na hora para o fim do conteúdo", () => {
+    vi.stubGlobal("matchMedia", (query) => ({ matches: query.includes("reduce"), addEventListener() {}, removeEventListener() {} }));
+    const { rerender } = render(<SimList open="f" />);
+    scrollToEnd();
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
+
+    rerender(<SimList open={null} />);
+    flushFrames();
+
+    expect(scrollToCalls).toEqual([{ top: 200, behavior: "instant" }]);
+  });
+
+  it("espaço ≤ 40%: segura o item parado como antes (sem rolar até o fim)", () => {
+    // Cartão de 260 px: segurar o "f" pede 160 px embaixo, exatamente 40% de 400.
+    openHeight = 260;
+    const { rerender } = render(<SimList open="f" />);
+    scrollToEnd();
+    const before = topOf("f");
+    const top = scroller.scrollTop;
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
+
+    rerender(<SimList open={null} />);
+    flushFrames();
+
+    expect(scrollToCalls).toEqual([]);
+    expect(scroller.scrollTop).toBe(top);
+    expect(topOf("f")).toBe(before);
+    expect(spacerHeight()).toBe(160);
+  });
+
+  // A página assentando sozinha não é "a pessoa chegou ao pendente rolando": o "↑ Próximo
+  // pendente" continua (quem tira é a pessoa: clicar, rolar, responder).
+  describe("a rolagem da própria tela não tira o 'Próximo pendente'", () => {
+    // Cabeçalho de 52 px, o pendente "a" no topo, "b" respondido e "f" (o último) aberto.
+    // Região de 600 px; o cartão de "a" mede 380 px quando abre e o de "f" também.
+    const ENTRIES = [
+      { id: "a", answer: null },
+      { id: "b", answer: "ignore" },
+      { id: "f", answer: null },
+    ];
+    let api;
+
+    function QueueHarness() {
+      const [entries, setEntries] = useState(ENTRIES);
+      const queue = useEntryQueue("doubts", entries);
+      api = { queue };
+      const answer = (id) => {
+        setEntries((list) => list.map((e) => (e.id === id ? { ...e, answer: "ignore" } : e)));
+        queue.advanceFrom(id);
+      };
+      return (
+        <div
+          data-testid="scroller"
+          style={{ overflowY: "auto" }}
+          ref={(el) => {
+            if (!el || el === scroller) return;
+            scroller = el;
+            Object.defineProperty(el, "clientHeight", { configurable: true, get: () => VIEW });
+            Object.defineProperty(el, "scrollHeight", { configurable: true, get: scrollHeight });
+            Object.defineProperty(el, "scrollTop", { configurable: true, get: readScroll, set: writeScroll });
+            el.scrollTo = (options) => scrollToCalls.push(options);
+          }}
+        >
+          <div data-testid="queue-header" />
+          {entries.map((entry) => (
+            <EntrySlot key={entry.id} open={entry.id === queue.currentId} queue={queue} entryId={entry.id}>
+              {entry.id === queue.currentId ? (
+                <CurrentEntryFrame queue={queue} entry={entry}>
+                  <button type="button" onClick={() => answer(entry.id)}>Não registrar {entry.id}</button>
+                </CurrentEntryFrame>
+              ) : (
+                <div data-testid={`row-${entry.id}`} />
+              )}
+            </EntrySlot>
+          ))}
+        </div>
+      );
+    }
+
+    const nextButton = () => screen.queryByTestId("next-pending-above");
+    const cardTop = () => screen.getByTestId("current-entry").getBoundingClientRect().top;
+
+    /** Responde o último ("f", com a página no fim): o "a" abre acima e o botão aparece embaixo. */
+    function answerLast() {
+      VIEW = 600;
+      openHeight = 380;
+      render(<QueueHarness />);
+      act(() => api.queue.open("f"));
+      scrollToEnd(); // 52 + 100 + 100 + 380 − 600
+      expect(scroller.scrollTop).toBe(32);
+      const confirm = screen.getByRole("button", { name: "Não registrar f" });
+      confirm.focus();
+      fireEvent.click(confirm);
+      expect(api.queue.currentId).toBe("a");
+      expect(nextButton()).toBeInTheDocument();
+      // Segurar o "f" pediria 280 px embaixo (> 40% de 600): a página vai assentar no fim.
+      expect(spacerHeight()).toBe(280);
+      expect(cardTop()).toBeLessThan(0);
+      flushFrames();
+      expect(scrollToCalls).toEqual([{ top: 32, behavior: "smooth" }]);
+    }
+
+    it("o topo do pendente entra na área visível durante a rolagem da tela: o botão continua", () => {
+      answerLast();
+      scrollThrough(200, 100, 32);
+      // O topo do cartão "a" agora está à vista (e se moveu desde que o botão apareceu).
+      expect(cardTop()).toBe(20);
+      expect(nextButton()).toBeInTheDocument();
+      flushFrames();
+      expect(nextButton()).toBeInTheDocument();
+    });
+
+    it("depois de assentar, a pessoa rolando conta de novo (o estado da rolagem da tela não fica preso)", () => {
+      answerLast();
+      scrollThrough(100, 32);
+      flushFrames();
+      expect(nextButton()).toBeInTheDocument();
+      act(() => { document.dispatchEvent(new Event("wheel")); });
+      scrollThrough(31);
+      expect(nextButton()).toBeNull();
+    });
+
+    it("a pessoa interrompe a rolagem da tela (roda do mouse): a rolagem dela conta na hora", () => {
+      answerLast();
+      scrollThrough(250);
+      act(() => { document.dispatchEvent(new Event("wheel")); });
+      scrollThrough(40);
+      expect(nextButton()).toBeNull();
+    });
+
+    for (const type of ["touchstart", "keydown", "pointerdown"]) {
+      it(`a pessoa interrompe a rolagem da tela (${type}): a rolagem dela conta na hora`, () => {
+        answerLast();
+        scrollThrough(250);
+        act(() => { document.body.dispatchEvent(new Event(type, { bubbles: true })); });
+        scrollThrough(40);
+        expect(nextButton()).toBeNull();
+      });
+    }
+
+    it("a rolagem suave para antes do alvo (scrollend): o estado desliga, sem temporizador", () => {
+      answerLast();
+      scrollThrough(250, 120);
+      act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+      scrollThrough(40);
+      expect(nextButton()).toBeNull();
+    });
+
+    it("um scrollend antes da rolagem suave andar (o da âncora) não desliga o estado", () => {
+      answerLast();
+      act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+      scrollThrough(100, 32);
+      expect(nextButton()).toBeInTheDocument();
+    });
   });
 });

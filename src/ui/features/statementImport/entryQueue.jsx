@@ -630,14 +630,91 @@ function releaseSpacer() {
 const commit = { expected: 0, changes: [] };
 let mountedSlots = 0;
 
+/**
+ * OBS-26: segurar o item respondido parado só vale enquanto o espaço provisório embaixo é pequeno.
+ * Acima desta fração da altura visível da região, a tela mostraria um vão vazio grande no fim da
+ * lista: em vez de segurar, a página assenta no fim do conteúdo, com rolagem suave.
+ */
+export const SETTLE_SPACER_RATIO = 0.4;
+
+/**
+ * A rolagem que a própria tela está fazendo até o fim do conteúdo (OBS-26). Enquanto ela anda, os
+ * `scroll` que ela gera não contam como "a pessoa chegou ao pendente rolando" (o "Próximo
+ * pendente" sumiria sozinho). Nunca fica ligada para sempre: desliga ao chegar no alvo, quando a
+ * rolagem para (`scrollend`), quando a pessoa mexe (roda do mouse, toque, tecla, clique: a rolagem
+ * a partir daí é dela), numa nova troca ou ao sair do passo. Nenhum temporizador.
+ */
+const settle = { on: false, stop: null };
+
+const PERSON_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"];
+
+function stopSettling() {
+  const stop = settle.stop;
+  settle.stop = null;
+  settle.on = false;
+  stop?.();
+}
+
+function settleAtContentEnd(scroller, top) {
+  stopSettling();
+  settle.on = true;
+  const root = scroller === document.scrollingElement || scroller === document.documentElement;
+  const events = root ? document : scroller;
+  let frame = null;
+  let moved = false;
+  const onScroll = () => {
+    moved = true;
+    if (Math.abs(scroller.scrollTop - top) >= 1) return;
+    // Chegou. O `scroll` desta chegada ainda passa pelos outros ouvintes (o do "Próximo pendente"
+    // pode vir depois deste): desliga no próximo quadro, não agora.
+    detach();
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      if (settle.stop === cleanup) stopSettling();
+    });
+  };
+  // `scrollend` só depois de a rolagem suave ter andado: o de uma rolagem anterior não desliga.
+  const onScrollEnd = () => { if (moved) stopSettling(); };
+  const onInput = () => stopSettling();
+  const detach = () => {
+    events.removeEventListener("scroll", onScroll);
+    events.removeEventListener("scrollend", onScrollEnd);
+    for (const type of PERSON_INPUT) document.removeEventListener(type, onInput, true);
+  };
+  const cleanup = () => {
+    detach();
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+  };
+  settle.stop = cleanup;
+  for (const type of PERSON_INPUT) document.addEventListener(type, onInput, { capture: true, passive: true });
+  // No quadro seguinte: a animação do recolher já começou e a âncora deste commit já valeu.
+  frame = requestAnimationFrame(() => {
+    frame = null;
+    if (settle.stop !== cleanup) return;
+    if (!scroller.isConnected || Math.abs(scroller.scrollTop - top) < 1) {
+      stopSettling();
+      return;
+    }
+    events.addEventListener("scroll", onScroll, { passive: true });
+    events.addEventListener("scrollend", onScrollEnd);
+    const behavior = prefersReducedMotion() ? "instant" : "smooth";
+    if (typeof scroller.scrollTo === "function") scroller.scrollTo({ top, behavior });
+    else scroller.scrollTop = top;
+  });
+}
+
 function flushCommit() {
   const changes = commit.changes.filter((c) => c.el?.isConnected);
   commit.changes = [];
   commit.expected = 0;
   // Uma animação anterior ainda andando: termina já, para medir o lugar final de tudo.
   for (const slot of [...animating]) slot.stopMotion();
+  // Uma rolagem até o fim do conteúdo ainda andando (OBS-26): a âncora desta troca manda agora.
+  stopSettling();
   const anchor = pickAnchor(changes);
   let held = null;
+  let settleTo = null;
   if (anchor) {
     // A região medida ANTES da troca: depois dela a página pode ter ficado curta demais para rolar.
     const scroller = anchor.scroller?.isConnected ? anchor.scroller : scrollParentOf(anchor.el);
@@ -650,6 +727,7 @@ function flushCommit() {
       // rascunho não a faz crescer depois (BUG-12: medir a linha provisória de 44 px em vez da
       // final de 80 px fazia a regra da metade errar entre 22 e 40 px atrás do topo grudado).
       const own = anchor.el.firstElementChild?.getBoundingClientRect().height || now.height;
+      const contentHeight = contentHeightOf(scroller);
       const target = anchorTarget({
         scrollTop,
         oldTop: anchor.top,
@@ -658,10 +736,15 @@ function flushCommit() {
         viewTop: anchor.viewTop ?? viewTopOf(scroller),
         coverTop: anchor.coverTop ?? coverTopOf(scroller),
         clientHeight: scroller.clientHeight,
-        contentHeight: contentHeightOf(scroller),
+        contentHeight,
       });
       holdScroll(scroller, target);
       held = { scroller, target };
+      // OBS-26: no fim da lista, segurar o item exigiria um vão grande embaixo. Este quadro ainda
+      // segura (nada pula); a seguir a página rola suave até o fim do conteúdo.
+      if (spacerNeeded({ target, clientHeight: scroller.clientHeight, contentHeight }) > SETTLE_SPACER_RATIO * scroller.clientHeight) {
+        settleTo = { scroller, top: Math.max(0, contentHeight - scroller.clientHeight) };
+      }
     }
   }
   for (const change of changes) {
@@ -682,6 +765,7 @@ function flushCommit() {
   // rolagem que só tinha sido cortada na medida (e o item escorregaria junto com a altura). A
   // rolagem é posta de novo no alvo, agora com a altura do primeiro quadro.
   if (held && Math.abs(held.scroller.scrollTop - held.target) >= 0.5) held.scroller.scrollTop = held.target;
+  if (settleTo) settleAtContentEnd(settleTo.scroller, settleTo.top);
 }
 
 /**
@@ -752,7 +836,10 @@ export class EntrySlot extends Component {
   componentWillUnmount() {
     this.stopMotion();
     mountedSlots -= 1;
-    if (!mountedSlots) removeSpacer();
+    if (!mountedSlots) {
+      stopSettling();
+      removeSpacer();
+    }
   }
 
   /** Termina a animação na hora (o lugar fica na forma final) e limpa. */
@@ -897,11 +984,12 @@ export function NextPendingButton({ queue, fromId }) {
 
 /**
  * A pessoa chegou ao pendente ROLANDO por conta própria (BUG-13): com o topo do cartão dele dentro
- * da área visível (abaixo do topo grudado), o "Próximo pendente" já não aponta para nada fora da
- * vista. O botão some sem mexer na rolagem e os atalhos passam a responder esse cartão (que está à
- * vista). Só conta rolagem que moveu o cartão desde que o botão apareceu: a âncora do recolher, no
- * mesmo commit, não tira o botão. Ouvinte passivo de `scroll`, sem temporizador; sem medida
- * (jsdom, altura zero) nada acontece.
+ * da área visível (abaixo do topo grudado), o "Próximo pendente" já não aponta
+ * para nada fora da vista. O botão some sem mexer na rolagem e os atalhos passam a responder esse
+ * cartão (que está à vista). Só conta rolagem que moveu o cartão desde que o botão apareceu e que
+ * não é da própria tela: a âncora do recolher, no mesmo commit, e a rolagem até o fim do conteúdo
+ * (OBS-26) não tiram o botão. Ouvinte passivo de `scroll`, sem temporizador; sem medida (jsdom,
+ * altura zero) nada acontece.
  */
 function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
   const latestDismiss = useRef(dismiss);
@@ -914,7 +1002,7 @@ function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
     const events = root ? document : scroller;
     const startTop = currentCardOf(targetId)?.getBoundingClientRect().top;
     const onScroll = () => {
-      if (going.current) return;
+      if (going.current || settle.on) return;
       const card = currentCardOf(targetId);
       if (!card || !button.isConnected) return;
       const rect = card.getBoundingClientRect();
