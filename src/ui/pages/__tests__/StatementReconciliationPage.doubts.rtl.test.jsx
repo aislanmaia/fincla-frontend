@@ -6,7 +6,7 @@
 // do Nubank; a TED é uma transferência sugerida. A gravação é garantida pelos testes de API;
 // aqui conferimos o que a pessoa vê, o que a tela manda e que nada some sem desfazer.
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -667,5 +667,63 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
     // Uma linha ainda sem resposta não diz Conferido.
     const pending = screen.getAllByTestId("doubt-row").filter((r) => r.textContent.includes("Falta responder"));
     for (const r of pending) expect(within(r).queryByTestId("conferido-badge")).toBeNull();
+  });
+
+  describe("BUG-13: com o 'Próximo pendente' na tela, chegar ao pendente rolando", () => {
+    /** O cartão aberto com o topo em `geo.top` px da tela (a página rola na janela de 768 px). */
+    const geo = { top: -600 };
+    const realRect = Element.prototype.getBoundingClientRect;
+    beforeEach(() => {
+      geo.top = -600;
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+        if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + 400, height: 400, left: 0, right: 0, width: 0 };
+        return realRect.call(this);
+      });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Uber (a última dúvida) sem resposta; responder ela abre o Paulo ACIMA, fora da vista. */
+    const answerUber = async (user) => {
+      draft.entries.find((e) => e.id === UBER).answer = null;
+      draft.entries.find((e) => e.id === UBER).confirmed = false;
+      await openDraft();
+      const uberRow = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("UBERX"));
+      await user.click(within(uberRow).getByRole("button", { name: /Alterar/ }));
+      await user.click(within(card("RSHOP UBERX 04 10")).getByRole("button", { name: "Não registrar" }));
+      await waitFor(() => expect(patches()).toHaveLength(1));
+      await screen.findByTestId("next-pending-above");
+      calls.length = 0;
+    };
+
+    it("o topo do cartão do Paulo entra na área visível: o botão some e o 1º N responde o Paulo (1 PATCH)", async () => {
+      const user = userEvent.setup();
+      await answerUber(user);
+
+      geo.top = 140;
+      fireEvent.scroll(document);
+      expect(screen.queryByTestId("next-pending-above")).toBeNull();
+
+      await user.keyboard("n");
+      await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "ignore" } }]));
+    });
+
+    it("o cartão do Paulo ainda fora da vista: N age como o botão (leva até ele), 0 PATCH", async () => {
+      const user = userEvent.setup();
+      Element.prototype.scrollIntoView = vi.fn();
+      try {
+        await answerUber(user);
+
+        geo.top = -200;
+        fireEvent.scroll(document);
+        expect(screen.getByTestId("next-pending-above")).toBeInTheDocument();
+
+        await user.keyboard("n");
+        await act(async () => {});
+        expect(patches()).toEqual([]);
+        expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+      } finally {
+        delete Element.prototype.scrollIntoView;
+      }
+    });
   });
 });

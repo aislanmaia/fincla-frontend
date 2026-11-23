@@ -116,9 +116,11 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     && answeredSignature(entries, aboveRequest.fromId, answered) === aboveRequest.sig
     ? { fromId: aboveRequest.fromId, target: entries.find((e) => e.id === aboveRequest.targetId) }
     : null;
-  const dismissNextAbove = useCallback(() => {
+  const dismissNextAbove = useCallback(({ hold = true } = {}) => {
     // O botão sai de baixo da linha: a rolagem fica onde está (sem o fim da página puxá-la).
-    const button = document.querySelector("[data-testid='next-pending-above']");
+    // `hold: false` quando sobra conteúdo embaixo para o botão sair sem a rolagem ser cortada (a
+    // pessoa ainda pode estar rolando: pôr o scrollTop interromperia o gesto dela).
+    const button = hold ? document.querySelector("[data-testid='next-pending-above']") : null;
     const scroller = button ? scrollParentOf(button) : null;
     if (scroller) Object.assign(heldAfterDismiss, { scroller, top: scroller.scrollTop });
     setAboveRequest(null);
@@ -838,7 +840,13 @@ function currentCardOf(id) {
  */
 export function NextPendingButton({ queue, fromId }) {
   const info = queue.nextAbove;
-  if (!info || info.fromId !== fromId || !info.target) return null;
+  const shown = Boolean(info && info.fromId === fromId && info.target);
+  const ref = useRef(null);
+  // O clique (ou o atalho que age como ele) está levando até o pendente: a rolagem dele não conta
+  // como "a pessoa chegou rolando" (quem tira o botão é o fim dela).
+  const going = useRef(false);
+  useReachedByScrolling(shown ? info.target.id : null, ref, going, queue.dismissNextAbove);
+  if (!shown) return null;
   const { target } = info;
   const memo = target.bank_description ?? target.description ?? "";
   const label = [shortDate(target.date ?? target.day), memo].filter(Boolean).join(" ");
@@ -849,6 +857,7 @@ export function NextPendingButton({ queue, fromId }) {
       return;
     }
     const reach = () => {
+      going.current = false;
       card.focus({ preventScroll: true });
       queue.dismissNextAbove();
     };
@@ -862,6 +871,7 @@ export function NextPendingButton({ queue, fromId }) {
       const wanted = scroller.scrollTop + card.getBoundingClientRect().top - (viewTopOf(scroller) + ANCHOR_MARGIN);
       moves = Math.abs(Math.max(0, Math.min(wanted, max)) - scroller.scrollTop) >= 1;
     }
+    going.current = true;
     card.scrollIntoView?.({ behavior: reduced ? "instant" : "smooth", block: "start" });
     const root = scroller === document.scrollingElement || scroller === document.documentElement;
     const events = root ? document : scroller;
@@ -870,6 +880,7 @@ export function NextPendingButton({ queue, fromId }) {
   };
   return (
     <Btn
+      ref={ref}
       variant="outGray"
       full
       data-testid="next-pending-above"
@@ -884,7 +895,51 @@ export function NextPendingButton({ queue, fromId }) {
   );
 }
 
+/**
+ * A pessoa chegou ao pendente ROLANDO por conta própria (BUG-13): com o topo do cartão dele dentro
+ * da área visível (abaixo do topo grudado), o "Próximo pendente" já não aponta para nada fora da
+ * vista. O botão some sem mexer na rolagem e os atalhos passam a responder esse cartão (que está à
+ * vista). Só conta rolagem que moveu o cartão desde que o botão apareceu: a âncora do recolher, no
+ * mesmo commit, não tira o botão. Ouvinte passivo de `scroll`, sem temporizador; sem medida
+ * (jsdom, altura zero) nada acontece.
+ */
+function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
+  const latestDismiss = useRef(dismiss);
+  latestDismiss.current = dismiss;
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (targetId === null || !button) return undefined;
+    const scroller = scrollParentOf(button);
+    const root = !scroller || scroller === document.scrollingElement || scroller === document.documentElement;
+    const events = root ? document : scroller;
+    const startTop = currentCardOf(targetId)?.getBoundingClientRect().top;
+    const onScroll = () => {
+      if (going.current) return;
+      const card = currentCardOf(targetId);
+      if (!card || !button.isConnected) return;
+      const rect = card.getBoundingClientRect();
+      if (!rect.height || startTop === undefined || Math.abs(rect.top - startTop) < 1) return;
+      const { top, bottom } = visibleBand(card);
+      if (rect.top < top - 0.5 || rect.top >= bottom - 0.5) return;
+      // Sobra conteúdo embaixo para o botão sair sem cortar a rolagem? Então a rolagem nem é tocada.
+      const extent = button.getBoundingClientRect().height + (Number.parseFloat(getComputedStyle(button).marginTop) || 0);
+      const room = scroller ? scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop : Number.POSITIVE_INFINITY;
+      if (document.activeElement === button) card.focus({ preventScroll: true });
+      latestDismiss.current({ hold: room < extent + 1 });
+    };
+    events.addEventListener("scroll", onScroll, { passive: true });
+    return () => events.removeEventListener("scroll", onScroll);
+  }, [targetId, buttonRef, going]);
+}
+
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
+/** A faixa visível (em px da tela) da região que rola em volta de `el`: abaixo do topo grudado. */
+function visibleBand(el) {
+  const scroller = scrollParentOf(el);
+  if (!scroller) return { top: 0, bottom: globalThis.innerHeight ?? Number.POSITIVE_INFINITY };
+  return { top: coverTopOf(scroller), bottom: scrollportTopOf(scroller) + scroller.clientHeight };
+}
 
 /**
  * Algum pedaço do elemento aparece na área visível da região que rola (abaixo do topo grudado)?
@@ -893,10 +948,8 @@ const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 function onScreen(el) {
   const rect = el.getBoundingClientRect();
   if (!rect.height) return true;
-  const scroller = scrollParentOf(el);
-  if (!scroller) return true;
-  const top = coverTopOf(scroller);
-  const bottom = scrollportTopOf(scroller) + scroller.clientHeight;
+  if (!scrollParentOf(el)) return true;
+  const { top, bottom } = visibleBand(el);
   return rect.bottom > top + 0.5 && rect.top < bottom - 0.5;
 }
 
@@ -929,8 +982,9 @@ export function useQueueShortcuts(queue, answers, { disabled = false } = {}) {
       const answer = a?.[key];
       if (!answer || !q.current) return;
       event.preventDefault();
-      // Um atalho nunca responde um cartão que a pessoa não está vendo (OBS-28). Com o "Próximo
-      // pendente" à vista, S/A/N fazem o que o botão faz: levam até o pendente e põem o foco nele.
+      // Um atalho nunca responde um cartão que a pessoa não está vendo (OBS-28). Enquanto o
+      // "Próximo pendente" está na tela (a pessoa ainda não chegou ao pendente: chegando rolando, o
+      // botão some, BUG-13), S/A/N fazem o que o botão faz: levam até o pendente e põem o foco nele.
       const nextButton = q.nextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
       if (nextButton) {
         nextButton.click();

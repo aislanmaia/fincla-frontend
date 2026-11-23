@@ -287,4 +287,94 @@ describe("Próximo pendente acima do item respondido", () => {
       expect(api.queue.entries.find((e) => e.id === "c").answer).toBe("ignore");
     });
   });
+
+  describe("BUG-13: a pessoa chega ao pendente rolando por conta própria", () => {
+    /** O cartão aberto (moldura) com o topo em `geo.top` px da tela; o resto sem medida. */
+    const geo = { top: -500 };
+    const realRect = Element.prototype.getBoundingClientRect;
+    beforeEach(() => {
+      geo.top = -500;
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+        if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + 300, height: 300, left: 0, right: 0, width: 0 };
+        if (this.dataset?.testid === "scroller") return { top: 0, bottom: 400, height: 400, left: 0, right: 0, width: 0 };
+        return realRect.call(this);
+      });
+    });
+
+    /** Uma região de 400 px que rola, com o "d" respondido e o "a" aberto acima, fora da vista. */
+    function answerLastInScroller() {
+      const { container } = render(
+        <div data-testid="scroller" style={{ overflowY: "auto" }}><Harness /></div>,
+      );
+      const scroller = container.querySelector("[data-testid='scroller']");
+      Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
+      Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+      scroller.scrollTop = 1600;
+      act(() => api.queue.open("d"));
+      fireEvent.click(screen.getByRole("button", { name: "Não registrar d" }));
+      expect(button()).toBeInTheDocument();
+      return scroller;
+    }
+
+    const scrollTo = (scroller, cardTop) => {
+      scroller.scrollTop -= cardTop - geo.top;
+      geo.top = cardTop;
+      fireEvent.scroll(scroller);
+    };
+
+    it("com o topo do cartão pendente à vista, o botão some sem mexer na rolagem e o 1º N responde esse cartão", async () => {
+      const user = userEvent.setup();
+      const scroller = answerLastInScroller();
+      expect(document.activeElement).toBe(button());
+
+      scrollTo(scroller, 120);
+      const top = scroller.scrollTop;
+
+      expect(button()).toBeNull();
+      expect(scroller.scrollTop).toBe(top);
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+      // O foco estava no botão que saiu: vai para o cartão à vista, sem rolar.
+      expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+
+      await user.keyboard("n");
+      expect(api.queue.entries.find((e) => e.id === "a").answer).toBe("ignore");
+      // Só ele: o outro pendente continua sem resposta (uma resposta, um PATCH na página).
+      expect(api.queue.entries.find((e) => e.id === "c").answer).toBeNull();
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it("rolando sem chegar (o topo do cartão ainda fora da vista), o botão fica e N age como ele, sem responder", async () => {
+      const user = userEvent.setup();
+      const scroller = answerLastInScroller();
+
+      scrollTo(scroller, -150);
+      expect(button()).toBeInTheDocument();
+
+      await user.keyboard("n");
+      expect(api.queue.entries.find((e) => e.id === "a").answer).toBeNull();
+      expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+    });
+
+    it("a rolagem do próprio botão (suave, até o fim dela) não conta como chegar rolando", () => {
+      globalThis.onscrollend = null;
+      const scroller = answerLastInScroller();
+      const card = screen.getByTestId("current-entry");
+      const focus = vi.spyOn(card, "focus");
+      fireEvent.click(button());
+      // No meio da rolagem suave o topo do cartão já passa pela área visível: o botão espera o fim.
+      scrollTo(scroller, 200);
+      expect(button()).toBeInTheDocument();
+      expect(focus).not.toHaveBeenCalled();
+      act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(button()).toBeNull();
+    });
+
+    it("sem a pessoa rolar (o cartão parado), um scroll da própria âncora não tira o botão", () => {
+      const scroller = answerLastInScroller();
+      // Um scroll sem o cartão sair do lugar onde estava quando o botão apareceu.
+      fireEvent.scroll(scroller);
+      expect(button()).toBeInTheDocument();
+    });
+  });
 });
