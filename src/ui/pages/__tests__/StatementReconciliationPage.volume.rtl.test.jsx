@@ -5,7 +5,7 @@
 // nem com a busca aberta); clicar em qualquer ponto da linha a reabre; visualização Detalhada ou
 // Compacta lembrada por pessoa. Os lançamentos vêm da fixture canônica do backend, multiplicados.
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -380,5 +380,57 @@ describe("volume grande", () => {
     await waitFor(() => expect(position()).toBe("Lançamento 2 de 300"));
     expect(pending()).toBe("299 sem resposta");
     expect(screen.getAllByTestId("pair-card")).toHaveLength(1);
+  });
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-24): abaixo da linha respondida não aparece nada; o
+// aviso do rodapé do passo ("↑ Falta responder N lançamentos deste passo") leva ao primeiro pendente.
+describe("o aviso do rodapé do passo leva ao primeiro pendente", () => {
+  beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
+  afterEach(() => { delete Element.prototype.scrollIntoView; });
+
+  const footer = () => screen.queryByRole("button", { name: /Ir para o primeiro item que falta responder/ });
+
+  it("mostra quantos faltam no passo, depois da lista, e a contagem acompanha as respostas", async () => {
+    draft = draftWith(3);
+    const user = await openDraft();
+    expect(footer()).toHaveTextContent("Falta responder 3 lançamentos deste passo");
+    expect(rows().at(-1).compareDocumentPosition(footer()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(within(current()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(footer()).toHaveTextContent("Falta responder 2 lançamentos deste passo"));
+  });
+
+  it("responder o último da lista com pendentes acima: embaixo da linha só a linha, nada rola; o clique no aviso leva ao primeiro pendente", async () => {
+    draft = draftWith(3);
+    const user = await openDraft();
+    await user.click(row("PIX PADARIA 003"));
+    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => currentIs("PIX PADARIA 001"));
+    await waitFor(() => expect(row("PIX PADARIA 003")).toHaveTextContent("Não registrar"));
+
+    const slot = row("PIX PADARIA 003").closest("[data-testid='entry-slot']");
+    expect(slot.children).toHaveLength(1);
+    expect(screen.queryByTestId("next-pending-above")).toBeNull();
+    expect(screen.queryByTestId("next-pending-summary")).toBeNull();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(footer()).toHaveTextContent("Falta responder 2 lançamentos deste passo");
+
+    await user.click(footer());
+
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([current()]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(current()).toHaveFocus();
+    expect(answers()).toHaveLength(1);
+  });
+
+  it("some com 0 pendentes no passo", async () => {
+    draft = draftWith(1);
+    const user = await openDraft();
+    expect(footer()).toHaveTextContent("Falta responder 1 lançamento deste passo");
+    await user.click(within(current()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(pending()).toBe("Todos respondidos"));
+    expect(footer()).toBeNull();
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
   });
 });

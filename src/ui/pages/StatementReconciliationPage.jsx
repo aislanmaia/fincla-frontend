@@ -54,6 +54,8 @@ import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsSt
 import { OutsideStep } from "../features/statementImport/OutsideStep.jsx";
 import { DoubtCard, DoubtRow, DoubtStep, answerSnapshot, doubtYes, pairBody } from "../features/statementImport/DoubtStep.jsx";
 import {
+  GoToPendingButton,
+  TRANSACTION_NOUN,
   ViewModeContext,
   reuseUnchangedEntries,
   useEntryQueue,
@@ -474,6 +476,9 @@ function StepRail({ statementImport, current, passed, onOpen }) {
     </nav>
   );
 }
+
+/** A largura da coluna dos passos no computador (o aviso do rodapé alinha à lista ao lado dela). */
+const RAIL_WIDTH = 240;
 
 /** Folga entre o topo fixo e o que ganha foco ao rolar (o cartão atual, "Alterar"…). */
 const STICKY_FOCUS_GAP = 12;
@@ -1147,7 +1152,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       <OtherAccountNotice accountCheck={statementImport.account_check} accountName={accountName} />
       <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
       <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} isMobile={isMobile} />
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "240px minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `${RAIL_WIDTH}px minmax(0, 1fr)`, gap: 16, alignItems: "start" }}>
         <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
         <ViewModeContext.Provider value={view}>
         <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
@@ -1290,6 +1295,15 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
         </main>
         </ViewModeContext.Provider>
       </div>
+      {/* O aviso de quanto falta no passo leva ao primeiro pendente (fincla-api#507). Filho da
+          coluna da página inteira (não do passo): gruda no fim da área que rola desde o topo,
+          também no celular, onde os passos ficam acima da lista. No computador, alinhado à lista. */}
+      {statementImport.status === "draft" && LIST_STEPS.has(current) ? (
+        <GoToPendingButton key={`pending-${current}`} queue={queue} isMobile={isMobile} indent={isMobile ? 0 : RAIL_WIDTH + 16} />
+      ) : null}
+      {statementImport.status === "draft" && current === "balance" && balanceCheck ? (
+        <GoToPendingButton key="pending-balance" queue={balanceQueue} noun={TRANSACTION_NOUN} isMobile={isMobile} indent={isMobile ? 0 : RAIL_WIDTH + 16} />
+      ) : null}
       {searchFor ? (
         <FinclaSearchDialog
           organizationId={organizationId}

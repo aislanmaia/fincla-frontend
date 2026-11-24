@@ -88,7 +88,7 @@ function Answers({ entry, busy, wantPair, desc, onYes, onAnswer, onChange, onSea
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{QUESTION}</span>
-      <div role="group" aria-label={QUESTION} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
+      <div role="group" data-answer-row="" aria-label={QUESTION} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
         {buttons.map((b, index) => (
           <button
             key={b.value}
@@ -316,7 +316,7 @@ export function DoubtStep({
         {pending ? `${plural(pending, "lançamento para responder", "lançamentos para responder")} de ${entries.length}` : "Todos respondidos"}
       </p>
       {entries.filter(queue.shown).map((entry) => (
-        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+        <EntrySlot key={entry.id} entryId={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
         {entry.id === queue.currentId ? (
         <CurrentEntryFrame queue={queue} entry={entry}>
           <DoubtCard

@@ -324,7 +324,7 @@ export function OutsideStep({
                   body = <BroughtBackRow entry={entry} busy={busy} onOpen={(e) => setOpen(e.id, true)} onUndoChoice={undoChoice} />;
                 }
                 return (
-                  <EntrySlot key={entry.id} open={open} tone={answerTone(entry.answer)}>
+                  <EntrySlot key={entry.id} entryId={entry.id} open={open} tone={answerTone(entry.answer)}>
                     {body}
                   </EntrySlot>
                 );

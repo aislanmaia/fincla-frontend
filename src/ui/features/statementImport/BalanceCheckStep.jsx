@@ -738,7 +738,7 @@ export function BalanceCheckStep({
           ) : null}
           {chosen.length ? <SelectionBar items={chosen} busy={busy} onClear={() => setSelected(new Set())} onBatch={batch} /> : null}
           {items.filter(queue.shown).map((item) => (
-            <EntrySlot key={item.id} open={item.id === queue.currentId} tone={T.inkLight} queue={queue} entryId={item.id}>
+            <EntrySlot key={item.id} entryId={item.id} open={item.id === queue.currentId} tone={T.inkLight}>
             {item.id === queue.currentId ? (
             <CurrentEntryFrame queue={queue} entry={item} noun={TRANSACTION_NOUN}>
               <UnmatchedCard

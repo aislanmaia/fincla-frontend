@@ -669,7 +669,7 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
     for (const r of pending) expect(within(r).queryByTestId("conferido-badge")).toBeNull();
   });
 
-  describe("BUG-13: com o 'Próximo pendente' na tela, chegar ao pendente rolando", () => {
+  describe("o próximo pendente abre acima, fora da vista: nada aparece embaixo da linha (fincla-api#507)", () => {
     /** O cartão aberto com o topo em `geo.top` px da tela (a página rola na janela de 768 px). */
     const geo = { top: -600 };
     const realRect = Element.prototype.getBoundingClientRect;
@@ -679,8 +679,15 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
         if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + 400, height: 400, left: 0, right: 0, width: 0 };
         return realRect.call(this);
       });
+      // A página rola na janela (jsdom não tem `scrollingElement` nem altura de janela).
+      Object.defineProperty(document, "scrollingElement", { configurable: true, value: document.documentElement });
+      Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 768 });
     });
-    afterEach(() => vi.restoreAllMocks());
+    afterEach(() => {
+      vi.restoreAllMocks();
+      delete document.scrollingElement;
+      delete document.documentElement.clientHeight;
+    });
 
     /** Uber (a última dúvida) sem resposta; responder ela abre o Paulo ACIMA, fora da vista. */
     const answerUber = async (user) => {
@@ -691,31 +698,32 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
       await user.click(within(uberRow).getByRole("button", { name: /Alterar/ }));
       await user.click(within(card("RSHOP UBERX 04 10")).getByRole("button", { name: "Não registrar" }));
       await waitFor(() => expect(patches()).toHaveLength(1));
-      await screen.findByTestId("next-pending-above");
+      await waitFor(() => expect(screen.getByTestId("current-entry")).toHaveTextContent("PAULO"));
       calls.length = 0;
     };
 
-    it("o topo do cartão do Paulo entra na área visível: o botão some e o 1º N responde o Paulo (1 PATCH)", async () => {
+    it("embaixo da linha do Uber só a linha; o foco fica no Alterar dela; rolando até o Paulo, o 1º N responde o Paulo (1 PATCH)", async () => {
       const user = userEvent.setup();
       await answerUber(user);
+      const uberSlot = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("UBERX")).closest("[data-testid='entry-slot']");
+      expect(uberSlot.children).toHaveLength(1);
+      expect(document.activeElement).toBe(within(uberSlot).getByRole("button", { name: /Alterar/ }));
 
       geo.top = 140;
       fireEvent.scroll(document);
-      expect(screen.queryByTestId("next-pending-above")).toBeNull();
 
       await user.keyboard("n");
       await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "ignore" } }]));
     });
 
-    it("o cartão do Paulo ainda fora da vista: N age como o botão (leva até ele), 0 PATCH", async () => {
+    it("o cartão do Paulo ainda fora da vista: N leva até ele, 0 PATCH", async () => {
       const user = userEvent.setup();
       Element.prototype.scrollIntoView = vi.fn();
       try {
         await answerUber(user);
 
-        geo.top = -200;
+        geo.top = -500;
         fireEvent.scroll(document);
-        expect(screen.getByTestId("next-pending-above")).toBeInTheDocument();
 
         await user.keyboard("n");
         await act(async () => {});

@@ -245,6 +245,24 @@ describe("Conferir o saldo: transações sem par", () => {
     expect(screen.getByText("Transações do Fincla sem par no extrato").closest("h3")).toHaveTextContent(/sem par no extrato\s?3$/);
   });
 
+  it("o rodapé diz quantas transações faltam e leva à primeira; some com 0 (fincla-api#507)", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    try {
+      const user = await openPage();
+      const footer = () => screen.queryByRole("button", { name: /Ir para o primeiro item que falta responder/ });
+      expect(footer()).toHaveTextContent("Falta responder 1 transação deste passo");
+
+      await user.click(footer());
+      expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+      expect(screen.getByTestId("current-entry")).toHaveFocus();
+
+      await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Está certa assim" }));
+      await waitFor(() => expect(footer()).toBeNull());
+    } finally {
+      delete Element.prototype.scrollIntoView;
+    }
+  });
+
   it("Está certa assim grava a resposta e Desfazer escolha a esquece", async () => {
     const user = await openPage();
 
