@@ -466,15 +466,18 @@ describe("com layout simulado (QA 2026-11-24)", () => {
   const OPEN = 300;
   const ROW = 100;
   const SUMMARY = 150;
-  const VIEW = 400;
+  let HEAD_NOW = HEAD;
+  let VIEW = 400;
   let scroller;
   let scrollTop = 0;
   const slots = () => [...scroller.querySelectorAll("[data-testid='entry-slot']")];
   // A altura animada vale já no primeiro quadro (como no navegador), até a animação acabar.
   const heightOf = (el) => (el.dataset.animHeight ? Number(el.dataset.animHeight) : (el.dataset.open === "true" ? OPEN : ROW) + (el.querySelector("[data-testid='next-pending-summary']") ? SUMMARY : 0));
-  const contentHeight = () => HEAD + slots().reduce((sum, el) => sum + heightOf(el), 0);
+  const contentHeight = () => HEAD_NOW + slots().reduce((sum, el) => sum + heightOf(el), 0);
   const spacerHeight = () => Number.parseFloat(scroller.querySelector("[data-testid='entry-anchor-spacer']")?.style.height) || 0;
-  const maxScroll = () => Math.max(0, contentHeight() + spacerHeight() - VIEW);
+  // Como no navegador, o scrollHeight nunca fica abaixo da janela (clientHeight).
+  const scrollHeight = () => Math.max(VIEW, contentHeight() + spacerHeight());
+  const maxScroll = () => scrollHeight() - VIEW;
   const realRect = Element.prototype.getBoundingClientRect;
 
   let animations = [];
@@ -484,9 +487,12 @@ describe("com layout simulado (QA 2026-11-24)", () => {
 
   beforeEach(() => {
     scrollTop = 0;
+    HEAD_NOW = HEAD;
+    VIEW = 400;
     animations = [];
-    Element.prototype.animate = vi.fn(function animate(keyframes) {
-      const a = { onfinish: null, oncancel: null, cancel: vi.fn() };
+    Element.prototype.animate = vi.fn(function animate(initialKeyframes) {
+      let keyframes = initialKeyframes;
+      const a = { onfinish: null, oncancel: null, cancel: vi.fn(), effect: { getKeyframes: () => keyframes, setKeyframes: (k) => { keyframes = k; } } };
       if (keyframes[0].height !== undefined) {
         this.dataset.animHeight = Number.parseFloat(keyframes[0].height);
         a.finish = () => { delete this.dataset.animHeight; a.onfinish?.(); };
@@ -497,13 +503,18 @@ describe("com layout simulado (QA 2026-11-24)", () => {
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
       const st = clamp();
       if (this.dataset?.testid === "current-entry" && scroller?.contains(this)) return this.closest("[data-testid='entry-slot']").getBoundingClientRect();
+      // A linha recolhida ocupa o topo do lugar dela.
+      if (/^row-/.test(this.dataset?.testid ?? "") && scroller?.contains(this)) {
+        const { top } = this.closest("[data-testid='entry-slot']").getBoundingClientRect();
+        return { top, bottom: top + ROW, height: ROW, left: 0, right: 0, width: 0 };
+      }
       if (this.dataset?.testid === "next-pending-summary" && scroller?.contains(this)) {
         const slot = this.closest("[data-testid='entry-slot']");
         const top = slot.getBoundingClientRect().top + ROW;
         return { top, bottom: top + SUMMARY, height: SUMMARY, left: 0, right: 0, width: 0 };
       }
       if (this.dataset?.testid !== "entry-slot" || !scroller?.contains(this)) return realRect.call(this);
-      let top = HEAD;
+      let top = HEAD_NOW;
       for (const el of slots()) {
         if (el === this) break;
         top += heightOf(el);
@@ -523,7 +534,7 @@ describe("com layout simulado (QA 2026-11-24)", () => {
           if (!el || el === scroller) return;
           scroller = el;
           Object.defineProperty(el, "clientHeight", { configurable: true, get: () => VIEW });
-          Object.defineProperty(el, "scrollHeight", { configurable: true, get: () => contentHeight() + spacerHeight() });
+          Object.defineProperty(el, "scrollHeight", { configurable: true, get: scrollHeight });
           Object.defineProperty(el, "scrollTop", { configurable: true, get: clamp, set: (v) => { scrollTop = Math.max(0, Math.min(v, maxScroll())); } });
         }}
       >
@@ -599,4 +610,62 @@ describe("com layout simulado (QA 2026-11-24)", () => {
       expect(document.activeElement).toBe(card);
     });
   }
+
+  // QA 2026-11-24 (resíduo de 15 px): com o cartão aberto acima e a linha clicada embaixo, no
+  // primeiro quadro (o cartão que abre ainda na altura da linha) a página ficava MAIS CURTA que a
+  // janela. O scrollHeight não desce abaixo do clientHeight, então o espaço provisório era medido
+  // com uma página mais alta que a real, saía curto essa diferença e a rolagem era cortada.
+  it("com a página do primeiro quadro mais curta que a janela, a linha clicada fica parada", async () => {
+    HEAD_NOW = 0;
+    VIEW = 540;
+    const user = userEvent.setup();
+    const initial = [
+      ...INITIAL.slice(0, 3).map((e) => ({ ...e, answer: null, options: 1 })),
+      { id: "e", date: "2026-10-08", bank_description: "PIX ENVIADO PADARIA", amount: -9, options: 1, answer: null },
+      INITIAL[3],
+    ];
+    renderInScroller(initial);
+    act(() => api.queue.open("d"));
+    scroller.scrollTop = 10_000;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Não registrar d" })); });
+    finishAnimations();
+    expect(summary()).toBeInTheDocument();
+    scroller.scrollTop = 10_000;
+    const before = slotOf("e").getBoundingClientRect().top;
+    expect(before).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "Alterar e" }));
+
+    expect(api.queue.currentId).toBe("e");
+    const clicked = () => screen.getByTestId("current-entry").closest("[data-testid='entry-slot']");
+    // O primeiro quadro: a página sem o espaço é mais curta que a janela.
+    expect(contentHeight()).toBeLessThan(VIEW);
+    expect(clicked().getBoundingClientRect().top).toBe(before);
+    finishAnimations();
+    expect(clicked().getBoundingClientRect().top).toBe(before);
+  });
+
+  // QA 2026-11-24 (Eletricista no meio da lista): o resumo sai embaixo da linha respondida no
+  // commit logo depois da troca, porque o pendente que abriu acima está à vista. A altura da linha
+  // seguia animando até a altura com o resumo e, no fim, pulava para a certa; o espaço provisório,
+  // medido com a chegada antiga, não cobria e a linha descia.
+  it("o resumo que sai logo depois da troca não faz a linha respondida descer no fim da animação", async () => {
+    VIEW = 800;
+    // a pendente, b respondido, c aberto (pendente), d respondido: responder c abre a, acima.
+    const initial = [{ ...INITIAL[0] }, { ...INITIAL[1] }, { ...INITIAL[2] }, { ...INITIAL[3], answer: "ignore" }];
+    renderInScroller(initial);
+    act(() => api.queue.open("c"));
+    finishAnimations();
+    scroller.scrollTop = 200;
+    const slotC = screen.getByTestId("current-entry").closest("[data-testid='entry-slot']");
+    const before = slotC.getBoundingClientRect().top;
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Não registrar c" })); });
+
+    expect(api.queue.currentId).toBe("a");
+    expect(summary()).toBeNull();
+    expect(slotOf("c").getBoundingClientRect().top).toBe(before);
+    finishAnimations();
+    expect(slotOf("c").getBoundingClientRect().top).toBe(before);
+  });
 });

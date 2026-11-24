@@ -584,12 +584,24 @@ function releaseAnchoring() {
 }
 
 /**
+ * A altura do conteúdo da região agora, sem o espaço provisório. O `scrollHeight` nunca fica
+ * abaixo do `clientHeight`: com o conteúdo mais curto que a janela (no primeiro quadro, o cartão
+ * que abre ainda tem a altura da linha), ele esconde quanto falta, o espaço sairia curto
+ * exatamente essa diferença e o navegador cortaria a rolagem (QA: a linha clicada descia 15 px).
+ * Nesse caso o espaço passa da janela só para medir; quem chama põe a altura certa antes da pintura.
+ */
+function rawContentHeight(scroller) {
+  if (scroller.scrollHeight <= scroller.clientHeight) setSpacer(scroller, scroller.clientHeight + 1);
+  return scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
+}
+
+/**
  * A altura FINAL do conteúdo da região, sem o espaço provisório: um lugar que ainda anima a altura
  * conta com a altura de chegada (senão o espaço seria medido curto no meio da animação e a
  * rolagem seria cortada quando ela terminasse).
  */
 function contentHeightOf(scroller) {
-  let height = scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
+  let height = rawContentHeight(scroller);
   for (const slot of animating) {
     const el = slot.ref.current;
     if (el?.isConnected && slot.finalHeight !== null && scroller.contains(el)) height -= el.getBoundingClientRect().height - slot.finalHeight;
@@ -789,14 +801,20 @@ function anchorCommit() {
  */
 function holdFirstFrame({ scroller, target }) {
   if (!scroller.isConnected) return;
-  const content = scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
-  const needed = spacerNeeded({ target, clientHeight: scroller.clientHeight, contentHeight: content });
-  const current = spacer.scroller === scroller ? spacerHeight() : 0;
-  if (needed > current) {
-    takeAnchoring(scroller);
-    setSpacer(scroller, needed);
-  }
+  growSpacerFor(scroller, target, rawContentHeight);
   if (Math.abs(scroller.scrollTop - target) >= 0.5) scroller.scrollTop = target;
+}
+
+/**
+ * O espaço provisório cresce (aqui nunca encolhe) até a rolagem `target` caber na altura que
+ * `measure` dá. A medida pode esticar o espaço (ver `rawContentHeight`): ele volta ao que estava.
+ */
+function growSpacerFor(scroller, target, measure) {
+  const ownHeight = () => (spacer.scroller === scroller ? spacerHeight() : 0);
+  const current = ownHeight();
+  const needed = spacerNeeded({ target, clientHeight: scroller.clientHeight, contentHeight: measure(scroller) });
+  if (needed > current) takeAnchoring(scroller);
+  if (needed > current || ownHeight() !== current) setSpacer(scroller, Math.max(needed, current));
 }
 
 /**
@@ -819,6 +837,11 @@ export class EntrySlot extends Component {
 
   // A altura de chegada enquanto a altura anima (null parado).
   finalHeight = null;
+
+  // A animação da altura e a altura natural do conteúdo quando ela começou.
+  grow = null;
+
+  naturalAtPlay = 0;
 
   componentDidMount() {
     mountedSlots += 1;
@@ -861,7 +884,10 @@ export class EntrySlot extends Component {
   }
 
   componentDidUpdate(_prevProps, _prevState, snap) {
-    if (!snap) return;
+    if (!snap) {
+      this.retarget();
+      return;
+    }
     commit.changes.push({ ...snap, slot: this, el: this.ref.current, collapsing: !this.props.open });
     if (commit.changes.length >= commit.expected) flushCommit();
   }
@@ -880,10 +906,34 @@ export class EntrySlot extends Component {
     this.cleanup?.();
   }
 
+  /**
+   * O conteúdo do lugar mudou de altura no meio da animação (o resumo do próximo pendente sai
+   * embaixo da linha porque o pendente está à vista, no commit logo depois da troca): a altura
+   * passa a andar até a nova chegada. Sem isso ela ia até a altura antiga e, no fim, pulava para a
+   * certa; o espaço provisório, medido com a chegada antiga (inclusive o da rolagem segurada
+   * quando o resumo sai, que mede antes de ele sair do DOM), não cobria a diferença e o navegador
+   * cortava a rolagem no fim (QA: a linha respondida descia 123 px). O espaço cresce agora para a
+   * rolagem atual caber na nova chegada; enquanto a altura anima, nada muda na tela.
+   */
+  retarget() {
+    const { grow, finalHeight } = this;
+    const el = this.ref.current;
+    if (!grow || finalHeight === null || !el?.isConnected || typeof grow.effect?.setKeyframes !== "function") return;
+    const to = finalHeight + naturalHeightOf(el) - this.naturalAtPlay;
+    if (Math.abs(to - finalHeight) < 0.5) return;
+    const [first] = grow.effect.getKeyframes();
+    grow.effect.setKeyframes([{ height: first.height }, { height: `${to}px` }]);
+    this.finalHeight = to;
+    this.naturalAtPlay += to - finalHeight;
+    const scroller = scrollParentOf(el);
+    if (scroller) growSpacerFor(scroller, scroller.scrollTop, contentHeightOf);
+  }
+
   play({ el, height: from, ghost, collapsing }) {
     this.stopMotion();
     const content = el.firstElementChild;
     const to = el.getBoundingClientRect().height;
+    this.naturalAtPlay = naturalHeightOf(el);
     const ease = "cubic-bezier(.2,.7,.2,1)";
     el.style.overflow = "hidden";
     const started = [];
@@ -898,6 +948,7 @@ export class EntrySlot extends Component {
       easing: ease,
     });
     started.push(grow);
+    this.grow = grow;
     let done = false;
     const cleanup = () => {
       if (done) return;
@@ -907,6 +958,7 @@ export class EntrySlot extends Component {
       if (this.cleanup === cleanup) this.cleanup = null;
       animating.delete(this);
       this.finalHeight = null;
+      this.grow = null;
       // A altura da página já é a final: o espaço provisório encolhe se não segura mais nada.
       releaseSpacer();
       releaseAnchoring();
@@ -942,6 +994,21 @@ export class EntrySlot extends Component {
       </div>
     );
   }
+}
+
+/**
+ * A altura do conteúdo de um lugar, mesmo com a altura dele presa pela animação: do topo do lugar
+ * ao fim do último filho no fluxo (a cópia antiga, posta por cima durante a animação, não conta).
+ */
+function naturalHeightOf(el) {
+  const top = el.getBoundingClientRect().top;
+  let bottom = top;
+  for (const child of el.children) {
+    const style = getComputedStyle(child);
+    if (style.position === "absolute" || style.position === "fixed") continue;
+    bottom = Math.max(bottom, child.getBoundingClientRect().bottom + (Number.parseFloat(style.marginBottom) || 0));
+  }
+  return bottom - top;
 }
 
 /** O cartão aberto de um lançamento (a moldura `CurrentEntryFrame`). */
