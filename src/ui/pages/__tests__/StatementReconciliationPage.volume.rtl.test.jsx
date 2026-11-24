@@ -435,7 +435,7 @@ describe("proposta 3: o resumo do próximo pendente nos outros passos", () => {
     expect(summary()).toBeNull();
   });
 
-  it("Adicionar lançamentos novos: 'Não registrar' no resumo manda o mesmo PATCH do cartão; sem outro pendente, o resumo sai", async () => {
+  it("Adicionar lançamentos novos: 'Não registrar' no resumo manda o mesmo PATCH do cartão; sem outro pendente, o resumo sai e a linha verde fica", async () => {
     draft.entries.forEach((e) => { if (e.classification === "suggested") e.confirmed = true; });
     draft.entries.find((e) => e.bank_description === "PAG BOLETO ENERGIA").description = "";
     draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").description = "";
@@ -456,6 +456,7 @@ describe("proposta 3: o resumo do próximo pendente nos outros passos", () => {
     await user.click(inSummary("Não registrar"));
 
     await waitFor(() => expect(summary()).toBeNull());
+    expect(screen.getByTestId("next-pending-done")).toHaveTextContent(/REMUNERACAO SALARIO·Fica fora do FinclaConferido/);
     const salary = draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").id;
     expect(answers()).toEqual([{ patch: salary, body: { answer: "ignore" } }]);
     expect(pending()).toBe("Todos respondidos");

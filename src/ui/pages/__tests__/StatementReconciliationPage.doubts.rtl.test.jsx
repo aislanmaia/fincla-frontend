@@ -771,8 +771,15 @@ describe("proposta 3: o resumo do próximo pendente", () => {
     await user.click(inSummary("Sim, é esta"));
 
     await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "pair", paired_transaction_id: 92 } }]));
-    // Sem outro pendente no passo: o resumo sai depois de confirmar, e a página diz que acabou.
+    // Sem outro pendente no passo: as respostas saem, a linha verde fica no lugar do resumo
+    // (anunciada) e a página diz que acabou.
     await waitFor(() => expect(summary()).toBeNull());
+    const done = screen.getByTestId("next-pending-done");
+    expect(done).toHaveTextContent("06/10/2026 PIX TRANSF PAULO V06 10·Sim, é Corte de cabeloConferido");
+    expect(done.closest("[aria-live='polite']")).not.toBeNull();
+    expect(screen.getByTestId("next-pending-finished").closest("[data-testid='entry-slot']")).toContainElement(
+      screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("UBERX")),
+    );
     const paulo = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
     expect(paulo).toHaveTextContent("Sim, é Corte de cabelo");
     expect(within(paulo).getByTestId("conferido-badge")).toBeInTheDocument();
@@ -837,6 +844,23 @@ describe("proposta 3: o resumo do próximo pendente", () => {
     expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
     expect(within(card("PIX TRANSF PAULO V06 10")).getByRole("button", { name: "Não, adicionar agora" })).toHaveAttribute("aria-pressed", "true");
     expect(summary()).toBeNull();
+  });
+
+  it("'Não, adicionar agora' que falhou no servidor não leva ao cartão: o erro aparece e o resumo fica", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+    server.use(http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
+      calls.push({ patch: p.entryId, body: await request.json() });
+      return HttpResponse.json({ detail: { code: "internal", message: "Falhou" } }, { status: 500 });
+    }));
+
+    await user.click(inSummary("Não, adicionar agora"));
+
+    await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "create" } }]));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(inSummary("Não, adicionar agora")).not.toBeDisabled());
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(summary()).toBeInTheDocument();
   });
 
   it("'Ver o cartão completo' leva ao Paulo sem gravar nada", async () => {

@@ -395,7 +395,7 @@ describe("Conferir o saldo: o resumo do próximo pendente (proposta 3)", () => {
     return user;
   };
 
-  it("mostra a transação com as ações do cartão; Excluir manda o mesmo pedido do cartão e o resumo sai", async () => {
+  it("mostra a transação com as ações do cartão; Excluir manda o mesmo pedido do cartão; o resumo sai e a linha verde fica", async () => {
     const user = await answerFarmacia();
     const s = summary();
     expect(s).toHaveAccessibleName(/2ª parcela salário/);
@@ -406,6 +406,7 @@ describe("Conferir o saldo: o resumo do próximo pendente (proposta 3)", () => {
 
     expect(lastChecks()).toEqual([{ transaction_id: 92, action: "delete", new_date: null }]);
     await waitFor(() => expect(summary()).toBeNull());
+    expect(screen.getByTestId("next-pending-done")).toHaveTextContent(/2ª parcela salário·Será excluída ao concluirConferido/);
     await waitFor(() => expect(rowOf("2ª parcela salário")).toHaveTextContent("Será excluída ao concluir"));
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });

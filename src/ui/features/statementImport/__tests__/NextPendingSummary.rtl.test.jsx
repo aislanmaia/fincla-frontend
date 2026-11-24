@@ -25,6 +25,8 @@ let api;
 let patches = [];
 // Segura a resposta do "servidor" até o teste soltar (null: responde na hora).
 let gate = null;
+// A próxima resposta falha no "servidor" (a ação devolve false, como a da página).
+let failNext = false;
 const deferred = () => {
   let release;
   const promise = new Promise((resolve) => { release = resolve; });
@@ -43,6 +45,10 @@ function Harness({ initial = INITIAL, withSummary = true, isMobile = false }) {
     setBusy(true);
     try {
       if (gate) await gate.promise;
+      if (failNext) {
+        failNext = false;
+        return false;
+      }
       setEntries((list) => list.map((e) => (e.id === entry.id ? { ...e, answer: value } : e)));
       if (value !== "create") queue.advanceFrom(entry.id);
       return true;
@@ -115,6 +121,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   patches = [];
   gate = null;
+  failNext = false;
 });
 
 afterEach(() => {
@@ -190,6 +197,36 @@ describe("responder no resumo", () => {
     expect(summary()).toBeNull();
     expect(api.queue.currentId).toBeNull();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("respondido o último pendente, a linha verde fica no lugar do resumo (anunciada, sem respostas) até a próxima ação", async () => {
+    await answerLast({ initial: INITIAL.map((e) => (e.id === "c" ? { ...e, answer: "ignore" } : e)) });
+    const live = within(summary()).getByRole("status");
+    expect(live).toHaveAttribute("aria-live", "polite");
+
+    await act(async () => { fireEvent.click(inSummary("Sim, é esta")); });
+
+    // A MESMA região viva (anunciada porque já estava no DOM), agora com a confirmação.
+    expect(live).toBeInTheDocument();
+    expect(live).toHaveTextContent("03/10/2026 PIX ENVIADO MERCADO·Sim, é MercadoConferido");
+    // Continua embaixo da linha respondida (d), sem as respostas nem o "Ver o cartão completo".
+    const slot = screen.getByTestId("row-d").parentElement;
+    expect(slot).toContainElement(live);
+    expect(screen.queryByRole("button", { name: "Ver o cartão completo" })).toBeNull();
+    expect(screen.queryByRole("group", { name: /Este lançamento/ })).toBeNull();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    // A próxima ação que mexe na fila (Alterar uma linha) tira a confirmação.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Alterar b" })); });
+    expect(screen.queryByTestId("next-pending-done")).toBeNull();
+  });
+
+  it("a linha verde final sai também quando outra resposta muda a lista", async () => {
+    await answerLast({ initial: INITIAL.map((e) => (e.id === "c" ? { ...e, answer: "ignore" } : e)) });
+    await act(async () => { fireEvent.click(inSummary("Sim, é esta")); });
+    expect(screen.getByTestId("next-pending-done")).toBeInTheDocument();
+    act(() => api.setEntries((list) => list.map((e) => (e.id === "b" ? { ...e, answer: null } : e))));
+    expect(screen.queryByTestId("next-pending-done")).toBeNull();
   });
 
   it("duplo clique manda uma resposta só", async () => {
@@ -291,6 +328,16 @@ describe("quando o resumo não basta, leva ao cartão", () => {
     expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([card]);
     expect(document.activeElement).toBe(card);
     expect(summary()).toBeNull();
+  });
+
+  it("'Não, adicionar agora' que falhou não leva ao cartão: o resumo fica, sem rolar", async () => {
+    await answerLast();
+    failNext = true;
+    await act(async () => { fireEvent.click(inSummary("Não, adicionar agora")); });
+    expect(patches).toEqual([{ id: "a", body: { answer: "create" }, via: "resumo" }]);
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(summary()).toBeInTheDocument();
+    expect(inSummary("Não, adicionar agora")).not.toBeDisabled();
   });
 
   it("'Ver o cartão completo' faz o que o botão fazia: rola suave até o pendente, foco nele, o resumo some", async () => {

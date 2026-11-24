@@ -71,6 +71,11 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   const liveAbove = useRef(null);
   // O pendente que está sendo respondido PELO RESUMO (só essa resposta encadeia; a do cartão, não).
   const fromSummary = useRef(null);
+  // O resumo respondeu o ÚLTIMO pendente do passo: a linha verde da confirmação fica no lugar dele,
+  // embaixo da linha respondida (sem as respostas), até a próxima ação que mexe na fila (abrir,
+  // responder, desfazer) ou a troca de passo. { step, fromId, except, sig }, como o `aboveRequest`.
+  const [finalDone, setFinalDone] = useState(null);
+  useEffect(() => { setFinalDone(null); }, [stepKey]);
 
   const stored = currentByStep[stepKey];
   const ids = useMemo(() => new Set(entries.map((e) => e.id)), [entries]);
@@ -96,6 +101,7 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     setRowFocusId(id === null ? rowFocus : null);
     // Abrir ou responder qualquer outro some com o "Próximo pendente" (quem o põe é o `advanceFrom`).
     setAboveRequest(null);
+    setFinalDone(null);
     if (focus && id !== null) setFocusRequest((prev) => ({ id, tick: prev.tick + 1 }));
   }, [stepKey]);
 
@@ -114,6 +120,8 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
       // o resumo sai e o foco volta para a linha que a pessoa está olhando.
       if (next === null || next === chain.fromId) {
         setCurrent(null, { rowFocus: chain.fromId });
+        const except = [...chain.except, fromId];
+        setFinalDone({ step: stepKey, fromId: chain.fromId, except, sig: answeredSignature(list, except, answered) });
         return;
       }
       if (index(next) > index(chain.fromId)) {
@@ -144,6 +152,14 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     ? { fromId: aboveRequest.fromId, target: entries.find((e) => e.id === aboveRequest.targetId) }
     : null;
   liveAbove.current = nextAbove ? aboveRequest : null;
+  // A confirmação final vale enquanto nada mais mudou (as respostas da sequência ainda podem chegar).
+  const doneBelow = finalDone
+    && finalDone.step === stepKey
+    && currentId === null
+    && ids.has(finalDone.fromId)
+    && answeredSignature(entries, finalDone.except, answered) === finalDone.sig
+    ? { fromId: finalDone.fromId }
+    : null;
   const dismissNextAbove = useCallback(({ hold = true } = {}) => {
     // O botão sai de baixo da linha: a rolagem fica onde está (sem o fim da página puxá-la).
     // `hold: false` quando sobra conteúdo embaixo para o botão sair sem a rolagem ser cortada (a
@@ -196,6 +212,8 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     answered,
     nextAbove,
     dismissNextAbove,
+    /** A confirmação da última resposta dada pelo resumo, embaixo da linha `fromId` (ou null). */
+    doneBelow,
     /** O resumo do próximo pendente começa (`id`) ou termina (null) uma resposta dele. */
     answeringFromSummary: (id) => { fromSummary.current = id; },
     hasNextUnanswered: currentId !== null && nextUnanswered(entries, currentId, answered) !== null,
@@ -1038,6 +1056,8 @@ const SUMMARY_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09
  * lugar). Nenhum temporizador: o resumo só muda quando a resposta volta.
  */
 const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, describe, busy, stacked = false, onGo, onAnswering }, ref) {
+  // `target` null: o resumo respondeu o último pendente e só a confirmação fica (no mesmo lugar e
+  // na MESMA região viva, que assim é anunciada), sem as respostas.
   const rootRef = useRef(null);
   const bodyRef = useRef(null);
   // Um clique só vale uma vez: o duplo clique não manda um segundo PATCH.
@@ -1047,7 +1067,7 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
   // não é mais o mostrado): aparece no mesmo commit em que o resumo passa para o seguinte, sem
   // esperar a releitura do rascunho, e uma resposta que falhou nunca aparece como conferida.
   const [log, setLog] = useState([]);
-  const done = [...log].reverse().find((d) => d.targetId !== target.id) ?? null;
+  const done = [...log].reverse().find((d) => d.targetId !== target?.id) ?? null;
   const pinnedSlot = useRef(null);
   useEffect(() => () => { if (pinnedSlot.current) unpin(pinnedSlot.current); }, []);
   const setRefs = useCallback((el) => {
@@ -1056,21 +1076,29 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
     else if (ref) ref.current = el;
   }, [ref]);
   // O pendente seguinte entra no lugar do anterior com um esmaecer curto, sem movimento.
-  const firstTarget = useRef(target.id);
+  const targetId = target?.id ?? null;
+  const firstTarget = useRef(targetId);
   useEffect(() => {
-    if (target.id === firstTarget.current || prefersReducedMotion()) return;
+    if (targetId === null || targetId === firstTarget.current || prefersReducedMotion()) return;
     bodyRef.current?.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
-  }, [target.id]);
-  const view = describe(target);
-  const name = [view.dateLabel, view.title].filter(Boolean).join(" ");
+  }, [targetId]);
+  const view = target ? describe(target) : null;
+  const name = view ? [view.dateLabel, view.title].filter(Boolean).join(" ") : "";
   const answer = async (a) => {
-    if (inFlight.current || busy || a.disabled) return;
+    if (inFlight.current || busy || a.disabled || !target) return;
     inFlight.current = true;
     setRunning(true);
     try {
       if (a.toCard) {
-        await a.run?.();
-        onGo();
+        // Só leva ao cartão se a resposta foi gravada (ou não havia o que gravar): uma que falhou
+        // deixa o resumo onde está, com o erro do passo na tela, como as outras respostas.
+        let ok = false;
+        try {
+          ok = (await a.run?.()) !== false;
+        } catch {
+          ok = false;
+        }
+        if (ok) onGo();
         return;
       }
       const slot = rootRef.current?.closest("[data-testid='entry-slot']") ?? null;
@@ -1096,11 +1124,14 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
     <section
       ref={setRefs}
       tabIndex={-1}
-      data-next-pending=""
-      data-testid="next-pending-summary"
-      aria-label={`Próximo pendente: ${name}`}
-      style={{ marginTop: 8, background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 12, boxShadow: T.sm, overflow: "hidden", outline: "none", minWidth: 0 }}
+      data-next-pending={view ? "" : undefined}
+      data-testid={view ? "next-pending-summary" : "next-pending-finished"}
+      aria-label={view ? `Próximo pendente: ${name}` : undefined}
+      style={view
+        ? { marginTop: 8, background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 12, boxShadow: T.sm, overflow: "hidden", outline: "none", minWidth: 0 }
+        : { marginTop: done ? 8 : 0, borderRadius: 12, overflow: "hidden", outline: "none", minWidth: 0, border: done ? `1px solid ${T.greenBorder}` : 0 }}
     >
+      {view ? (
       <div ref={bodyRef} style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={SUMMARY_LABEL}>Próximo pendente</span>
@@ -1149,12 +1180,13 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
           </div>
         </div>
       </div>
+      ) : null}
       {/* A confirmação fica EMBAIXO das respostas: ao aparecer, não empurra os botões que estão
           sob o dedo ou o cursor (QA 2026-11-24: em cima, eles desciam 17 px no computador e 55 px
           no celular). */}
       <div role="status" aria-live="polite">
         {done ? (
-          <p data-testid="next-pending-done" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "7px 14px", background: T.greenLight, borderTop: `1px solid ${T.greenBorder}`, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <p data-testid="next-pending-done" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "7px 14px", background: T.greenLight, borderTop: view ? `1px solid ${T.greenBorder}` : 0, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <Check size={13} aria-hidden="true" style={{ color: T.green, flexShrink: 0 }} />
             <span style={{ ...NUM, minWidth: 0, wordBreak: "break-word" }}>{done.name}</span>
             <span aria-hidden="true">·</span>
@@ -1185,6 +1217,9 @@ export function NextPendingButton({ queue, fromId }) {
   const going = useRef(false);
   useReachedByScrolling(shown ? info.target.id : null, ref, going, queue.dismissNextAbove);
   useNotWhenPendingInView(shown ? info.target.id : null, ref, queue.dismissNextAbove);
+  const finished = !shown && Boolean(summary) && queue.doneBelow?.fromId === fromId;
+  // O mesmo componente, no mesmo lugar: a confirmação e a região viva dele sobrevivem ao fim.
+  if (finished) return <NextPendingSummary ref={ref} target={null} describe={summary.describe} busy={summary.busy} stacked={Boolean(summary.isMobile)} onGo={queue.dismissNextAbove} onAnswering={queue.answeringFromSummary} />;
   if (!shown) return null;
   const { target } = info;
   const memo = target.bank_description ?? target.description ?? "";
