@@ -15,7 +15,7 @@
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
 import { Component, createContext, createRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Check } from "lucide-react";
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -410,16 +410,17 @@ export const ANCHOR_MARGIN = 16;
  * - No topo antigo ele ficaria inteiro ACIMA da área visível (cartão mais alto que a tela, a
  *   pessoa rolou até os botões): manter esse topo deixaria a linha fora da tela e só espaço vazio
  *   à vista (BUG-08). A linha vem para o topo da área visível, onde estava a parte do cartão que a
- *   pessoa via (também quando só uma fresta dela apareceria atrás do topo grudado, BUG-10); e, se
- *   isso deixaria vazio embaixo (fim da lista), a rolagem para no fim do
- *   conteúdo: a linha fica à vista com a lista acima dela, sem espaço provisório.
+ *   pessoa via (também quando só uma fresta dela apareceria atrás do topo grudado, BUG-10). Também
+ *   no fim da lista: o espaço provisório segura a rolagem. Parar no fim do conteúdo levava a linha
+ *   para o pé da tela, um salto PARA BAIXO de meia tela (BUG-01 da ct-sem-resumo-g4: com o rodapé
+ *   grudado no fim da página, o topo da última dúvida fica 87 px atrás do topo grudado e caía aqui).
+ *   A linha nunca desce além do topo da área visível.
  */
-export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, coverTop = viewTop, clientHeight, contentHeight }) {
+export function anchorTarget({ scrollTop, oldTop, newTop, newHeight = 0, viewTop, coverTop = viewTop }) {
   const keep = scrollTop + (newTop - oldTop);
   // "Pelo menos metade": exatamente a metade à vista também fica (meio px de folga para o arredondamento).
   if (oldTop + newHeight / 2 >= coverTop - 0.5) return keep;
-  const toTop = scrollTop + (newTop - (viewTop + ANCHOR_MARGIN));
-  return Math.max(0, Math.min(toTop, contentHeight - clientHeight));
+  return Math.max(0, scrollTop + (newTop - (viewTop + ANCHOR_MARGIN)));
 }
 
 /**
@@ -618,8 +619,6 @@ function anchorCommit() {
         newHeight: own,
         viewTop: anchor.viewTop ?? viewTopOf(scroller),
         coverTop: anchor.coverTop ?? coverTopOf(scroller),
-        clientHeight: scroller.clientHeight,
-        contentHeight: contentHeightOf(scroller),
       });
       holdScroll(scroller, target);
       held = { scroller, target };
@@ -837,9 +836,9 @@ export class EntrySlot extends Component {
   }
 
   render() {
-    const { open, children } = this.props;
+    const { open, entryId, children } = this.props;
     return (
-      <div ref={this.ref} data-testid="entry-slot" data-open={open ? "true" : "false"} style={{ position: "relative", overflowAnchor: "none", borderRadius: 12, minWidth: 0 }}>
+      <div ref={this.ref} data-testid="entry-slot" data-entry-id={entryId} data-open={open ? "true" : "false"} style={{ position: "relative", overflowAnchor: "none", borderRadius: 12, minWidth: 0 }}>
         {children}
       </div>
     );
@@ -864,6 +863,11 @@ function naturalHeightOf(el) {
 /** O cartão aberto de um lançamento (a moldura `CurrentEntryFrame`). */
 function currentCardOf(id) {
   return document.querySelector(`[data-testid="current-entry"][data-entry-id=${JSON.stringify(String(id))}]`);
+}
+
+/** O lugar de um lançamento na lista (`EntrySlot` com `entryId`). */
+function slotOf(id) {
+  return document.querySelector(`[data-testid="entry-slot"][data-entry-id=${JSON.stringify(String(id))}]`);
 }
 
 /** Termina na hora as animações de troca cartão ↔ linha (o layout fica no lugar final). */
@@ -961,6 +965,8 @@ const TOUCH_TARGET = 44;
  * fincla-api#507): um botão que leva ao PRIMEIRO pendente do passo, acima ou abaixo, e põe o foco
  * nele. É o único movimento da tela, e só no clique. Gruda no fim da área que rola enquanto falta
  * responder, para ficar à vista no meio de uma lista longa (celular e computador); some com 0.
+ * A seta aponta para onde o pendente está ("↓" abaixo da faixa visível, "↑" acima), medida da
+ * posição real a cada rolagem; o nome acessível não muda com ela.
  *
  * Classe por causa da foto antes da troca: ao sumir (o último pendente respondido) a página fica
  * mais curta embaixo; com a rolagem no fim, o navegador a puxaria para trás e a lista desceria. A
@@ -976,14 +982,62 @@ export class GoToPendingButton extends Component {
 
   previousPaddingBottom = "";
 
+  // Onde o ouvinte de rolagem da seta está preso (a região que rola, ou o documento).
+  scrollEvents = null;
+
+  state = { direction: "up" };
+
   componentDidMount() {
     this.reserve();
+    this.trackDirection();
     // A altura do aviso muda com a largura (a quebra de linha do texto, girar o celular): a reserva
     // acompanha, como a do topo fixo.
     window.addEventListener("resize", this.onResize);
   }
 
-  onResize = () => this.reserve();
+  onResize = () => {
+    this.reserve();
+    this.updateDirection();
+  };
+
+  onScroll = () => this.updateDirection();
+
+  /**
+   * Para onde o primeiro pendente está: "down" com ele abaixo da faixa visível (ou cortado pelo
+   * fim dela, sem passar do topo), "up" acima, cortado em cima ou à vista. O alvo é o que o clique
+   * traz: a fileira de respostas do cartão aberto, ou a linha recolhida. Sem medida, "up".
+   */
+  direction() {
+    const id = this.props.queue?.firstPendingId;
+    if (id === null || id === undefined) return "up";
+    const card = currentCardOf(id);
+    const row = card?.querySelector(`[${ANSWER_ROW_ATTR}]`);
+    const target = [row, card, card ? null : slotOf(id)].find((el) => el?.getBoundingClientRect().height);
+    if (!target) return "up";
+    const rect = target.getBoundingClientRect();
+    const band = visibleBand(target);
+    return rect.bottom > band.bottom + 0.5 && rect.top > band.top + 0.5 ? "down" : "up";
+  }
+
+  updateDirection() {
+    if (!this.ref.current) return;
+    const direction = this.direction();
+    if (direction !== this.state.direction) this.setState({ direction });
+  }
+
+  /** Um ouvinte de rolagem passivo na região que rola em volta do aviso (só enquanto ele existe). */
+  trackDirection() {
+    const el = this.ref.current;
+    const scroller = el ? scrollParentOf(el) : null;
+    let events = null;
+    if (scroller) events = scroller === document.scrollingElement || scroller === document.documentElement ? document : scroller;
+    if (events !== this.scrollEvents) {
+      this.scrollEvents?.removeEventListener("scroll", this.onScroll);
+      this.scrollEvents = events;
+      events?.addEventListener("scroll", this.onScroll, { passive: true });
+    }
+    this.updateDirection();
+  }
 
   getSnapshotBeforeUpdate() {
     const el = this.ref.current;
@@ -996,6 +1050,7 @@ export class GoToPendingButton extends Component {
 
   componentDidUpdate(_prevProps, _prevState, snap) {
     this.reserve();
+    this.trackDirection();
     const el = this.ref.current;
     if (snap?.scroller.isConnected) {
       const height = el?.isConnected ? el.getBoundingClientRect().height : 0;
@@ -1012,6 +1067,8 @@ export class GoToPendingButton extends Component {
 
   componentWillUnmount() {
     window.removeEventListener("resize", this.onResize);
+    this.scrollEvents?.removeEventListener("scroll", this.onScroll);
+    this.scrollEvents = null;
     this.release();
   }
 
@@ -1070,6 +1127,7 @@ export class GoToPendingButton extends Component {
     if (!queue?.pending) return null;
     const what = plural(queue.pending, noun.one, noun.many);
     const label = `Falta responder ${what} deste passo`;
+    const Arrow = this.state.direction === "down" ? ArrowDown : ArrowUp;
     return (
       <div
         ref={this.ref}
@@ -1082,11 +1140,12 @@ export class GoToPendingButton extends Component {
           variant="outAmber"
           full={isMobile}
           data-testid="go-to-pending"
+          data-direction={this.state.direction}
           aria-label={`${label}. Ir para o primeiro item que falta responder`}
           onClick={this.go}
           style={{ minHeight: TOUCH_TARGET, padding: "0 16px", fontSize: 13, color: T.ink, background: T.amberLight, boxShadow: T.sm, whiteSpace: "normal", textAlign: "left" }}
         >
-          <ArrowUp size={16} aria-hidden="true" style={{ flexShrink: 0, color: T.amber }} />
+          <Arrow size={16} aria-hidden="true" style={{ flexShrink: 0, color: T.amber }} />
           <span>{label}</span>
         </Btn>
       </div>

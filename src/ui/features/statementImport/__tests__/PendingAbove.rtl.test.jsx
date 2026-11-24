@@ -55,7 +55,7 @@ function Harness({ initial = INITIAL }) {
   return (
     <div>
       {entries.map((entry) => (
-        <EntrySlot key={entry.id} open={entry.id === queue.currentId}>
+        <EntrySlot key={entry.id} entryId={entry.id} open={entry.id === queue.currentId}>
           {entry.id === queue.currentId ? (
             <CurrentEntryFrame queue={queue} entry={entry}>
               <div data-testid={`card-${entry.id}`}>
@@ -404,7 +404,8 @@ describe("com layout simulado: nada pula", () => {
 
   let animations = [];
   // Como o navegador: medir força o layout, e a rolagem é cortada se a página encolheu.
-  const clamp = () => { scrollTop = Math.min(scrollTop, maxScroll()); return scrollTop; };
+  // (A região ainda sem ref, ao montar: nada rolou ainda.)
+  const clamp = () => { if (!scroller) return 0; scrollTop = Math.min(scrollTop, maxScroll()); return scrollTop; };
   const finishAnimations = () => act(() => { for (const a of animations.splice(0)) a.finish?.(); });
 
   beforeEach(() => {
@@ -730,5 +731,92 @@ describe("o aviso do rodapé acompanha a mudança de tamanho da janela", () => {
     } finally {
       if (realHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", realHeight);
     }
+  });
+});
+
+// A seta do aviso aponta para onde o primeiro pendente está: "↓" com ele abaixo da faixa visível,
+// "↑" acima (ou cortado em cima). Medida da posição real, atualizada na rolagem (ouvinte passivo).
+describe("a seta do aviso do rodapé segue a posição do primeiro pendente", () => {
+  // A região que rola vai de 0 a 400 px. `geo.card`: topo do cartão aberto (300 px de altura) e da
+  // fileira de respostas (32 px, `geo.answers` abaixo do topo dele); `geo.slots`: topo de cada linha (80 px).
+  const geo = { card: 0, answers: 250, slots: {} };
+  let scroller;
+  beforeEach(() => {
+    Object.assign(geo, { card: 0, answers: 250, slots: {} });
+    const realRect = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      const box = (top, height) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 0 });
+      if (this.dataset?.testid === "current-entry") return box(geo.card, 300);
+      if (this.hasAttribute?.("data-answer-row")) return box(geo.card + geo.answers, 32);
+      if (this.dataset?.testid === "entry-slot" && geo.slots[this.dataset.entryId] !== undefined) return box(geo.slots[this.dataset.entryId], 80);
+      if (this.dataset?.testid === "scroller") return box(0, 400);
+      return realRect.call(this);
+    });
+  });
+
+  function renderInScroller() {
+    render(
+      <div
+        data-testid="scroller"
+        style={{ overflowY: "auto" }}
+        ref={(el) => {
+          if (!el || el === scroller) return;
+          scroller = el;
+          Object.defineProperty(el, "scrollHeight", { configurable: true, value: 3000 });
+          Object.defineProperty(el, "clientHeight", { configurable: true, value: 400 });
+        }}
+      >
+        <Harness />
+      </div>,
+    );
+  }
+  const scrollTo = (changes) => act(() => { Object.assign(geo, changes); scroller.dispatchEvent(new Event("scroll")); });
+  const NAME = "Falta responder 3 lançamentos deste passo. Ir para o primeiro item que falta responder";
+
+  it("o cartão do primeiro pendente com a fileira de respostas abaixo da faixa: ↓; rolando até ele ficar acima: ↑", () => {
+    geo.card = 500;
+    renderInScroller();
+    expect(footer().dataset.direction).toBe("down");
+    expect(footer().querySelector(".lucide-arrow-down")).not.toBeNull();
+    expect(footer()).toHaveAccessibleName(NAME);
+
+    scrollTo({ card: -600 });
+    expect(footer().dataset.direction).toBe("up");
+    expect(footer().querySelector(".lucide-arrow-up")).not.toBeNull();
+    // O nome acessível não muda com a rolagem (a seta é decorativa).
+    expect(footer()).toHaveAccessibleName(NAME);
+  });
+
+  it("a fileira de respostas cortada pelo fim da faixa: ↓; cortada em cima (parte à vista acima): ↑", () => {
+    geo.card = 200; // fileira em 450..482, abaixo do fim (400)
+    renderInScroller();
+    expect(footer().dataset.direction).toBe("down");
+    scrollTo({ card: 100, answers: 290 }); // fileira em 390..422: cortada embaixo
+    expect(footer().dataset.direction).toBe("down");
+    scrollTo({ card: -270, answers: 250 }); // fileira em -20..12: cortada em cima
+    expect(footer().dataset.direction).toBe("up");
+  });
+
+  it("o primeiro pendente é uma linha recolhida (outro cartão aberto): abaixo ↓, acima ↑", () => {
+    geo.slots.a = 700;
+    renderInScroller();
+    act(() => api.queue.open("c"));
+    expect(api.queue.firstPendingId).toBe("a");
+    expect(footer().dataset.direction).toBe("down");
+    scrollTo({ slots: { a: -200 } });
+    expect(footer().dataset.direction).toBe("up");
+  });
+
+  it("ouve a rolagem com um ouvinte passivo e para de ouvir ao sumir", () => {
+    const add = vi.spyOn(HTMLElement.prototype, "addEventListener");
+    const remove = vi.spyOn(HTMLElement.prototype, "removeEventListener");
+    renderInScroller();
+    const call = add.mock.calls.find(([type, , options], i) => type === "scroll" && add.mock.contexts[i] === scroller && options?.passive);
+    expect(call).toBeDefined();
+    act(() => api.answer("a"));
+    act(() => api.answer("c"));
+    act(() => api.answer("d"));
+    expect(footer()).toBeNull();
+    expect(remove.mock.calls.some(([type, fn], i) => type === "scroll" && fn === call[1] && remove.mock.contexts[i] === scroller)).toBe(true);
   });
 });

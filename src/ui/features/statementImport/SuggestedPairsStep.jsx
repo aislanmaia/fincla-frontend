@@ -397,7 +397,7 @@ export function SuggestedPairsStep({
         </div>
       ) : null}
       {entries.filter(queue.shown).map((entry) => (
-        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
+        <EntrySlot key={entry.id} entryId={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
         {entry.id === queue.currentId ? (
         <CurrentEntryFrame queue={queue} entry={entry}>
           <PairCard

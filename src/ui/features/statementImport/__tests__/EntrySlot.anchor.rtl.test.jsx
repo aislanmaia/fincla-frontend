@@ -180,17 +180,19 @@ describe("pickAnchor / spacerNeeded / anchorTarget", () => {
 
   it("só uma fresta da linha apareceria atrás do topo grudado (BUG-10): ela vem para a área visível", () => {
     // Celular: cartão alto centralizado, topo 1 px acima da tela, área visível a partir de 123 px;
-    // a linha de 126 px no mesmo topo mostraria 2 px. No fim da lista, a rolagem para no fim do conteúdo.
-    expect(anchorTarget({ scrollTop: 1597, oldTop: -1, newTop: -1, newHeight: 126, viewTop: 123, clientHeight: 844, contentHeight: 2200 })).toBe(2200 - 844);
+    // a linha de 126 px no mesmo topo mostraria 2 px. Também no fim da lista ela vai para o topo da
+    // área visível (o espaço provisório segura a rolagem): parar no fim do conteúdo a fazia descer.
+    expect(anchorTarget({ scrollTop: 1597, oldTop: -1, newTop: -1, newHeight: 126, viewTop: 123, clientHeight: 844, contentHeight: 2200 })).toBe(1597 - 1 - 123 - ANCHOR_MARGIN);
     // No meio da lista: a linha vai para o topo da área visível (com a folga).
     expect(anchorTarget({ scrollTop: 1597, oldTop: -1, newTop: -1, newHeight: 126, viewTop: 123, clientHeight: 844, contentHeight: 6000 })).toBe(1597 - 1 - 123 - ANCHOR_MARGIN);
   });
 
-  it("topo acima da tela: a linha vem para o topo da área visível; no fim da lista, a rolagem para no fim do conteúdo", () => {
+  it("topo acima da tela: a linha vem para o topo da área visível, também no fim da lista (nunca desce além dele)", () => {
     // No meio da lista: há conteúdo embaixo, a linha fica no topo (com a folga).
     expect(anchorTarget({ scrollTop: 800, oldTop: -300, newTop: -300, viewTop: 0, clientHeight: 400, contentHeight: 3000 })).toBe(500 - ANCHOR_MARGIN);
-    // No fim: levar a linha ao topo deixaria vazio embaixo; a rolagem fica no fim do conteúdo.
-    expect(anchorTarget({ scrollTop: 800, oldTop: -300, newTop: -300, viewTop: 0, clientHeight: 400, contentHeight: 700 })).toBe(300);
+    // No fim (BUG-01 da ct-sem-resumo-g4): parar no fim do conteúdo levaria a linha para o pé da
+    // tela, um salto para baixo; ela vai para o topo da área visível e o espaço provisório segura.
+    expect(anchorTarget({ scrollTop: 800, oldTop: -300, newTop: -300, viewTop: 0, clientHeight: 400, contentHeight: 700 })).toBe(500 - ANCHOR_MARGIN);
     // A área visível começa mais abaixo na tela (região que rola dentro do app).
     expect(anchorTarget({ scrollTop: 800, oldTop: 50, newTop: 50, viewTop: 120, clientHeight: 400, contentHeight: 3000 })).toBe(800 + 50 - 120 - ANCHOR_MARGIN);
     // Nunca abaixo de zero.
@@ -325,7 +327,7 @@ describe("EntrySlot: o item respondido fica parado (BUG-01)", () => {
 });
 
 describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha respondida", () => {
-  it("o último, com a página no fim e o topo do cartão acima da tela: a linha e a lista à vista, sem espaço vazio", () => {
+  it("o último, com a página no fim e o topo do cartão acima da tela: a linha vem para o topo da área visível, nunca para o pé", () => {
     openHeight = 900;
     fakeAnimate();
     const { rerender } = render(<List open="f" />);
@@ -335,13 +337,10 @@ describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha res
 
     rerender(<List open={null} />);
 
-    // A rolagem para no fim do conteúdo: nada de espaço provisório, a tela inteira com conteúdo.
-    expect(spacerOf()).toBeNull();
-    expect(visibleContent()).toBe(VIEW);
-    // A linha "Conferido" inteira à vista, na parte da tela onde estava o cartão, e a lista acima.
-    expect(topOf("f")).toBeGreaterThanOrEqual(0);
-    expect(topOf("f") + ROW).toBeLessThanOrEqual(VIEW);
-    expect(topOf("e")).toBeGreaterThanOrEqual(0);
+    // A linha "Conferido" inteira à vista no topo da área visível; o espaço provisório segura a
+    // rolagem (parar no fim do conteúdo a jogava para o pé da tela).
+    expect(topOf("f")).toBe(ANCHOR_MARGIN);
+    expect(spacerHeight()).toBeGreaterThan(0);
   });
 
   it("com a animação começando da altura antiga (Chrome devolve a rolagem cortada), a linha não escorrega quadro a quadro", () => {
@@ -357,27 +356,59 @@ describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha res
     // Primeiro quadro: o lugar ainda alto (900), a rolagem já no alvo final.
     const settled = topOf("f");
     expect(slot("f").dataset.animHeight).toBe("900");
-    expect(scroller.scrollTop).toBe(200); // o fim do conteúdo final (5 × 100 + 100 − 400)
-    expect(settled).toBe(300);
+    expect(settled).toBe(ANCHOR_MARGIN);
     // Fim da animação: nada se move.
     act(() => { for (const { a } of animations) a.finish?.(); });
     expect(topOf("f")).toBe(settled);
-    expect(visibleContent()).toBe(VIEW);
   });
 
-  it("rolar depois não cai em espaço vazio: para baixo não há mais nada, para cima a lista continua", () => {
+  it("rolar depois não cai em espaço vazio novo: para baixo não passa de onde está, para cima o espaço some", () => {
     openHeight = 900;
     const { rerender } = render(<List open="f" />);
     scrollToEnd();
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
     rerender(<List open={null} />);
     const end = scroller.scrollTop;
 
     act(() => { scroller.scrollTop = end + 300; scroller.dispatchEvent(new Event("scroll")); });
     expect(scroller.scrollTop).toBe(end);
-    expect(visibleContent()).toBe(VIEW);
-    act(() => { scroller.scrollTop = end - 150; scroller.dispatchEvent(new Event("scroll")); });
-    expect(visibleContent()).toBe(VIEW);
+    act(() => { scroller.scrollTop = 0; scroller.dispatchEvent(new Event("scroll")); });
     expect(spacerOf()).toBeNull();
+    expect(visibleContent()).toBe(VIEW);
+  });
+
+  // BUG-01 da ct-sem-resumo-g4 (computador 1440x900): a última dúvida (cartão de 670 px) com a
+  // página no fim; o rodapé grudado "Falta responder" soma 61 px ao fim da página, então o topo do
+  // cartão fica 87 px atrás do topo grudado e a linha de 80 px não aparece pela metade ali. Parar no
+  // fim do conteúdo levava a linha 590 px para baixo, até o pé da lista.
+  const bug01 = () => {
+    ROW = 80;
+    VIEW = 728;
+    openHeight = 670;
+    const view = render(<List open="f" />);
+    scroller.dataset.stickyCover = "145";
+    scroller.style.scrollPaddingTop = "157px";
+    scrollToEnd();
+    expect(topOf("f")).toBe(58); // 87 px atrás da borda do topo grudado (145)
+    screen.getByRole("button", { name: "Confirmar f" }).focus();
+    return view;
+  };
+
+  it("BUG-01: o último pendente respondido no fim da página vem para logo abaixo do topo grudado, nunca desce além", () => {
+    const { rerender } = bug01();
+
+    rerender(<List open={null} />);
+
+    expect(topOf("f")).toBe(157 + ANCHOR_MARGIN);
+  });
+
+  it("BUG-01: com o próximo pendente abrindo ACIMA, a linha vem para logo abaixo do topo grudado, nunca desce além", () => {
+    const { rerender } = bug01();
+
+    rerender(<List open="b" />);
+
+    expect(topOf("f")).toBe(157 + ANCHOR_MARGIN);
+    expect(topOf("b")).toBeLessThan(topOf("f"));
   });
 
   it("no meio da lista (o próximo abre abaixo): a linha vem para o topo da área visível, com o próximo embaixo", () => {
@@ -462,10 +493,8 @@ describe("cartão mais alto que a tela (BUG-08): a pessoa sempre vê a linha res
       if (stays(offset)) {
         expect(after).toBe(before);
       } else {
-        // Inteira à vista abaixo do topo grudado, com conteúdo na tela.
-        expect(after).toBeGreaterThanOrEqual(74);
-        expect(after + 80).toBeLessThanOrEqual(VIEW);
-        expect(visibleContent()).toBeGreaterThan(0);
+        // Logo abaixo do topo grudado (com a folga), nunca mais embaixo.
+        expect(after).toBe(86 + ANCHOR_MARGIN);
       }
     });
 
