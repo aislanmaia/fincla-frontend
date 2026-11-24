@@ -215,7 +215,7 @@ describe("EntrySlot: o item respondido fica parado (BUG-01)", () => {
     expect(spacerOf()).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("BUG-12 (Conferir o saldo): enquanto a linha anima (cresce com o Próximo pendente embaixo), a ancoragem do navegador fica desligada; volta no fim", () => {
+  it("BUG-12 (Conferir o saldo): enquanto a altura anima entre cartão e linha, a ancoragem do navegador fica desligada; volta no fim", () => {
     // Sem espaço provisório (a rolagem cabe), a âncora soltava a ancoragem antes de a animação
     // começar; com conteúdo abaixo da lista, o navegador rolava junto com o crescimento e a
     // linha subia 45 px depois de recolher.

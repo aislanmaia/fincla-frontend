@@ -231,7 +231,10 @@ describe("o próximo pendente abre acima do item respondido", () => {
         await user.keyboard("s");
 
         expect(shortcutAnswers).toEqual([]);
-        expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+        // Traz o cartão (ou, sem caber, a fileira de respostas dele) e põe o foco no cartão.
+        const card = screen.getByTestId("current-entry");
+        expect(card.contains(Element.prototype.scrollIntoView.mock.contexts[0])).toBe(true);
+        expect(document.activeElement).toBe(card);
       });
     }
 
@@ -557,5 +560,175 @@ describe("com layout simulado: nada pula", () => {
 
     expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([screen.getByTestId("current-entry")]);
     expect(scroller.querySelector("[data-anim-height]")).toBeNull();
+  });
+});
+
+// Revisão do PR #349: um cartão alto (uma dúvida com 2 opções, no celular de 390×844) alinhado só
+// pelo topo deixava a fileira de respostas embaixo do aviso grudado no fim. Levar ao pendente é
+// deixar a fileira de respostas inteira entre o topo grudado e o aviso do rodapé.
+describe("levar ao pendente deixa a fileira de respostas à vista", () => {
+  // O cartão com o topo em `geo.top` px da tela e `geo.height` de altura; a fileira de respostas
+  // (32 px) em `geo.answers` px abaixo do topo dele. A região que rola vai de 0 a 400 px.
+  const geo = { top: 500, height: 300, answers: 250 };
+  let scroller;
+  beforeEach(() => {
+    globalThis.onscrollend = null;
+    Object.assign(geo, { top: 500, height: 300, answers: 250 });
+    const realRect = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      if (this.dataset?.testid === "current-entry") return { top: geo.top, bottom: geo.top + geo.height, height: geo.height, left: 0, right: 0, width: 0 };
+      if (this.hasAttribute?.("data-answer-row")) {
+        const top = geo.top + geo.answers;
+        return { top, bottom: top + 32, height: 32, left: 0, right: 0, width: 0 };
+      }
+      if (this.dataset?.testid === "scroller") return { top: 0, bottom: 400, height: 400, left: 0, right: 0, width: 0 };
+      return realRect.call(this);
+    });
+  });
+
+  /** Numa região de 400 px que rola, d respondido e a aberto (o pendente que o aviso leva). */
+  function inScroller() {
+    const { container } = render(
+      <div data-testid="scroller" style={{ overflowY: "auto" }}><Harness /></div>,
+    );
+    scroller = container.querySelector("[data-testid='scroller']");
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 3000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+    scroller.scrollTop = 1000;
+    act(() => api.queue.open("d"));
+    fireEvent.click(screen.getByRole("button", { name: "Não registrar d" }));
+    expect(api.queue.currentId).toBe("a");
+    return screen.getByTestId("current-entry");
+  }
+
+  const answerRow = () => screen.getByTestId("current-entry").querySelector("[data-answer-row]");
+
+  it("o cartão inteiro cabe: alinha o topo dele (como antes)", () => {
+    const card = inScroller();
+    fireEvent.click(footer());
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([card]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("o cartão não cabe: a fileira de respostas fica logo acima do aviso do rodapé (o fim dela no scroll-padding-bottom)", () => {
+    const card = inScroller();
+    geo.height = 600;
+    geo.answers = 550;
+    const focus = vi.spyOn(card, "focus");
+
+    fireEvent.click(footer());
+
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([answerRow()]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "end" });
+    // O scroll-padding-bottom é o aviso mais a folga: o fim da fileira fica a 16 px dele.
+    expect(scroller.style.scrollPaddingBottom).toBe("16px");
+    expect(focus).not.toHaveBeenCalled();
+    act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it("o cartão não cabe mas, com o topo alinhado, a fileira de respostas já fica à vista: alinha o topo", () => {
+    const card = inScroller();
+    geo.height = 600;
+    geo.answers = 200;
+    fireEvent.click(footer());
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([card]);
+  });
+
+  it("o atalho que traz um cartão alto fora da vista também deixa a fileira de respostas à vista", async () => {
+    const user = userEvent.setup();
+    inScroller();
+    geo.top = -900;
+    geo.height = 600;
+    geo.answers = 550;
+
+    await user.keyboard("s");
+
+    expect(shortcutAnswers).toEqual([]);
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([answerRow()]);
+    expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+  });
+
+  it("OBS-40: com o cartão à vista mas a fileira de respostas cortada pelo fim, S traz a fileira (não responde)", async () => {
+    const user = userEvent.setup();
+    inScroller();
+    // O topo do cartão à vista (120 px); as respostas em 380–412 px, cortadas pelo fim (400).
+    geo.top = 120;
+    geo.answers = 260;
+
+    await user.keyboard("s");
+
+    expect(shortcutAnswers).toEqual([]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    // Com a fileira inteira à vista, o mesmo atalho responde.
+    geo.answers = 200;
+    await user.keyboard("s");
+    expect(shortcutAnswers).toEqual([["a", "pair"]]);
+  });
+
+  it("dois cliques seguidos: um fim de rolagem põe o foco uma vez só (um ouvinte só)", () => {
+    const card = inScroller();
+    const focus = vi.spyOn(card, "focus");
+    fireEvent.click(footer());
+    fireEvent.click(footer());
+    act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+    expect(focus).toHaveBeenCalledTimes(1);
+    // Nenhum ouvinte sobra para a próxima rolagem.
+    act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("a pessoa mexe antes do fim da rolagem: o ouvinte sai e a rolagem dela não rouba o foco depois", () => {
+    const card = inScroller();
+    const focus = vi.spyOn(card, "focus");
+    fireEvent.click(footer());
+    fireEvent.wheel(scroller);
+    act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it("sem distância a andar, o foco vai na hora (sem ouvinte pendurado)", () => {
+    const card = inScroller();
+    // O topo do cartão já no lugar (a folga de 16 px abaixo do topo da região).
+    geo.top = 16;
+    const focus = vi.spyOn(card, "focus");
+    fireEvent.click(footer());
+    expect(focus).toHaveBeenCalledTimes(1);
+    act(() => { scroller.dispatchEvent(new Event("scrollend")); });
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("o aviso do rodapé acompanha a mudança de tamanho da janela", () => {
+  it("ao redimensionar (girar o celular), publica a altura nova; ao desmontar, para de ouvir", () => {
+    let barHeight = 60;
+    const realHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get() { return this.dataset?.testid === "go-to-pending-bar" ? barHeight : 0; },
+    });
+    try {
+      const { container, unmount } = render(
+        <div data-testid="scroller" style={{ overflowY: "auto" }}><Harness /></div>,
+      );
+      const scroller = container.querySelector("[data-testid='scroller']");
+      Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
+      Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+
+      act(() => { window.dispatchEvent(new Event("resize")); });
+      expect(scroller.dataset.stickyBottom).toBe("60");
+
+      barHeight = 88;
+      act(() => { window.dispatchEvent(new Event("resize")); });
+      expect(scroller.dataset.stickyBottom).toBe("88");
+      expect(scroller.style.scrollPaddingBottom).toBe("104px");
+
+      const remove = vi.spyOn(window, "removeEventListener");
+      unmount();
+      expect(remove.mock.calls.some(([type]) => type === "resize")).toBe(true);
+    } finally {
+      if (realHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", realHeight);
+    }
   });
 });

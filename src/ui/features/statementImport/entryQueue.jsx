@@ -633,8 +633,8 @@ function anchorCommit() {
       change.slot.play(change);
       // Enquanto a altura anima, a ancoragem do navegador fica desligada nesta região: sem isso,
       // com algo abaixo da lista (no "Conferir o saldo", as notas e o que fica de fora), o
-      // navegador ancorava nesse conteúdo e rolava junto com a linha que crescia (o "Próximo
-      // pendente" aparecendo embaixo dela): a linha subia 45 px depois de recolher.
+      // navegador ancorava nesse conteúdo e rolava junto com a altura que anima entre cartão e
+      // linha: a linha respondida saía do lugar (BUG-12, subia 45 px depois de recolher).
       const region = change.scroller?.isConnected ? change.scroller : scrollParentOf(change.el);
       if (region) takeAnchoring(region);
     } else change.ghost?.remove();
@@ -871,26 +871,86 @@ function finishMotion() {
   for (const slot of [...animating]) slot.stopMotion();
 }
 
+/** As interações da pessoa que tomam a rolagem para ela: o foco não espera mais a rolagem acabar. */
+const USER_TAKEOVER = ["wheel", "touchstart", "pointerdown", "keydown"];
+
+// O foco que espera o fim de uma rolagem até um cartão (um só por vez).
+let pendingReach = null;
+
+function dropPendingReach() {
+  if (!pendingReach) return;
+  const { events, reach, drop } = pendingReach;
+  events.removeEventListener("scrollend", reach);
+  for (const type of USER_TAKEOVER) document.removeEventListener(type, drop, true);
+  pendingReach = null;
+}
+
 /**
- * Rola suave até o cartão aberto (na hora com movimento reduzido), com o topo logo abaixo do topo
- * grudado (o `scroll-padding-top` da região), e só depois da rolagem põe o foco nele, sem rolar de
- * novo. Sem distância a andar não vem `scrollend`: o foco vai na hora. Nenhum temporizador.
+ * O fim da fileira de respostas do cartão, em px abaixo do topo dele (0 sem a fileira ou sem
+ * medida: aí o cartão conta como o que precisa caber).
  */
-function scrollToCard(card) {
-  const reduced = prefersReducedMotion();
+function answersOffsetOf(card, cardRect) {
+  const rect = card.querySelector(`[${ANSWER_ROW_ATTR}]`)?.getBoundingClientRect();
+  return rect?.height ? rect.bottom - cardRect.top : cardRect.height;
+}
+
+/**
+ * Rola (suave, ou na hora com movimento reduzido) até a fileira de respostas do cartão ficar
+ * inteira entre o topo grudado e o aviso grudado no fim (`visibleBand`), mostrando o máximo do
+ * cartão: com o topo alinhado logo abaixo do topo grudado (o `scroll-margin-top` do cartão) a
+ * fileira já fica à vista, o topo é alinhado; senão (um cartão alto, como uma dúvida com 2 opções
+ * no celular), o fim da fileira fica logo acima do aviso (o `scroll-padding-bottom` dele, com a
+ * folga). Devolve se a rolagem vai andar.
+ */
+function bringAnswersIntoView(card) {
+  const behavior = prefersReducedMotion() ? "instant" : "smooth";
   const scroller = scrollParentOf(card);
+  const cardRect = card.getBoundingClientRect();
+  const row = card.querySelector(`[${ANSWER_ROW_ATTR}]`);
+  const startTop = scroller ? viewTopOf(scroller) + ANCHOR_MARGIN : ANCHOR_MARGIN;
+  const limit = (scroller ? visibleBand(card).bottom : (globalThis.innerHeight ?? Number.POSITIVE_INFINITY)) - ANCHOR_MARGIN;
+  const fits = startTop + answersOffsetOf(card, cardRect) <= limit + 0.5;
+  const target = fits || !row ? card : row;
+  let delta = 0;
+  if (fits || !row) delta = cardRect.top - startTop;
+  else {
+    const paddingBottom = scroller ? Number.parseFloat(getComputedStyle(scroller).scrollPaddingBottom) || 0 : 0;
+    const bottom = scroller ? scrollportTopOf(scroller) + scroller.clientHeight - paddingBottom : limit + ANCHOR_MARGIN;
+    delta = row.getBoundingClientRect().bottom - bottom;
+  }
   let moves = false;
   if (scroller) {
     const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const wanted = scroller.scrollTop + card.getBoundingClientRect().top - (viewTopOf(scroller) + ANCHOR_MARGIN);
-    moves = Math.abs(Math.max(0, Math.min(wanted, max)) - scroller.scrollTop) >= 1;
+    moves = Math.abs(Math.max(0, Math.min(scroller.scrollTop + delta, max)) - scroller.scrollTop) >= 1;
   }
-  const reach = () => card.focus({ preventScroll: true });
-  card.scrollIntoView?.({ behavior: reduced ? "instant" : "smooth", block: "start" });
+  target.scrollIntoView?.({ behavior, block: fits || !row ? "start" : "end" });
+  return { scroller, moves };
+}
+
+/**
+ * Leva até o cartão aberto (`bringAnswersIntoView`) e só depois da rolagem põe o foco nele, sem
+ * rolar de novo. Sem distância a andar não vem `scrollend`: o foco vai na hora. Um só ouvinte
+ * por vez (dois cliques seguidos não somam), e ele sai se a pessoa mexer antes do fim da rolagem:
+ * a rolagem dela não rouba o foco depois. Nenhum temporizador.
+ */
+function scrollToCard(card) {
+  dropPendingReach();
+  const { scroller, moves } = bringAnswersIntoView(card);
+  const focus = () => card.focus({ preventScroll: true });
+  if (prefersReducedMotion() || !moves || !("onscrollend" in globalThis)) {
+    focus();
+    return;
+  }
   const root = !scroller || scroller === document.scrollingElement || scroller === document.documentElement;
   const events = root ? document : scroller;
-  if (!reduced && moves && "onscrollend" in globalThis) events.addEventListener("scrollend", reach, { once: true });
-  else reach();
+  const reach = () => {
+    dropPendingReach();
+    focus();
+  };
+  const drop = () => dropPendingReach();
+  pendingReach = { events, reach, drop };
+  events.addEventListener("scrollend", reach);
+  for (const type of USER_TAKEOVER) document.addEventListener(type, drop, true);
 }
 
 /** A altura mínima de um alvo de toque (WCAG 2.5.5 / diretrizes do iOS e do Android). */
@@ -918,7 +978,12 @@ export class GoToPendingButton extends Component {
 
   componentDidMount() {
     this.reserve();
+    // A altura do aviso muda com a largura (a quebra de linha do texto, girar o celular): a reserva
+    // acompanha, como a do topo fixo.
+    window.addEventListener("resize", this.onResize);
   }
+
+  onResize = () => this.reserve();
 
   getSnapshotBeforeUpdate() {
     const el = this.ref.current;
@@ -946,6 +1011,7 @@ export class GoToPendingButton extends Component {
   }
 
   componentWillUnmount() {
+    window.removeEventListener("resize", this.onResize);
     this.release();
   }
 
@@ -1058,6 +1124,16 @@ function answersInView(card) {
 }
 
 /**
+ * A pessoa chegou ao pendente: a fileira de respostas dele inteira na faixa visível. Sem a fileira
+ * medida (jsdom, um cartão sem ela), vale algum pedaço do cartão à vista.
+ */
+function answersReached(card) {
+  const row = card.querySelector(`[${ANSWER_ROW_ATTR}]`);
+  if (row?.getBoundingClientRect().height) return answersInView(card);
+  return onScreen(card);
+}
+
+/**
  * Algum pedaço do elemento aparece na área visível da região que rola (abaixo do topo grudado)?
  * Sem medida (altura zero, como no jsdom), conta como à vista.
  */
@@ -1098,14 +1174,15 @@ export function useQueueShortcuts(queue, answers, { disabled = false } = {}) {
       const answer = a?.[key];
       if (!answer || !q.current) return;
       event.preventDefault();
-      // Um atalho nunca responde um cartão que a pessoa não está vendo (OBS-28): com o cartão
-      // aberto todo fora da área visível (ex.: o próximo pendente abriu acima do item respondido),
-      // S/A/N trazem o cartão e põem o foco nele, sem responder. Com a fileira de respostas dele
-      // inteira à vista (OBS-40, o topo de um cartão alto escondido), a pessoa está vendo o que
-      // responde: o 1º atalho já responde.
+      // Um atalho nunca responde um cartão cujas respostas a pessoa não está vendo (OBS-28,
+      // OBS-40): sem a fileira de respostas inteira entre o topo grudado e o aviso do rodapé (o
+      // cartão fora da vista, ou à vista com a fileira atrás do aviso), S/A/N trazem a fileira à
+      // vista, como o clique no aviso, e põem o foco no cartão, sem responder. Com ela à vista
+      // (mesmo com o topo de um cartão alto escondido), o 1º atalho já responde.
       const card = currentCardOf(q.current.id);
-      if (card && !onScreen(card) && !answersInView(card)) {
-        card.scrollIntoView?.({ behavior: prefersReducedMotion() ? "instant" : "smooth", block: "start" });
+      if (card && !answersReached(card)) {
+        dropPendingReach();
+        bringAnswersIntoView(card);
         card.focus({ preventScroll: true });
         return;
       }
