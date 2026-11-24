@@ -671,6 +671,7 @@ export function BalanceCheckStep({
   periodEnd,
   linked,
   busy,
+  isMobile = false,
   queue,
   view,
   onViewChange,
@@ -702,7 +703,7 @@ export function BalanceCheckStep({
     return ok;
   };
   const describe = useStableCallback((item) => unmatchedSummary(item, { answer }));
-  const summary = useMemo(() => ({ busy, describe }), [busy, describe]);
+  const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
 
   const undo = async (item) => {
     const previous = itemHistory[item.transaction_id]?.at(-1) ?? { action: null, new_date: null };

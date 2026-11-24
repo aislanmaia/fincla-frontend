@@ -33,7 +33,7 @@ const deferred = () => {
 
 const dateLabel = (ymd) => ymd.split("-").reverse().join("/");
 
-function Harness({ initial = INITIAL, withSummary = true }) {
+function Harness({ initial = INITIAL, withSummary = true, isMobile = false }) {
   const [entries, setEntries] = useState(initial);
   const [busy, setBusy] = useState(false);
   const queue = useEntryQueue("doubts", entries);
@@ -57,6 +57,7 @@ function Harness({ initial = INITIAL, withSummary = true }) {
   });
   const stepSummary = useMemo(() => ({
     busy,
+    isMobile,
     describe: (e) => ({
       dateLabel: dateLabel(e.date),
       title: e.bank_description,
@@ -71,7 +72,7 @@ function Harness({ initial = INITIAL, withSummary = true }) {
         { key: "ignore", label: "Não registrar", run: () => answer(e, "ignore", "resumo"), said: "Fica fora do Fincla" },
       ],
     }),
-  }), [busy]);
+  }), [busy, isMobile]);
   api = { queue, setEntries };
   const rows = (
     <div>
@@ -177,7 +178,6 @@ describe("responder no resumo", () => {
     const done = within(s).getByRole("status");
     expect(done).toHaveTextContent("03/10/2026 PIX ENVIADO MERCADO·Fica fora do FinclaConferido");
     expect(done).toHaveAttribute("aria-live", "polite");
-    expect(s.firstElementChild).toBe(done);
     // Nada rolou e o foco continua no resumo (não foi para o cartão do c, fora da vista).
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(s);
@@ -221,6 +221,48 @@ describe("responder no resumo", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Não registrar a" })); });
     expect(patches).toEqual([{ id: "a", body: { answer: "ignore" }, via: "cartão" }]);
     expect(summary()).toBeNull();
+  });
+});
+
+// QA 2026-11-24 (defeito 2): a linha verde entrava no topo do resumo e empurrava os botões de
+// resposta para baixo (17 px no computador, 55 px no celular), sob o dedo/cursor. Ela fica embaixo
+// das respostas: nada acima dos botões muda de altura ao confirmar.
+describe("a confirmação não mexe nos botões", () => {
+  it("a região da confirmação (presente desde o início) fica depois das respostas, e nada novo entra acima delas", async () => {
+    await answerLast();
+    const s = summary();
+    const group = () => within(s).getByRole("group");
+    const live = within(s).getByRole("status");
+    expect(live).toBeEmptyDOMElement();
+    expect(group().compareDocumentPosition(live) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // O que vem antes dos botões, no resumo, antes da resposta.
+    const aboveButtons = (root) => [...root.querySelectorAll("*")].filter((el) => !el.contains(group()) && Boolean(el.compareDocumentPosition(group()) & Node.DOCUMENT_POSITION_FOLLOWING));
+    const before = aboveButtons(s).length;
+
+    await act(async () => { fireEvent.click(inSummary("Não registrar")); });
+
+    const done = within(s).getByTestId("next-pending-done");
+    expect(live).toContainElement(done);
+    expect(group().compareDocumentPosition(done) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(aboveButtons(s).length).toBe(before);
+  });
+});
+
+// QA 2026-11-24 (defeito 4): no celular (390 px) as três respostas do resumo quebravam em 2 + 1,
+// com espaço vazio. No celular ficam uma por linha, na largura toda; no computador, lado a lado.
+describe("respostas do resumo no celular", () => {
+  it("uma por linha, na largura toda", async () => {
+    await answerLast({ isMobile: true });
+    const group = within(summary()).getByRole("group");
+    expect(group).toHaveStyle({ display: "flex", flexDirection: "column", flexWrap: "nowrap" });
+    for (const b of within(group).getAllByRole("button")) expect(b).toHaveStyle({ width: "100%" });
+  });
+
+  it("no computador, lado a lado como antes", async () => {
+    await answerLast();
+    const group = within(summary()).getByRole("group");
+    expect(group).toHaveStyle({ display: "inline-flex", flexDirection: "row" });
+    for (const b of within(group).getAllByRole("button")) expect(b.style.width).toBe("");
   });
 });
 

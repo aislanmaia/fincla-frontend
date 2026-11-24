@@ -1259,6 +1259,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               periodEnd={statementImport.period.end}
               linked={linked}
               busy={answering}
+              isMobile={isMobile}
               queue={balanceQueue}
               view={view}
               onViewChange={changeView}

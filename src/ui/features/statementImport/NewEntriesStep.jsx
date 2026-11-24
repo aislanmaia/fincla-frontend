@@ -323,7 +323,7 @@ export function NewEntriesStep({
     answer: answerEntry,
     categoryText: categoryLabel(categories, entry.category_tag_id, fallbackLabel),
   }));
-  const summary = useMemo(() => ({ busy: answering, describe }), [answering, describe]);
+  const summary = useMemo(() => ({ busy: answering, isMobile, describe }), [answering, isMobile, describe]);
 
   const run = async (work) => {
     setBusy(true);

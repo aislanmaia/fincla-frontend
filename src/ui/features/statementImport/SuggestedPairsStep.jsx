@@ -406,7 +406,7 @@ export function SuggestedPairsStep({
   const openRow = useStableCallback((entry) => queue.open(entry.id));
   const undoChoice = useStableCallback(onUndoChoice);
   const describe = useStableCallback((entry) => pairSummary(entry, onAnswer));
-  const summary = useMemo(() => ({ busy, describe }), [busy, describe]);
+  const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
   return (
     <NextPendingSummaryContext.Provider value={summary}>
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

@@ -951,7 +951,7 @@ function currentCardOf(id) {
 
 /**
  * O que um passo diz do seu pendente para o resumo do próximo pendente (proposta 3, fincla-api#507):
- * `{ busy, describe(entry) }`, com `describe` devolvendo
+ * `{ busy, isMobile, describe(entry) }` (no celular as respostas ficam uma por linha), com `describe` devolvendo
  * `{ dateLabel, title, amountLabel, amountTone, hint, question, answers }` e cada resposta
  * `{ key, label, tone, pressed, disabled, said, run, toCard }`. `run()` é a MESMA ação do botão do
  * cartão (o mesmo PATCH) e devolve se deu certo; `toCard` = o resumo não expressa essa resposta
@@ -967,10 +967,10 @@ const SUMMARY_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09
  * abriu ACIMA dela, fora da vista (decisão do Owner, proposta 3): data, descrição e valor do banco,
  * uma linha sobre o que o Fincla achou, as mesmas respostas do cartão e "↑ Ver o cartão completo".
  * Responder aqui grava como no cartão; o pendente recolhe lá em cima sem a tela mexer, a linha
- * verde no topo confirma e o resumo passa para o pendente seguinte (com um esmaecer curto, no
+ * verde embaixo das respostas confirma e o resumo passa para o pendente seguinte (com um esmaecer curto, no
  * lugar). Nenhum temporizador: o resumo só muda quando a resposta volta.
  */
-const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, describe, busy, onGo, onAnswering }, ref) {
+const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, describe, busy, stacked = false, onGo, onAnswering }, ref) {
   const rootRef = useRef(null);
   const bodyRef = useRef(null);
   // Um clique só vale uma vez: o duplo clique não manda um segundo PATCH.
@@ -1034,17 +1034,6 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
       aria-label={`Próximo pendente: ${name}`}
       style={{ marginTop: 8, background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 12, boxShadow: T.sm, overflow: "hidden", outline: "none", minWidth: 0 }}
     >
-      <div role="status" aria-live="polite">
-        {done ? (
-          <p data-testid="next-pending-done" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "7px 14px", background: T.greenLight, borderBottom: `1px solid ${T.greenBorder}`, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <Check size={13} aria-hidden="true" style={{ color: T.green, flexShrink: 0 }} />
-            <span style={{ ...NUM, minWidth: 0, wordBreak: "break-word" }}>{done.name}</span>
-            <span aria-hidden="true">·</span>
-            <span style={{ minWidth: 0 }}>{done.said}</span>
-            <Badge color={T.green} bg={T.surface}>Conferido</Badge>
-          </p>
-        ) : null}
-      </div>
       <div ref={bodyRef} style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={SUMMARY_LABEL}>Próximo pendente</span>
@@ -1060,9 +1049,15 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
           {view.amountLabel ? <span style={{ ...NUM, fontWeight: 700, color: view.amountTone ?? T.ink }}>{view.amountLabel}</span> : null}
           {view.hint ? <span data-testid="next-pending-hint" style={{ color: T.inkLight, minWidth: 0 }}>{view.hint}</span> : null}
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        {/* No celular, uma resposta por linha, na largura toda (quebrar em 2 + 1 deixava buracos). */}
+        <div style={stacked ? { display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" } : { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {view.question ? <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{view.question}</span> : null}
-          <div role="group" aria-label={`${view.question ?? "Respostas"} (${name})`} style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", background: T.surface }}>
+          <div
+            role="group"
+            aria-label={`${view.question ?? "Respostas"} (${name})`}
+            data-stacked={stacked ? "true" : undefined}
+            style={{ display: stacked ? "flex" : "inline-flex", flexDirection: stacked ? "column" : "row", flexWrap: stacked ? "nowrap" : "wrap", maxWidth: "100%", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", background: T.surface }}
+          >
             {view.answers.map((a, index) => {
               const disabled = off || Boolean(a.disabled);
               return (
@@ -1073,8 +1068,10 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
                   disabled={disabled}
                   onClick={() => answer(a)}
                   style={{
-                    ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
-                    border: 0, borderRight: index < view.answers.length - 1 ? `1px solid ${T.border}` : 0,
+                    ...G, minHeight: stacked ? 40 : 32, padding: "0 12px", fontSize: stacked ? 13 : 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+                    width: stacked ? "100%" : undefined,
+                    border: 0,
+                    [stacked ? "borderBottom" : "borderRight"]: index < view.answers.length - 1 ? `1px solid ${T.border}` : 0,
                     background: a.pressed ? a.tone ?? T.blue : "transparent", color: a.pressed ? "#fff" : T.inkLight,
                   }}
                 >
@@ -1084,6 +1081,20 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
             })}
           </div>
         </div>
+      </div>
+      {/* A confirmação fica EMBAIXO das respostas: ao aparecer, não empurra os botões que estão
+          sob o dedo ou o cursor (QA 2026-11-24: em cima, eles desciam 17 px no computador e 55 px
+          no celular). */}
+      <div role="status" aria-live="polite">
+        {done ? (
+          <p data-testid="next-pending-done" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "7px 14px", background: T.greenLight, borderTop: `1px solid ${T.greenBorder}`, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <Check size={13} aria-hidden="true" style={{ color: T.green, flexShrink: 0 }} />
+            <span style={{ ...NUM, minWidth: 0, wordBreak: "break-word" }}>{done.name}</span>
+            <span aria-hidden="true">·</span>
+            <span style={{ minWidth: 0 }}>{done.said}</span>
+            <Badge color={T.green} bg={T.surface}>Conferido</Badge>
+          </p>
+        ) : null}
       </div>
     </section>
   );
@@ -1140,7 +1151,7 @@ export function NextPendingButton({ queue, fromId }) {
     else reach();
   };
   if (summary) {
-    return <NextPendingSummary ref={ref} target={target} describe={summary.describe} busy={summary.busy} onGo={go} onAnswering={queue.answeringFromSummary} />;
+    return <NextPendingSummary ref={ref} target={target} describe={summary.describe} busy={summary.busy} stacked={Boolean(summary.isMobile)} onGo={go} onAnswering={queue.answeringFromSummary} />;
   }
   return (
     <Btn
