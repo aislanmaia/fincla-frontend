@@ -419,7 +419,7 @@ describe("a linha respondida e o resumo ficam parados", () => {
 // perto do topo e a linha clicada descia (446 px, depois 157 px). A regra é a de toda troca: a
 // linha clicada fica onde está. Layout simulado: um cabeçalho de 500 px acima da lista, cartão
 // aberto 300 px, linha 100 px, o resumo 150 px dentro do lugar da linha respondida.
-describe("Alterar uma linha com o resumo na tela", () => {
+describe("com layout simulado (QA 2026-11-24)", () => {
   const HEAD = 500;
   const OPEN = 300;
   const ROW = 100;
@@ -454,6 +454,7 @@ describe("Alterar uma linha com o resumo na tela", () => {
     });
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
       const st = clamp();
+      if (this.dataset?.testid === "current-entry" && scroller?.contains(this)) return this.closest("[data-testid='entry-slot']").getBoundingClientRect();
       if (this.dataset?.testid === "next-pending-summary" && scroller?.contains(this)) {
         const slot = this.closest("[data-testid='entry-slot']");
         const top = slot.getBoundingClientRect().top + ROW;
@@ -471,7 +472,7 @@ describe("Alterar uma linha com o resumo na tela", () => {
 
   afterEach(() => { delete Element.prototype.animate; });
 
-  function renderInScroller(initial) {
+  function renderInScroller(initial, props = {}) {
     render(
       <div
         data-testid="scroller"
@@ -484,7 +485,7 @@ describe("Alterar uma linha com o resumo na tela", () => {
           Object.defineProperty(el, "scrollTop", { configurable: true, get: clamp, set: (v) => { scrollTop = Math.max(0, Math.min(v, maxScroll())); } });
         }}
       >
-        <Harness initial={initial} />
+        <Harness initial={initial} {...props} />
       </div>,
     );
   }
@@ -527,6 +528,33 @@ describe("Alterar uma linha com o resumo na tela", () => {
       expect(clicked().getBoundingClientRect().top).toBe(before);
       finishAnimations();
       expect(clicked().getBoundingClientRect().top).toBe(before);
+    });
+  }
+
+  // QA 2026-11-24 (defeito 3): no meio da lista, o pendente que abriu acima estava à vista ao mesmo
+  // tempo que o resumo, com as mesmas respostas duas vezes. O resumo (e o botão) só aparecem com o
+  // pendente fora da vista.
+  for (const withSummary of [true, false]) {
+    it(`com o pendente que abriu acima à vista, nada aparece embaixo da linha (${withSummary ? "resumo" : "botão"}); o foco vai para o cartão`, async () => {
+      // a pendente, b respondido, c aberto (pendente), d respondido: responder c abre a, acima.
+      const initial = [{ ...INITIAL[0] }, { ...INITIAL[1] }, { ...INITIAL[2] }, { ...INITIAL[3], answer: "ignore" }];
+      renderInScroller(initial, { withSummary });
+      act(() => api.queue.open("c"));
+      // Cabeçalho de 500 px e rolagem 200: a linha a em 300 px na tela.
+      scroller.scrollTop = 200;
+      expect(slotOf("a").getBoundingClientRect().top).toBe(300);
+
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Não registrar c" })); });
+      finishAnimations();
+
+      expect(api.queue.currentId).toBe("a");
+      const card = screen.getByTestId("current-entry");
+      // O cartão de a está à vista (o topo dentro da janela).
+      expect(card.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+      expect(card.getBoundingClientRect().top).toBeLessThan(VIEW);
+      expect(summary()).toBeNull();
+      expect(screen.queryByTestId("next-pending-above")).toBeNull();
+      expect(document.activeElement).toBe(card);
     });
   }
 });

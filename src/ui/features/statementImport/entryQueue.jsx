@@ -215,6 +215,8 @@ function answeredSignature(list, exceptIds, answered) {
 
 /** O "Próximo pendente" na tela: o resumo do pendente (ou o botão, num passo sem resumo). */
 const NEXT_PENDING = "[data-next-pending]";
+/** O "Próximo pendente" que fica (não o que está saindo porque o pendente já está à vista). */
+const NEXT_PENDING_STAYING = "[data-next-pending]:not([data-leaving])";
 /** O que leva até o cartão do pendente: o "Ver o cartão completo" do resumo (ou o botão). */
 const NEXT_PENDING_GO = "[data-testid='next-pending-above']";
 
@@ -410,7 +412,7 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
     // próximo pendente, à vista logo abaixo da linha (o primeiro Tab não entra num cartão que a
     // pessoa não vê, OBS-22). Sem o resumo (linha escondida pelo filtro), o foco vem para o
     // cartão, como sempre.
-    const next = isNextAbove ? document.querySelector(NEXT_PENDING) : null;
+    const next = isNextAbove ? document.querySelector(NEXT_PENDING_STAYING) : null;
     (next ?? ref.current)?.focus({ preventScroll: true });
   }, [focusTick, entry.id]);
   // A pessoa chegou no pendente apontado por "Próximo pendente" (o foco entrou num controle dele).
@@ -663,7 +665,16 @@ function releaseSpacer() {
 
 // As trocas de um mesmo commit do React: todas as fotos (antes) saem antes de qualquer
 // `componentDidUpdate`, então a âncora é escolhida com a lista inteira já no lugar final.
-const commit = { expected: 0, changes: [] };
+const commit = { expected: 0, changes: [], after: [] };
+
+/**
+ * Roda `fn` com o layout deste commit já no lugar final: depois da âncora das trocas cartão ↔
+ * linha (se alguma está pendente no commit), ou na hora.
+ */
+function afterAnchoring(fn) {
+  if (commit.expected) commit.after.push(fn);
+  else fn();
+}
 let mountedSlots = 0;
 
 /**
@@ -699,6 +710,13 @@ function takePinned(changes) {
 }
 
 function flushCommit() {
+  anchorCommit();
+  const after = commit.after;
+  commit.after = [];
+  for (const fn of after) fn();
+}
+
+function anchorCommit() {
   const changes = commit.changes.filter((c) => c.el?.isConnected);
   commit.changes = [];
   commit.expected = 0;
@@ -1088,6 +1106,7 @@ export function NextPendingButton({ queue, fromId }) {
   // como "a pessoa chegou rolando" (quem tira o botão é o fim dela).
   const going = useRef(false);
   useReachedByScrolling(shown ? info.target.id : null, ref, going, queue.dismissNextAbove);
+  useNotWhenPendingInView(shown ? info.target.id : null, ref, queue.dismissNextAbove);
   if (!shown) return null;
   const { target } = info;
   const memo = target.bank_description ?? target.description ?? "";
@@ -1166,9 +1185,7 @@ function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
       if (!card || !button.isConnected) return;
       const rect = card.getBoundingClientRect();
       if (!rect.height || startTop === undefined || Math.abs(rect.top - startTop) < 1) return;
-      const { top, bottom } = visibleBand(card);
-      const topInView = rect.top >= top - 0.5 && rect.top < bottom - 0.5;
-      if (!topInView && !answersInView(card)) return;
+      if (!pendingInView(card)) return;
       // Sobra conteúdo embaixo para o botão sair sem cortar a rolagem? Então a rolagem nem é tocada.
       const extent = button.getBoundingClientRect().height + (Number.parseFloat(getComputedStyle(button).marginTop) || 0);
       const room = scroller ? scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop : Number.POSITIVE_INFINITY;
@@ -1178,6 +1195,37 @@ function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
     events.addEventListener("scroll", onScroll, { passive: true });
     return () => events.removeEventListener("scroll", onScroll);
   }, [targetId, buttonRef, going]);
+}
+
+/**
+ * O resumo (ou o botão) só existe com o pendente FORA da vista (QA 2026-11-24, defeito 3): no meio
+ * da lista, o pendente que abriu acima pode estar à vista, e as mesmas respostas apareciam duas
+ * vezes. Medido com o layout final do commit (depois da âncora da troca, antes da pintura): com o
+ * pendente à vista, nada aparece embaixo da linha; o foco que iria para o resumo vai para o
+ * cartão. Sem medida (jsdom, altura zero), o pendente não conta como à vista.
+ */
+function useNotWhenPendingInView(targetId, nodeRef, dismiss) {
+  const latestDismiss = useRef(dismiss);
+  latestDismiss.current = dismiss;
+  useLayoutEffect(() => {
+    if (targetId === null) return;
+    afterAnchoring(() => {
+      const node = nodeRef.current;
+      const card = currentCardOf(targetId);
+      if (!node?.isConnected || !card || !pendingInView(card)) return;
+      node.dataset.leaving = "";
+      if (node.contains(document.activeElement)) card.focus({ preventScroll: true });
+      latestDismiss.current();
+    });
+  }, [targetId, nodeRef]);
+}
+
+/** O pendente está à vista: o topo do cartão na área visível, ou a fileira de respostas inteira (OBS-40). */
+function pendingInView(card) {
+  const rect = card.getBoundingClientRect();
+  if (!rect.height) return false;
+  const { top, bottom } = visibleBand(card);
+  return (rect.top >= top - 0.5 && rect.top < bottom - 0.5) || answersInView(card);
 }
 
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
