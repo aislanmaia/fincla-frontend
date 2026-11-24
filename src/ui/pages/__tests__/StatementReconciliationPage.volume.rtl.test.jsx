@@ -383,104 +383,54 @@ describe("volume grande", () => {
   });
 });
 
-// Decisão do Owner (fincla-api#507, 2026-11-24, proposta 3): quando o próximo pendente abre acima
-// do item respondido, o resumo dele (com as respostas do cartão) fica embaixo da linha respondida.
-describe("proposta 3: o resumo do próximo pendente nos outros passos", () => {
+// Decisão do Owner (fincla-api#507, 2026-11-24): abaixo da linha respondida não aparece nada; o
+// aviso do rodapé do passo ("↑ Falta responder N lançamentos deste passo") leva ao primeiro pendente.
+describe("o aviso do rodapé do passo leva ao primeiro pendente", () => {
   beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
   afterEach(() => { delete Element.prototype.scrollIntoView; });
 
-  const summary = () => screen.queryByTestId("next-pending-summary");
-  const inSummary = (name) => within(summary()).getByRole("button", { name });
-  const idle = () => waitFor(() => expect(within(summary()).getByRole("button", { name: "Não registrar" })).not.toBeDisabled());
+  const footer = () => screen.queryByRole("button", { name: /Ir para o primeiro item que falta responder/ });
 
-  it("Confirmar lançamentos encontrados: 'Sim, é esta' no resumo confirma a sugestão com o mesmo PATCH do cartão e passa para o seguinte", async () => {
+  it("mostra quantos faltam no passo, depois da lista, e a contagem acompanha as respostas", async () => {
+    draft = draftWith(3);
+    const user = await openDraft();
+    expect(footer()).toHaveTextContent("Falta responder 3 lançamentos deste passo");
+    expect(rows().at(-1).compareDocumentPosition(footer()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(within(current()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(footer()).toHaveTextContent("Falta responder 2 lançamentos deste passo"));
+  });
+
+  it("responder o último da lista com pendentes acima: embaixo da linha só a linha, nada rola; o clique no aviso leva ao primeiro pendente", async () => {
     draft = draftWith(3);
     const user = await openDraft();
     await user.click(row("PIX PADARIA 003"));
     await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
-    await waitFor(() => expect(summary()).toBeInTheDocument());
-    await idle();
-    calls.length = 0;
+    await waitFor(() => currentIs("PIX PADARIA 001"));
+    await waitFor(() => expect(row("PIX PADARIA 003")).toHaveTextContent("Não registrar"));
 
-    const s = summary();
-    expect(s).toHaveAccessibleName(/PIX PADARIA 001/);
-    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent(/^Sugestão: Padaria do bairro · -R\$\s45,90$/);
-    expect(within(s).getByRole("group").textContent).toBe("Sim, é estaNão, adicionar agoraNão registrar");
-    // A sugestão já vem marcada "Sim, é esta", como no cartão.
-    expect(inSummary("Sim, é esta")).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(inSummary("Sim, é esta"));
-
-    await waitFor(() => expect(summary()).toHaveAccessibleName(/PIX PADARIA 002/));
-    expect(answers()).toEqual([{ patch: "s1", body: { answer: "pair" } }]);
-    expect(row("PIX PADARIA 001")).toHaveTextContent("Sim, já está no Fincla");
-    expect(within(summary()).getByTestId("next-pending-done")).toHaveTextContent("PIX PADARIA 001·Sim, é Padaria do bairroConferido");
+    const slot = row("PIX PADARIA 003").closest("[data-testid='entry-slot']");
+    expect(slot.children).toHaveLength(1);
+    expect(screen.queryByTestId("next-pending-above")).toBeNull();
+    expect(screen.queryByTestId("next-pending-summary")).toBeNull();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(footer()).toHaveTextContent("Falta responder 2 lançamentos deste passo");
+
+    await user.click(footer());
+
+    expect(Element.prototype.scrollIntoView.mock.contexts).toEqual([current()]);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(current()).toHaveFocus();
+    expect(answers()).toHaveLength(1);
   });
 
-  it("Confirmar lançamentos encontrados: 'Não, adicionar agora' grava como o cartão e leva ao formulário", async () => {
-    draft = draftWith(2);
+  it("some com 0 pendentes no passo", async () => {
+    draft = draftWith(1);
     const user = await openDraft();
-    await user.click(row("PIX PADARIA 002"));
-    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
-    await waitFor(() => expect(summary()).toBeInTheDocument());
-    await idle();
-    calls.length = 0;
-
-    await user.click(inSummary("Não, adicionar agora"));
-
-    await waitFor(() => expect(answers()).toEqual([{ patch: "s1", body: { answer: "create" } }]));
-    await waitFor(() => expect(within(current()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
-    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(current());
-    expect(summary()).toBeNull();
-  });
-
-  it("Adicionar lançamentos novos: 'Não registrar' no resumo manda o mesmo PATCH do cartão; sem outro pendente, o resumo sai e a linha verde fica", async () => {
-    draft.entries.forEach((e) => { if (e.classification === "suggested") e.confirmed = true; });
-    draft.entries.find((e) => e.bank_description === "PAG BOLETO ENERGIA").description = "";
-    draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").description = "";
-    const user = await openDraft();
-    await user.click(within(screen.getByRole("navigation", { name: "Passos da conciliação" })).getByText("Adicionar lançamentos novos"));
-    await screen.findByRole("heading", { name: "Adicionar lançamentos novos" });
-    await user.click(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA")));
-    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
-    await waitFor(() => expect(summary()).toBeInTheDocument());
-    await idle();
-    calls.length = 0;
-
-    const s = summary();
-    expect(s).toHaveAccessibleName(/REMUNERACAO SALARIO/);
-    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent("Falta a descrição para adicionar");
-    expect(within(s).getByRole("group").textContent).toBe("Não, adicionar agoraNão registrar");
-
-    await user.click(inSummary("Não registrar"));
-
-    await waitFor(() => expect(summary()).toBeNull());
-    expect(screen.getByTestId("next-pending-done")).toHaveTextContent(/REMUNERACAO SALARIO·Fica fora do FinclaConferido/);
-    const salary = draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").id;
-    expect(answers()).toEqual([{ patch: salary, body: { answer: "ignore" } }]);
-    expect(pending()).toBe("Todos respondidos");
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
-  });
-
-  it("Adicionar lançamentos novos: 'Não, adicionar agora' já marcado só leva ao formulário, sem PATCH", async () => {
-    draft.entries.forEach((e) => { if (e.classification === "suggested") e.confirmed = true; });
-    draft.entries.find((e) => e.bank_description === "PAG BOLETO ENERGIA").description = "";
-    draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").description = "";
-    const user = await openDraft();
-    await user.click(within(screen.getByRole("navigation", { name: "Passos da conciliação" })).getByText("Adicionar lançamentos novos"));
-    await screen.findByRole("heading", { name: "Adicionar lançamentos novos" });
-    await user.click(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA")));
-    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
-    await waitFor(() => expect(summary()).toBeInTheDocument());
-    await idle();
-    calls.length = 0;
-
-    await user.click(inSummary("Não, adicionar agora"));
-
-    expect(answers()).toEqual([]);
-    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(current());
-    expect(within(current()).getByTestId("statement-entry")).toHaveTextContent("REMUNERACAO SALARIO");
-    expect(summary()).toBeNull();
+    expect(footer()).toHaveTextContent("Falta responder 1 lançamento deste passo");
+    await user.click(within(current()).getByRole("button", { name: "Sim, é esta" }));
+    await waitFor(() => expect(pending()).toBe("Todos respondidos"));
+    expect(footer()).toBeNull();
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
   });
 });

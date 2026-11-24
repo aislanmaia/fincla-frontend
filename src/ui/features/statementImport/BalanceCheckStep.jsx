@@ -7,7 +7,7 @@
 // concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer escolha". As
 // transferências sem par (G3-3-10) entram na mesma lista, só para ver: a conciliação nunca altera
 // transferência, então elas têm "Abrir" e nada mais.
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import { AlertTriangle, Check, Info, Link2, X } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -21,9 +21,7 @@ const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : fo
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { DELETE_BG, DELETE_CARD_BG, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
-import {
-  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, NextPendingSummaryContext, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick, useStableCallback,
-} from "./entryQueue.jsx";
+import { ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
 export function longDateLabel(ymd) {
@@ -342,33 +340,10 @@ function TransactionDetails({ item }) {
   );
 }
 
-/**
- * A transação sem par no resumo do próximo pendente (proposta 3): as ações do cartão pela mesma
- * `answer` dele. "Excluir" (quando pode) e "Está certa assim" respondem no lugar; "Mudar data"
- * precisa do formulário da data e leva ao cartão com ele já aberto. A exclusão recusada mostra o
- * mesmo motivo do cartão.
- */
-export function unmatchedSummary(item, { answer, openDating }) {
-  const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
-  return {
-    dateLabel: bankDateLabel(item.day),
-    title: item.description,
-    amountLabel: signed(item.amount, item.currency),
-    amountTone: item.amount > 0 ? T.green : T.ink,
-    hint: "Está no Fincla e não aparece no extrato",
-    question: null,
-    answers: [
-      { key: "change_date", label: "Mudar data", toCard: true, run: () => openDating(item) },
-      { key: "delete", label: "Excluir", tone: T.red, disabled: Boolean(refusal), reason: refusal, run: () => answer(item, "delete"), said: "Será excluída ao concluir" },
-      { key: "keep", label: "Está certa assim", tone: T.green, pressed: item.check === "keep", run: () => answer(item, "keep"), said: "Você disse que está certa" },
-    ],
-  };
-}
-
 /** O cartão aberto: as ações da transação. */
-function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, dating, onDating, onSelect, onAnswer, onUndo, onPairHint, onMinimize }) {
+function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, onSelect, onAnswer, onUndo, onPairHint, onMinimize }) {
   const [details, setDetails] = useState(false);
-  const setDating = (value) => onDating(typeof value === "function" ? value(dating) : value);
+  const [dating, setDating] = useState(false);
   const deleted = item.check === "delete";
   const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
   return (
@@ -672,7 +647,6 @@ export function BalanceCheckStep({
   periodEnd,
   linked,
   busy,
-  isMobile = false,
   queue,
   view,
   onViewChange,
@@ -685,10 +659,6 @@ export function BalanceCheckStep({
   const [selected, setSelected] = useState(() => new Set());
   const [itemHistory, setItemHistory] = useState({});
   const [lastBatch, setLastBatch] = useState(null);
-  // O cartão com o formulário "Mudar data" aberto: no passo (não no cartão) para o "Mudar data" do
-  // resumo do próximo pendente chegar ao cartão com ele aberto. Vale só para o cartão aberto.
-  const [datingFor, setDatingFor] = useState(null);
-  if (datingFor !== null && datingFor !== queue.currentId) setDatingFor(null);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const live = items.filter((i) => i.check !== "delete" && i.weight !== 0);
   const transfers = check.unmatched_transfers ?? [];
@@ -705,10 +675,7 @@ export function BalanceCheckStep({
     setLastBatch(null);
     const ok = await onAnswer([{ transaction_id: item.transaction_id, action, new_date: action === "change_date" ? newDate : null }]);
     if (ok && action !== "change_date") queue.advanceFrom(item.id);
-    return ok;
   };
-  const describe = useStableCallback((item) => unmatchedSummary(item, { answer, openDating: (i) => setDatingFor(i.id) }));
-  const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
 
   const undo = async (item) => {
     const previous = itemHistory[item.transaction_id]?.at(-1) ?? { action: null, new_date: null };
@@ -742,7 +709,6 @@ export function BalanceCheckStep({
   const allOn = items.length > 0 && chosen.length === items.length;
 
   return (
-    <NextPendingSummaryContext.Provider value={summary}>
     <div data-testid="balance-step" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <BalanceDifferencePanel check={check} />
       <PendingNotes check={check} onGoToPending={onGoToPending} />
@@ -772,7 +738,7 @@ export function BalanceCheckStep({
           ) : null}
           {chosen.length ? <SelectionBar items={chosen} busy={busy} onClear={() => setSelected(new Set())} onBatch={batch} /> : null}
           {items.filter(queue.shown).map((item) => (
-            <EntrySlot key={item.id} open={item.id === queue.currentId} tone={T.inkLight} queue={queue} entryId={item.id}>
+            <EntrySlot key={item.id} open={item.id === queue.currentId} tone={T.inkLight}>
             {item.id === queue.currentId ? (
             <CurrentEntryFrame queue={queue} entry={item} noun={TRANSACTION_NOUN}>
               <UnmatchedCard
@@ -781,8 +747,6 @@ export function BalanceCheckStep({
                 periodEnd={periodEnd}
                 selected={selected.has(item.transaction_id)}
                 busy={busy}
-                dating={datingFor === item.id}
-                onDating={(on) => setDatingFor(on ? item.id : null)}
                 onSelect={toggle}
                 onAnswer={answer}
                 onUndo={undo}
@@ -811,7 +775,6 @@ export function BalanceCheckStep({
       <LeftOutEntries entries={check.left_out_entries} onRedecide={onRedecide} />
       <ConcludeWithDifferenceNote check={check} />
     </div>
-    </NextPendingSummaryContext.Provider>
   );
 }
 

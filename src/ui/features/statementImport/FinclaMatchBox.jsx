@@ -33,15 +33,6 @@ export function matchTitle(entry, match) {
   return entry.amount < 0 ? `Transferência para ${match.to_account_name ?? "outra conta"}` : `Transferência de ${match.from_account_name ?? "outra conta"}`;
 }
 
-/** O que o Fincla sugere, numa linha (o resumo do próximo pendente): "Sugestão: X · −R$ 10,00". */
-export function matchHint(entry, match) {
-  return (
-    <>
-      Sugestão: <b style={{ color: T.ink }}>{matchTitle(entry, match)}</b> · <span style={NUM}>{signedMoney(entry, match.value, match.currency)}</span>
-    </>
-  );
-}
-
 const has = (match, difference) => (match?.differences ?? []).includes(difference);
 /** Há algo a dizer sobre o que acontece ao concluir (VALOR DIFERENTE, DATAS DIFERENTES, OUTRA CONTA). */
 const hasConsequences = (match) => ["amount", "date", "account"].some((d) => has(match, d));

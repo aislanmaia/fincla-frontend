@@ -6,7 +6,7 @@
 // desativada, com "Desfazer lá". "Está no Fincla com outros dados…" abre a busca em todas as
 // contas da mesma moeda. Responder minimiza o cartão numa linha que continua visível, com
 // "Alterar" e "Desfazer escolha": nada some sem um jeito de voltar. Nada muda antes de concluir.
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -18,10 +18,9 @@ import {
   CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, StatementEntryCard, bankDateLabel, useDescriptionDraft,
 } from "./StatementEntryCard.jsx";
 import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
-import { FinclaMatchBox, MATCH_BOX, matchHint, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
+import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
-  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, NextPendingSummaryContext, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick,
-  useStableCallback,
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
 } from "./entryQueue.jsx";
 
 const QUESTION = "Este lançamento do banco já está no Fincla?";
@@ -189,44 +188,6 @@ export function doubtYes(entry, { onPick, onWantPair, onSearch }) {
   else onSearch(entry);
 }
 
-/**
- * O lançamento em dúvida no resumo do próximo pendente (proposta 3), com as respostas do cartão
- * pelas mesmas ações dele. O resumo responde no lugar quando a resposta cabe nele: "Sim, é esta"
- * com UMA opção livre (escolhe-a, como o cartão) e "Não registrar". Ele leva ao cartão quando não
- * cabe: "Sim, é esta" com várias opções (marca o "Sim" como o cartão, e lá a pessoa escolhe qual)
- * ou sem nenhuma (lá está a busca), e "Não, adicionar agora" (grava como o cartão; o formulário
- * da descrição está lá).
- */
-export function doubtSummary(entry, { onAnswer, onPick, onWantPair }) {
-  const options = (entry.candidates ?? []).filter((o) => !o.taken_by_entry_id);
-  let hint = "Nada parecido nesta conta";
-  if (options.length === 1) hint = matchHint(entry, options[0]);
-  else if (options.length > 1) hint = `${plural(options.length, "opção", "opções")} no Fincla`;
-  let yes = { toCard: true, run: null };
-  if (options.length === 1) yes = { run: () => onPick(entry, options[0]), said: <>Sim, é <b>{matchTitle(entry, options[0])}</b></> };
-  else if (options.length > 1) yes = { toCard: true, run: () => onWantPair(entry) };
-  return {
-    dateLabel: bankDateLabel(entry.date),
-    title: entry.bank_description,
-    amountLabel: formatMoney(entry.amount, entry.currency),
-    amountTone: entry.amount > 0 ? T.green : T.ink,
-    hint,
-    question: QUESTION,
-    answers: [
-      { key: "pair", label: "Sim, é esta", tone: T.blue, pressed: entry.answer === "pair", ...yes },
-      {
-        key: "create",
-        label: "Não, adicionar agora",
-        tone: T.green,
-        pressed: entry.answer === "create",
-        toCard: true,
-        run: entry.answer === "create" ? null : () => onAnswer(entry, { answer: "create" }),
-      },
-      { key: "ignore", label: "Não registrar", tone: T.inkLight, pressed: entry.answer === "ignore", run: () => onAnswer(entry, { answer: "ignore" }), said: "Fica fora do Fincla" },
-    ],
-  };
-}
-
 /** O cartão aberto de um lançamento em dúvida (também usado para um lançamento novo pareado pela busca). */
 export function DoubtCard({
   entry, entries, isMobile, busy, canUndo, wantPair = false, categories, details, fallbackLabel, accountName,
@@ -348,17 +309,14 @@ export function DoubtStep({
   const pending = entries.filter((e) => e.answer === null).length;
   const openRow = useStableCallback((entry) => queue.open(entry.id));
   const undoChoice = useStableCallback(onUndoChoice);
-  const describe = useStableCallback((entry) => doubtSummary(entry, { onAnswer, onPick, onWantPair }));
-  const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
   return (
-    <NextPendingSummaryContext.Provider value={summary}>
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} />
       <p role="status" style={{ ...G, ...NUM, fontSize: 13, color: pending ? T.amber : T.green, margin: 0 }}>
         {pending ? `${plural(pending, "lançamento para responder", "lançamentos para responder")} de ${entries.length}` : "Todos respondidos"}
       </p>
       {entries.filter(queue.shown).map((entry) => (
-        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
         {entry.id === queue.currentId ? (
         <CurrentEntryFrame queue={queue} entry={entry}>
           <DoubtCard
@@ -389,6 +347,5 @@ export function DoubtStep({
         </EntrySlot>
       ))}
     </div>
-    </NextPendingSummaryContext.Provider>
   );
 }

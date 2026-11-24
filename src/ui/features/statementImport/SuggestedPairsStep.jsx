@@ -5,7 +5,7 @@
 // sugestão já vem respondida "Sim, é esta" e falta a pessoa confirmar. Responder (ou "Confirmar
 // os N de uma vez") minimiza o cartão numa linha que continua visível, com "Alterar" e "Desfazer
 // escolha": nada some sem um jeito de voltar. Nada muda no Fincla antes de concluir.
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Ban, Check, ChevronRight, Link2, Plus, Sparkles } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -22,16 +22,14 @@ import {
   CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel, useDescriptionDraft,
 } from "./StatementEntryCard.jsx";
 import { unconfirmedSuggestions } from "./reconciliationSteps.js";
-import { FinclaMatchBox, dayOf, matchHint, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
+import { FinclaMatchBox, dayOf, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
-  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, InlineFields, NextPendingSummaryContext, ROW_CLICKABLE, answerTone, isAnswered,
-  openOnRowClick, useCompact, useStableCallback,
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, InlineFields, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useCompact,
+  useStableCallback,
 } from "./entryQueue.jsx";
 
 const BOX = { border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, minWidth: 0, flex: 1 };
 const BOX_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 };
-
-const QUESTION = "Este lançamento do banco já está no Fincla?";
 
 const ANSWERS = [
   { value: "pair", label: "Sim, é esta", tone: T.blue },
@@ -207,7 +205,7 @@ export function StatusBadge({ entry }) {
 export const untouchedSuggestion = (entry) => entry.answer === "pair" && !entry.confirmed && Boolean(entry.fincla_match);
 
 function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
-  const label = QUESTION;
+  const label = "Este lançamento do banco já está no Fincla?";
   let confirm = null;
   if (untouchedSuggestion(entry)) {
     confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} onConfirm={() => onAnswer(entry, "pair")} />;
@@ -352,33 +350,6 @@ const PairRow = memo(function PairRowView({ entry, canUndo, focus = false, onOpe
 });
 
 /**
- * O par sugerido no resumo do próximo pendente (proposta 3): as respostas do cartão, cada uma pela
- * mesma `onAnswer` dele. "Sim, é esta" confirma a sugestão (como o "Confirmar sugestão"); "Não,
- * adicionar agora" grava como no cartão e leva ao cartão, onde fica o formulário.
- */
-export function pairSummary(entry, onAnswer) {
-  const match = entry.fincla_match;
-  return {
-    dateLabel: bankDateLabel(entry.date),
-    title: entry.bank_description,
-    amountLabel: formatMoney(entry.amount, entry.currency),
-    amountTone: entry.amount > 0 ? T.green : T.ink,
-    hint: match ? matchHint(entry, match) : "A transação sugerida não existe mais no Fincla",
-    question: QUESTION,
-    answers: ANSWERS.map((a) => ({
-      key: a.value,
-      label: a.label,
-      tone: a.tone,
-      pressed: entry.answer === a.value,
-      disabled: a.value === "pair" && !match,
-      toCard: a.value === "create",
-      run: a.value === "create" && entry.answer === "create" ? null : () => onAnswer(entry, a.value),
-      said: a.value === "pair" && match ? <>Sim, é <b>{matchTitle(entry, match)}</b></> : "Fica fora do Fincla",
-    })),
-  };
-}
-
-/**
  * O passo inteiro (lista do fincla-api#517): só o lançamento atual (`queue.currentId`) fica aberto;
  * os outros são linhas. `history` guarda, por lançamento, as respostas anteriores para "Desfazer
  * escolha"; `lastBulk` é a última confirmação em lote, com a sua barra de desfazer.
@@ -405,10 +376,7 @@ export function SuggestedPairsStep({
   const unconfirmed = unconfirmedSuggestions(entries);
   const openRow = useStableCallback((entry) => queue.open(entry.id));
   const undoChoice = useStableCallback(onUndoChoice);
-  const describe = useStableCallback((entry) => pairSummary(entry, onAnswer));
-  const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
   return (
-    <NextPendingSummaryContext.Provider value={summary}>
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -429,7 +397,7 @@ export function SuggestedPairsStep({
         </div>
       ) : null}
       {entries.filter(queue.shown).map((entry) => (
-        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+        <EntrySlot key={entry.id} open={entry.id === queue.currentId} tone={answerTone(entry.answer)}>
         {entry.id === queue.currentId ? (
         <CurrentEntryFrame queue={queue} entry={entry}>
           <PairCard
@@ -456,6 +424,5 @@ export function SuggestedPairsStep({
         </EntrySlot>
       ))}
     </div>
-    </NextPendingSummaryContext.Provider>
   );
 }

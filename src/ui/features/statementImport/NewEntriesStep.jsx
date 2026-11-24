@@ -4,7 +4,7 @@
 // com "Conferido", "Alterar" e "Desfazer escolha", como nos outros passos (fincla-api#507). Em
 // lote: categoria, Não registrar e "Somar em um só lançamento", sempre com a barra de desfazer. As somas aparecem como cartões próprios, com os lançamentos somados dentro e
 // "Tirar da soma" / "Desfazer soma". Tudo é gravado no rascunho; as contagens vêm do backend.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Layers, Lock, X } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -18,37 +18,7 @@ import {
   MONTH_NAMES, bankDateLabel, categoriesForType, categoryLabel, detailLabels,
 } from "./StatementEntryCard.jsx";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, NextPendingSummaryContext, answerTone, useStableCallback } from "./entryQueue.jsx";
-
-const QUESTION = "Este lançamento do banco já está no Fincla?";
-
-/**
- * O lançamento novo no resumo do próximo pendente (proposta 3): as respostas do cartão, pela mesma
- * ação dele (`answer`). "Não registrar" responde no lugar; "Não, adicionar agora" leva ao cartão,
- * onde fica o formulário da descrição (gravando a resposta antes, como o cartão, se era outra).
- */
-export function newEntrySummary(entry, { answer, categoryText }) {
-  const description = String(entry.description ?? "").trim();
-  return {
-    dateLabel: bankDateLabel(entry.date),
-    title: entry.bank_description,
-    amountLabel: formatMoney(entry.amount, entry.currency),
-    amountTone: entry.amount > 0 ? T.green : T.ink,
-    hint: description ? <>Adicionar como <b style={{ color: T.ink }}>“{description}”</b> · {categoryText}</> : "Falta a descrição para adicionar",
-    question: QUESTION,
-    answers: [
-      {
-        key: "create",
-        label: "Não, adicionar agora",
-        tone: T.green,
-        pressed: entry.answer === "create",
-        toCard: true,
-        run: entry.answer === "create" ? null : () => answer(entry.id, { answer: "create" }),
-      },
-      { key: "ignore", label: "Não registrar", tone: T.inkMid, pressed: entry.answer === "ignore", run: () => answer(entry.id, { answer: "ignore" }), said: "Fica fora do Fincla" },
-    ],
-  };
-}
+import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, answerTone, useStableCallback } from "./entryQueue.jsx";
 
 
 const signed = (amount, currency) => `${amount > 0 ? "+" : ""}${formatMoney(amount, currency)}`;
@@ -314,17 +284,6 @@ export function NewEntriesStep({
     if (entry.answer === "create" && (body.answer ?? "create") === "create") queue.open(id);
   });
 
-  // Uma resposta do cartão (ou do resumo do próximo pendente, que responde igual): "Não registrar"
-  // minimiza assim que o backend aceita a resposta (como nos outros passos), sem esperar a releitura.
-  const answerEntry = (id, change) => onChangeEntry(id, change, {
-    onSaved: change.answer === "ignore" ? () => answered(id) : null,
-  });
-  const describe = useStableCallback((entry) => newEntrySummary(entry, {
-    answer: answerEntry,
-    categoryText: categoryLabel(categories, entry.category_tag_id, fallbackLabel),
-  }));
-  const summary = useMemo(() => ({ busy: answering, isMobile, describe }), [answering, isMobile, describe]);
-
   const run = async (work) => {
     setBusy(true);
     try { return await work(); } finally { setBusy(false); }
@@ -398,7 +357,6 @@ export function NewEntriesStep({
   const freeTotal = free.reduce((s, e) => s + e.amount, 0);
 
   return (
-    <NextPendingSummaryContext.Provider value={summary}>
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {stepGroups.map((group) => (
         <GroupCard
@@ -499,18 +457,21 @@ export function NewEntriesStep({
                 onCollapse={(id) => queue.close(id)}
                 onSearch={onSearch}
                 onConfirm={(e) => answered(e.id)}
-                onChange={answerEntry}
+                onChange={(id, change) => onChangeEntry(id, change, {
+                  // "Não registrar" escolhido no cartão: minimiza assim que o backend aceita a
+                  // resposta (como nos outros passos), sem esperar a releitura do rascunho.
+                  onSaved: change.answer === "ignore" ? () => answered(id) : null,
+                })}
               />
             </CurrentEntryFrame>
           );
         }
         return (
-          <EntrySlot key={entry.id} open={current} tone={answerTone(entry.answer)} queue={queue} entryId={entry.id}>
+          <EntrySlot key={entry.id} open={current} tone={answerTone(entry.answer)}>
             {body}
           </EntrySlot>
         );
       })}
     </div>
-    </NextPendingSummaryContext.Provider>
   );
 }
