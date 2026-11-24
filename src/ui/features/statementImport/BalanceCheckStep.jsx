@@ -7,7 +7,7 @@
 // concluir: o item continua à vista (riscado, ou data antiga → nova) com "Desfazer escolha". As
 // transferências sem par (G3-3-10) entram na mesma lista, só para ver: a conciliação nunca altera
 // transferência, então elas têm "Abrir" e nada mais.
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AlertTriangle, Check, Info, Link2, X } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -21,7 +21,9 @@ const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : fo
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { DELETE_BG, DELETE_CARD_BG, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
-import { ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
+import {
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, NextPendingSummaryContext, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick, useStableCallback,
+} from "./entryQueue.jsx";
 
 /** "7 de outubro" (o dia por extenso, sem converter fuso: lê AAAA-MM-DD). */
 export function longDateLabel(ymd) {
@@ -338,6 +340,28 @@ function TransactionDetails({ item }) {
       <span style={{ color: T.inkLight }}>Para editar outros dados, abra a transação em Lançamentos depois de concluir.</span>
     </div>
   );
+}
+
+/**
+ * A transação sem par no resumo do próximo pendente (proposta 3): as ações do cartão pela mesma
+ * `answer` dele. "Excluir" (quando pode) e "Está certa assim" respondem no lugar; "Mudar data"
+ * precisa do formulário da data e leva ao cartão.
+ */
+export function unmatchedSummary(item, { answer }) {
+  const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
+  return {
+    dateLabel: bankDateLabel(item.day),
+    title: item.description,
+    amountLabel: signed(item.amount, item.currency),
+    amountTone: item.amount > 0 ? T.green : T.ink,
+    hint: "Está no Fincla e não aparece no extrato",
+    question: null,
+    answers: [
+      { key: "change_date", label: "Mudar data", toCard: true, run: null },
+      { key: "delete", label: "Excluir", tone: T.red, disabled: Boolean(refusal), run: () => answer(item, "delete"), said: "Será excluída ao concluir" },
+      { key: "keep", label: "Está certa assim", tone: T.green, pressed: item.check === "keep", run: () => answer(item, "keep"), said: "Você disse que está certa" },
+    ],
+  };
 }
 
 /** O cartão aberto: as ações da transação. */
@@ -675,7 +699,10 @@ export function BalanceCheckStep({
     setLastBatch(null);
     const ok = await onAnswer([{ transaction_id: item.transaction_id, action, new_date: action === "change_date" ? newDate : null }]);
     if (ok && action !== "change_date") queue.advanceFrom(item.id);
+    return ok;
   };
+  const describe = useStableCallback((item) => unmatchedSummary(item, { answer }));
+  const summary = useMemo(() => ({ busy, describe }), [busy, describe]);
 
   const undo = async (item) => {
     const previous = itemHistory[item.transaction_id]?.at(-1) ?? { action: null, new_date: null };
@@ -709,6 +736,7 @@ export function BalanceCheckStep({
   const allOn = items.length > 0 && chosen.length === items.length;
 
   return (
+    <NextPendingSummaryContext.Provider value={summary}>
     <div data-testid="balance-step" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <BalanceDifferencePanel check={check} />
       <PendingNotes check={check} onGoToPending={onGoToPending} />
@@ -775,6 +803,7 @@ export function BalanceCheckStep({
       <LeftOutEntries entries={check.left_out_entries} onRedecide={onRedecide} />
       <ConcludeWithDifferenceNote check={check} />
     </div>
+    </NextPendingSummaryContext.Provider>
   );
 }
 

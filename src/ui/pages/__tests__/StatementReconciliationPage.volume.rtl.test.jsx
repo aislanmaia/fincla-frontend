@@ -5,7 +5,7 @@
 // nem com a busca aberta); clicar em qualquer ponto da linha a reabre; visualização Detalhada ou
 // Compacta lembrada por pessoa. Os lançamentos vêm da fixture canônica do backend, multiplicados.
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -380,5 +380,106 @@ describe("volume grande", () => {
     await waitFor(() => expect(position()).toBe("Lançamento 2 de 300"));
     expect(pending()).toBe("299 sem resposta");
     expect(screen.getAllByTestId("pair-card")).toHaveLength(1);
+  });
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-24, proposta 3): quando o próximo pendente abre acima
+// do item respondido, o resumo dele (com as respostas do cartão) fica embaixo da linha respondida.
+describe("proposta 3: o resumo do próximo pendente nos outros passos", () => {
+  beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
+  afterEach(() => { delete Element.prototype.scrollIntoView; });
+
+  const summary = () => screen.queryByTestId("next-pending-summary");
+  const inSummary = (name) => within(summary()).getByRole("button", { name });
+  const idle = () => waitFor(() => expect(within(summary()).getByRole("button", { name: "Não registrar" })).not.toBeDisabled());
+
+  it("Confirmar lançamentos encontrados: 'Sim, é esta' no resumo confirma a sugestão com o mesmo PATCH do cartão e passa para o seguinte", async () => {
+    draft = draftWith(3);
+    const user = await openDraft();
+    await user.click(row("PIX PADARIA 003"));
+    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await idle();
+    calls.length = 0;
+
+    const s = summary();
+    expect(s).toHaveAccessibleName(/PIX PADARIA 001/);
+    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent(/^Sugestão: Padaria do bairro · -R\$\s45,90$/);
+    expect(within(s).getByRole("group").textContent).toBe("Sim, é estaNão, adicionar agoraNão registrar");
+    // A sugestão já vem marcada "Sim, é esta", como no cartão.
+    expect(inSummary("Sim, é esta")).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(inSummary("Sim, é esta"));
+
+    await waitFor(() => expect(summary()).toHaveAccessibleName(/PIX PADARIA 002/));
+    expect(answers()).toEqual([{ patch: "s1", body: { answer: "pair" } }]);
+    expect(row("PIX PADARIA 001")).toHaveTextContent("Sim, já está no Fincla");
+    expect(within(summary()).getByTestId("next-pending-done")).toHaveTextContent("PIX PADARIA 001·Sim, é Padaria do bairroConferido");
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("Confirmar lançamentos encontrados: 'Não, adicionar agora' grava como o cartão e leva ao formulário", async () => {
+    draft = draftWith(2);
+    const user = await openDraft();
+    await user.click(row("PIX PADARIA 002"));
+    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await idle();
+    calls.length = 0;
+
+    await user.click(inSummary("Não, adicionar agora"));
+
+    await waitFor(() => expect(answers()).toEqual([{ patch: "s1", body: { answer: "create" } }]));
+    await waitFor(() => expect(within(current()).getByTestId("statement-entry-new-side")).toBeInTheDocument());
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(current());
+    expect(summary()).toBeNull();
+  });
+
+  it("Adicionar lançamentos novos: 'Não registrar' no resumo manda o mesmo PATCH do cartão; sem outro pendente, o resumo sai", async () => {
+    draft.entries.forEach((e) => { if (e.classification === "suggested") e.confirmed = true; });
+    draft.entries.find((e) => e.bank_description === "PAG BOLETO ENERGIA").description = "";
+    draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").description = "";
+    const user = await openDraft();
+    await user.click(within(screen.getByRole("navigation", { name: "Passos da conciliação" })).getByText("Adicionar lançamentos novos"));
+    await screen.findByRole("heading", { name: "Adicionar lançamentos novos" });
+    await user.click(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA")));
+    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await idle();
+    calls.length = 0;
+
+    const s = summary();
+    expect(s).toHaveAccessibleName(/REMUNERACAO SALARIO/);
+    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent("Falta a descrição para adicionar");
+    expect(within(s).getByRole("group").textContent).toBe("Não, adicionar agoraNão registrar");
+
+    await user.click(inSummary("Não registrar"));
+
+    await waitFor(() => expect(summary()).toBeNull());
+    const salary = draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").id;
+    expect(answers()).toEqual([{ patch: salary, body: { answer: "ignore" } }]);
+    expect(pending()).toBe("Todos respondidos");
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("Adicionar lançamentos novos: 'Não, adicionar agora' já marcado só leva ao formulário, sem PATCH", async () => {
+    draft.entries.forEach((e) => { if (e.classification === "suggested") e.confirmed = true; });
+    draft.entries.find((e) => e.bank_description === "PAG BOLETO ENERGIA").description = "";
+    draft.entries.find((e) => e.bank_description === "REMUNERACAO SALARIO").description = "";
+    const user = await openDraft();
+    await user.click(within(screen.getByRole("navigation", { name: "Passos da conciliação" })).getByText("Adicionar lançamentos novos"));
+    await screen.findByRole("heading", { name: "Adicionar lançamentos novos" });
+    await user.click(screen.getAllByTestId("entry-row").find((r) => r.textContent.includes("PAG BOLETO ENERGIA")));
+    await user.click(within(current()).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await idle();
+    calls.length = 0;
+
+    await user.click(inSummary("Não, adicionar agora"));
+
+    expect(answers()).toEqual([]);
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(current());
+    expect(within(current()).getByTestId("statement-entry")).toHaveTextContent("REMUNERACAO SALARIO");
+    expect(summary()).toBeNull();
   });
 });

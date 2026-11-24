@@ -727,3 +727,127 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
     });
   });
 });
+
+// Decisão do Owner (fincla-api#507, 2026-11-24, proposta 3): no lugar do "↑ Próximo pendente", o
+// resumo do pendente com as respostas do cartão. Responder nele manda o MESMO PATCH do cartão.
+describe("proposta 3: o resumo do próximo pendente", () => {
+  beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
+  afterEach(() => { delete Element.prototype.scrollIntoView; });
+
+  const summary = () => screen.queryByTestId("next-pending-summary");
+  const inSummary = (name) => within(summary()).getByRole("button", { name });
+
+  /** Uber (a última dúvida) sem resposta; responder ela no cartão abre o pendente de cima, fora da vista. */
+  const answerUber = async (user) => {
+    draft.entries.find((e) => e.id === UBER).answer = null;
+    draft.entries.find((e) => e.id === UBER).confirmed = false;
+    await openDraft();
+    const uberRow = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("UBERX"));
+    await user.click(within(uberRow).getByRole("button", { name: /Alterar/ }));
+    await user.click(within(card("RSHOP UBERX 04 10")).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Não registrar" }).every((b) => !b.disabled)).toBe(true));
+    calls.length = 0;
+  };
+
+  it("mostra o Paulo: data, descrição e valor do banco, a sugestão do Fincla e as respostas do cartão", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+
+    const s = summary();
+    expect(s).toHaveAccessibleName("Próximo pendente: 06/10/2026 PIX TRANSF PAULO V06 10");
+    const entry = within(s).getByTestId("next-pending-entry").textContent.replace(/ /g, " ");
+    expect(entry).toContain("06/10/2026PIX TRANSF PAULO V06 10-R$ 30,00");
+    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent(/^Sugestão: Corte de cabelo · -R\$\s30,00$/);
+    const group = within(s).getByRole("group", { name: /Este lançamento do banco já está no Fincla\?/ });
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Sim, é esta", "Não, adicionar agora", "Não registrar"]);
+    expect(document.activeElement).toBe(s);
+  });
+
+  it("'Sim, é esta' com uma opção livre manda o mesmo PATCH de escolher a opção no cartão; o Paulo recolhe e a linha verde confirma, sem rolar", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+
+    await user.click(inSummary("Sim, é esta"));
+
+    await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "pair", paired_transaction_id: 92 } }]));
+    // Sem outro pendente no passo: o resumo sai depois de confirmar, e a página diz que acabou.
+    await waitFor(() => expect(summary()).toBeNull());
+    const paulo = screen.getAllByTestId("doubt-row").find((r) => r.textContent.includes("PAULO"));
+    expect(paulo).toHaveTextContent("Sim, é Corte de cabelo");
+    expect(within(paulo).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(screen.queryByTestId("current-entry")).toBeNull();
+    expect(screen.getByText(/Tudo respondido neste passo/)).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("'Não registrar' manda o mesmo PATCH do cartão, uma vez só no duplo clique", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+
+    const button = inSummary("Não registrar");
+    await user.dblClick(button);
+
+    await waitFor(() => expect(screen.queryByTestId("next-pending-summary")).toBeNull());
+    expect(patches()).toEqual([{ patch: PAULO, body: { answer: "ignore" } }]);
+  });
+
+  it("com o pendente seguinte, a confirmação fica no topo do resumo e ele passa para o seguinte", async () => {
+    const user = userEvent.setup();
+    // A Julia também sem resposta (acima do Paulo).
+    Object.assign(draft.entries.find((e) => e.id === JULIA), { answer: null, confirmed: false, paired_transaction_id: null, fincla_match: null });
+    refreshTaken();
+    await answerUber(user);
+    expect(summary()).toHaveAccessibleName(/PIX TRANSF JULIA F04 10/);
+
+    await user.click(inSummary("Não registrar"));
+
+    await waitFor(() => expect(summary()).toHaveAccessibleName(/PIX TRANSF PAULO V06 10/));
+    expect(patches()).toEqual([{ patch: JULIA, body: { answer: "ignore" } }]);
+    const done = within(summary()).getByTestId("next-pending-done");
+    expect(done).toHaveTextContent("04/10/2026 PIX TRANSF JULIA F04 10·Fica fora do FinclaConferido");
+    expect(done.closest("[aria-live='polite']")).not.toBeNull();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("'Sim, é esta' com várias opções não grava: leva ao cartão, que pede para escolher qual", async () => {
+    const user = userEvent.setup();
+    Object.assign(draft.entries.find((e) => e.id === JULIA), { answer: null, confirmed: false, paired_transaction_id: null, fincla_match: null });
+    refreshTaken();
+    await answerUber(user);
+    expect(within(summary()).getByTestId("next-pending-hint")).toHaveTextContent("2 opções no Fincla");
+
+    await user.click(inSummary("Sim, é esta"));
+
+    expect(patches()).toEqual([]);
+    const julia = card("PIX TRANSF JULIA F04 10");
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+    expect(julia).toHaveTextContent("Escolha ao lado qual transação é.");
+    expect(summary()).toBeNull();
+  });
+
+  it("'Não, adicionar agora' grava como o cartão e leva ao cartão, onde está o formulário", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+
+    await user.click(inSummary("Não, adicionar agora"));
+
+    await waitFor(() => expect(patches()).toEqual([{ patch: PAULO, body: { answer: "create" } }]));
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+    expect(within(card("PIX TRANSF PAULO V06 10")).getByRole("button", { name: "Não, adicionar agora" })).toHaveAttribute("aria-pressed", "true");
+    expect(summary()).toBeNull();
+  });
+
+  it("'Ver o cartão completo' leva ao Paulo sem gravar nada", async () => {
+    const user = userEvent.setup();
+    await answerUber(user);
+
+    await user.click(within(summary()).getByRole("button", { name: "Ver o cartão completo" }));
+
+    expect(patches()).toEqual([]);
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+    expect(document.activeElement).toBe(screen.getByTestId("current-entry"));
+    expect(summary()).toBeNull();
+  });
+});

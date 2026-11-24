@@ -902,10 +902,11 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
   // formulário da transação nova e o "Confirmar" ao lado das respostas.
   const advanceAfter = (entry, answer) => { if (answer && answer !== "create") queue.advanceFrom(entry.id); };
 
+  // Devolve se a resposta foi gravada (o resumo do próximo pendente responde por aqui também).
   const answerPair = async (entry, answer) => {
     if (answer === entry.answer && entry.confirmed) {
       advanceAfter(entry, answer);
-      return;
+      return true;
     }
     setAnswering(true);
     setActionError("");
@@ -919,8 +920,10 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       // A barra "N confirmados · Desfazer" falava de um estado que esta resposta mudou.
       setLastBulk(null);
       await reload();
+      return true;
     } catch (err) {
       setActionError(handleApiError(err));
+      return false;
     } finally {
       setAnswering(false);
     }

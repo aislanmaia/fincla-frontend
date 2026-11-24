@@ -14,7 +14,7 @@
 //     ? <CurrentEntryFrame queue={queue} entry={e}>{cartão}</CurrentEntryFrame>
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
-import { Component, createContext, createRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, createRef, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Check } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -63,8 +63,14 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   // O lançamento que acabou de minimizar sem outro abrir: o foco vai para o "Alterar" da linha dele.
   const [rowFocusId, setRowFocusId] = useState(null);
   // O próximo pendente abriu ACIMA do item respondido (ex.: respondeu o último da lista): embaixo da
-  // linha recolhida aparece "Próximo pendente" (fincla-api#507). { step, fromId, targetId, sig }.
+  // linha recolhida aparece o resumo do próximo pendente (fincla-api#507, proposta 3).
+  // { step, fromId, targetId, except, sig }: `except` = os itens respondidos nesta sequência (o
+  // `fromId` e os pendentes respondidos pelo resumo), cuja resposta ainda pode chegar da releitura.
   const [aboveRequest, setAboveRequest] = useState(null);
+  // O pedido acima, só enquanto ele vale (o resumo está na tela): é o que o `advanceFrom` encadeia.
+  const liveAbove = useRef(null);
+  // O pendente que está sendo respondido PELO RESUMO (só essa resposta encadeia; a do cartão, não).
+  const fromSummary = useRef(null);
 
   const stored = currentByStep[stepKey];
   const ids = useMemo(() => new Set(entries.map((e) => e.id)), [entries]);
@@ -100,10 +106,31 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   const advanceFrom = useCallback((fromId) => {
     const { entries: list } = latest.current;
     const next = nextUnanswered(list, fromId, answered);
-    setCurrent(next, { rowFocus: fromId });
     const index = (id) => list.findIndex((e) => e.id === id);
+    const chain = liveAbove.current;
+    if (chain && chain.step === stepKey && chain.targetId === fromId && fromSummary.current === fromId) {
+      // Respondido pelo resumo embaixo da linha (proposta 3): a linha e o resumo ficam onde estão.
+      // O resumo passa para o pendente seguinte, que abre acima, também fora da vista; sem nenhum,
+      // o resumo sai e o foco volta para a linha que a pessoa está olhando.
+      if (next === null || next === chain.fromId) {
+        setCurrent(null, { rowFocus: chain.fromId });
+        return;
+      }
+      if (index(next) > index(chain.fromId)) {
+        setCurrent(next);
+        return;
+      }
+      const except = [...chain.except, fromId];
+      setCurrentByStep((prev) => ({ ...prev, [stepKey]: next }));
+      setRowFocusId(null);
+      // O foco vai para o resumo (o `CurrentEntryFrame` do pendente novo o encontra à vista).
+      setFocusRequest((prev) => ({ id: next, tick: prev.tick + 1 }));
+      setAboveRequest({ ...chain, targetId: next, except, sig: answeredSignature(list, except, answered) });
+      return;
+    }
+    setCurrent(next, { rowFocus: fromId });
     if (next !== null && index(next) < index(fromId)) {
-      setAboveRequest({ step: stepKey, fromId, targetId: next, sig: answeredSignature(list, fromId, answered) });
+      setAboveRequest({ step: stepKey, fromId, targetId: next, except: [fromId], sig: answeredSignature(list, [fromId], answered) });
     }
   }, [answered, setCurrent, stepKey]);
 
@@ -113,16 +140,18 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     && aboveRequest.step === stepKey
     && currentId === aboveRequest.targetId
     && ids.has(aboveRequest.fromId)
-    && answeredSignature(entries, aboveRequest.fromId, answered) === aboveRequest.sig
+    && answeredSignature(entries, aboveRequest.except, answered) === aboveRequest.sig
     ? { fromId: aboveRequest.fromId, target: entries.find((e) => e.id === aboveRequest.targetId) }
     : null;
+  liveAbove.current = nextAbove ? aboveRequest : null;
   const dismissNextAbove = useCallback(({ hold = true } = {}) => {
     // O botão sai de baixo da linha: a rolagem fica onde está (sem o fim da página puxá-la).
     // `hold: false` quando sobra conteúdo embaixo para o botão sair sem a rolagem ser cortada (a
     // pessoa ainda pode estar rolando: pôr o scrollTop interromperia o gesto dela).
-    const button = hold ? document.querySelector("[data-testid='next-pending-above']") : null;
+    const button = hold ? document.querySelector(NEXT_PENDING) : null;
     const scroller = button ? scrollParentOf(button) : null;
     if (scroller) Object.assign(heldAfterDismiss, { scroller, top: scroller.scrollTop });
+    liveAbove.current = null;
     setAboveRequest(null);
   }, []);
   useLayoutEffect(() => {
@@ -167,6 +196,8 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
     answered,
     nextAbove,
     dismissNextAbove,
+    /** O resumo do próximo pendente começa (`id`) ou termina (null) uma resposta dele. */
+    answeringFromSummary: (id) => { fromSummary.current = id; },
     hasNextUnanswered: currentId !== null && nextUnanswered(entries, currentId, answered) !== null,
     setFilter: (value) => setFilterByStep((prev) => ({ ...prev, [stepKey]: value })),
     open: (id) => setCurrent(id),
@@ -177,10 +208,15 @@ export function useEntryQueue(stepKey, entries, { answered = isAnswered } = {}) 
   };
 }
 
-/** As respostas da lista numa assinatura, fora a do item `exceptId` (a dele ainda pode chegar). */
-function answeredSignature(list, exceptId, answered) {
-  return list.map((e) => (e.id === exceptId ? "-" : answered(e) ? "1" : "0")).join("");
+/** As respostas da lista numa assinatura, fora as dos itens `exceptIds` (a deles ainda pode chegar). */
+function answeredSignature(list, exceptIds, answered) {
+  return list.map((e) => (exceptIds.includes(e.id) ? "-" : answered(e) ? "1" : "0")).join("");
 }
+
+/** O "Próximo pendente" na tela: o resumo do pendente (ou o botão, num passo sem resumo). */
+const NEXT_PENDING = "[data-next-pending]";
+/** O que leva até o cartão do pendente: o "Ver o cartão completo" do resumo (ou o botão). */
+const NEXT_PENDING_GO = "[data-testid='next-pending-above']";
 
 const heldAfterDismiss = { scroller: null, top: 0 };
 
@@ -370,12 +406,12 @@ export function CurrentEntryFrame({ queue, entry, noun = ENTRY_NOUN, children })
   useEffect(() => {
     // preventScroll: a tela não pula para o próximo cartão; quem fica parado é o que minimizou.
     if (!takeFocus(entry.id)) return;
-    // Este cartão abriu ACIMA do item respondido, fora da tela: o foco vai para o "Próximo
-    // pendente", à vista logo abaixo da linha (o primeiro Tab não entra num cartão que a pessoa
-    // não vê, OBS-22). Enter/clique nele leva até aqui. Sem o botão (linha escondida pelo filtro),
-    // o foco vem para o cartão, como sempre.
-    const button = isNextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
-    (button ?? ref.current)?.focus({ preventScroll: true });
+    // Este cartão abriu ACIMA do item respondido, fora da tela: o foco vai para o resumo do
+    // próximo pendente, à vista logo abaixo da linha (o primeiro Tab não entra num cartão que a
+    // pessoa não vê, OBS-22). Sem o resumo (linha escondida pelo filtro), o foco vem para o
+    // cartão, como sempre.
+    const next = isNextAbove ? document.querySelector(NEXT_PENDING) : null;
+    (next ?? ref.current)?.focus({ preventScroll: true });
   }, [focusTick, entry.id]);
   // A pessoa chegou no pendente apontado por "Próximo pendente" (o foco entrou num controle dele).
   const onFocus = (event) => {
@@ -630,12 +666,53 @@ function releaseSpacer() {
 const commit = { expected: 0, changes: [] };
 let mountedSlots = 0;
 
+/**
+ * Proposta 3 (fincla-api#507): a resposta dada no resumo do próximo pendente. As trocas que ela
+ * causa (o pendente `targetId` recolhe, o seguinte abre) acontecem ACIMA da linha respondida, fora
+ * da vista; quem fica parado é o lugar dessa linha (`el`), com o resumo embaixo, que é o que a
+ * pessoa está olhando. `top` é medido na foto da troca (o DOM ainda antigo). O pedido vale para a
+ * troca em que o pendente recolhe e é consumido nela; uma resposta que falhou o desfaz.
+ */
+const pinned = { el: null, top: null, targetId: null };
+
+function pinInPlace(el, targetId) {
+  Object.assign(pinned, { el, top: null, targetId });
+}
+
+function unpin(el) {
+  if (pinned.el === el) Object.assign(pinned, { el: null, top: null, targetId: null });
+}
+
+/** O lugar preso, se esta troca é a do pendente respondido e tudo mudou acima dele. */
+function takePinned(changes) {
+  const { el, top, targetId } = pinned;
+  if (!el || top === null) return null;
+  if (!changes.some((c) => c.collapsing && c.slot.props.entryId === targetId)) {
+    // Outra troca no caminho (não a da resposta): mede de novo na próxima.
+    pinned.top = null;
+    return null;
+  }
+  unpin(el);
+  if (!el.isConnected) return null;
+  const allAbove = changes.every((c) => c.el !== el && Boolean(c.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));
+  return allAbove ? { el, top } : null;
+}
+
 function flushCommit() {
   const changes = commit.changes.filter((c) => c.el?.isConnected);
   commit.changes = [];
   commit.expected = 0;
   // Uma animação anterior ainda andando: termina já, para medir o lugar final de tudo.
   for (const slot of [...animating]) slot.stopMotion();
+  const pin = takePinned(changes);
+  if (pin) {
+    // Tudo mudou acima do que a pessoa olha: a troca é na hora (sem animar fora da vista) e a
+    // rolagem anda exatamente o que o conteúdo de cima andou.
+    const scroller = scrollParentOf(pin.el);
+    if (scroller) holdScroll(scroller, Math.max(0, scroller.scrollTop + pin.el.getBoundingClientRect().top - pin.top));
+    for (const change of changes) change.ghost?.remove();
+    return;
+  }
   const anchor = pickAnchor(changes);
   let held = null;
   if (anchor) {
@@ -725,6 +802,8 @@ export class EntrySlot extends Component {
       ghost.removeAttribute("data-testid");
       for (const node of ghost.querySelectorAll("[data-testid]")) node.removeAttribute("data-testid");
     }
+    // O lugar preso pela resposta do resumo, medido antes de qualquer mudança deste commit.
+    if (pinned.el?.isConnected && pinned.top === null) pinned.top = pinned.el.getBoundingClientRect().top;
     if (!commit.expected) {
       // Rede de segurança: se algum `componentDidUpdate` não vier, a troca não fica pendurada.
       queueMicrotask(() => { if (commit.expected) flushCommit(); });
@@ -833,12 +912,155 @@ function currentCardOf(id) {
 }
 
 /**
- * "↑ Próximo pendente: 07/10 PIX ..." logo abaixo da linha que acabou de recolher, quando o próximo
- * pendente abriu ACIMA dela (fincla-api#507): o item respondido fica parado e a tela nunca fica sem
- * indicação de onde continuar. O clique rola suave até o pendente (na hora com movimento reduzido)
- * e, terminada a rolagem, põe o foco nele sem rolar de novo.
+ * O que um passo diz do seu pendente para o resumo do próximo pendente (proposta 3, fincla-api#507):
+ * `{ busy, describe(entry) }`, com `describe` devolvendo
+ * `{ dateLabel, title, amountLabel, amountTone, hint, question, answers }` e cada resposta
+ * `{ key, label, tone, pressed, disabled, said, run, toCard }`. `run()` é a MESMA ação do botão do
+ * cartão (o mesmo PATCH) e devolve se deu certo; `toCard` = o resumo não expressa essa resposta
+ * (escolher entre opções, preencher um formulário): depois do `run` opcional, leva ao cartão.
+ * Um passo sem este contexto continua com o botão "↑ Próximo pendente".
+ */
+export const NextPendingSummaryContext = createContext(null);
+
+const SUMMARY_LABEL = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkLight };
+
+/**
+ * O resumo do próximo pendente, logo abaixo da linha que acabou de recolher, quando o pendente
+ * abriu ACIMA dela, fora da vista (decisão do Owner, proposta 3): data, descrição e valor do banco,
+ * uma linha sobre o que o Fincla achou, as mesmas respostas do cartão e "↑ Ver o cartão completo".
+ * Responder aqui grava como no cartão; o pendente recolhe lá em cima sem a tela mexer, a linha
+ * verde no topo confirma e o resumo passa para o pendente seguinte (com um esmaecer curto, no
+ * lugar). Nenhum temporizador: o resumo só muda quando a resposta volta.
+ */
+const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, describe, busy, onGo, onAnswering }, ref) {
+  const rootRef = useRef(null);
+  const bodyRef = useRef(null);
+  // Um clique só vale uma vez: o duplo clique não manda um segundo PATCH.
+  const inFlight = useRef(false);
+  const [running, setRunning] = useState(false);
+  // As respostas dadas aqui. A confirmação é a da última que já saiu do resumo (o pendente dela
+  // não é mais o mostrado): aparece no mesmo commit em que o resumo passa para o seguinte, sem
+  // esperar a releitura do rascunho, e uma resposta que falhou nunca aparece como conferida.
+  const [log, setLog] = useState([]);
+  const done = [...log].reverse().find((d) => d.targetId !== target.id) ?? null;
+  const pinnedSlot = useRef(null);
+  useEffect(() => () => { if (pinnedSlot.current) unpin(pinnedSlot.current); }, []);
+  const setRefs = useCallback((el) => {
+    rootRef.current = el;
+    if (typeof ref === "function") ref(el);
+    else if (ref) ref.current = el;
+  }, [ref]);
+  // O pendente seguinte entra no lugar do anterior com um esmaecer curto, sem movimento.
+  const firstTarget = useRef(target.id);
+  useEffect(() => {
+    if (target.id === firstTarget.current || prefersReducedMotion()) return;
+    bodyRef.current?.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+  }, [target.id]);
+  const view = describe(target);
+  const name = [view.dateLabel, view.title].filter(Boolean).join(" ");
+  const answer = async (a) => {
+    if (inFlight.current || busy || a.disabled) return;
+    inFlight.current = true;
+    setRunning(true);
+    try {
+      if (a.toCard) {
+        await a.run?.();
+        onGo();
+        return;
+      }
+      const slot = rootRef.current?.closest("[data-testid='entry-slot']") ?? null;
+      if (slot) pinInPlace(slot, target.id);
+      pinnedSlot.current = slot;
+      setLog((prev) => [...prev.slice(-1), { targetId: target.id, name, said: a.said }]);
+      let ok = false;
+      onAnswering(target.id);
+      try {
+        ok = (await a.run()) !== false;
+      } finally {
+        onAnswering(null);
+        // Sem resposta gravada, nada vai recolher: o lugar não fica preso para outra troca.
+        if (!ok && slot) unpin(slot);
+      }
+    } finally {
+      inFlight.current = false;
+      setRunning(false);
+    }
+  };
+  const off = busy || running;
+  return (
+    <section
+      ref={setRefs}
+      tabIndex={-1}
+      data-next-pending=""
+      data-testid="next-pending-summary"
+      aria-label={`Próximo pendente: ${name}`}
+      style={{ marginTop: 8, background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 12, boxShadow: T.sm, overflow: "hidden", outline: "none", minWidth: 0 }}
+    >
+      <div role="status" aria-live="polite">
+        {done ? (
+          <p data-testid="next-pending-done" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "7px 14px", background: T.greenLight, borderBottom: `1px solid ${T.greenBorder}`, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <Check size={13} aria-hidden="true" style={{ color: T.green, flexShrink: 0 }} />
+            <span style={{ ...NUM, minWidth: 0, wordBreak: "break-word" }}>{done.name}</span>
+            <span aria-hidden="true">·</span>
+            <span style={{ minWidth: 0 }}>{done.said}</span>
+            <Badge color={T.green} bg={T.surface}>Conferido</Badge>
+          </p>
+        ) : null}
+      </div>
+      <div ref={bodyRef} style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={SUMMARY_LABEL}>Próximo pendente</span>
+          <Badge color={T.amber} bg={T.amberLight}>Falta responder</Badge>
+          <span style={{ flex: 1 }} />
+          <Btn variant="ghost" small data-testid="next-pending-above" onClick={onGo} style={{ color: T.blue, gap: 4 }}>
+            <ArrowUp size={13} aria-hidden="true" />Ver o cartão completo
+          </Btn>
+        </div>
+        <div data-testid="next-pending-entry" style={{ ...G, fontSize: 13, display: "flex", alignItems: "baseline", gap: "4px 12px", flexWrap: "wrap", color: T.inkMid }}>
+          {view.dateLabel ? <span style={{ ...NUM, color: T.inkLight }}>{view.dateLabel}</span> : null}
+          <span style={{ fontWeight: 600, color: T.ink, minWidth: 0, wordBreak: "break-word" }}>{view.title}</span>
+          {view.amountLabel ? <span style={{ ...NUM, fontWeight: 700, color: view.amountTone ?? T.ink }}>{view.amountLabel}</span> : null}
+          {view.hint ? <span data-testid="next-pending-hint" style={{ color: T.inkLight, minWidth: 0 }}>{view.hint}</span> : null}
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {view.question ? <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{view.question}</span> : null}
+          <div role="group" aria-label={`${view.question ?? "Respostas"} (${name})`} style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", background: T.surface }}>
+            {view.answers.map((a, index) => {
+              const disabled = off || Boolean(a.disabled);
+              return (
+                <button
+                  key={a.key}
+                  type="button"
+                  aria-pressed={Boolean(a.pressed)}
+                  disabled={disabled}
+                  onClick={() => answer(a)}
+                  style={{
+                    ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+                    border: 0, borderRight: index < view.answers.length - 1 ? `1px solid ${T.border}` : 0,
+                    background: a.pressed ? a.tone ?? T.blue : "transparent", color: a.pressed ? "#fff" : T.inkLight,
+                  }}
+                >
+                  {a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+/**
+ * Logo abaixo da linha que acabou de recolher, quando o próximo pendente abriu ACIMA dela
+ * (fincla-api#507): o item respondido fica parado e a tela nunca fica sem indicação de onde
+ * continuar. Com o `NextPendingSummaryContext` do passo, o resumo do pendente (com as respostas);
+ * sem ele, o botão "↑ Próximo pendente: 07/10 PIX ...". "Ver o cartão completo" (ou o botão) rola
+ * suave até o pendente (na hora com movimento reduzido) e, terminada a rolagem, põe o foco nele
+ * sem rolar de novo.
  */
 export function NextPendingButton({ queue, fromId }) {
+  const summary = useContext(NextPendingSummaryContext);
   const info = queue.nextAbove;
   const shown = Boolean(info && info.fromId === fromId && info.target);
   const ref = useRef(null);
@@ -878,11 +1100,15 @@ export function NextPendingButton({ queue, fromId }) {
     if (!reduced && moves && events && "onscrollend" in globalThis) events.addEventListener("scrollend", reach, { once: true });
     else reach();
   };
+  if (summary) {
+    return <NextPendingSummary ref={ref} target={target} describe={summary.describe} busy={summary.busy} onGo={go} onAnswering={queue.answeringFromSummary} />;
+  }
   return (
     <Btn
       ref={ref}
       variant="outGray"
       full
+      data-next-pending=""
       data-testid="next-pending-above"
       onClick={go}
       style={{ marginTop: 8, justifyContent: "flex-start", padding: "9px 14px", fontSize: 13, color: T.inkMid, background: T.surface }}
@@ -926,7 +1152,7 @@ function useReachedByScrolling(targetId, buttonRef, going, dismiss) {
       // Sobra conteúdo embaixo para o botão sair sem cortar a rolagem? Então a rolagem nem é tocada.
       const extent = button.getBoundingClientRect().height + (Number.parseFloat(getComputedStyle(button).marginTop) || 0);
       const room = scroller ? scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop : Number.POSITIVE_INFINITY;
-      if (document.activeElement === button) card.focus({ preventScroll: true });
+      if (button.contains(document.activeElement)) card.focus({ preventScroll: true });
       latestDismiss.current({ hold: room < extent + 1 });
     };
     events.addEventListener("scroll", onScroll, { passive: true });
@@ -1005,16 +1231,18 @@ export function useQueueShortcuts(queue, answers, { disabled = false } = {}) {
       // botão some, BUG-13), S/A/N fazem o que o botão faz: levam até o pendente e põem o foco nele.
       // Com a fileira de respostas do pendente inteira à vista (OBS-40), a pessoa já está vendo o
       // que responde: o botão sai e o atalho responde direto.
-      const nextButton = q.nextAbove ? document.querySelector("[data-testid='next-pending-above']") : null;
+      // Com o resumo do pendente na tela, o atalho faz o que o "Ver o cartão completo" faz (as
+      // respostas do resumo são dos botões dele).
+      const next = q.nextAbove ? document.querySelector(NEXT_PENDING) : null;
       const card = currentCardOf(q.current.id);
-      if (nextButton && card && answersInView(card)) {
-        if (document.activeElement === nextButton) card.focus({ preventScroll: true });
+      if (next && card && answersInView(card)) {
+        if (next.contains(document.activeElement)) card.focus({ preventScroll: true });
         q.dismissNextAbove();
         answer(q.current);
         return;
       }
-      if (nextButton) {
-        nextButton.click();
+      if (next) {
+        (next.matches(NEXT_PENDING_GO) ? next : next.querySelector(NEXT_PENDING_GO))?.click();
         return;
       }
       if (card && !onScreen(card)) {

@@ -6,7 +6,7 @@
 // que tem estorno e não pode ser excluída). O cálculo e a gravação são garantidos pelos testes de
 // API; aqui conferimos o que a pessoa vê e o que a tela manda.
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -372,6 +372,52 @@ describe("Conferir o saldo: transações sem par", () => {
     expect(linked).toHaveTextContent("Ligada ao lançamento do banco de 07/10/2026");
     expect(linked).toHaveTextContent("Você disse que é o lançamento “PAG BOLETO ENERGIA”. Não entra mais na diferença.");
     expect(within(linked).getByRole("button", { name: "Desfazer" })).toBeInTheDocument();
+  });
+});
+
+// Decisão do Owner (fincla-api#507, 2026-11-24, proposta 3): o resumo do próximo pendente também
+// aqui, com as ações do cartão da transação (Mudar data leva ao cartão: precisa do formulário).
+describe("Conferir o saldo: o resumo do próximo pendente (proposta 3)", () => {
+  beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
+  afterEach(() => { delete Element.prototype.scrollIntoView; });
+
+  const summary = () => screen.queryByTestId("next-pending-summary");
+  const inSummary = (name) => within(summary()).getByRole("button", { name });
+
+  /** O salário e a farmácia sem resposta; responder a farmácia (a última) abre o salário acima. */
+  const answerFarmacia = async () => {
+    const user = await openPage({ edit: ({ check: c }) => Object.assign(c.unmatched_transactions[0], { check: null, new_date: null }) });
+    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Alterar" }));
+    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Está certa assim" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+    await waitFor(() => expect(inSummary("Excluir")).not.toBeDisabled());
+    calls.length = 0;
+    return user;
+  };
+
+  it("mostra a transação com as ações do cartão; Excluir manda o mesmo pedido do cartão e o resumo sai", async () => {
+    const user = await answerFarmacia();
+    const s = summary();
+    expect(s).toHaveAccessibleName(/2ª parcela salário/);
+    expect(within(s).getByTestId("next-pending-hint")).toHaveTextContent("Está no Fincla e não aparece no extrato");
+    expect(within(s).getByRole("group").textContent).toBe("Mudar dataExcluirEstá certa assim");
+
+    await user.click(inSummary("Excluir"));
+
+    expect(lastChecks()).toEqual([{ transaction_id: 92, action: "delete", new_date: null }]);
+    await waitFor(() => expect(summary()).toBeNull());
+    await waitFor(() => expect(rowOf("2ª parcela salário")).toHaveTextContent("Será excluída ao concluir"));
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("Mudar data leva ao cartão, sem gravar", async () => {
+    const user = await answerFarmacia();
+
+    await user.click(inSummary("Mudar data"));
+
+    expect(calls.filter((c) => c.checks)).toEqual([]);
+    expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
+    expect(summary()).toBeNull();
   });
 });
 
