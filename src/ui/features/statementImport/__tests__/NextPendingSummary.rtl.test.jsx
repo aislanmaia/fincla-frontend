@@ -413,3 +413,120 @@ describe("a linha respondida e o resumo ficam parados", () => {
     });
   }
 });
+
+// QA 2026-11-24 (defeito 1): com o resumo na tela, "Alterar" numa linha do meio da lista (entre o
+// pendente aberto lá em cima, fora da vista, e a linha com o resumo) fazia a rolagem voltar para
+// perto do topo e a linha clicada descia (446 px, depois 157 px). A regra é a de toda troca: a
+// linha clicada fica onde está. Layout simulado: um cabeçalho de 500 px acima da lista, cartão
+// aberto 300 px, linha 100 px, o resumo 150 px dentro do lugar da linha respondida.
+describe("Alterar uma linha com o resumo na tela", () => {
+  const HEAD = 500;
+  const OPEN = 300;
+  const ROW = 100;
+  const SUMMARY = 150;
+  const VIEW = 400;
+  let scroller;
+  let scrollTop = 0;
+  const slots = () => [...scroller.querySelectorAll("[data-testid='entry-slot']")];
+  // A altura animada vale já no primeiro quadro (como no navegador), até a animação acabar.
+  const heightOf = (el) => (el.dataset.animHeight ? Number(el.dataset.animHeight) : (el.dataset.open === "true" ? OPEN : ROW) + (el.querySelector("[data-testid='next-pending-summary']") ? SUMMARY : 0));
+  const contentHeight = () => HEAD + slots().reduce((sum, el) => sum + heightOf(el), 0);
+  const spacerHeight = () => Number.parseFloat(scroller.querySelector("[data-testid='entry-anchor-spacer']")?.style.height) || 0;
+  const maxScroll = () => Math.max(0, contentHeight() + spacerHeight() - VIEW);
+  const realRect = Element.prototype.getBoundingClientRect;
+
+  let animations = [];
+  // Como o navegador: medir força o layout, e a rolagem é cortada se a página encolheu.
+  const clamp = () => { scrollTop = Math.min(scrollTop, maxScroll()); return scrollTop; };
+  const finishAnimations = () => act(() => { for (const a of animations.splice(0)) a.finish?.(); });
+
+  beforeEach(() => {
+    scrollTop = 0;
+    animations = [];
+    Element.prototype.animate = vi.fn(function animate(keyframes) {
+      const a = { onfinish: null, oncancel: null, cancel: vi.fn() };
+      if (keyframes[0].height !== undefined) {
+        this.dataset.animHeight = Number.parseFloat(keyframes[0].height);
+        a.finish = () => { delete this.dataset.animHeight; a.onfinish?.(); };
+      }
+      animations.push(a);
+      return a;
+    });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      const st = clamp();
+      if (this.dataset?.testid === "next-pending-summary" && scroller?.contains(this)) {
+        const slot = this.closest("[data-testid='entry-slot']");
+        const top = slot.getBoundingClientRect().top + ROW;
+        return { top, bottom: top + SUMMARY, height: SUMMARY, left: 0, right: 0, width: 0 };
+      }
+      if (this.dataset?.testid !== "entry-slot" || !scroller?.contains(this)) return realRect.call(this);
+      let top = HEAD;
+      for (const el of slots()) {
+        if (el === this) break;
+        top += heightOf(el);
+      }
+      return { top: top - st, bottom: top - st + heightOf(this), height: heightOf(this), left: 0, right: 0, width: 0 };
+    });
+  });
+
+  afterEach(() => { delete Element.prototype.animate; });
+
+  function renderInScroller(initial) {
+    render(
+      <div
+        data-testid="scroller"
+        style={{ overflowY: "auto" }}
+        ref={(el) => {
+          if (!el || el === scroller) return;
+          scroller = el;
+          Object.defineProperty(el, "clientHeight", { configurable: true, get: () => VIEW });
+          Object.defineProperty(el, "scrollHeight", { configurable: true, get: () => contentHeight() + spacerHeight() });
+          Object.defineProperty(el, "scrollTop", { configurable: true, get: clamp, set: (v) => { scrollTop = Math.max(0, Math.min(v, maxScroll())); } });
+        }}
+      >
+        <Harness initial={initial} />
+      </div>,
+    );
+  }
+
+  const slotOf = (id) => screen.getByTestId(`row-${id}`).parentElement;
+
+  for (const chained of [false, true]) {
+    it(chained ? "depois de responder um pendente no resumo, a linha clicada fica parada" : "a linha clicada fica parada", async () => {
+      const user = userEvent.setup();
+      // a b c pendentes, e pendente, d aberto por último: responder d abre a acima.
+      const initial = [
+        ...INITIAL.slice(0, 3).map((e) => ({ ...e, answer: null, options: 1 })),
+        { id: "e", date: "2026-10-08", bank_description: "PIX ENVIADO PADARIA", amount: -9, options: 1, answer: null },
+        INITIAL[3],
+      ];
+      renderInScroller(initial);
+      act(() => api.queue.open("d"));
+      scroller.scrollTop = 10_000;
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Não registrar d" })); });
+      finishAnimations();
+      if (chained) {
+        await act(async () => { fireEvent.click(inSummary("Não registrar")); });
+        finishAnimations();
+        expect(api.queue.currentId).toBe("b");
+      }
+      expect(summary()).toBeInTheDocument();
+      // A pessoa rola até o fim.
+      scroller.scrollTop = 10_000;
+      // O cartão aberto está acima, fora da vista; a linha e (entre ele e o resumo) está à vista.
+      expect(screen.getByTestId("current-entry").closest("[data-testid='entry-slot']").getBoundingClientRect().bottom).toBeLessThanOrEqual(0);
+      const before = slotOf("e").getBoundingClientRect().top;
+      expect(before).toBeGreaterThanOrEqual(0);
+      expect(before).toBeLessThan(VIEW);
+
+      await user.click(screen.getByRole("button", { name: "Alterar e" }));
+
+      expect(api.queue.currentId).toBe("e");
+      const clicked = () => screen.getByTestId("current-entry").closest("[data-testid='entry-slot']");
+      // No primeiro quadro (o cartão ainda na altura da linha) e no fim da animação.
+      expect(clicked().getBoundingClientRect().top).toBe(before);
+      finishAnimations();
+      expect(clicked().getBoundingClientRect().top).toBe(before);
+    });
+  }
+});

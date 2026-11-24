@@ -758,7 +758,27 @@ function flushCommit() {
   // Com a animação começando da altura antiga, a página volta a ser alta: o Chrome devolve a
   // rolagem que só tinha sido cortada na medida (e o item escorregaria junto com a altura). A
   // rolagem é posta de novo no alvo, agora com a altura do primeiro quadro.
-  if (held && Math.abs(held.scroller.scrollTop - held.target) >= 0.5) held.scroller.scrollTop = held.target;
+  if (held) holdFirstFrame(held);
+}
+
+/**
+ * A rolagem no alvo também no PRIMEIRO quadro das animações. O espaço provisório foi medido com
+ * as alturas finais; um cartão que abre começa da altura da linha, e a página fica mais curta até
+ * ele crescer. Sem conteúdo embaixo para cobrir isso (o resumo do próximo pendente acabou de sair
+ * de baixo da lista), o navegador cortava a rolagem e ela não voltava: a linha clicada descia
+ * (defeito "Alterar com o resumo na tela"). O espaço cresce até a página do primeiro quadro
+ * caber; quando as animações acabam, o `releaseSpacer` o encolhe ao que a altura final pede.
+ */
+function holdFirstFrame({ scroller, target }) {
+  if (!scroller.isConnected) return;
+  const content = scroller.scrollHeight - (spacer.scroller === scroller ? spacerExtent() : 0);
+  const needed = spacerNeeded({ target, clientHeight: scroller.clientHeight, contentHeight: content });
+  const current = spacer.scroller === scroller ? spacerHeight() : 0;
+  if (needed > current) {
+    takeAnchoring(scroller);
+    setSpacer(scroller, needed);
+  }
+  if (Math.abs(scroller.scrollTop - target) >= 0.5) scroller.scrollTop = target;
 }
 
 /**
