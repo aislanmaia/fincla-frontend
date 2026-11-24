@@ -345,9 +345,10 @@ function TransactionDetails({ item }) {
 /**
  * A transação sem par no resumo do próximo pendente (proposta 3): as ações do cartão pela mesma
  * `answer` dele. "Excluir" (quando pode) e "Está certa assim" respondem no lugar; "Mudar data"
- * precisa do formulário da data e leva ao cartão.
+ * precisa do formulário da data e leva ao cartão com ele já aberto. A exclusão recusada mostra o
+ * mesmo motivo do cartão.
  */
-export function unmatchedSummary(item, { answer }) {
+export function unmatchedSummary(item, { answer, openDating }) {
   const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
   return {
     dateLabel: bankDateLabel(item.day),
@@ -357,17 +358,17 @@ export function unmatchedSummary(item, { answer }) {
     hint: "Está no Fincla e não aparece no extrato",
     question: null,
     answers: [
-      { key: "change_date", label: "Mudar data", toCard: true, run: null },
-      { key: "delete", label: "Excluir", tone: T.red, disabled: Boolean(refusal), run: () => answer(item, "delete"), said: "Será excluída ao concluir" },
+      { key: "change_date", label: "Mudar data", toCard: true, run: () => openDating(item) },
+      { key: "delete", label: "Excluir", tone: T.red, disabled: Boolean(refusal), reason: refusal, run: () => answer(item, "delete"), said: "Será excluída ao concluir" },
       { key: "keep", label: "Está certa assim", tone: T.green, pressed: item.check === "keep", run: () => answer(item, "keep"), said: "Você disse que está certa" },
     ],
   };
 }
 
 /** O cartão aberto: as ações da transação. */
-function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, onSelect, onAnswer, onUndo, onPairHint, onMinimize }) {
+function UnmatchedCard({ item, hintEntry, periodEnd, selected, busy, dating, onDating, onSelect, onAnswer, onUndo, onPairHint, onMinimize }) {
   const [details, setDetails] = useState(false);
-  const [dating, setDating] = useState(false);
+  const setDating = (value) => onDating(typeof value === "function" ? value(dating) : value);
   const deleted = item.check === "delete";
   const refusal = REFUSAL_TEXT[item.delete_refusal] ?? null;
   return (
@@ -684,6 +685,10 @@ export function BalanceCheckStep({
   const [selected, setSelected] = useState(() => new Set());
   const [itemHistory, setItemHistory] = useState({});
   const [lastBatch, setLastBatch] = useState(null);
+  // O cartão com o formulário "Mudar data" aberto: no passo (não no cartão) para o "Mudar data" do
+  // resumo do próximo pendente chegar ao cartão com ele aberto. Vale só para o cartão aberto.
+  const [datingFor, setDatingFor] = useState(null);
+  if (datingFor !== null && datingFor !== queue.currentId) setDatingFor(null);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const live = items.filter((i) => i.check !== "delete" && i.weight !== 0);
   const transfers = check.unmatched_transfers ?? [];
@@ -702,7 +707,7 @@ export function BalanceCheckStep({
     if (ok && action !== "change_date") queue.advanceFrom(item.id);
     return ok;
   };
-  const describe = useStableCallback((item) => unmatchedSummary(item, { answer }));
+  const describe = useStableCallback((item) => unmatchedSummary(item, { answer, openDating: (i) => setDatingFor(i.id) }));
   const summary = useMemo(() => ({ busy, isMobile, describe }), [busy, isMobile, describe]);
 
   const undo = async (item) => {
@@ -776,6 +781,8 @@ export function BalanceCheckStep({
                 periodEnd={periodEnd}
                 selected={selected.has(item.transaction_id)}
                 busy={busy}
+                dating={datingFor === item.id}
+                onDating={(on) => setDatingFor(on ? item.id : null)}
                 onSelect={toggle}
                 onAnswer={answer}
                 onUndo={undo}

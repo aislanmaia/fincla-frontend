@@ -411,7 +411,7 @@ describe("Conferir o saldo: o resumo do próximo pendente (proposta 3)", () => {
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it("Mudar data leva ao cartão, sem gravar", async () => {
+  it("Mudar data leva ao cartão, sem gravar, com o formulário da data já aberto", async () => {
     const user = await answerFarmacia();
 
     await user.click(inSummary("Mudar data"));
@@ -419,6 +419,26 @@ describe("Conferir o saldo: o resumo do próximo pendente (proposta 3)", () => {
     expect(calls.filter((c) => c.checks)).toEqual([]);
     expect(Element.prototype.scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId("current-entry"));
     expect(summary()).toBeNull();
+    const salario = rowOf("2ª parcela salário");
+    expect(within(salario).getByTestId("change-date-form")).toBeInTheDocument();
+    expect(within(salario).getByRole("button", { name: "Mudar data" })).toHaveAttribute("aria-expanded", "true");
+    // Cancelar fecha como no cartão.
+    await user.click(within(salario).getByRole("button", { name: "Cancelar" }));
+    expect(within(salario).queryByTestId("change-date-form")).toBeNull();
+  });
+
+  it("com a exclusão recusada, Excluir fica desligado no resumo com o mesmo motivo do cartão", async () => {
+    const user = await openPage({
+      edit: ({ check: c }) => Object.assign(c.unmatched_transactions[0], { check: null, new_date: null, delete_refusal: "goal" }),
+    });
+    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Alterar" }));
+    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Está certa assim" }));
+    await waitFor(() => expect(summary()).toBeInTheDocument());
+
+    const excluir = inSummary("Excluir");
+    expect(excluir).toBeDisabled();
+    expect(excluir).toHaveAccessibleDescription("Ligada a um aporte de meta: desfaça o aporte na meta para poder excluir.");
+    expect(within(summary()).getByText("Ligada a um aporte de meta: desfaça o aporte na meta para poder excluir.")).toBeInTheDocument();
   });
 });
 

@@ -14,7 +14,7 @@
 //     ? <CurrentEntryFrame queue={queue} entry={e}>{cartão}</CurrentEntryFrame>
 //     : <linha onClick={openOnRowClick(() => queue.open(e.id))} />)
 // e registrando as respostas S/A/N em `useQueueShortcuts`.
-import { Component, createContext, createRef, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, createRef, forwardRef, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Check } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -1038,7 +1038,7 @@ function currentCardOf(id) {
  * O que um passo diz do seu pendente para o resumo do próximo pendente (proposta 3, fincla-api#507):
  * `{ busy, isMobile, describe(entry) }` (no celular as respostas ficam uma por linha), com `describe` devolvendo
  * `{ dateLabel, title, amountLabel, amountTone, hint, question, answers }` e cada resposta
- * `{ key, label, tone, pressed, disabled, said, run, toCard }`. `run()` é a MESMA ação do botão do
+ * `{ key, label, tone, pressed, disabled, reason, said, run, toCard }` (`reason`: por que está desligada, embaixo das respostas). `run()` é a MESMA ação do botão do
  * cartão (o mesmo PATCH) e devolve se deu certo; `toCard` = o resumo não expressa essa resposta
  * (escolher entre opções, preencher um formulário): depois do `run` opcional, leva ao cartão.
  * Um passo sem este contexto continua com o botão "↑ Próximo pendente".
@@ -1083,6 +1083,9 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
     bodyRef.current?.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
   }, [targetId]);
   const view = target ? describe(target) : null;
+  // O motivo de uma resposta desligada (ex.: "Excluir" recusado), o mesmo texto do cartão.
+  const reasonIdBase = useId();
+  const reasonId = (a) => `${reasonIdBase}-${a.key}`;
   const name = view ? [view.dateLabel, view.title].filter(Boolean).join(" ") : "";
   const answer = async (a) => {
     if (inFlight.current || busy || a.disabled || !target) return;
@@ -1163,6 +1166,7 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
                   key={a.key}
                   type="button"
                   aria-pressed={Boolean(a.pressed)}
+                  aria-describedby={a.reason ? reasonId(a) : undefined}
                   disabled={disabled}
                   onClick={() => answer(a)}
                   style={{
@@ -1179,6 +1183,9 @@ const NextPendingSummary = forwardRef(function NextPendingSummaryView({ target, 
             })}
           </div>
         </div>
+        {view.answers.filter((a) => a.reason).map((a) => (
+          <span key={a.key} id={reasonId(a)} data-testid="next-pending-reason" style={{ ...G, fontSize: 12, color: T.inkLight }}>{a.reason}</span>
+        ))}
       </div>
       ) : null}
       {/* A confirmação fica EMBAIXO das respostas: ao aparecer, não empurra os botões que estão
