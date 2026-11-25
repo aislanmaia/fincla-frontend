@@ -128,8 +128,12 @@ describe("o passo Compras novas", () => {
     expect(within(mercado).getByTestId("locked-payment")).toHaveTextContent("Cartão de crédito · Itaú Visa");
     expect(within(mercado).getByTestId("locked-type")).toHaveTextContent("Despesa");
     expect(within(mercado).queryByRole("combobox", { name: "Forma de pagamento" })).not.toBeInTheDocument();
-    // Sem histórico: vai para Não classificado.
-    expect(mercado).toHaveTextContent("Sem categoria: vai para Não classificado");
+    // Sem histórico: o texto da spec (fincla-api#554) na fatura.
+    expect(mercado).toHaveTextContent("Sem histórico parecido: escolha a categoria");
+    expect(mercado).not.toHaveTextContent("Sem categoria: vai para Não classificado");
+    // Data e Valor travados: "Vem da fatura" (o artigo concorda com o nome, QA F3 BUG-02).
+    expect(within(mercado).getByTestId("locked-date")).toHaveAttribute("title", "Vem da fatura e não pode ser alterada");
+    expect(within(mercado).getByTestId("locked-amount")).toHaveAttribute("title", "Vem da fatura e não pode ser alterado");
     const answers = within(mercado).getByRole("group", { name: "O que fazer com esta compra?" });
     expect(within(answers).getByRole("button", { name: "Adicionar" })).toHaveAttribute("aria-pressed", "true");
     expect(within(answers).getByRole("button", { name: "Não registrar" })).toHaveAttribute("aria-pressed", "false");
@@ -187,7 +191,8 @@ describe("o passo Compras novas", () => {
     await user.click(alter("PADARIA PAO QUENTE"));
 
     let card = purchase("PADARIA PAO QUENTE");
-    expect(card).toHaveTextContent("Sugerida pelo seu histórico");
+    expect(card).toHaveTextContent("Categoria pelo histórico: compras parecidas foram para Alimentação");
+    expect(card).not.toHaveTextContent("Sugerida pelo seu histórico");
     const tags = within(card).getByRole("group", { name: "Etiquetas de Alimentação" });
     expect(within(tags).getByRole("button", { name: "Lanche" })).toHaveAttribute("aria-pressed", "true");
     expect(within(tags).queryByRole("button", { name: "Móveis" })).not.toBeInTheDocument();
@@ -559,6 +564,48 @@ describe("Não, adicionar agora (passo 1)", () => {
     expect(within(pairCard("MERCADO BOA VISTA")).getByRole("button", { name: "Não, adicionar agora" })).toBeDisabled();
     await user.keyboard("a");
     expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+});
+
+describe("crédito parcelado (só Não registrar)", () => {
+  // Um crédito "NN/MM" que o backend não cria (guia, #557): vem "Não registrar" a confirmar. A LOJA
+  // da fixture vira crédito; as compras antes dela já estão respondidas, então ela abre sozinha.
+  const installmentCredit = () => {
+    MERCADO().confirmed = true;
+    Object.assign(PADARIA(), { description: "Padaria", confirmed: true });
+    Object.assign(LOJA(), { amount: { amount: "99.90", currency: "BRL" }, transaction_type: "refund", answer: "ignore", confirmed: false });
+  };
+  const REASON = "Crédito parcelado não entra no Fincla como compra: só dá para não registrar.";
+
+  it("Adicionar desligado com o motivo escrito (aria-describedby); o atalho A não adiciona; Não registrar confirma", async () => {
+    installmentCredit();
+    const user = userEvent.setup();
+    await open();
+
+    const loja = purchase("LOJA DO BAIRRO 03/06");
+    const add = within(loja).getByRole("button", { name: "Adicionar" });
+    expect(add).toBeDisabled();
+    expect(within(loja).getByTestId("answer-note")).toHaveTextContent(REASON);
+    expect(add).toHaveAccessibleDescription(REASON);
+    // "Não registrar" ligado não é descrito pelo motivo.
+    expect(within(loja).getByRole("button", { name: "Não registrar" })).not.toHaveAttribute("aria-describedby");
+
+    await user.keyboard("a");
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+
+    await user.click(within(loja).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: LOJA().id, body: { confirmed: true } }));
+    expect(calls.some((c) => c.body?.answer === "create")).toBe(false);
+  });
+
+  it("compra parcelada (cobrança) segue com Adicionar ligado e sem motivo", async () => {
+    const user = userEvent.setup();
+    await open();
+    await user.click(alter("LOJA DO BAIRRO 03/06"));
+
+    const loja = purchase("LOJA DO BAIRRO 03/06");
+    expect(within(loja).getByRole("button", { name: "Adicionar" })).toBeEnabled();
+    expect(within(loja).queryByTestId("answer-note")).not.toBeInTheDocument();
   });
 });
 

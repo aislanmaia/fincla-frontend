@@ -81,8 +81,24 @@ export const paidValueLocked = (entry) => entry.value_locked && bankValueDiffers
  */
 export const invoiceAnswerUnavailable = (entry, value) => {
   if (value === "pair") return !entry.fincla_transaction;
-  if (value === "create") return Boolean(entry.value_locked);
+  if (value === "create") return Boolean(entry.value_locked) || isInstallmentCredit(entry);
   return false;
+};
+
+/**
+ * Crédito parcelado "NN/MM" (#557): o Fincla não o cria como compra, então "Não registrar" é a única
+ * resposta (a regra do backend: crédito, ou zero, com mais de uma parcela).
+ */
+export const isInstallmentCredit = (entry) => entry.amount >= 0 && (entry.installment?.count ?? 0) > 1;
+
+/** Por que "Adicionar" está desligado neste crédito parcelado. */
+export const INSTALLMENT_CREDIT_REASON = "Crédito parcelado não entra no Fincla como compra: só dá para não registrar.";
+
+/** O motivo escrito ao lado das respostas: fatura paga (decisão 1) ou crédito parcelado; `null` = nenhum. */
+export const invoiceAnswerNote = (entry) => {
+  if (entry.value_locked) return PAID_INVOICE_REASON;
+  if (isInstallmentCredit(entry)) return INSTALLMENT_CREDIT_REASON;
+  return null;
 };
 
 /** O valor como a fatura mostra: cobrança sem sinal; crédito (estorno, redução) com "−", em verde. */
@@ -342,8 +358,9 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, o
   const valueDiffers = entry.answer === "pair" && Boolean(entry.fincla_transaction?.differences.includes("amount"));
   const outcome = outcomeText(entry, form);
   const desc = useDescriptionDraft(entry, onChange);
-  // Fatura já paga (decisão 1): Adicionar fica desligado e o valor não muda; o motivo aparece.
-  const paidNote = entry.value_locked ? PAID_INVOICE_REASON : null;
+  // Fatura já paga (decisão 1): Adicionar fica desligado e o valor não muda; o motivo aparece. No
+  // crédito parcelado, Adicionar também fica desligado, com o motivo.
+  const paidNote = invoiceAnswerNote(entry);
   let confirm = null;
   if (untouchedInvoiceSuggestion(entry)) {
     confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onAnswer(entry, "pair")} />;

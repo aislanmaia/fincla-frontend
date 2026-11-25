@@ -200,9 +200,18 @@ export function SummedBadge({ children = "Somada" }) {
   );
 }
 
-/** "Sugerida pelo seu histórico" / "Escolhida por você" / "Sem categoria: vai para Não classificado". */
-export function CategoryHelp({ categoryId, suggestedId }) {
-  if (categoryId && categoryId === suggestedId) return <span style={{ ...HELP, color: T.blue, fontWeight: 600 }}>Sugerida pelo seu histórico</span>;
+/**
+ * "Sugerida pelo seu histórico" / "Escolhida por você" / "Sem categoria: vai para Não classificado".
+ * Na fatura (`suggestedLabel` dado, fincla-api#554), os textos da spec: "Categoria pelo histórico:
+ * compras parecidas foram para <X>" e, sem sugestão nem escolha, "Sem histórico parecido: escolha a
+ * categoria".
+ */
+export function CategoryHelp({ categoryId, suggestedId, invoice = false, suggestedLabel = "" }) {
+  if (categoryId && categoryId === suggestedId) {
+    const text = invoice ? `Categoria pelo histórico: compras parecidas foram para ${suggestedLabel}` : "Sugerida pelo seu histórico";
+    return <span style={{ ...HELP, color: T.blue, fontWeight: 600 }}>{text}</span>;
+  }
+  if (invoice && !categoryId && !suggestedId) return <span style={{ ...HELP, color: T.amber }}>Sem histórico parecido: escolha a categoria</span>;
   if (categoryId) return <span style={HELP}>Escolhida por você</span>;
   return <span style={{ ...HELP, color: T.amber }}>Sem categoria: vai para Não classificado</span>;
 }
@@ -409,7 +418,8 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   const type = entry.transaction_type ?? (moneyIn ? "income" : "expense");
   const options = categoriesForType(categories, type).filter((c) => !c.is_fallback);
   const blank = !skipped && !description.trim();
-  const source = invoice ? "fatura" : "extrato";
+  // "Vem da fatura" / "Vem do extrato": o artigo concorda com o nome (QA F3 BUG-02).
+  const source = invoice ? "da fatura" : "do extrato";
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const touchTarget = useTouchTarget();
@@ -445,14 +455,14 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
 
         <div>
           <span style={FIELD_LABEL}>Data</span>
-          <LockedValue testId="locked-date" title={`Vem do ${source} e não pode ser alterada`}>{bankDateLabel(entry.date)}</LockedValue>
+          <LockedValue testId="locked-date" title={`Vem ${source} e não pode ser alterada`}>{bankDateLabel(entry.date)}</LockedValue>
           <span style={HELP}>Vem do banco</span>
         </div>
         <div>
           <span style={FIELD_LABEL}>Valor</span>
           {/* Na fatura o sinal é do extrato (cobrança negativa): o valor vai sem sinal, como a
               fatura mostra, e o tipo travado ao lado diz se é despesa ou estorno. */}
-          <LockedValue testId="locked-amount" title={`Vem do ${source} e não pode ser alterado`}>
+          <LockedValue testId="locked-amount" title={`Vem ${source} e não pode ser alterado`}>
             {invoice ? formatMoneyAbs(entry.amount, entry.currency) : formatMoney(entry.amount, entry.currency)}
           </LockedValue>
           <span style={HELP}>Vem do banco</span>
@@ -513,7 +523,12 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             <option value="">{fallbackLabel}</option>
             {options.map((c) => <option key={c.id} value={c.id}>{c.label || c.name}</option>)}
           </Select>
-          <CategoryHelp categoryId={entry.category_tag_id} suggestedId={entry.suggested_category_tag_id} />
+          <CategoryHelp
+            categoryId={entry.category_tag_id}
+            suggestedId={entry.suggested_category_tag_id}
+            invoice={Boolean(invoice)}
+            suggestedLabel={categoryLabel(categories, entry.suggested_category_tag_id, fallbackLabel)}
+          />
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
           <span style={FIELD_LABEL}>Etiquetas</span>

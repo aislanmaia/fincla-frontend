@@ -254,9 +254,19 @@ export type CardInvoiceImportListItem = Pick<
   | 'current_step' | 'created_at' | 'last_activity_at' | 'expires_at' | 'concluded_at' | 'undone_at' | 'latest_concluded'
 >;
 
-/** A recusa do desfazer: as do extrato, e `invoice_paid` (decisão 8: a fatura já foi paga). */
+/**
+ * A recusa do desfazer: as do extrato, e `invoice_paid` (decisão 8: a fatura já foi paga). Em
+ * `invoice_paid`, `invoice_year`/`invoice_month` dizem QUAL fatura paga segura o desfazer (a
+ * conciliada ou uma anterior, onde entrou uma parcela); `null` nos outros códigos. A `message` já a
+ * nomeia.
+ */
 export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
-  refusal: { code: UndoRefusalCode | 'invoice_paid'; message: string } | null;
+  refusal: {
+    code: UndoRefusalCode | 'invoice_paid';
+    message: string;
+    invoice_year?: number | null;
+    invoice_month?: number | null;
+  } | null;
 };
 
 /** O desfazer feito: `status: 'undone'`, com quantas transações ele apagou. */

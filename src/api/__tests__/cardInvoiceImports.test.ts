@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import contract from '../__fixtures__/card_invoice_import.example.json';
 import {
+  type CardInvoiceUndoPreview,
   invoiceDraftInProgressOf,
   isCardInvoiceResponse,
   normalizeCardInvoiceImport,
@@ -155,6 +156,10 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     expect(preview.to_restore.find((r) => r.entity_id === '1')!.value_back).toBeNull();
     const refused = normalizeStatementUndoPreview(raw(contract.undo_preview_refused) as never);
     expect(refused.refusal?.code).toBe('not_latest');
+    // Recusa por fatura paga anterior (QA F3 BUG-01): a recusa diz qual fatura desmarcar.
+    const paid = normalizeStatementUndoPreview(raw(contract.undo_preview_refused_paid) as never) as CardInvoiceUndoPreview;
+    expect(paid.refusal).toMatchObject({ code: 'invoice_paid', invoice_year: 2026, invoice_month: 12 });
+    expect(paid.refusal?.message).toMatch(/^A fatura de dezembro\/2026 foi paga depois da conciliação\./);
   });
 
   it('a desfeita: status undone, undone_at e o que o desfazer apagou', () => {

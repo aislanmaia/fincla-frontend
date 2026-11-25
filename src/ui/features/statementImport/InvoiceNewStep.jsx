@@ -7,7 +7,8 @@
 // forma de pagamento travada no cartão e as opções da compra parcelada. Respostas: Adicionar · Não
 // registrar. Vêm "Adicionar" marcado, com o "Confirmar" ao lado (desligado sem descrição, com o
 // motivo ligado por `aria-describedby`); "Não registrar" confirma e recolhe no clique. Fatura já
-// paga (decisão 1): Adicionar desligado, com o motivo; vem "Não registrar" a confirmar.
+// paga (decisão 1) ou crédito parcelado: Adicionar desligado, com o motivo (`aria-describedby`); vem
+// "Não registrar" a confirmar.
 import { Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -15,7 +16,7 @@ import { G, NUM } from "../../typography";
 import { CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, StatementEntryCard, bankDateLabel, useDescriptionDraft } from "./StatementEntryCard.jsx";
 import { AnswerSegment, Connector } from "./SuggestedPairsStep.jsx";
 import { NewEntriesStep } from "./NewEntriesStep.jsx";
-import { InvoiceAmount, InvoiceBankSide, InvoiceStatusBadge, PAID_INVOICE_REASON, invoiceAnswerUnavailable } from "./InvoiceSuggestedStep.jsx";
+import { InvoiceAmount, InvoiceBankSide, InvoiceStatusBadge, invoiceAnswerNote, invoiceAnswerUnavailable } from "./InvoiceSuggestedStep.jsx";
 import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
 import { createdInstallments, isInvoiceEntryAnswered, pad2 } from "./invoiceSteps.js";
 
@@ -92,7 +93,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
           unavailable={(a) => invoiceAnswerUnavailable(entry, a.value)}
           onAnswer={choose}
           confirm={confirm}
-          note={entry.value_locked ? PAID_INVOICE_REASON : null}
+          note={invoiceAnswerNote(entry)}
           touch={isMobile}
         />
       </footer>
