@@ -144,12 +144,12 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
  * Os lançamentos do banco de uma soma, um por linha: a do "Somar em um só lançamento" do extrato
  * (#513, com "Tirar da soma") e a do grupo de encargos da fatura (#558, com a linha "Soma" no fim).
  * `amountOf(entry)` escreve o valor como a tela mostra; `action(entry)` é o botão da linha (ou
- * nada); `total` é a linha "Soma" (ou nada).
+ * nada); `total` é a linha "Soma" (ou nada). `style` sobrepõe o padrão da lista (respiro 8, fundo).
  */
 export function SummedEntryList({ entries, amountOf, action = null, total = null, label = "Lançamentos do banco nesta soma", style = null }) {
   const line = { ...G, fontSize: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
   return (
-    <ul aria-label={label} style={{ ...style, listStyle: "none", margin: 0, padding: 8, display: "flex", flexDirection: "column", gap: 6, background: T.bg }}>
+    <ul aria-label={label} style={{ listStyle: "none", margin: 0, padding: 8, display: "flex", flexDirection: "column", gap: 6, background: T.bg, ...style }}>
       {entries.map((e) => (
         <li key={e.id} data-testid="summed-entry" style={line}>
           <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(e.date)}</span>
@@ -167,6 +167,9 @@ export function SummedEntryList({ entries, amountOf, action = null, total = null
     </ul>
   );
 }
+
+/** A moldura da lista na soma do extrato: a caixa, com o respiro menor da lista (8, não o 14 do BOX). */
+const SUMMED_BOX = { ...BOX, padding: 8 };
 
 /** Um lançamento somado: vira UMA transação; os lançamentos do banco aparecem dentro dele. */
 function GroupCard({ group, entries, categories, details, fallbackLabel, isMobile, onUpdate, onUngroup, onTakeOut }) {
@@ -246,7 +249,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
         entries={entries}
         amountOf={(e) => signed(e.amount, e.currency)}
         action={(e) => <Btn variant="outGray" small onClick={() => onTakeOut(e.id)}>Tirar da soma</Btn>}
-        style={BOX}
+        style={SUMMED_BOX}
       />
       <OutcomeLine>
         Ao concluir a conciliação: será adicionado <b>“{group.description}”</b> em <b>{chosen}</b>

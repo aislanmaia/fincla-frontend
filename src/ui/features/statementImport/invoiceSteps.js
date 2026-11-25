@@ -115,6 +115,19 @@ export function invoiceStepItems(stepKey, invoiceImport) {
   return [...groups.map((g) => chargeGroupItem(g, invoiceImport.entries)), ...entries.filter((e) => !grouped.has(e.id))];
 }
 
+/**
+ * Quantos itens, com o grupo de encargos (#558) pelo nome: "1 grupo de encargos", "1 grupo de
+ * encargos e 2 lançamentos", "3 lançamentos". O grupo é um item da fila, mas não é "um lançamento".
+ */
+export function itemsCountText(items, one = "lançamento", many = "lançamentos") {
+  const groups = items.filter(isChargeGroupItem).length;
+  const rest = items.length - groups;
+  return [
+    groups ? plural(groups, "grupo de encargos", "grupos de encargos") : null,
+    rest || !groups ? plural(rest, one, many) : null,
+  ].filter(Boolean).join(" e ");
+}
+
 /** Os que a pessoa responde neste passo (os outros são "Fica de fora nesta versão"). */
 export const answerableEntries = (entries) => entries.filter((e) => e.answerable);
 
@@ -170,8 +183,8 @@ export function invoiceStepStatus(stepKey, invoiceImport, passed) {
   const entries = invoiceStepItems(stepKey, invoiceImport);
   // Os já conferidos (reimportação) aparecem no passo 1, só para leitura.
   const conferred = stepKey === "suggested" ? reconciledEntries(invoiceImport.entries).length : 0;
-  const pending = pendingEntries(entries).length;
-  if (pending) return { tone: "warn", text: plural(pending, "lançamento para responder", "lançamentos para responder") };
+  const pending = pendingEntries(entries);
+  if (pending.length) return { tone: "warn", text: `${itemsCountText(pending)} para responder` };
   const unconfirmed = unconfirmedEntries(entries).length;
   if (unconfirmed) return { tone: "ready", text: plural(unconfirmed, "escolha para confirmar", "escolhas para confirmar") };
   if (passed) return { tone: "done", text: "Conferido" };

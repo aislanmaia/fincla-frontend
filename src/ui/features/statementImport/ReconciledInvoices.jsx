@@ -24,11 +24,12 @@ export function invoiceCountsLabel(item) {
     else if (status === "undone") parts.push(plural(summary.to_pair, "compra ligada e desfeita", "compras ligadas e desfeitas"));
     else parts.push(plural(summary.to_pair, "compra ligada", "compras ligadas"));
   }
-  // Compras novas (fincla-api#557).
+  // Os "Adicionar" (fincla-api#557, #558): compras novas e também encargos, tarifas e estornos, por
+  // isso "lançamentos" e não "compras novas" (decisão do orquestrador).
   if (summary.to_create) {
-    if (status === "draft") parts.push(plural(summary.to_create, "compra nova a adicionar", "compras novas a adicionar"));
-    else if (status === "undone") parts.push(plural(summary.to_create, "compra nova adicionada e desfeita", "compras novas adicionadas e desfeitas"));
-    else parts.push(plural(summary.to_create, "compra nova adicionada", "compras novas adicionadas"));
+    if (status === "draft") parts.push(plural(summary.to_create, "lançamento a adicionar", "lançamentos a adicionar"));
+    else if (status === "undone") parts.push(plural(summary.to_create, "lançamento adicionado e desfeito", "lançamentos adicionados e desfeitos"));
+    else parts.push(plural(summary.to_create, "lançamento adicionado", "lançamentos adicionados"));
   }
   // O grupo de encargos somado numa transação do Fincla (fincla-api#558).
   if (summary.summed_charges) {

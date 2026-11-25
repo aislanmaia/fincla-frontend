@@ -462,7 +462,7 @@ describe("o passo Revisar e concluir", () => {
     expect(screen.getByTestId("summary-created")).toHaveTextContent("9 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
     expect(screen.getByTestId("summary-ignored")).toHaveTextContent("3 lançamentos não serão registrados · 3 ficam de fora nesta versão");
     expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent(
-      "9 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Compras novas e em Encargos, tarifas e estornos.",
+      "9 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
     );
     expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.403,32/);
     expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 0,40/);

@@ -4,8 +4,8 @@
 // #558: o passo 4 "Encargos, tarifas e estornos" responde. O grupo de encargos é UM item da fila
 // (respondido pela rota do grupo: "Sim, somados em <transação>" · "Não, adicionar cada um" · "Não
 // registrar"); anuidade, redução, repasse de IOF e estornos são "Adicionar" com o formulário do
-// passo 5, e o crédito vira estorno. O "Próximo" confirma o grupo pela rota dele (os lançamentos do
-// grupo nunca vão no lote).
+// passo 5, e o crédito vira estorno. O "Próximo" confirma os lançamentos e o grupo num lote só (os
+// lançamentos do grupo nunca vão nele: o grupo vai em `groups`).
 //
 // #557: o passo 5 "Compras novas" responde (Adicionar · Não registrar), com o formulário do item
 // novo do extrato (o mesmo `NewEntriesStep`/`StatementEntryCard`, com a forma de pagamento travada
@@ -75,6 +75,7 @@ import {
   isChargeGroupItem,
   invoiceSummaryRows,
   isInvoiceEntryAnswered,
+  itemsCountText,
   pendingEntries,
   reconciledEntries,
   unconfirmedEntries,
@@ -423,16 +424,38 @@ const EMPTY_TEXT = {
 };
 
 /**
- * Onde corrigir os "Adicionar" que pedem algo (descrição, categoria): "Compras novas" e, com
- * lançamento do passo 4 nessa situação (#558), "Encargos, tarifas e estornos". E o substantivo: só
- * compras novas → "compra nova"; com encargo, tarifa ou estorno → "transação nova".
+ * Onde corrigir os "Adicionar" que pedem algo (descrição, categoria): o passo de cada um, pela
+ * classificação ("Não, adicionar agora" do passo 1 e do passo 3 se corrigem lá; as compras novas em
+ * "Compras novas"; anuidade, redução, repasse de IOF e estornos em "Encargos, tarifas e estornos").
+ * Os lançamentos do grupo de encargos (#558) não têm onde: "Não, adicionar cada um" os cria como o
+ * banco mandou, sem formulário (decisão do orquestrador, como no protótipo); `where` vem vazio quando
+ * só eles estão na situação. E o substantivo: só compras → "compra nova"; com encargo, tarifa ou
+ * estorno → "transação nova".
  */
 function createsWhere(entries, test) {
   const creates = entries.filter((e) => e.answer === "create" && test(e));
-  const charges = creates.some((e) => e.classification === "charges");
-  const onlyNew = creates.every((e) => e.classification !== "charges");
-  const steps = [creates.some((e) => e.classification !== "charges") ? "Compras novas" : null, charges ? "Encargos, tarifas e estornos" : null].filter(Boolean);
-  return { where: steps.join(" e em "), one: onlyNew ? "compra nova" : "transação nova", many: onlyNew ? "compras novas" : "transações novas" };
+  const onlyPurchases = creates.every((e) => e.classification !== "charges");
+  const fixable = new Set(creates.filter((e) => !e.charge_group_id).map((e) => e.classification));
+  const where = INVOICE_STEPS.filter((s) => fixable.has(s.key)).map((s) => s.title).join(" e em ");
+  return {
+    where,
+    one: onlyPurchases ? "compra nova" : "transação nova",
+    many: onlyPurchases ? "compras novas" : "transações novas",
+  };
+}
+
+/**
+ * "Falta responder 1 grupo de encargos e 2 itens": o `unanswered` do backend conta cada lançamento do
+ * grupo; a tela chama o grupo pelo nome, como o trilho e o rodapé do passo.
+ */
+function unansweredText(invoiceImport) {
+  const groups = (invoiceImport.charge_groups ?? []).filter((g) => g.answerable && g.answer === null);
+  const inGroups = groups.reduce((n, g) => n + g.entry_ids.length, 0);
+  const rest = Math.max(0, invoiceImport.summary.unanswered - inGroups);
+  return [
+    groups.length ? plural(groups.length, "grupo de encargos", "grupos de encargos") : null,
+    rest ? plural(rest, "item", "itens") : null,
+  ].filter(Boolean).join(" e ");
 }
 
 function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclude }) {
@@ -444,8 +467,8 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
   const blank = createsWhere(invoiceImport.entries, (e) => !String(e.description ?? "").trim());
   const uncategorized = createsWhere(invoiceImport.entries, (e) => !e.category_tag_id);
   const reasons = [
-    pending ? `Falta responder ${plural(pending, "item", "itens")}.` : null,
-    missing ? `${missing === 1 ? `Uma ${blank.one} está` : `${missing.toLocaleString("pt-BR")} ${blank.many} estão`} sem descrição: escreva a descrição em ${blank.where || "Compras novas"}.` : null,
+    pending ? `Falta responder ${unansweredText(invoiceImport) || plural(pending, "item", "itens")}.` : null,
+    missing ? `${missing === 1 ? `Uma ${blank.one} está` : `${missing.toLocaleString("pt-BR")} ${blank.many} estão`} sem descrição${blank.where ? `: escreva a descrição em ${blank.where}` : ""}.` : null,
   ].filter(Boolean);
   const why = reasons.length ? reasons.join(" ") : invoiceImport.blockers.length ? "Ainda há pendências na conciliação." : "";
   const off = now.difference !== null && Math.abs(now.difference) >= 0.005;
@@ -466,7 +489,7 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
         <div role="note" data-testid="summary-uncategorized" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 8, alignItems: "baseline" }}>
           <AlertTriangle size={14} aria-hidden="true" style={{ color: T.amber, flexShrink: 0, alignSelf: "center" }} />
           <span>
-            {summary.uncategorized === 1 ? `Uma ${uncategorized.one} está sem categoria e vai` : `${summary.uncategorized.toLocaleString("pt-BR")} ${uncategorized.many} estão sem categoria e vão`} para <b>Não classificado</b> ao concluir. Dá para escolher a categoria em {uncategorized.where || "Compras novas"}.
+            {summary.uncategorized === 1 ? `Uma ${uncategorized.one} está sem categoria e vai` : `${summary.uncategorized.toLocaleString("pt-BR")} ${uncategorized.many} estão sem categoria e vão`} para <b>Não classificado</b> ao concluir.{uncategorized.where ? ` Dá para escolher a categoria em ${uncategorized.where}.` : null}
           </span>
         </div>
       ) : null}
@@ -725,15 +748,15 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     }
   };
 
-  // "Desfazer escolha" do grupo: a resposta e o `confirmed` anteriores. O grupo que não tinha
-  // resposta não volta a "sem resposta" (a rota não apaga a resposta): fica a escolha, a confirmar.
+  // "Desfazer escolha" do grupo: a resposta e o `confirmed` anteriores. O grupo que começou sem
+  // resposta volta a "sem resposta" (`{answer: null}`, que também desconfirma).
   const undoGroup = async (item) => {
     const previous = answerHistory[item.id]?.at(-1);
     if (!previous) return;
     setAnswering(true);
     setActionError("");
     try {
-      const body = previous.answer ? { answer: previous.answer, confirmed: previous.confirmed } : { confirmed: false };
+      const body = previous.answer === null ? { answer: null } : { answer: previous.answer, confirmed: previous.confirmed };
       setImport(await updateCardInvoiceChargeGroup(cardId, organizationId, importId, item.id, body));
       setAnswerHistory((prev) => ({ ...prev, [item.id]: prev[item.id].slice(0, -1) }));
       setLastBulk(null);
@@ -782,9 +805,9 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   };
 
   // "Próximo": confirma as escolhas do passo que faltam confirmar (nada muda no Fincla) e avança.
-  // Os lançamentos num lote só (sugestões, Adicionar, Não registrar), tudo ou nada: uma falha não
-  // deixa metade confirmada. O grupo de encargos (#558) não entra no lote (o backend recusa um
-  // lançamento do grupo sozinho): ele se confirma pela rota dele, depois do lote.
+  // Um lote só, tudo ou nada: uma falha não deixa metade confirmada. Os lançamentos (sugestões,
+  // Adicionar, Não registrar) vão em `entries`; o grupo de encargos (#558) vai em `groups`, nunca os
+  // lançamentos dele (o backend recusa um lançamento do grupo sozinho).
   const next = async (stepKey) => {
     const unconfirmed = unconfirmedEntries(stepEntries);
     if (unconfirmed.length) {
@@ -793,8 +816,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       setAnswering(true);
       setActionError("");
       try {
-        if (entries.length) setImport(await updateCardInvoiceEntries(cardId, organizationId, importId, entries.map((e) => ({ id: e.id, confirmed: true }))));
-        for (const item of groups) setImport(await updateCardInvoiceChargeGroup(cardId, organizationId, importId, item.id, { confirmed: true }));
+        const confirm = (e) => ({ id: e.id, confirmed: true });
+        setImport(await updateCardInvoiceEntries(cardId, organizationId, importId, entries.map(confirm), groups.map(confirm)));
       } catch (err) {
         setActionError(cardApiError(err));
         return;
@@ -1019,7 +1042,14 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       </div>
       {/* O aviso de quanto falta no passo leva ao primeiro pendente; some com 0. */}
       {QUEUE_STEPS.has(current) ? (
-        <GoToPendingButton key={`pending-${current}`} queue={queue} noun={current === "charges" ? CHARGE_NOUN : PURCHASE_NOUN} isMobile={isMobile} indent={isMobile ? 0 : RAIL_WIDTH + 16} />
+        <GoToPendingButton
+          key={`pending-${current}`}
+          queue={queue}
+          noun={current === "charges" ? CHARGE_NOUN : PURCHASE_NOUN}
+          pendingText={current === "charges" ? itemsCountText(queueEntries.filter((e) => !isInvoiceEntryAnswered(e))) : null}
+          isMobile={isMobile}
+          indent={isMobile ? 0 : RAIL_WIDTH + 16}
+        />
       ) : null}
     </div>
   );

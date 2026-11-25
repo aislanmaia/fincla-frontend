@@ -40,6 +40,8 @@ export const CHARGE_NOUN = {
 };
 
 export const GROUP_TITLE = "Encargos do mês";
+/** A linha recolhida do grupo ainda sem resposta. */
+export const GROUP_UNANSWERED = "Falta escolher o que fazer com estes encargos";
 const GROUP_QUESTION = "Estes encargos já estão no Fincla?";
 /** Sem transação com o valor da soma: "Sim, somados em…" fica desligado, com o motivo. */
 export const NO_SUM_MATCH_REASON = "Nenhuma transação desta fatura no Fincla tem o valor da soma.";
@@ -156,7 +158,7 @@ function GroupFinclaSide({ item, form, invoiceMonth, busy, onConfirmSuggestion }
         <div style={BOX_LABEL}>No Fincla {skipped ? <SkipBadge /> : null}</div>
         <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
           {skipped
-            ? "Estes lançamentos do banco não entram no Fincla. A diferença aparece em Conferir o total."
+            ? `${members.length === 1 ? "Este lançamento do banco não entra" : "Estes lançamentos do banco não entram"} no Fincla. A diferença aparece em Conferir o total.`
             : `${NO_SUM_MATCH_REASON} Adicione cada um ou escolha “Não registrar”.`}
         </p>
       </section>
@@ -170,7 +172,7 @@ function GroupFinclaSide({ item, form, invoiceMonth, busy, onConfirmSuggestion }
         entry={asEntry}
         invoiceMonth={invoiceMonth}
         skipped
-        skipText={`Estes ${members.length.toLocaleString("pt-BR")} lançamentos do banco não entram no Fincla. ${match.description} continua como está, sem mudança, e a diferença aparece em Conferir o total.`}
+        skipText={`${members.length === 1 ? "Este lançamento do banco não entra" : `Estes ${count} do banco não entram`} no Fincla. ${match.description} continua como está, sem mudança, e a diferença aparece em Conferir o total.`}
       />
     );
   }
@@ -183,7 +185,7 @@ function GroupFinclaSide({ item, form, invoiceMonth, busy, onConfirmSuggestion }
         <div data-testid="sum-consequences" style={CONS}>
           <span style={CTAG}>Somado</span>
           <span>
-            <b>{match.description}</b> (<span style={NUM}>{formatMoney(match.value, match.currency)}</span>) tem o mesmo valor que a soma destes {count}. Se for isso, nada novo é criado: ela fica ligada a todos eles.
+            <b>{match.description}</b> (<span style={NUM}>{formatMoney(match.value, match.currency)}</span>) tem o mesmo valor que {members.length === 1 ? "este lançamento" : `a soma destes ${count}`}. Se for isso, nada novo é criado: ela fica ligada a {members.length === 1 ? "ele" : "todos eles"}.
           </span>
         </div>
       )}
@@ -196,7 +198,8 @@ function groupOutcome(item) {
   const { group, members } = item;
   const match = group.fincla_transaction;
   if (group.answer === "pair_sum" && match) {
-    return <>Ao concluir: os {members.length.toLocaleString("pt-BR")} lançamentos ficam ligados a <b>{match.description}</b>. Nada mais muda nela.</>;
+    const linked = members.length === 1 ? "o lançamento fica ligado" : `os ${plural(members.length, "lançamento", "lançamentos")} ficam ligados`;
+    return <>Ao concluir: {linked} a <b>{match.description}</b>. Nada mais muda nela.</>;
   }
   if (group.answer === "create") return <>Ao concluir: entram {plural(members.length, "transação nova", "transações novas")} no Fincla, uma por lançamento.</>;
   if (group.answer === "ignore") return <>Não entram no Fincla. A diferença aparece em Conferir o total.</>;
@@ -257,7 +260,8 @@ function rowSummary(item) {
   const { group, members } = item;
   if (group.answer === "pair_sum") return <>Somados em <b>{group.fincla_transaction?.description ?? "uma transação do Fincla"}</b></>;
   if (group.answer === "create") return <>Entram {plural(members.length, "transação", "transações")}</>;
-  return <span style={{ color: T.inkLight }}>Ficam fora do Fincla</span>;
+  if (group.answer === "ignore") return <span style={{ color: T.inkLight }}>Ficam fora do Fincla</span>;
+  return <span style={{ color: T.amber }}>{GROUP_UNANSWERED}</span>;
 }
 
 /** O grupo recolhido numa linha que continua visível; um clique em qualquer ponto a reabre. */
@@ -343,7 +347,8 @@ export function InvoiceChargesStep({
       question={CHARGE_QUESTION}
       cardLabel="Lançamento"
       leading={leading}
-      shortcutKeys={groupItem ? ["s", "a", "n"] : ["a", "n"]}
+      // O S só responde o grupo: a dica só o mostra com o grupo aberto.
+      shortcutKeys={groupItem && groupItem.id === queue.currentId ? ["s", "a", "n"] : ["a", "n"]}
     />
   );
 }

@@ -226,6 +226,13 @@ describe("revisar rendimentos pequenos: somar em um só lançamento", () => {
     ]);
     expect(within(group).getByTestId("entry-outcome")).toHaveTextContent("será adicionado “Rendimentos da conta” em Não classificado, +R$ 0,03, em 15/10/2026");
     expect(screen.getByText("Todos os rendimentos foram somados.")).toBeInTheDocument();
+    // A moldura da lista continua a de antes: a caixa com borda, respiro 8 e o fundo da página.
+    const list = within(group).getByRole("list", { name: "Lançamentos do banco nesta soma" });
+    expect(list.style.padding).toBe("8px");
+    expect(list.style.borderRadius).toBe("12px");
+    expect(list.style.border).not.toBe("");
+    expect(list.style.background).not.toBe("");
+    expect(list.style.background).not.toBe("transparent");
   });
 
   it("o total dos rendimentos fora da soma concorda com a quantidade: valor de 1, soma das N (BUG-02)", async () => {

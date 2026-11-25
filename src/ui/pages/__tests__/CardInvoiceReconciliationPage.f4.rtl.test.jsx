@@ -81,7 +81,8 @@ function applyGroup(g, body) {
     g.paired_transaction_id = body.answer === "pair_sum" ? g.suggested_transaction_id : null;
   }
   if (body.confirmed !== undefined) g.confirmed = body.confirmed;
-  else if (body.answer !== undefined) g.confirmed = true;
+  // `{answer: null}` volta a sem resposta, desconfirmado; responder confirma.
+  else if (body.answer !== undefined) g.confirmed = body.answer !== null;
   for (const e of members()) Object.assign(e, { answer: g.answer, confirmed: g.confirmed });
   draft.summary.summed_charges = g.answer === "pair_sum" ? g.entry_ids.length : 0;
   project(before, members().reduce((sum, e) => sum + effectOf(e), 0));
@@ -108,11 +109,13 @@ const server = setupServer(
     applyBody(entry, body);
     return HttpResponse.json(entry);
   }),
+  // O lote (#558): `entries` e `groups`, tudo ou nada; os grupos depois dos lançamentos.
   http.patch(`${BASE}/:importId/entries`, async ({ request }) => {
     const body = await request.json();
-    calls.push({ batch: body.entries });
-    if (body.entries.some((item) => draft.entries.find((e) => e.id === item.id).charge_group_id)) return memberRefusal();
-    for (const item of body.entries) applyBody(draft.entries.find((e) => e.id === item.id), item);
+    calls.push({ batch: body.entries ?? [], groups: body.groups ?? [], keys: Object.keys(body).sort() });
+    if ((body.entries ?? []).some((item) => draft.entries.find((e) => e.id === item.id).charge_group_id)) return memberRefusal();
+    for (const item of body.entries ?? []) applyBody(draft.entries.find((e) => e.id === item.id), item);
+    for (const { id, ...rest } of body.groups ?? []) applyGroup(draft.charge_groups.find((g) => g.id === id), rest);
     return HttpResponse.json(draft);
   }),
   http.patch(`${BASE}/:importId/charge-groups/:groupId`, async ({ request, params: p }) => {
@@ -141,6 +144,13 @@ const groupCard = () => screen.getByRole("article", { name: "Encargos do mês: 4
 const groupAnswers = () => within(groupCard()).getByRole("group", { name: "Estes encargos já estão no Fincla?" });
 const charge = (text) => screen.getByRole("article", { name: new RegExp(`Lançamento de .*: ${text}`) });
 const groupPatches = () => calls.filter((c) => c.group);
+const rail = () => screen.getByRole("navigation", { name: "Etapas da conciliação da fatura" });
+const railButton = (title) => within(rail()).getAllByRole("button").find((b) => within(b).getByTestId("step-title").textContent === title);
+/** Sem transação que bata: o grupo começa sem resposta (como o backend grava). */
+const noSumMatch = () => {
+  Object.assign(group(), { answer: null, confirmed: false, suggested_transaction_id: null, paired_transaction_id: null, fincla_transaction: null });
+  for (const e of members()) Object.assign(e, { answer: null, confirmed: false });
+};
 /** Nenhum lançamento do grupo foi respondido ou confirmado sozinho (nem no lote). */
 const noMemberAnswered = () => {
   const ids = new Set(group().entry_ids);
@@ -153,7 +163,10 @@ describe("o grupo de encargos", () => {
     await open();
 
     const card = groupCard();
-    expect(within(card).getByRole("list", { name: "Lançamentos do grupo de encargos" })).toBeInTheDocument();
+    // A lista vive dentro da caixa do banco: sem o respiro e o fundo próprios da soma do extrato.
+    const list = within(card).getByRole("list", { name: "Lançamentos do grupo de encargos" });
+    expect(list.style.padding).toBe("0px");
+    expect(list.style.background).toBe("transparent");
     const lines = within(card).getAllByTestId("summed-entry");
     expect(lines.map((l) => l.textContent)).toEqual([
       expect.stringContaining("JUROS DO ROTATIVO"),
@@ -267,8 +280,7 @@ describe("o grupo de encargos", () => {
   });
 
   it("sem transação que bata: começa sem resposta, Sim desligado com o motivo, e segura o Próximo", async () => {
-    Object.assign(group(), { answer: null, confirmed: false, suggested_transaction_id: null, paired_transaction_id: null, fincla_transaction: null });
-    for (const e of members()) Object.assign(e, { answer: null, confirmed: false });
+    noSumMatch();
     const user = userEvent.setup();
     await open();
 
@@ -280,11 +292,90 @@ describe("o grupo de encargos", () => {
     expect(yes).toHaveAccessibleDescription("Nenhuma transação desta fatura no Fincla tem o valor da soma.");
     expect(within(card).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Próximo: Compras novas/ })).toBeDisabled();
-    // O grupo conta como um, ao lado dos 4 lançamentos ainda a confirmar.
-    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 5 lançamentos deste passo");
+    // O grupo conta como um, pelo nome, ao lado dos 4 lançamentos ainda a confirmar.
+    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 1 grupo de encargos e 4 lançamentos deste passo");
 
     await user.click(within(groupAnswers()).getByRole("button", { name: "Não, adicionar cada um" }));
     await waitFor(() => expect(groupPatches()).toEqual([{ group: group().id, body: { answer: "create" } }]));
+  });
+
+  it("sem resposta e recolhido: a linha diz que falta escolher, nunca que fica fora do Fincla", async () => {
+    noSumMatch();
+    const user = userEvent.setup();
+    await open();
+    groupCard();
+
+    // Abrir outro item da fila recolhe o grupo ainda sem resposta.
+    await user.click(screen.getAllByTestId("entry-row")[0]);
+
+    const row = await screen.findByTestId("charge-group-row");
+    expect(row).toHaveTextContent("Falta responder");
+    expect(row).toHaveTextContent("Falta escolher o que fazer com estes encargos");
+    expect(row).not.toHaveTextContent("Ficam fora do Fincla");
+    expect(row).not.toHaveTextContent("Conferido");
+    expect(row.style.background).not.toContain("repeating-linear-gradient");
+  });
+
+  it("Desfazer escolha da primeira resposta volta o grupo a sem resposta ({answer: null})", async () => {
+    noSumMatch();
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(groupAnswers()).getByRole("button", { name: "Não registrar" }));
+    const row = await screen.findByTestId("charge-group-row");
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(groupPatches().at(-1)).toEqual({ group: group().id, body: { answer: null } }));
+    expect(group()).toMatchObject({ answer: null, confirmed: false });
+    const card = await screen.findByRole("article", { name: "Encargos do mês: 4 lançamentos" });
+    expect(within(card).getByText("Falta responder")).toBeInTheDocument();
+    for (const b of within(groupAnswers()).getAllByRole("button")) expect(b).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Próximo: Compras novas/ })).toBeDisabled();
+    noMemberAnswered();
+  });
+
+  it("as contagens chamam o grupo pelo nome: o trilho e o resumo concordam", async () => {
+    noSumMatch();
+    // O backend conta cada lançamento do grupo em `unanswered`, e mais um sem resposta de outro passo.
+    Object.assign(draft.summary, { unanswered: 5 });
+    Object.assign(draft, { can_conclude: false, blockers: [{ code: "unanswered", count: 5 }] });
+    const user = userEvent.setup();
+    await open();
+
+    expect(railButton("Encargos, tarifas e estornos")).toHaveTextContent("1 grupo de encargos para responder");
+    await user.click(railButton("Revisar e concluir"));
+    expect(await screen.findByTestId("conclude-blocked")).toHaveTextContent("Falta responder 1 grupo de encargos e 1 item.");
+  });
+
+  it("um grupo de um lançamento só: o singular em todo o cartão", async () => {
+    const [first, ...rest] = group().entry_ids;
+    group().entry_ids = [first];
+    draft.entries = draft.entries.filter((e) => !rest.includes(e.id));
+    const user = userEvent.setup();
+    await open();
+
+    const card = screen.getByRole("article", { name: "Encargos do mês: 1 lançamento" });
+    expect(within(card).getByTestId("sum-consequences")).toHaveTextContent(
+      "Encargos do cartão (R$ 12,59) tem o mesmo valor que este lançamento. Se for isso, nada novo é criado: ela fica ligada a ele.",
+    );
+    expect(within(card).getByTestId("pair-outcome")).toHaveTextContent("Ao concluir: o lançamento fica ligado a Encargos do cartão. Nada mais muda nela.");
+
+    await user.click(within(within(card).getByRole("group", { name: "Estes encargos já estão no Fincla?" })).getByRole("button", { name: "Não registrar" }));
+    await user.click(within(await screen.findByTestId("charge-group-row")).getByRole("button", { name: "Alterar encargos do mês" }));
+    expect(within(screen.getByTestId("fincla-side-skipped")).getByTestId("skip-note")).toHaveTextContent(
+      "Este lançamento do banco não entra no Fincla. Encargos do cartão continua como está",
+    );
+  });
+
+  it("a dica de atalhos só mostra o S com o grupo aberto", async () => {
+    const user = userEvent.setup();
+    await open();
+    expect(screen.getByTestId("queue-shortcuts")).toHaveTextContent("S sim");
+
+    await user.click(within(groupCard()).getByRole("button", { name: "Confirmar sugestão" }));
+    await screen.findByRole("article", { name: /ESTORNO LOJA MODA/ });
+    expect(screen.getByTestId("queue-shortcuts")).not.toHaveTextContent("S sim");
+    expect(screen.getByTestId("queue-shortcuts")).toHaveTextContent("A adicionar");
   });
 
   it("fatura já paga: Não, adicionar cada um desligado com o motivo; a soma ainda liga", async () => {
@@ -310,20 +401,35 @@ describe("o grupo de encargos", () => {
     noMemberAnswered();
   });
 
-  it("Próximo confirma o grupo pela rota dele e os outros num lote, sem nenhum lançamento do grupo", async () => {
+  it("Próximo confirma os lançamentos e o grupo numa chamada só (o grupo em groups), sem nenhum lançamento do grupo", async () => {
     const user = userEvent.setup();
     await open();
 
     expect(screen.getByText("Ao avançar, as 5 escolhas que faltam confirmar ficam confirmadas. Nada muda no Fincla até você concluir.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Próximo: Compras novas/ }));
 
-    await waitFor(() => expect(groupPatches()).toEqual([{ group: group().id, body: { confirmed: true } }]));
-    const batch = calls.find((c) => c.batch).batch;
+    await waitFor(() => expect(calls.filter((c) => c.batch)).toHaveLength(1));
+    const [{ batch, groups }] = calls.filter((c) => c.batch);
     expect(batch.map((b) => draft.entries.find((e) => e.id === b.id).bank_description).sort()).toEqual(
       ["ANUIDADE DIFERENCIADA", "ESTORNO LOJA MODA", "REDUCAO ANUIDADE", "Repasse de IOF"],
     );
     expect(batch.every((b) => b.confirmed === true && Object.keys(b).length === 2)).toBe(true);
+    expect(groups).toEqual([{ id: group().id, confirmed: true }]);
+    // Nada pela rota do grupo: tudo ou nada, no lote.
+    expect(groupPatches()).toEqual([]);
     noMemberAnswered();
+    expect(await screen.findByRole("heading", { name: "Compras novas" })).toBeInTheDocument();
+  });
+
+  it("Próximo com só o grupo a confirmar manda só groups no lote", async () => {
+    for (const e of draft.entries.filter((x) => x.classification === "charges" && !x.charge_group_id)) e.confirmed = true;
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(screen.getByRole("button", { name: /Próximo: Compras novas/ }));
+
+    await waitFor(() => expect(calls.filter((c) => c.batch)).toHaveLength(1));
+    expect(calls.find((c) => c.batch)).toMatchObject({ keys: ["groups"], groups: [{ id: group().id, confirmed: true }] });
     expect(await screen.findByRole("heading", { name: "Compras novas" })).toBeInTheDocument();
   });
 });
@@ -393,6 +499,51 @@ describe("anuidade, redução, repasse de IOF e estornos", () => {
     expect(reducao).not.toHaveTextContent("Pode trocar por um nome seu");
     expect(within(reducao).getByRole("button", { name: "Adicionar" })).toBeDisabled();
     expect(within(reducao).getByTestId("pair-outcome")).toHaveTextContent("Não entra no Fincla.");
+  });
+});
+
+describe("o resumo: onde escolher a categoria", () => {
+  const setCategory = (pred) => { for (const e of draft.entries.filter(pred)) e.category_tag_id = "cat-tarifas"; };
+
+  it("os lançamentos criados pelo grupo (Adicionar cada um) não convidam a escolher a categoria: lá ela é só leitura", async () => {
+    fresh("charge_group_each");
+    // Só os 4 do grupo ficam sem categoria.
+    setCategory((e) => e.answer === "create" && !e.charge_group_id);
+    draft.summary.uncategorized = 4;
+    const user = userEvent.setup();
+    await open();
+    await user.click(railButton("Revisar e concluir"));
+
+    const note = await screen.findByTestId("summary-uncategorized");
+    expect(note).toHaveTextContent("4 transações novas estão sem categoria e vão para Não classificado ao concluir.");
+    expect(note).not.toHaveTextContent("Dá para escolher");
+  });
+
+  it("com um lançamento solto do passo 4 sem categoria, o convite aponta só para ele, ao lado dos do grupo", async () => {
+    fresh("charge_group_each");
+    setCategory((e) => e.answer === "create" && !e.charge_group_id && e.bank_description !== "ANUIDADE DIFERENCIADA");
+    draft.summary.uncategorized = 5;
+    const user = userEvent.setup();
+    await open();
+    await user.click(railButton("Revisar e concluir"));
+
+    expect(await screen.findByTestId("summary-uncategorized")).toHaveTextContent(
+      "5 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos.",
+    );
+  });
+
+  it("\"Não, adicionar agora\" do passo 1 aponta para o passo 1, não para Compras novas", async () => {
+    setCategory((e) => e.answer === "create");
+    Object.assign(byText("MERCADO BOA VISTA"), { answer: "create", confirmed: true, category_tag_id: null });
+    Object.assign(group(), { confirmed: true });
+    draft.summary.uncategorized = 1;
+    const user = userEvent.setup();
+    await open();
+    await user.click(railButton("Revisar e concluir"));
+
+    expect(await screen.findByTestId("summary-uncategorized")).toHaveTextContent(
+      "Uma compra nova está sem categoria e vai para Não classificado ao concluir. Dá para escolher a categoria em Confirmar compras encontradas.",
+    );
   });
 });
 

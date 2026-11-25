@@ -122,7 +122,7 @@ describe("Faturas conciliadas do cartão", () => {
     expect(within(undoneRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(concludedRow).toHaveTextContent("Concluída");
-    expect(concludedRow).toHaveTextContent("20 lançamentos · 4 compras ligadas · 9 compras novas adicionadas · 4 encargos somados · 3 não registrados");
+    expect(concludedRow).toHaveTextContent("20 lançamentos · 4 compras ligadas · 9 lançamentos adicionados · 4 encargos somados · 3 não registrados");
     expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: −R$ 0,40");
   });
 

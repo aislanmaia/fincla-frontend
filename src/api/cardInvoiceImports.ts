@@ -310,9 +310,13 @@ export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
 /** O desfazer feito: `status: 'undone'`, com quantas transações ele apagou. */
 export type UndoneCardInvoiceImport = CardInvoiceImport & { deleted_transactions: number | null };
 
-/** O grupo inteiro (#558): responder confirma, a menos que `confirmed` venha junto; só `{confirmed}` mantém a resposta. */
+/**
+ * O grupo inteiro (#558): responder confirma, a menos que `confirmed` venha junto; só `{confirmed}`
+ * mantém a resposta. `answer: null` (enviado) volta o grupo a sem resposta (`confirmed: false`): o
+ * "Desfazer escolha" da primeira resposta de um grupo que começou sem resposta.
+ */
 export interface UpdateChargeGroupRequest {
-  answer?: ChargeGroupAnswer;
+  answer?: ChargeGroupAnswer | null;
   confirmed?: boolean;
 }
 
@@ -583,14 +587,20 @@ export const updateCardInvoiceEntry = async (
   return normalizeInvoiceEntry(response.data);
 };
 
-/** O mesmo, em lote (tudo ou nada). */
+/**
+ * O mesmo, em lote (tudo ou nada). `groups` (#558) responde/confirma grupos de encargos como a rota
+ * do grupo, aplicados depois dos `entries`, na mesma transação: o "Próximo" que confirma lançamentos
+ * e o grupo é uma chamada só. Só a lista que vier vai no corpo.
+ */
 export const updateCardInvoiceEntries = async (
   cardId: number,
   organizationId: string,
   importId: string,
   entries: (UpdateInvoiceEntryRequest & { id: string })[],
+  groups: (UpdateChargeGroupRequest & { id: string })[] = [],
 ): Promise<CardInvoiceImport> => {
-  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries`, { entries }, {
+  const body = groups.length ? { ...(entries.length ? { entries } : null), groups } : { entries };
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries`, body, {
     params: { organization_id: organizationId },
   });
   return normalizeCardInvoiceImport(response.data);
