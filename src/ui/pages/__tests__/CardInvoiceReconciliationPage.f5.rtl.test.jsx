@@ -9,6 +9,8 @@
 // a troca "Mover só esta" ⇄ "Mover esta e as próximas" ali mesmo; no passo 2, a sugestão marcada com
 // "Confirmar sugestão", as respostas de mover e o motivo quando a fatura está paga (decisão 1); a
 // leitura desatualizada (QA F4 OBS-01); as palavras do que falta (OBS-03); e os alvos de toque.
+// As parcelas vizinhas vêm de `search_neighbours` (a 06/12 numa série uma fatura à frente, a 05/12
+// nesta fatura, a 04/12 numa série uma fatura atrás), como o backend as grava.
 import React from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
@@ -33,6 +35,8 @@ const CATEGORIES = [
 ];
 const JANUARY = { id: 6, year: 2027, month: 1, status: "open" };
 const PAID_REASON = "Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.";
+const SERIES_REFUSAL = "Uma parcela seguinte desta compra já foi conferida: só dá para mover esta.";
+const neighbours = () => clone(contract.search_neighbours.results);
 
 const calls = [];
 let draft;
@@ -63,6 +67,15 @@ const known = () => [
  * vem e o que dá para mover agora. Responder confirma, a menos que venha `confirmed`.
  */
 function applyBody(entry, body) {
+  if (body.answer === null) {
+    // "Desfazer escolha" da primeira resposta: volta a sem resposta (nunca com transaction_id).
+    if (body.transaction_id !== undefined || body.confirmed === true) return HttpResponse.json({ detail: "answer null" }, { status: 422 });
+    Object.assign(entry, {
+      answer: null, confirmed: false, paired_transaction_id: null, fincla_transaction: null, other_invoice: null,
+      movable: false, series_movable: false, move_refusal: null,
+    });
+    return HttpResponse.json(entry);
+  }
   if (body.transaction_id !== undefined) {
     const other = draft.entries.find((e) => e.id !== entry.id && e.paired_transaction_id === body.transaction_id
       && ["pair", "move", "move_series"].includes(e.answer));
@@ -73,13 +86,18 @@ function applyBody(entry, body) {
       );
     }
     const chosen = known().find((t) => t.id === body.transaction_id);
-    const { invoice, taken_by_entry_id: _taken, ...transaction } = chosen;
+    const {
+      invoice, taken_by_entry_id: _taken, movable, series_movable: seriesMovable, move_refusal: refusal,
+      suggested_answer: _suggested, suggestion_basis: _basis, ...transaction
+    } = chosen;
     entry.paired_transaction_id = chosen.id;
     entry.fincla_transaction = transaction;
     const neighbour = invoice && invoice.id !== draft.invoice.id;
     entry.other_invoice = neighbour ? invoice : null;
-    entry.movable = Boolean(neighbour);
-    entry.series_movable = Boolean(neighbour && transaction.installment);
+    // O que dá para mover agora é o da opção escolhida (calculado para ela, #559).
+    entry.movable = movable ?? Boolean(neighbour);
+    entry.series_movable = seriesMovable ?? Boolean(neighbour && transaction.installment);
+    entry.move_refusal = refusal ?? null;
   }
   if (body.answer !== undefined) {
     entry.answer = body.answer;
@@ -165,8 +183,8 @@ describe("o passo Decidir casos com dúvida", () => {
     await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "pair", transaction_id: 25 }]));
     const row = await waitFor(() => rowOf("É Uber 1"));
     expect(row).toHaveTextContent("Conferido");
-    // A primeira resposta de uma dúvida não tem "Desfazer escolha" (o backend não volta a sem resposta).
-    expect(within(row).queryByRole("button", { name: "Desfazer escolha" })).not.toBeInTheDocument();
+    // A primeira resposta também tem "Desfazer escolha": volta a sem resposta.
+    expect(within(row).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
     // A segunda corrida abre: a Uber 1 já é a resposta da primeira, sem clique e com o motivo.
     const second = article("UBER .TRIP");
     const taken = option(second, "Uber 1");
@@ -197,6 +215,25 @@ describe("o passo Decidir casos com dúvida", () => {
     await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "pair", confirmed: true, transaction_id: 25 }));
     card = await screen.findByRole("article", { name: /UBER .TRIP/ });
     expect(option(card, "Uber 1").dataset.pressed).toBe("true");
+  });
+
+  it("Desfazer escolha da primeira resposta volta a sem resposta (answer: null), sem transaction_id", async () => {
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(option(article("UBER .TRIP"), "Uber 1")).getByRole("button", { name: /^Sim, é esta: Uber 1/ }));
+    const row = await waitFor(() => rowOf("É Uber 1"));
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: null, confirmed: false }));
+    const card = await waitFor(() => {
+      const reopened = screen.getAllByRole("article").find((a) => within(a).queryByText("Falta responder") && options(a).some((o) => o.textContent.includes("Uber 1")));
+      expect(reopened).toBeTruthy();
+      return reopened;
+    });
+    expect(options(card).every((o) => o.dataset.pressed === "false")).toBe(true);
+    expect(UBER_1().answer).toBeNull();
+    expect(screen.getByTestId("queue-pending")).toHaveTextContent("3 sem resposta");
   });
 
   it("uma opção com valor parecido: a pergunta e a diferença em destaque", async () => {
@@ -259,7 +296,11 @@ describe("o passo Decidir casos com dúvida", () => {
     draft.invoice.status = "paid";
     const posto = POSTO();
     Object.assign(posto, { value_locked: true, addable: false });
-    posto.candidates = [{ ...posto.candidates[0], id: 99, description: "Posto (janeiro)", invoice: JANUARY, invoice_id: JANUARY.id }];
+    // Como o backend a calcula com esta fatura paga (decisão 1): mover desligado, com o motivo.
+    posto.candidates = [{
+      ...posto.candidates[0], id: 99, description: "Posto (janeiro)", invoice: JANUARY, invoice_id: JANUARY.id,
+      movable: false, move_refusal: { code: "invoice_paid", message: PAID_REASON, invoice_year: 2026, invoice_month: 12 },
+    }];
     for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
     await open();
 
@@ -299,37 +340,85 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("uma da fatura vizinha responde Mover; numa parcela, a troca entre só esta e a série fica no cartão", async () => {
-    const installment = { ...contract.search.results[0], id: 77, description: "Curso (parcela)", installment: { number: 5, count: 10 }, invoice: JANUARY, invoice_id: JANUARY.id };
-    searchResults = [installment];
+  it("uma parcela da série uma fatura à frente responde pela sugestão dela (esta e as próximas); a troca fica no cartão", async () => {
+    searchResults = neighbours();
     const user = userEvent.setup();
     await open();
 
     await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
     const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
-    const result = await within(dialog).findByTestId("candidate-option");
-    expect(within(result).getByTestId("other-invoice-badge")).toHaveTextContent("Na fatura de janeiro/2027");
-    // Sem sugestão do backend para a dúvida, a parcela vem "só esta" (muda o mínimo).
-    await user.click(within(result).getByRole("button", { name: /^Mover só esta: Curso \(parcela\)/ }));
-    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "move", transaction_id: 77 }]));
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(3));
+    const ahead = within(dialog).getAllByTestId("candidate-option").find((o) => o.textContent.includes("janeiro/2027"));
+    expect(within(ahead).getByTestId("other-invoice-badge")).toHaveTextContent("Na fatura de janeiro/2027");
+    await user.click(within(ahead).getByRole("button", { name: /^Mover esta e as próximas parcelas: Loja/ }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "move_series", transaction_id: 8 }]));
+
+    await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
+    const how = within(article("UBER .TRIP")).getByRole("group", { name: "Como mover a parcela" });
+    expect(within(how).getByRole("button", { name: "Mover esta e as próximas parcelas" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(how).getByRole("button", { name: "Mover só esta" }));
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "move", transaction_id: 8 }));
+  });
+
+  it("uma parcela da série uma fatura atrás move só esta: sem a série, nem a troca no cartão", async () => {
+    searchResults = neighbours();
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(3));
+    expect(within(dialog).queryByRole("button", { name: /^Mover esta e as próximas parcelas: .*novembro\/2026/ })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /^Mover esta parcela: Loja, .*na fatura de novembro\/2026/ }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "move", transaction_id: 6 }]));
+
+    await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
+    expect(within(article("UBER .TRIP")).queryByRole("group", { name: "Como mover a parcela" })).not.toBeInTheDocument();
+  });
+
+  it("a série recusada (parcela seguinte conferida): a opção move só esta, e a troca mostra a série desligada com o motivo", async () => {
+    const [ahead] = neighbours();
+    searchResults = [{ ...ahead, series_movable: false, move_refusal: { code: "series_reconciled", message: SERIES_REFUSAL, invoice_year: null, invoice_month: null } }];
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await user.click(await within(dialog).findByRole("button", { name: /^Mover só esta: Loja/ }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "move", transaction_id: 8 }]));
 
     await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
     const card = article("UBER .TRIP");
     const how = within(card).getByRole("group", { name: "Como mover a parcela" });
-    expect(within(how).getByRole("button", { name: "Mover só esta" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(card).getByTestId("pair-outcome")).toHaveTextContent("Ao concluir: Curso (parcela) vem da fatura de janeiro/2027 para esta fatura");
-    await user.click(within(how).getByRole("button", { name: "Mover esta e as próximas parcelas" }));
-    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "move_series", transaction_id: 77 }));
+    expect(within(how).getByRole("button", { name: "Mover esta e as próximas parcelas" })).toBeDisabled();
+    expect(within(card).getByTestId("move-choice-note")).toHaveTextContent(SERIES_REFUSAL);
   });
 
-  it("uma da fatura vizinha já paga não pode ser escolhida, com o motivo", async () => {
-    searchResults = [{ ...contract.search.results[0], id: 78, description: "Uber (dezembro pago)", invoice: { ...JANUARY, status: "paid" }, invoice_id: JANUARY.id }];
+  it("uma da fatura vizinha que não pode ser movida (movable: false): o motivo do backend, sem clique", async () => {
+    const message = "A fatura de novembro/2026 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.";
+    const behind = neighbours()[2];
+    searchResults = [{
+      ...behind, invoice: { ...behind.invoice, status: "paid" }, movable: false,
+      move_refusal: { code: "other_invoice_paid", message, invoice_year: 2026, invoice_month: 11 },
+    }];
     const user = userEvent.setup();
     await open();
 
     await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
     const result = await within(await screen.findByRole("dialog")).findByTestId("candidate-option");
-    expect(within(result).getByTestId("candidate-refusal")).toHaveTextContent("A fatura de janeiro/2027 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.");
+    expect(within(result).getByTestId("candidate-refusal")).toHaveTextContent(message);
+    expect(within(result).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("uma opção sem fatura conhecida (invoice: null) não quebra: diz que não sabemos, sem clique", async () => {
+    searchResults = [{ ...neighbours()[2], invoice: null, invoice_id: null, movable: false, suggested_answer: null, move_refusal: null, suggestion_basis: null }];
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const result = await within(await screen.findByRole("dialog")).findByTestId("candidate-option");
+    expect(within(result).getByTestId("other-invoice-badge")).toHaveTextContent("Fatura: não sabemos");
+    expect(within(result).getByTestId("candidate-refusal")).toHaveTextContent("Não sabemos em que fatura esta compra está");
     expect(within(result).queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -347,6 +436,31 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
     await user.click(within(dialog).getByRole("button", { name: /^Sim, é esta: Uber 2/ }));
     expect(await within(dialog).findByText("Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP).")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("409 numa resposta relê o rascunho; o erro de antes não aparece na busca aberta depois", async () => {
+    let reads = 0;
+    server.use(
+      http.get(`${BASE}/:importId`, () => {
+        reads += 1;
+        return HttpResponse.json(draft);
+      }),
+      http.patch(`${BASE}/:importId/entries/:entryId`, () => HttpResponse.json(
+        { detail: { code: "conflict", message: "Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP)." } }, { status: 409 },
+      )),
+    );
+    const user = userEvent.setup();
+    await open();
+    expect(reads).toBe(1);
+
+    await user.click(within(option(article("UBER .TRIP"), "Uber 1")).getByRole("button", { name: /^Sim, é esta: Uber 1/ }));
+    expect(await screen.findByText("Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP).")).toBeInTheDocument();
+    await waitFor(() => expect(reads).toBe(2));
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    expect(within(dialog).queryByText(/já é a resposta do lançamento de 12\/11/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP).")).not.toBeInTheDocument();
   });
 });
 
@@ -378,29 +492,75 @@ describe("o passo Compras em outra fatura", () => {
     expect(screen.queryByTestId("go-to-pending")).not.toBeInTheDocument();
   });
 
-  it("parcela: Mover esta e as próximas · Mover só esta · Adicionar como nova · Não registrar, com a sugestão das vizinhas", async () => {
-    fresh("draft", "other_invoice");
+  /** A compra em outra fatura como uma parcela gravada em search_neighbours (o que dá para mover e as vizinhas). */
+  const asInstallment = (recorded, extra = {}) => {
     const cafe = CAFE();
     Object.assign(cafe, {
-      bank_description: "CURSO IDIOMAS 05/10", installment: { number: 5, count: 10 }, suggested_answer: "move_series", answer: "move_series",
-      series_movable: true,
+      bank_description: `LOJA ${String(recorded.installment.number).padStart(2, "0")}/12`, installment: recorded.installment,
+      suggested_answer: recorded.suggested_answer, answer: recorded.suggested_answer, movable: recorded.movable,
+      series_movable: recorded.series_movable, move_refusal: recorded.move_refusal, suggestion_basis: recorded.suggestion_basis,
+      other_invoice: recorded.invoice, ...extra,
     });
-    cafe.fincla_transaction.installment = { number: 5, count: 10 };
+    cafe.fincla_transaction.installment = recorded.installment;
+    return cafe;
+  };
+
+  it("parcela da série uma fatura à frente: as quatro respostas e a sugestão pelos meses reais das vizinhas", async () => {
+    fresh("draft", "other_invoice");
+    const cafe = asInstallment(neighbours()[0]);
     const user = userEvent.setup();
     await open();
 
-    const card = article("CURSO IDIOMAS");
+    const card = article("LOJA 06/12");
     const row = answers(card, "Mover esta compra para a fatura de dezembro/2026?");
     expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Mover esta e as próximas parcelas", "Mover só esta", "Adicionar como nova", "Não registrar",
     ]);
-    expect(within(card).getByTestId("move-suggestion")).toHaveTextContent("Mover esta e as próximas parcelas. No Fincla, a parcela anterior desta compra está nesta fatura");
-    expect(within(card).getByTestId("move-consequences")).toHaveTextContent(
-      "Ao concluir, as parcelas 05 a 10/10 voltam uma fatura: a 05 entra em dezembro/2026 e a última termina em maio/2027, como no banco. As anteriores não mudam.",
+    expect(within(card).getByTestId("move-suggestion")).toHaveTextContent(
+      "Mover esta e as próximas parcelas. No Fincla, a parcela 05/12 está nesta fatura (dezembro/2026) e a parcela 07/12 está na fatura de fevereiro/2027. A série está uma fatura à frente do banco: esta e as próximas voltam uma fatura.",
     );
+    expect(within(card).getByTestId("move-consequences")).toHaveTextContent(
+      "Ao concluir, as parcelas 06 a 12/12 voltam uma fatura: a 06 entra em dezembro/2026 e a última termina em junho/2027, como no banco. As anteriores não mudam.",
+    );
+    expect(within(card).getByRole("button", { name: "Confirmar sugestão" })).toBeInTheDocument();
 
     await user.click(within(row).getByRole("button", { name: "Mover só esta" }));
     await waitFor(() => expect(patches(cafe)).toEqual([{ answer: "move" }]));
+  });
+
+  it("parcela da série uma fatura atrás: sem a série; Mover esta parcela, com as vizinhas nos meses reais", async () => {
+    fresh("draft", "other_invoice");
+    asInstallment(neighbours()[2]);
+    await open();
+
+    const card = article("LOJA 04/12");
+    const row = answers(card, "Mover esta compra para a fatura de dezembro/2026?");
+    expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["Mover esta parcela", "Adicionar como nova", "Não registrar"]);
+    expect(within(row).getByRole("button", { name: "Mover esta parcela" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(card).getByTestId("move-suggestion")).toHaveTextContent(
+      "Mover esta parcela. No Fincla, a parcela 03/12 está na fatura de outubro/2026 e a parcela 05/12 está nesta fatura (dezembro/2026). Só esta parcela muda de fatura; as outras ficam onde estão.",
+    );
+    expect(within(card).getByRole("button", { name: "Confirmar sugestão" })).toBeInTheDocument();
+  });
+
+  it("série sugerida mas recusada: a sugestão mostrada é só esta (nunca a desligada), a série com o motivo", async () => {
+    fresh("draft", "other_invoice");
+    asInstallment(neighbours()[0], {
+      answer: "move", series_movable: false,
+      move_refusal: { code: "series_reconciled", message: SERIES_REFUSAL, invoice_year: null, invoice_month: null },
+    });
+    await open();
+
+    const card = article("LOJA 06/12");
+    const row = answers(card, "Mover esta compra para a fatura de dezembro/2026?");
+    const series = within(row).getByRole("button", { name: "Mover esta e as próximas parcelas" });
+    expect(series).toBeDisabled();
+    expect(series).toHaveAccessibleDescription(SERIES_REFUSAL);
+    expect(within(row).getByRole("button", { name: "Mover só esta" })).toHaveAttribute("aria-pressed", "true");
+    const suggestion = within(card).getByTestId("move-suggestion");
+    expect(suggestion).toHaveTextContent(/^SugestãoMover só esta\./);
+    expect(suggestion).toHaveTextContent("Mover a série não dá agora: só esta parcela muda de fatura.");
+    expect(within(card).getByRole("button", { name: "Confirmar sugestão" })).toBeInTheDocument();
   });
 
   it("a outra fatura já paga: começa sem resposta, mover desligado com o motivo, Não registrar responde", async () => {
@@ -478,6 +638,62 @@ describe("a leitura desatualizada (QA F4 OBS-01)", () => {
   });
 });
 
+describe("atalhos S/A/N", () => {
+  it("passo 3: N não registra, A abre a compra nova e confirma, S escolhe a única opção livre", async () => {
+    const user = userEvent.setup();
+    await open();
+    article("UBER .TRIP");
+
+    await user.keyboard("n");
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "ignore" }]));
+    await waitFor(() => rowOf("Fica fora do Fincla"));
+
+    await user.keyboard("a");
+    await waitFor(() => expect(patches(UBER_2())).toEqual([{ answer: "create", confirmed: false }]));
+    await within(article("UBER .TRIP")).findByRole("textbox", { name: "Descrição" });
+    await user.keyboard("a");
+    await waitFor(() => expect(patches(UBER_2()).at(-1)).toEqual({ confirmed: true }));
+
+    await waitFor(() => article("POSTO CENTRAL"));
+    await user.keyboard("s");
+    await waitFor(() => expect(patches(POSTO())).toEqual([{ answer: "pair", transaction_id: 27 }]));
+  });
+
+  it("passo 3: S com várias opções livres pede a escolha, sem responder", async () => {
+    const user = userEvent.setup();
+    await open();
+    const card = article("UBER .TRIP");
+
+    await user.keyboard("s");
+    expect(await within(card).findByText("Escolha ao lado qual compra é.")).toBeInTheDocument();
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+
+  it("passo 2: S confirma a sugestão; A adiciona como nova; N não registra", async () => {
+    for (const [key, body] of [["s", { answer: "move" }], ["a", { answer: "create", confirmed: false }], ["n", { answer: "ignore" }]]) {
+      cleanup();
+      calls.length = 0;
+      fresh("draft", "other_invoice");
+      const user = userEvent.setup();
+      await open();
+      article("CAFETERIA AROMA");
+
+      await user.keyboard(key);
+      await waitFor(() => expect(patches(CAFE())).toEqual([body]));
+    }
+  });
+
+  it("passo 2: S não aponta para uma resposta desligada (mover recusado: nada acontece)", async () => {
+    fresh("new_purchases_draft", "other_invoice");
+    const user = userEvent.setup();
+    await open();
+    article("MERCADO BOA VISTA");
+
+    await user.keyboard("s");
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+});
+
 describe("celular e computador", () => {
   it("os atalhos de teclado só aparecem no computador", async () => {
     await open();
@@ -489,8 +705,7 @@ describe("celular e computador", () => {
 
   it("varredura: no celular nenhum controle da dúvida, da busca, da troca de mover nem da outra fatura fica abaixo de 44 px", async () => {
     const found = {};
-    const installment = { ...contract.search.results[0], id: 77, description: "Curso (parcela)", installment: { number: 5, count: 10 }, invoice: JANUARY, invoice_id: JANUARY.id };
-    searchResults = [installment, ...searchResults];
+    searchResults = [...neighbours(), ...searchResults];
     const user = userEvent.setup();
     await open({ isMobile: true });
     article("UBER .TRIP");
@@ -498,10 +713,10 @@ describe("celular e computador", () => {
 
     await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
     const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
-    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(3));
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(5));
     found.search = smallTouchTargets(document.body);
 
-    await user.click(within(dialog).getByRole("button", { name: /^Mover só esta: Curso/ }));
+    await user.click(within(dialog).getByRole("button", { name: /^Mover esta e as próximas parcelas: Loja/ }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
     within(article("UBER .TRIP")).getByRole("group", { name: "Como mover a parcela" });

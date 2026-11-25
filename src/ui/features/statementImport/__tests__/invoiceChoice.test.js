@@ -28,22 +28,42 @@ describe("stepRemaining (QA F4 OBS-03)", () => {
 });
 
 describe("a opção escolhida (#559)", () => {
-  const entry = { id: "e", suggested_answer: null, value_locked: false };
-  const option = (invoice, extra = {}) => ({ id: 9, invoice, invoice_id: invoice.id, installment: null, ...extra });
+  const option = (invoice, extra = {}) => ({ id: 9, invoice, invoice_id: invoice.id, installment: null, movable: false, series_movable: false, suggested_answer: null, move_refusal: null, ...extra });
+  // As parcelas vizinhas da busca, como o backend as grava (search_neighbours): a 06/12 numa série uma
+  // fatura à frente (série sugerida e valendo), a 05/12 nesta fatura e a 04/12 numa série uma atrás.
+  const neighbours = contract.search_neighbours.results.map((r) => normalizeCardInvoiceImport({
+    ...JSON.parse(JSON.stringify(contract.draft)), entries: [{ ...JSON.parse(JSON.stringify(contract.entry_doubt)), candidates: [r] }],
+  }).entries[0].candidates[0]);
+  const [ahead, here, behind] = neighbours;
 
-  it("nesta fatura é Sim, é esta; na vizinha, Mover; a parcela segue a sugestão do backend, senão só esta", () => {
-    expect(pickAnswerOf(entry, option(DECEMBER), DECEMBER)).toBe("pair");
-    expect(pickAnswerOf(entry, option(JANUARY), DECEMBER)).toBe("move");
-    const installment = option(JANUARY, { installment: { number: 5, count: 10 } });
-    expect(pickAnswerOf(entry, installment, DECEMBER)).toBe("move");
-    expect(pickAnswerOf({ ...entry, suggested_answer: "move_series" }, installment, DECEMBER)).toBe("move_series");
+  it("nesta fatura é Sim, é esta; na vizinha, a sugestão da própria opção: a série só quando ela vale", () => {
+    expect(pickAnswerOf(option(DECEMBER), DECEMBER)).toBe("pair");
+    expect(pickAnswerOf(option(JANUARY, { movable: true, suggested_answer: "move" }), DECEMBER)).toBe("move");
+    expect(ahead).toMatchObject({ suggested_answer: "move_series", series_movable: true });
+    expect(pickAnswerOf(ahead, DECEMBER)).toBe("move_series");
+    expect(pickAnswerOf(here, DECEMBER)).toBe("pair");
+    // Série uma fatura atrás: "esta e as próximas" nunca vale (sem motivo), a opção move só esta.
+    expect(behind).toMatchObject({ suggested_answer: "move", series_movable: false, move_refusal: null });
+    expect(pickAnswerOf(behind, DECEMBER)).toBe("move");
+    // Série sugerida mas recusada agora: só esta.
+    expect(pickAnswerOf({ ...ahead, series_movable: false }, DECEMBER)).toBe("move");
   });
 
-  it("fatura paga (decisão 1): ligar vale; mover de ou para fatura paga não, com o motivo", () => {
-    expect(pickRefusal({ ...entry, value_locked: true }, option(DECEMBER), { ...DECEMBER, status: "paid" })).toBeNull();
-    expect(pickRefusal({ ...entry, value_locked: true }, option(JANUARY), { ...DECEMBER, status: "paid" })).toMatch(/^Esta fatura já foi paga/);
-    expect(pickRefusal(entry, option({ ...JANUARY, status: "paid" }), DECEMBER)).toMatch(/^A fatura de janeiro\/2027 já foi paga/);
-    expect(pickRefusal(entry, option(JANUARY), DECEMBER)).toBeNull();
+  it("mover vale pelo movable da opção, com o motivo pronto do backend; ligar vale sempre", () => {
+    expect(pickRefusal(option(DECEMBER), { ...DECEMBER, status: "paid" })).toBeNull();
+    expect(pickRefusal(ahead, DECEMBER)).toBeNull();
+    expect(pickRefusal(behind, DECEMBER)).toBeNull();
+    const message = "A fatura de janeiro/2027 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.";
+    expect(pickRefusal(option(JANUARY, { move_refusal: { code: "other_invoice_paid", message, invoice_year: 2027, invoice_month: 1 } }), DECEMBER)).toBe(message);
+    // O status da fatura não decide: só movable/move_refusal.
+    expect(pickRefusal(option({ ...JANUARY, status: "paid" }, { movable: true }), DECEMBER)).toBeNull();
+    expect(pickRefusal(option(JANUARY), DECEMBER)).toBe("Não dá para mover esta compra para esta fatura agora.");
+  });
+
+  it("uma opção sem fatura conhecida (invoice: null) não quebra e diz que não sabemos", () => {
+    const unknown = { id: 9, invoice: null, invoice_id: 99, installment: null, movable: false, series_movable: false, suggested_answer: null, move_refusal: null };
+    expect(pickAnswerOf(unknown, DECEMBER)).toBe("move");
+    expect(pickRefusal(unknown, DECEMBER)).toMatch(/^Não sabemos em que fatura/);
   });
 
   it("já escolhida: só pelas respostas de agora de OUTRO lançamento", () => {

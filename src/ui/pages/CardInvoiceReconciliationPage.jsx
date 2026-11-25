@@ -741,6 +741,18 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     }
   };
 
+  // Uma resposta recusada com 409 (a transação foi escolhida por outro lançamento, ou mudou): a tela
+  // estava lendo um rascunho velho. Relê, sem apagar o erro, para as opções mostrarem o estado de agora.
+  const reloadOnConflict = (err) => {
+    if (err?.response?.status === 409) reload().catch(() => {});
+  };
+
+  // A busca abre limpa: o erro de uma resposta anterior não fica pendurado nela.
+  const openSearch = useCallback((entry) => {
+    setActionError("");
+    setSearchFor(entry);
+  }, []);
+
   // O Confirmar do formulário da compra nova (#557): grava a confirmação (a descrição já foi gravada
   // pelo campo). Já confirmada, só recolhe.
   const confirmNew = (entry) => (entry.confirmed ? Promise.resolve(true) : changeEntry(entry.id, { confirmed: true }));
@@ -751,8 +763,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   //
   // `extra` (#559): a transação escolhida (`transaction_id`) numa dúvida ou na busca. A mesma resposta
   // com outra transação é uma resposta nova. O "Desfazer escolha" guarda a transação anterior de uma
-  // dúvida; uma primeira resposta (o lançamento vinha sem resposta) não tem o que desfazer: o backend
-  // não volta um lançamento a "sem resposta" (lacuna de contrato), e o "Alterar" troca a escolha.
+  // dúvida; o de uma primeira resposta (o lançamento vinha sem resposta) volta a "sem resposta"
+  // (`{answer: null, confirmed: false}`, nunca com `transaction_id`).
   const answer = async (entry, value, extra = {}) => {
     const sameTarget = extra.transaction_id === undefined || extra.transaction_id === entry.paired_transaction_id;
     if (value === entry.answer && entry.confirmed && sameTarget) {
@@ -765,13 +777,11 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     try {
       const body = value === "create" ? { answer: value, confirmed: false } : { answer: value, ...extra };
       showSaved(entry.id, await updateCardInvoiceEntry(cardId, organizationId, importId, entry.id, body));
-      if (entry.answer !== null) {
-        const previous = { answer: entry.answer, confirmed: entry.confirmed };
-        if (entry.classification === "doubt" && linksTransaction(entry.answer) && entry.paired_transaction_id !== null) {
-          previous.transaction_id = entry.paired_transaction_id;
-        }
-        setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), previous] }));
+      const previous = { answer: entry.answer, confirmed: entry.answer === null ? false : entry.confirmed };
+      if (entry.classification === "doubt" && linksTransaction(entry.answer) && entry.paired_transaction_id !== null) {
+        previous.transaction_id = entry.paired_transaction_id;
       }
+      setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), previous] }));
       setWantPair((prev) => {
         if (!prev.has(entry.id)) return prev;
         const nextSet = new Set(prev);
@@ -784,6 +794,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       return true;
     } catch (err) {
       setActionError(cardApiError(err));
+      reloadOnConflict(err);
       return false;
     } finally {
       setAnswering(false);
@@ -802,8 +813,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       return answer(entry, entry.answer, { transaction_id: candidate.id });
     }
     const invoice = invoiceImport.invoice;
-    if (takenByOf(invoiceImport.entries, entry.id, candidate.id) || pickRefusal(entry, candidate, invoice)) return false;
-    return answer(entry, pickAnswerOf(entry, candidate, invoice), { transaction_id: candidate.id });
+    if (takenByOf(invoiceImport.entries, entry.id, candidate.id) || pickRefusal(candidate, invoice)) return false;
+    return answer(entry, pickAnswerOf(candidate, invoice), { transaction_id: candidate.id });
   };
 
   // "Sim, é esta" numa dúvida sem escolher: com uma opção livre, escolhe-a; com várias, pede para
@@ -815,10 +826,10 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       return;
     }
     const invoice = invoiceImport.invoice;
-    const free = (entry.candidates ?? []).filter((c) => !takenByOf(invoiceImport.entries, entry.id, c.id) && !pickRefusal(entry, c, invoice));
+    const free = (entry.candidates ?? []).filter((c) => !takenByOf(invoiceImport.entries, entry.id, c.id) && !pickRefusal(c, invoice));
     if (free.length === 1) pick(entry, free[0]);
     else if (free.length > 1) setWantPair((prev) => new Set(prev).add(entry.id));
-    else setSearchFor(entry);
+    else openSearch(entry);
   };
 
   // "Mover só esta" ⇄ "Mover esta e as próximas" na dúvida respondida com uma parcela da vizinha.
@@ -885,6 +896,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       await reload();
     } catch (err) {
       setActionError(cardApiError(err));
+      reloadOnConflict(err);
     } finally {
       setAnswering(false);
     }
@@ -1131,7 +1143,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
                 onPick: pick,
                 onMove: changeMove,
                 onYes: doubtYes,
-                onSearch: setSearchFor,
+                onSearch: openSearch,
                 onChange: changeEntry,
                 onConfirmNew: (entry) => confirmNew(entry).then((ok) => ok && queue.advanceFrom(entry.id)),
                 onUndoChoice: undoChoice,

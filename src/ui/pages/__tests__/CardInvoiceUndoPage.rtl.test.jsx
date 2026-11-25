@@ -94,6 +94,15 @@ describe("a prévia", () => {
     expect(within(loja).getByTestId("undo-kept")).toHaveTextContent("Você mudou de novo depois: fica como você deixou (valor).");
     expect(within(loja).queryByTestId("undo-value-back")).not.toBeInTheDocument();
   });
+
+  it("a compra movida (#559) diz para qual fatura volta (invoice_back); as outras não falam de fatura", async () => {
+    open();
+
+    const restored = await screen.findAllByTestId("undo-restored");
+    const cafe = restored.find((r) => r.textContent.includes("Cafeteria"));
+    expect(within(cafe).getByTestId("undo-invoice-back")).toHaveTextContent("Volta para a fatura de janeiro/2027 (a conciliação a tinha movido para esta).");
+    expect(screen.getAllByTestId("undo-invoice-back")).toHaveLength(1);
+  });
 });
 
 describe("desfazer", () => {

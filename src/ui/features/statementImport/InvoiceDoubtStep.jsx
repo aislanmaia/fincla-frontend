@@ -10,9 +10,9 @@
 // vizinhas do cartão.
 //
 // Passo 3 (dúvida): nada vem marcado. Clicar numa opção já responde: uma opção desta fatura é "Sim,
-// é esta" (`pair`); uma da fatura vizinha é "Mover" (`move`, ou `move_series` numa parcela quando o
-// backend sugere a série; decisão do orquestrador), e o cartão deixa trocar entre "Mover só esta" e
-// "Mover esta e as próximas" ali mesmo. As outras opções ficam esmaecidas, com "Fica de fora… vai
+// é esta" (`pair`); uma da fatura vizinha é "Mover" (a `suggested_answer` da própria opção; a série só
+// quando `series_movable`), e o cartão deixa trocar entre "Mover só esta" e "Mover esta e as próximas"
+// ali mesmo, quando a série é uma opção (série uma fatura atrás: só "esta"). As outras opções ficam esmaecidas, com "Fica de fora… vai
 // para Sobrando no Fincla".
 //
 // Passo 2 (outra fatura): a compra que o Fincla achou na fatura vizinha, com o selo "Na fatura de
@@ -38,7 +38,7 @@ import {
   PairConsequences, bankValueDiffers, invoiceAnswerNote, invoiceAnswerUnavailable, invoiceDoubtHint, invoiceOutcomeText, moveAnswerLabel,
 } from "./InvoiceSuggestedStep.jsx";
 import { invoiceNewPurchaseForm } from "./InvoiceNewPurchase.jsx";
-import { invoiceMonthLabel, isMoveAnswer, linksTransaction, pad2 } from "./invoiceSteps.js";
+import { UNKNOWN_INVOICE, invoiceMonthLabel, isMoveAnswer, linksTransaction, pad2, seriesIsAnOption } from "./invoiceSteps.js";
 
 const DOUBT_QUESTION = "Esta compra do banco já está no Fincla?";
 
@@ -54,9 +54,6 @@ export function addInvoiceMonths({ year, month }, n) {
   return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
 
-/** A fatura vem antes desta? (pelo mês em que fecha) */
-const isBefore = (a, b) => a.year * 12 + a.month < b.year * 12 + b.month;
-
 // --------------------------------------------------------------------------------------------
 // As opções de uma dúvida e os resultados da busca
 // --------------------------------------------------------------------------------------------
@@ -71,28 +68,33 @@ export function takenByOf(entries, entryId, transactionId) {
 export const inThisInvoice = (candidate, invoice) => (candidate.invoice ? candidate.invoice.id === invoice.id : candidate.invoice_id === invoice.id);
 
 /**
- * A resposta que escolher a opção dá: nesta fatura, "Sim, é esta" (`pair`); na vizinha, "Mover"
- * (decisão do orquestrador): numa parcela, a sugestão do backend quando ele a dá (`suggested_answer`,
- * série deslocada → "esta e as próximas"), senão "só esta", que muda o mínimo.
+ * A resposta que escolher a opção dá: nesta fatura, "Sim, é esta" (`pair`); na vizinha, "Mover" pela
+ * sugestão calculada para ela (`candidate.suggested_answer`): a série ("esta e as próximas") só
+ * quando o backend a sugere E ela vale agora (`series_movable`); senão "só esta", que muda o mínimo.
  */
-export function pickAnswerOf(entry, candidate, invoice) {
+export function pickAnswerOf(candidate, invoice) {
   if (inThisInvoice(candidate, invoice)) return "pair";
-  if (candidate.installment && entry.suggested_answer === "move_series") return "move_series";
+  if (candidate.suggested_answer === "move_series" && candidate.series_movable) return "move_series";
   return "move";
 }
 
+/** Uma opção fora desta fatura sem motivo do backend: não sabemos onde ela está, ou não dá para mover. */
+const NOT_MOVABLE_REASON = "Não dá para mover esta compra para esta fatura agora.";
+const UNKNOWN_INVOICE_REASON = "Não sabemos em que fatura esta compra está: ela não pode ser movida daqui.";
+
 /**
- * Por que a opção não pode ser escolhida (decisão 1): mover de/para uma fatura paga. `null` = pode.
- * Ligar ("Sim, é esta") vale mesmo em fatura paga: só não troca o valor.
+ * Por que a opção não pode ser escolhida: mover não vale agora (`candidate.movable`, com o motivo
+ * pronto do backend em `move_refusal`, decisão 1). `null` = pode. Ligar ("Sim, é esta") vale mesmo
+ * em fatura paga: só não troca o valor.
  */
-export function pickRefusal(entry, candidate, invoice) {
-  if (inThisInvoice(candidate, invoice)) return null;
-  if (entry.value_locked || invoice.status === "paid") return PAID_INVOICE_REASON;
-  if (candidate.invoice?.status === "paid") {
-    return `A fatura de ${invoiceMonthLabel(candidate.invoice)} já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.`;
-  }
-  return null;
+export function pickRefusal(candidate, invoice) {
+  if (inThisInvoice(candidate, invoice) || candidate.movable) return null;
+  if (candidate.move_refusal?.message) return candidate.move_refusal.message;
+  return candidate.invoice ? NOT_MOVABLE_REASON : UNKNOWN_INVOICE_REASON;
 }
+
+/** "na fatura de janeiro/2027", ou o que sabemos dela. */
+const whereText = (invoice) => (invoice ? `na fatura de ${invoiceMonthLabel(invoice)}` : "numa fatura que não sabemos");
 
 const NOTE = { ...G, fontSize: 12, color: T.inkMid, marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.border}`, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap", lineHeight: 1.5 };
 const TAG = { fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap" };
@@ -106,7 +108,7 @@ function LeftOutNote({ candidate, invoice }) {
       <span style={{ flex: "1 1 180px", minWidth: 0 }}>
         {here
           ? <>Continua no Fincla como está, sem mudança. Como o banco não cobrou outra compra igual nesta fatura, ela {LEFTOVER}, onde você decide se mantém, move ou exclui.</>
-          : <>Continua na fatura de {invoiceMonthLabel(candidate.invoice)}, sem mudança.</>}
+          : <>Continua {whereText(candidate.invoice)}, sem mudança.</>}
       </span>
     </div>
   );
@@ -158,7 +160,12 @@ export const InvoiceCandidateOption = memo(function InvoiceCandidateOptionView({
     note = <CandidateDifference entry={entry} candidate={candidate} />;
   }
   let action = "Sim, é esta";
-  if (!here) action = moveAnswerLabel({ installment: candidate.installment }, pickAnswerOf(entry, candidate, invoice));
+  if (!here) {
+    // A escolhida mostra a resposta que ela tem; as outras, a que escolhê-las daria.
+    const chosen = pressed && isMoveAnswer(entry.answer);
+    const subject = chosen ? { ...entry, installment: candidate.installment } : candidate;
+    action = moveAnswerLabel(subject, chosen ? entry.answer : pickAnswerOf(candidate, invoice));
+  }
   return (
     <div
       data-testid="candidate-option"
@@ -171,7 +178,7 @@ export const InvoiceCandidateOption = memo(function InvoiceCandidateOptionView({
         entry={entry}
         match={candidate}
         invoiceMonth={invoiceMonth}
-        elsewhere={here ? null : candidate.invoice}
+        elsewhere={here ? null : (candidate.invoice ?? UNKNOWN_INVOICE)}
         linked={pressed}
         consequences={note}
       />
@@ -180,7 +187,7 @@ export const InvoiceCandidateOption = memo(function InvoiceCandidateOptionView({
           type="button"
           aria-pressed={pressed}
           disabled={busy}
-          aria-label={`${action}: ${candidate.description}, ${bankDateLabel(day)}, ${formatMoney(candidate.value, candidate.currency)}${here ? "" : `, na fatura de ${invoiceMonthLabel(candidate.invoice)}`}`}
+          aria-label={`${action}: ${candidate.description}, ${bankDateLabel(day)}, ${formatMoney(candidate.value, candidate.currency)}${here ? "" : `, ${whereText(candidate.invoice)}`}`}
           onClick={() => onPick(candidate)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, padding: 0, border: 0, borderRadius: "inherit", background: "transparent", cursor: busy ? "not-allowed" : "pointer" }}
         />
@@ -225,7 +232,7 @@ function DoubtOptions({ entry, entries, invoice, invoiceMonth, busy, onPick, onS
       </section>
     );
   }
-  const free = options.filter((o) => !takenByOf(entries, entry.id, o.id) && !pickRefusal(entry, o, invoice));
+  const free = options.filter((o) => !takenByOf(entries, entry.id, o.id) && !pickRefusal(o, invoice));
   let prompt;
   if (chosenId !== null) {
     prompt = shown.length > 1 ? "Você escolheu a compra em azul. Clique em outra para trocar." : null;
@@ -250,7 +257,7 @@ function DoubtOptions({ entry, entries, invoice, invoiceMonth, busy, onPick, onS
             pressed={pressed}
             faded={chosenId !== null && !pressed}
             takenBy={pressed ? null : takenByOf(entries, entry.id, candidate.id)}
-            refusal={pressed ? null : pickRefusal(entry, candidate, invoice)}
+            refusal={pressed ? null : pickRefusal(candidate, invoice)}
             busy={busy}
             onPick={(picked) => onPick(entry, picked)}
           />
@@ -277,7 +284,7 @@ function DoubtSkipped({ entry, invoice, invoiceMonth }) {
           entry={entry}
           match={candidate}
           invoiceMonth={invoiceMonth}
-          elsewhere={inThisInvoice(candidate, invoice) ? null : candidate.invoice}
+          elsewhere={inThisInvoice(candidate, invoice) ? null : (candidate.invoice ?? UNKNOWN_INVOICE)}
           skipped
           skipText={index === options.length - 1 ? text : ""}
         />
@@ -286,7 +293,10 @@ function DoubtSkipped({ entry, invoice, invoiceMonth }) {
   );
 }
 
-/** O que muda ao mover (#559): à vista, só esta (parcela) ou a série desta parcela em diante. */
+/**
+ * O que muda ao mover (#559): à vista, só esta (parcela) ou a série desta parcela em diante. A série
+ * só vale uma fatura à frente (a parcela está na seguinte): esta e as próximas sempre voltam.
+ */
 export function MoveConsequences({ entry, invoice }) {
   const from = entry.other_invoice;
   const match = entry.fincla_transaction;
@@ -298,10 +308,9 @@ export function MoveConsequences({ entry, invoice }) {
   if (entry.answer === "move_series" && installment) {
     const left = installment.count - installment.number;
     const last = invoiceMonthLabel(addInvoiceMonths(invoice, left));
-    const direction = isBefore(from, invoice) ? "avançam" : "voltam";
     text = (
       <>
-        Ao concluir, as parcelas <b style={NUM}>{pad2(installment.number)} a {pad2(installment.count)}/{pad2(installment.count)}</b> {direction} uma fatura:
+        Ao concluir, as parcelas <b style={NUM}>{pad2(installment.number)} a {pad2(installment.count)}/{pad2(installment.count)}</b> voltam uma fatura:
         a {pad2(installment.number)} entra em <b>{here}</b>{left ? <> e a última termina em <b>{last}</b>, como no banco</> : null}. As anteriores não mudam.
       </>
     );
@@ -335,26 +344,58 @@ function ChosenConsequences({ entry }) {
   return <PairConsequences entry={entry} />;
 }
 
+/** Onde está uma parcela vizinha (`suggestion_basis`): "a parcela 05/12 está nesta fatura" / "na de dezembro/2026". */
+function neighbourText(neighbour, count, invoice) {
+  const which = `a parcela ${pad2(neighbour.number)}/${pad2(count)}`;
+  if (!neighbour.invoice) return `${which} não está em nenhuma fatura deste cartão`;
+  if (neighbour.invoice.id === invoice.id) return `${which} está nesta fatura (${invoiceMonthLabel(invoice)})`;
+  return `${which} está na fatura de ${invoiceMonthLabel(neighbour.invoice)}`;
+}
+
+/**
+ * O motivo da "Sugestão: …" do passo 2. Numa parcela, os meses reais das parcelas vizinhas
+ * (`suggestion_basis`, #559): a série uma fatura à frente sugere "esta e as próximas"; senão, só esta.
+ */
+function suggestionWhy(entry, invoice, suggestion) {
+  const installment = entry.installment ?? entry.fincla_transaction?.installment;
+  if (!installment) return suggestion ? "Compra à vista: só esta compra muda de fatura." : null;
+  const basis = entry.suggestion_basis;
+  const neighbours = basis ? [basis.previous, basis.next].filter(Boolean).map((n) => neighbourText(n, installment.count, invoice)) : [];
+  const where = neighbours.length ? `No Fincla, ${neighbours.join(" e ")}.` : null;
+  if (suggestion === "move_series") {
+    return [where, "A série está uma fatura à frente do banco: esta e as próximas voltam uma fatura."].filter(Boolean).join(" ");
+  }
+  const tail = entry.suggested_answer === "move_series"
+    ? "Mover a série não dá agora: só esta parcela muda de fatura."
+    : "Só esta parcela muda de fatura; as outras ficam onde estão.";
+  return [where, tail].filter(Boolean).join(" ");
+}
+
+/**
+ * A sugestão que a tela mostra no passo 2: a do backend quando ela vale agora; "esta e as próximas"
+ * recusada cai para "só esta" quando ela vale; nenhuma quando nada vale (nunca aponta para uma
+ * resposta desligada).
+ */
+export function shownMoveSuggestion(entry) {
+  const suggestion = entry.suggested_answer;
+  if (!suggestion) return null;
+  if (!otherInvoiceAnswerUnavailable(entry, suggestion)) return suggestion;
+  if (suggestion === "move_series" && !otherInvoiceAnswerUnavailable(entry, "move")) return "move";
+  return null;
+}
+
 /** As duas notas do passo 2: a "Sugestão: …" (fixa, do backend) e "Outra fatura". */
 function OtherInvoiceNotes({ entry, invoice }) {
   const from = entry.other_invoice;
-  const installment = entry.installment ?? entry.fincla_transaction?.installment;
-  let why = null;
-  if (entry.suggested_answer === "move_series") {
-    why = "No Fincla, a parcela anterior desta compra está nesta fatura: a série inteira está uma fatura à frente do banco.";
-  } else if (entry.suggested_answer === "move" && installment) {
-    why = `No Fincla, as parcelas vizinhas estão no lugar certo: só esta parcela saiu${from ? ` para a fatura de ${invoiceMonthLabel(from)}` : ""}.`;
-  } else if (entry.suggested_answer === "move") {
-    why = "Compra à vista: só esta compra muda de fatura.";
-  }
+  const suggestion = shownMoveSuggestion(entry);
   return (
     <>
-      {entry.suggested_answer ? (
+      {suggestion ? (
         <div data-testid="move-suggestion" style={NOTE}>
           <span style={{ ...TAG, color: T.blue, background: T.blueLight, display: "inline-flex", gap: 4, alignItems: "center" }}>
             <Sparkles size={11} aria-hidden="true" />Sugestão
           </span>
-          <span style={{ flex: "1 1 180px", minWidth: 0 }}><b>{moveAnswerLabel(entry, entry.suggested_answer)}</b>. {why}</span>
+          <span style={{ flex: "1 1 180px", minWidth: 0 }}><b>{moveAnswerLabel(entry, suggestion)}</b>. {suggestionWhy(entry, invoice, suggestion)}</span>
         </div>
       ) : null}
       {from ? (
@@ -385,7 +426,7 @@ function answerNotes(...notes) {
 export function otherInvoiceAnswers(entry) {
   const create = { value: "create", label: "Adicionar como nova", tone: T.green };
   const ignore = { value: "ignore", label: "Não registrar", tone: T.inkLight };
-  if (entry.installment) {
+  if (entry.installment && seriesIsAnOption(entry)) {
     return [
       { value: "move_series", label: "Mover esta e as próximas parcelas", tone: T.blue },
       { value: "move", label: "Mover só esta", tone: T.blue },
@@ -393,7 +434,7 @@ export function otherInvoiceAnswers(entry) {
       ignore,
     ];
   }
-  return [{ value: "move", label: "Mover para esta fatura", tone: T.blue }, create, ignore];
+  return [{ value: "move", label: moveAnswerLabel(entry, "move"), tone: T.blue }, create, ignore];
 }
 
 /** A resposta do passo 2 está desligada? (mover pelo backend, `movable`/`series_movable`; adicionar pela decisão 1) */
@@ -405,21 +446,28 @@ export function otherInvoiceAnswerUnavailable(entry, value) {
 
 /** Por que as respostas desligadas do passo 2 estão desligadas. */
 function otherInvoiceNote(entry) {
-  const moveOff = otherInvoiceAnswerUnavailable(entry, "move") || (entry.installment && otherInvoiceAnswerUnavailable(entry, "move_series"));
+  const moveOff = otherInvoiceAnswerUnavailable(entry, "move")
+    || (entry.installment && seriesIsAnOption(entry) && otherInvoiceAnswerUnavailable(entry, "move_series"));
   return answerNotes(moveOff ? entry.move_refusal?.message : null, invoiceAnswerNote(entry));
 }
 
-/** A sugestão do passo 2 sem nenhuma mudança: só aí o "Confirmar sugestão". */
-export const untouchedMoveSuggestion = (entry) => Boolean(entry.suggested_answer) && entry.answer === entry.suggested_answer
-  && !entry.confirmed && Boolean(entry.fincla_transaction);
+/**
+ * A sugestão do passo 2 sem nenhuma mudança: só aí o "Confirmar sugestão". É a sugestão que a tela
+ * mostra (`shownMoveSuggestion`): "esta e as próximas" recusada vem pré-respondida "só esta".
+ */
+export const untouchedMoveSuggestion = (entry) => {
+  const suggestion = shownMoveSuggestion(entry);
+  return Boolean(suggestion) && entry.answer === suggestion && !entry.confirmed && Boolean(entry.fincla_transaction);
+};
 
 /**
  * Na dúvida respondida com uma compra da fatura vizinha que é parcela: trocar ali mesmo entre "Mover
- * só esta" e "Mover esta e as próximas parcelas" (decisão do orquestrador), como no passo 2.
+ * só esta" e "Mover esta e as próximas parcelas" (decisão do orquestrador), como no passo 2. Numa
+ * série uma fatura atrás a série não é opção (só "esta"): a troca não aparece.
  */
 function MoveChoice({ entry, busy, touch, onChoose }) {
   const installment = entry.fincla_transaction?.installment;
-  if (!isMoveAnswer(entry.answer) || !installment) return null;
+  if (!isMoveAnswer(entry.answer) || !installment || !seriesIsAnOption(entry)) return null;
   const options = [
     { value: "move", label: "Mover só esta", off: !entry.movable },
     { value: "move_series", label: "Mover esta e as próximas parcelas", off: !entry.series_movable },
@@ -655,7 +703,7 @@ export function InvoiceSearchResult({ entry, entries, invoice, candidate, busy, 
       invoiceMonth={invoiceMonthLabel(invoice)}
       pressed={linksTransaction(entry.answer) && entry.paired_transaction_id === candidate.id}
       takenBy={takenBy}
-      refusal={takenBy ? null : pickRefusal(entry, candidate, invoice)}
+      refusal={takenBy ? null : pickRefusal(candidate, invoice)}
       busy={busy}
       onPick={onPick}
     />

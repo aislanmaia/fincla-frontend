@@ -68,10 +68,25 @@ export type InvoiceMoveAnswer = 'move' | 'move_series';
  * PT-BR, e nomeia a fatura; `invoice_year`/`invoice_month` dizem qual fatura paga segura.
  */
 export interface MoveRefusal {
-  code: 'invoice_paid' | 'other_invoice_paid' | 'series_reconciled' | string;
+  code: 'invoice_paid' | 'other_invoice_paid' | 'series_reconciled' | 'series_off_invoice' | string;
   message: string;
   invoice_year: number | null;
   invoice_month: number | null;
+}
+
+/** Uma parcela vizinha da mesma compra e a fatura onde ela está hoje (`invoice: null` = em nenhuma deste cartão). */
+export interface SuggestionNeighbour {
+  number: number;
+  invoice: InvoiceBrief | null;
+}
+
+/**
+ * Por que a "Sugestão: …" de uma parcela (#559): onde estão HOJE as parcelas vizinhas da mesma compra
+ * (`previous: null` na 1ª, `next: null` na última). `null` à vista e fora do passo 2.
+ */
+export interface SuggestionBasis {
+  previous: SuggestionNeighbour | null;
+  next: SuggestionNeighbour | null;
 }
 
 /** Uma parcela da compra nova, na fatura em que cai (`invoice_month` = mês em que ela fecha). */
@@ -127,6 +142,16 @@ export interface InvoiceCandidate extends InvoiceFinclaTransaction {
   invoice: InvoiceBrief | null;
   /** Outro lançamento já respondido com ela (`pair`, `pair_sum`, `move`, `move_series`); escolher → 409. */
   taken_by_entry_id: string | null;
+  /**
+   * Calculados para ela, com o mesmo sentido do lançamento de outra fatura: a resposta que escolhê-la
+   * dá (`move`/`move_series`; `null` nesta fatura, onde é `pair`), se "Mover" e "Mover esta e as
+   * próximas" valem agora, por que um deles está desligado, e as parcelas vizinhas.
+   */
+  suggested_answer: InvoiceMoveAnswer | null;
+  movable: boolean;
+  series_movable: boolean;
+  move_refusal: MoveRefusal | null;
+  suggestion_basis: SuggestionBasis | null;
 }
 
 export interface InvoiceEntry {
@@ -191,6 +216,8 @@ export interface InvoiceEntry {
   series_movable: boolean;
   /** Por que um dos dois está desligado (mostre `message`); `null` = nenhum motivo. */
   move_refusal: MoveRefusal | null;
+  /** Onde estão hoje as parcelas vizinhas da mesma compra (o motivo da sugestão); `null` à vista. */
+  suggestion_basis: SuggestionBasis | null;
   /** As opções de uma dúvida, ao vivo, a mais parecida primeiro; vazio fora de `doubt` e de rascunho. */
   candidates: InvoiceCandidate[];
 }
@@ -353,7 +380,12 @@ export type CardInvoiceImportListItem = Pick<
  * conciliada ou uma anterior, onde entrou uma parcela); `null` nos outros códigos. A `message` já a
  * nomeia.
  */
-export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
+export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal' | 'to_restore'> & {
+  /**
+   * `invoice_back` (#559): a fatura para onde uma compra movida (`move`/`move_series`) volta, como
+   * está hoje; `null` se a fatura não muda no desfazer.
+   */
+  to_restore: (StatementUndoPreview['to_restore'][number] & { invoice_back: InvoiceBrief | null })[];
   refusal: {
     code: UndoRefusalCode | 'invoice_paid';
     message: string;
@@ -376,7 +408,11 @@ export interface UpdateChargeGroupRequest {
 }
 
 export interface UpdateInvoiceEntryRequest {
-  answer?: 'pair' | 'ignore' | 'create' | InvoiceMoveAnswer;
+  /**
+   * `null` (enviado) volta o lançamento a sem resposta (`confirmed: false`): o "Desfazer escolha" da
+   * primeira resposta. Nunca com `transaction_id` nem `confirmed: true` (→ 422).
+   */
+  answer?: 'pair' | 'ignore' | 'create' | InvoiceMoveAnswer | null;
   /**
    * Com `pair`/`move`/`move_series`: a transação escolhida (opção da dúvida ou da busca). Ausente = a
    * sugerida. `pair` só nesta fatura; `move`/`move_series` só na anterior ou na seguinte.
@@ -437,10 +473,32 @@ const normalizeBrief = (raw: unknown): InvoiceBrief | null => {
   return { id: Number(brief.id), year: Number(brief.year), month: Number(brief.month), status: String(brief.status ?? '') };
 };
 
+const normalizeNeighbour = (raw: unknown): SuggestionNeighbour | null => {
+  const neighbour = raw as Raw | null | undefined;
+  if (!neighbour) return null;
+  return { number: Number(neighbour.number), invoice: normalizeBrief(neighbour.invoice) };
+};
+
+const normalizeSuggestionBasis = (raw: unknown): SuggestionBasis | null => {
+  const basis = raw as Raw | null | undefined;
+  if (!basis) return null;
+  return { previous: normalizeNeighbour(basis.previous), next: normalizeNeighbour(basis.next) };
+};
+
+/** O que dá para mover (#559), comum ao lançamento de outra fatura e às opções/resultados da busca. */
+const normalizeMoveFields = (raw: Raw) => ({
+  suggested_answer: (raw.suggested_answer as InvoiceMoveAnswer | null) ?? null,
+  movable: Boolean(raw.movable),
+  series_movable: Boolean(raw.series_movable),
+  move_refusal: (raw.move_refusal as MoveRefusal | null) ?? null,
+  suggestion_basis: normalizeSuggestionBasis(raw.suggestion_basis),
+});
+
 export const normalizeInvoiceCandidate = (raw: Raw): InvoiceCandidate => ({
   ...(normalizeFincla(raw) as InvoiceFinclaTransaction),
   invoice: normalizeBrief(raw.invoice),
   taken_by_entry_id: (raw.taken_by_entry_id as string | null) ?? null,
+  ...normalizeMoveFields(raw),
 });
 
 export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
@@ -476,11 +534,8 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     charge_group_id: (raw.charge_group_id as string | null) ?? null,
     // Um backend sem o campo (anterior à #558): Adicionar vale onde a resposta vale.
     addable: raw.addable === undefined ? Boolean(raw.answerable) : Boolean(raw.addable),
-    suggested_answer: (raw.suggested_answer as InvoiceMoveAnswer | null) ?? null,
+    ...normalizeMoveFields(raw),
     other_invoice: normalizeBrief(raw.other_invoice),
-    movable: Boolean(raw.movable),
-    series_movable: Boolean(raw.series_movable),
-    move_refusal: (raw.move_refusal as MoveRefusal | null) ?? null,
     candidates: ((raw.candidates as Raw[]) ?? []).map(normalizeInvoiceCandidate),
   };
 };
@@ -759,7 +814,17 @@ export const previewCardInvoiceImportUndo = async (
   importId: string,
 ): Promise<CardInvoiceUndoPreview> => {
   const response = await apiClient.get(`${base(cardId)}/${importId}/undo-preview`, { params: { organization_id: organizationId } });
-  return normalizeStatementUndoPreview(response.data as Parameters<typeof normalizeStatementUndoPreview>[0]) as CardInvoiceUndoPreview;
+  return normalizeCardInvoiceUndoPreview(response.data as Raw);
+};
+
+/** A prévia do desfazer da fatura: as peças do extrato e a fatura para onde cada compra movida volta (#559). */
+export const normalizeCardInvoiceUndoPreview = (raw: Raw): CardInvoiceUndoPreview => {
+  const preview = normalizeStatementUndoPreview(raw as Parameters<typeof normalizeStatementUndoPreview>[0]);
+  const rawRestore = (raw.to_restore as Raw[] | undefined) ?? [];
+  return {
+    ...(preview as unknown as CardInvoiceUndoPreview),
+    to_restore: preview.to_restore.map((r, i) => ({ ...r, invoice_back: normalizeBrief(rawRestore[i]?.invoice_back) })),
+  };
 };
 
 /** Desfaz a conciliação concluída mais recente do cartão (tudo ou nada). */

@@ -27,7 +27,7 @@ import { AnswerSegment, Connector, UndoChoiceButton } from "./SuggestedPairsStep
 import {
   ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, openOnRowClick, useStableCallback,
 } from "./entryQueue.jsx";
-import { invoiceMonthLabel, isInvoiceEntryAnswered, unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
+import { invoiceMonthLabel, invoiceWhereLabel, isInvoiceEntryAnswered, seriesIsAnOption, unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
 import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
 
 /** As palavras da lista do passo: compras da fatura. */
@@ -248,11 +248,11 @@ export function PairConsequences({ entry }) {
   );
 }
 
-/** "Na fatura de janeiro/2027": a compra está em outra fatura do cartão (#559). */
+/** "Na fatura de janeiro/2027": a compra está em outra fatura do cartão (#559); "Fatura: não sabemos" sem ela. */
 export function OtherInvoiceBadge({ invoice }) {
   return (
     <Badge color={T.amber} bg={T.amberLight}>
-      <span data-testid="other-invoice-badge">Na fatura de {invoiceMonthLabel(invoice)}</span>
+      <span data-testid="other-invoice-badge">{invoice.unknown ? "Fatura: não sabemos" : `Na fatura de ${invoiceMonthLabel(invoice)}`}</span>
     </Badge>
   );
 }
@@ -299,7 +299,7 @@ export function InvoiceFinclaSide({
         [match.installment ? "Data da compra" : "Data", <Hl key="d" on={!skipped && dateDiffers}><span style={NUM}>{bankDateLabel(day)}</span></Hl>],
         ["Descrição", <span key="n"><b>{match.description}</b><InstallmentBadge installment={match.installment} /></span>],
         ["Valor", <Hl key="v" on={!skipped && valueDiffers}><FinclaAmount match={match} /></Hl>],
-        ["Fatura", elsewhere ? <Hl key="i" on={!skipped}>{invoiceMonthLabel(elsewhere)}</Hl> : invoiceMonth],
+        ["Fatura", elsewhere ? <Hl key="i" on={!skipped}>{invoiceWhereLabel(elsewhere)}</Hl> : invoiceMonth],
         ["Categoria", [match.category_name ?? "Não classificado", ...match.tag_names].join(" · ")],
       ]}
     />
@@ -489,12 +489,14 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, o
 
 /**
  * Os nomes das respostas de mover (#559): "Mover para esta fatura" (à vista), "Mover só esta" e
- * "Mover esta e as próximas parcelas" (parcela).
+ * "Mover esta e as próximas parcelas" (parcela), e "Mover esta parcela" quando a série não é uma
+ * opção (série uma fatura atrás: não há "só" a escolher).
  */
 export function moveAnswerLabel(entry, answer) {
   if (answer === "move_series") return "Mover esta e as próximas parcelas";
   const installment = entry.installment ?? entry.fincla_transaction?.installment;
-  return installment ? "Mover só esta" : "Mover para esta fatura";
+  if (!installment) return "Mover para esta fatura";
+  return seriesIsAnOption(entry) ? "Mover só esta" : "Mover esta parcela";
 }
 
 function rowSummary(entry) {

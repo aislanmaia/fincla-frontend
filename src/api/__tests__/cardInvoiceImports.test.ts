@@ -9,6 +9,8 @@ import {
   isCardInvoiceResponse,
   normalizeCardInvoiceImport,
   normalizeCardInvoiceImportListItem,
+  normalizeCardInvoiceUndoPreview,
+  normalizeInvoiceCandidate,
 } from '../cardInvoiceImports';
 import { normalizeStatementUndoPreview } from '../statementImports';
 
@@ -22,7 +24,7 @@ const KEYS = [
   // Encargos, tarifas e estornos (#558).
   'charge_group_id', 'addable',
   // Dúvidas e compras em outra fatura (#559).
-  'suggested_answer', 'other_invoice', 'movable', 'series_movable', 'move_refusal', 'candidates',
+  'suggested_answer', 'other_invoice', 'movable', 'series_movable', 'move_refusal', 'candidates', 'suggestion_basis',
 ];
 
 describe('normalizeCardInvoiceImport', () => {
@@ -357,6 +359,45 @@ describe('dúvidas e compras em outra fatura (#559)', () => {
     expect(mercado.movable).toBe(false);
     expect(mercado.move_refusal).toMatchObject({ code: 'other_invoice_paid', invoice_year: 2026, invoice_month: 12 });
     expect(mercado.move_refusal?.message).toMatch(/dezembro\/2026 já foi paga/);
+  });
+
+  it('cada opção e resultado da busca traz o que dá para mover e a sugestão calculada para ela', () => {
+    const [ahead, here, behind] = contract.search_neighbours.results.map((r) => normalizeInvoiceCandidate(raw(r)));
+    expect(ahead).toMatchObject({ id: 8, suggested_answer: 'move_series', movable: true, series_movable: true, move_refusal: null });
+    expect(ahead.suggestion_basis).toEqual({
+      previous: { number: 5, invoice: { id: 1, year: 2026, month: 12, status: 'open' } },
+      next: { number: 7, invoice: { id: 7, year: 2027, month: 2, status: 'open' } },
+    });
+    // Nesta fatura: é "Sim, é esta", nada a mover.
+    expect(here).toMatchObject({ id: 7, suggested_answer: null, movable: false, series_movable: false, move_refusal: null, suggestion_basis: null });
+    // Série uma fatura atrás: só esta, sem motivo.
+    expect(behind).toMatchObject({ id: 6, suggested_answer: 'move', movable: true, series_movable: false, move_refusal: null });
+    expect(behind.suggestion_basis?.previous).toEqual({ number: 3, invoice: { id: 4, year: 2026, month: 10, status: 'open' } });
+    // As opções da dúvida, nesta fatura.
+    const uber = one(contract.entry_doubt);
+    expect(uber.candidates.every((c) => c.suggested_answer === null && !c.movable && c.suggestion_basis === null)).toBe(true);
+    // O lançamento à vista do passo 2: sem base de sugestão.
+    expect(one(contract.entry_move).suggestion_basis).toBeNull();
+  });
+
+  it('a base da sugestão: parcela vizinha fora das faturas do cartão (invoice null) continua null', () => {
+    const basis = { previous: null, next: { number: 7, invoice: null } };
+    const candidate = normalizeInvoiceCandidate({ ...raw(contract.search_neighbours.results[0]), suggestion_basis: basis, invoice: null });
+    expect(candidate.suggestion_basis).toEqual(basis);
+    expect(candidate.invoice).toBeNull();
+    const old = raw(contract.search_neighbours.results[0]);
+    for (const key of ['suggested_answer', 'movable', 'series_movable', 'move_refusal', 'suggestion_basis']) delete old[key];
+    expect(normalizeInvoiceCandidate(old)).toMatchObject({ suggested_answer: null, movable: false, series_movable: false, move_refusal: null, suggestion_basis: null });
+  });
+
+  it('a prévia do desfazer do cartão: a fatura para onde a compra movida volta (invoice_back)', () => {
+    const preview = normalizeCardInvoiceUndoPreview(raw(contract.undo_preview));
+    const moved = preview.to_restore.filter((r) => r.invoice_back);
+    expect(moved.map((r) => [r.description, r.invoice_back])).toEqual([['Cafeteria', { id: 6, year: 2027, month: 1, status: 'open' }]]);
+    expect(preview.to_restore.find((r) => r.entity_id === '7')!.value_back).toBe(108.33);
+    const old = raw(contract.undo_preview);
+    for (const r of old.to_restore as Record<string, unknown>[]) delete r.invoice_back;
+    expect(normalizeCardInvoiceUndoPreview(old).to_restore.every((r) => r.invoice_back === null)).toBe(true);
   });
 
   it('a leitura desatualizada (stale_draft): changed_since_read, o bloqueio e nada a concluir', () => {

@@ -133,6 +133,14 @@ export function itemsCountText(items, one = "lançamento", many = "lançamentos"
 export const MOVE_ANSWERS = new Set(["move", "move_series"]);
 export const isMoveAnswer = (answer) => MOVE_ANSWERS.has(answer);
 
+/**
+ * "Mover esta e as próximas" é uma opção para esta parcela (o lançamento do passo 2, ou uma opção da
+ * dúvida/busca)? Não numa série uma fatura atrás (`series_movable: false` sem `move_refusal`, #559):
+ * lá ela nunca vale, e a parcela se move sozinha, como uma compra à vista. Desligada COM motivo, ela
+ * continua à vista, com o motivo.
+ */
+export const seriesIsAnOption = (item) => Boolean(item.series_movable || item.move_refusal || item.answer === "move_series");
+
 /** A resposta liga o lançamento a uma compra do Fincla (a desta fatura, ou a movida de outra). */
 export const linksTransaction = (answer) => answer === "pair" || isMoveAnswer(answer);
 
@@ -234,6 +242,15 @@ export function invoiceStepProgress(invoiceImport, passed) {
 const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 export const invoiceMonthName = (month) => MONTHS[(Number(month) || 1) - 1];
 export const invoiceMonthLabel = ({ year, month }) => `${invoiceMonthName(month)}/${year}`;
+
+/**
+ * A fatura de uma opção da dúvida ou da busca que o backend não sabe dizer (`invoice: null`, #559):
+ * a tela escreve "não sabemos", nunca um mês inventado.
+ */
+export const UNKNOWN_INVOICE = Object.freeze({ id: null, year: null, month: null, status: null, unknown: true });
+
+/** "janeiro/2027", ou "não sabemos" para a fatura desconhecida. */
+export const invoiceWhereLabel = (invoice) => (!invoice || invoice.unknown ? "não sabemos" : invoiceMonthLabel(invoice));
 
 /** "03" de 3: a parcela como o banco imprime. */
 export const pad2 = (n) => String(n).padStart(2, "0");
