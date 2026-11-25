@@ -132,13 +132,14 @@ function installmentsDetail(entry) {
  */
 export function InvoiceNewStep({
   entries, queue, form, isMobile, answering, onChangeEntry, onConfirmEntry, answeredRef = null,
-  stepKey = "new", question = QUESTION, cardLabel = "Compra", leading = null, shortcutKeys = null,
+  stepKey = "new", question = QUESTION, cardLabel = "Compra", leading = null, shortcutKeys = null, pendingText = undefined,
 }) {
   return (
     <NewEntriesStep
       stepKey={stepKey}
       leading={leading}
       shortcutKeys={shortcutKeys}
+      pendingText={pendingText}
       entries={entries}
       groups={[]}
       categories={form.categories}

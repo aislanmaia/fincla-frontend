@@ -15,6 +15,7 @@ import { handleApiError } from "../../../api/client";
 import { bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel } from "./InvoicePaymentStep.jsx";
 import { ErrorNote } from "./StatementImportNotes.jsx";
+import { invoiceMonthLabel } from "./invoiceSteps.js";
 
 /** As palavras do desfazer do extrato (o texto aprovado da #509). */
 export const STATEMENT_UNDO_WORDS = {
@@ -102,6 +103,11 @@ function RestoredTransactionRow({ entity }) {
       {entity.date_back ? (
         <span data-testid="undo-date-back" style={{ ...NUM, fontSize: 12, color: T.ink }}>
           A data volta a <b>{dayMonthLabel(entity.date_back)}</b> (a conciliação tinha mudado para {dayMonthLabel(entity.date_changed_to)}).
+        </span>
+      ) : null}
+      {entity.invoice_back ? (
+        <span data-testid="undo-invoice-back" style={{ fontSize: 12, color: T.ink }}>
+          Volta para a fatura de <b>{invoiceMonthLabel(entity.invoice_back)}</b> (a conciliação a tinha movido para esta).
         </span>
       ) : null}
       {entity.account_back ? (
