@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
-import { T } from "../tokens";
+import { T, TOUCH_TARGET } from "../tokens";
 import { G } from "../typography";
 import { FC } from "../routing/searchContract.js";
 import { Btn, Card } from "../components/primitives";
@@ -138,7 +138,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
       {onReconcileInvoice ? (
         <>
           <span style={{ flex: 1 }} />
-          <Btn variant="outGray" small onClick={() => onReconcileInvoice(cardId)}>Conciliar fatura</Btn>
+          <Btn variant="outGray" small onClick={() => onReconcileInvoice(cardId)} style={isMobile ? { minHeight: TOUCH_TARGET } : undefined}>Conciliar fatura</Btn>
         </>
       ) : null}
     </div>

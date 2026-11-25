@@ -71,7 +71,7 @@ function useCardOf(organizationId, cardPublicId) {
     const forKey = `${organizationId}|${cardPublicId}`;
     listCreditCards(organizationId)
       .then((cards) => { if (alive) setState({ for: forKey, card: cards.find((c) => c.public_id === cardPublicId) ?? null, error: "" }); })
-      .catch((err) => { if (alive) setState({ for: forKey, card: null, error: handleApiError(err) }); });
+      .catch((err) => { if (alive) setState({ for: forKey, card: null, error: cardApiError(err) }); });
     return () => { alive = false; };
   }, [organizationId, cardPublicId]);
   if (state.for !== wanted) return { card: null, error: "", loaded: false };
@@ -111,7 +111,7 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
     } catch (err) {
       const running = invoiceDraftInProgressOf(err);
       if (running) setInProgress(running);
-      else setError(handleApiError(err));
+      else setError(cardApiError(err));
       setSending(false);
     }
   };
@@ -139,6 +139,16 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * A API devolve o mesmo 404 do extrato ("Conciliação não encontrada nesta conta.") nas rotas do
+ * cartão; aqui a pessoa está num cartão, então a frase diz "neste cartão" (QA F1, entrega 001).
+ */
+const ACCOUNT_NOT_FOUND = "Conciliação não encontrada nesta conta.";
+function cardApiError(err) {
+  const message = handleApiError(err);
+  return message === ACCOUNT_NOT_FOUND ? "Conciliação não encontrada neste cartão." : message;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -176,16 +186,28 @@ function ContextChips({ invoiceImport }) {
   );
 }
 
-/** "Reconhecemos este arquivo como a fatura do <cartão> de <mês>…", com "escolha outro cartão". */
+/**
+ * "Reconhecemos este arquivo como a fatura do <cartão> de <mês>…", com "escolha outro cartão". Com o
+ * PDF de outro cartão (`other_card`) o final NÃO bate: só diz em que fatura o rascunho está, sem
+ * afirmar o reconhecimento pelo final (o aviso de outro cartão logo abaixo diz de quem é o PDF).
+ */
 function RecognitionNotice({ invoiceImport, onOtherCard }) {
-  const { credit_card: card, invoice } = invoiceImport;
+  const { credit_card: card, invoice, card_check: cardCheck } = invoiceImport;
   const due = invoice.due_date ? invoice.due_date.slice(8, 10) + "/" + invoice.due_date.slice(5, 7) : null;
+  const otherCard = cardCheck?.status === "other_card";
+  const invoiceLabel = (
+    <>
+      <b>fatura do {card.name} de {invoiceMonthName(invoice.month)}</b>
+      {due ? <> (vencimento <b style={NUM}>{due}</b>)</> : null}
+    </>
+  );
   return (
     <div data-testid="recognition-notice" role="note" style={{ ...G, fontSize: 13, color: T.ink, background: T.blueLight, border: `1px solid ${T.blue}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 8, alignItems: "baseline" }}>
       <Info size={14} aria-hidden="true" style={{ color: T.blue, flexShrink: 0, alignSelf: "center" }} />
       <span>
-        Reconhecemos este arquivo como a <b>fatura do {card.name} de {invoiceMonthName(invoice.month)}</b>
-        {due ? <> (vencimento <b style={NUM}>{due}</b>)</> : null}, pelo final do cartão e pelo vencimento que vêm no PDF. Se não for,{" "}
+        {otherCard
+          ? <>Esta conciliação está na {invoiceLabel}, pelo vencimento que vem no PDF. Se não for,{" "}</>
+          : <>Reconhecemos este arquivo como a {invoiceLabel}, pelo final do cartão e pelo vencimento que vêm no PDF. Se não for,{" "}</>}
         <button type="button" onClick={onOtherCard} style={{ ...G, background: "none", border: 0, padding: 0, fontSize: 13, fontWeight: 600, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
           escolha outro cartão
         </button>.
@@ -417,7 +439,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
         setCurrent(data.current_step ?? firstInvoiceStepWithWork(data.entries));
         setPassed(new Set(data.reviewed_steps ?? []));
       })
-      .catch((err) => { if (alive) setLoadError(handleApiError(err)); });
+      .catch((err) => { if (alive) setLoadError(cardApiError(err)); });
     return () => { alive = false; };
   }, [cardId, organizationId, importId, setImport]);
 
@@ -438,7 +460,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     const progress = { current_step: stepKey, reviewed_steps: INVOICE_STEPS.map((s) => s.key).filter((key) => reviewed.has(key)) };
     progressQueue.current = progressQueue.current
       .then(() => updateCardInvoiceImportProgress(cardId, organizationId, importId, progress))
-      .catch((err) => setActionError(handleApiError(err)));
+      .catch((err) => setActionError(cardApiError(err)));
   };
 
   // O lançamento que o PATCH devolveu entra na tela no mesmo commit em que o cartão recolhe: a linha
@@ -463,7 +485,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       setLastBulk(null);
       await reload();
     } catch (err) {
-      setActionError(handleApiError(err));
+      setActionError(cardApiError(err));
     } finally {
       setAnswering(false);
     }
@@ -482,7 +504,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       queue.open(entry.id);
       await reload();
     } catch (err) {
-      setActionError(handleApiError(err));
+      setActionError(cardApiError(err));
     } finally {
       setAnswering(false);
     }
@@ -498,7 +520,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       else if (entryIds.length) queue.open(entryIds[0]);
       return true;
     } catch (err) {
-      setActionError(handleApiError(err));
+      setActionError(cardApiError(err));
       return false;
     } finally {
       setAnswering(false);
@@ -519,7 +541,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     try {
       setImport(await concludeCardInvoiceImport(cardId, organizationId, importId));
     } catch (err) {
-      setActionError(handleApiError(err));
+      setActionError(cardApiError(err));
       await reload().catch(() => {});
     } finally {
       setConcluding(false);

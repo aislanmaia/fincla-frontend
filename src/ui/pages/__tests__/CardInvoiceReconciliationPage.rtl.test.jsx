@@ -145,6 +145,43 @@ describe("o topo da conciliação da fatura", () => {
     expect(notice).toHaveTextContent("O PDF é do cartão final 4321.");
     expect(notice).toHaveTextContent("Se ela é mesmo deste cartão, pode seguir");
     expect(within(notice).queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("recognition-notice")).not.toHaveTextContent("pelo final do cartão");
+  });
+
+  // QA F1 BUG-01: o aviso azul dizia "Reconhecemos… pelo final do cartão" e o amarelo, logo abaixo,
+  // que o PDF é de outro final. Com `other_card`, o azul só diz em que fatura está o rascunho.
+  it("PDF de outro cartão: o aviso azul não afirma o reconhecimento pelo final, só em que fatura está", async () => {
+    draft.card_check = clone(contract.card_check_other_card);
+    await openDraft();
+
+    const recognition = screen.getByTestId("recognition-notice");
+    expect(recognition).toHaveTextContent(
+      "Esta conciliação está na fatura do Itaú Visa de dezembro (vencimento 10/12), pelo vencimento que vem no PDF. Se não for, escolha outro cartão.",
+    );
+    expect(recognition).not.toHaveTextContent("Reconhecemos");
+    expect(recognition).not.toHaveTextContent("pelo final do cartão");
+    expect(screen.getByTestId("other-card-notice")).toHaveTextContent("O PDF é do cartão final 4321");
+  });
+
+  it("PDF do mesmo cartão (same_card): o reconhecimento pelo final continua, sem aviso de outro cartão", async () => {
+    draft.card_check = { status: "same_card", file_last4: CARD.last4, suggested_card: null };
+    await openDraft();
+
+    expect(screen.getByTestId("recognition-notice")).toHaveTextContent(
+      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no PDF. Se não for, escolha outro cartão.",
+    );
+    expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
+  });
+
+  // QA F1: a API devolve o 404 do extrato ("…nesta conta."); na rota do cartão a frase diz "neste cartão".
+  it("conciliação que não existe neste cartão (404): diz 'neste cartão', não 'nesta conta'", async () => {
+    server.use(http.get(`${BASE}/${IMPORT}`, () =>
+      HttpResponse.json({ detail: { code: "not_found", message: "Conciliação não encontrada nesta conta." } }, { status: 404 })));
+    params = { cardId: CARD.public_id, importId: IMPORT };
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByText("Conciliação não encontrada neste cartão.")).toBeInTheDocument();
+    expect(screen.queryByText(/nesta conta/)).not.toBeInTheDocument();
   });
 
   it("o PDF de outro cartão da organização só avisa, com Conciliar no cartão X", async () => {
@@ -159,6 +196,16 @@ describe("o topo da conciliação da fatura", () => {
 });
 
 describe("o passo Confirmar compras encontradas", () => {
+  // QA F1: no celular as respostas tinham 32 px; alvo de toque é 44 px. No computador, 32 px.
+  it.each([[false, "32px"], [true, "44px"]])("as respostas têm altura de alvo de toque só no celular (mobile=%s → %s)", async (isMobile, height) => {
+    params = { cardId: CARD.public_id, importId: IMPORT };
+    render(<CardInvoiceReconciliationPage organizationId={ORG} isMobile={isMobile} />);
+    await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
+
+    const answers = within(card("MERCADO BOA VISTA")).getByRole("group", { name: /já está no Fincla/ });
+    for (const button of within(answers).getAllByRole("button")) expect(button.style.minHeight).toBe(height);
+  });
+
   it("a sugestão intacta vem marcada, com Confirmar sugestão ao lado das respostas e o que acontece ao concluir", async () => {
     await openDraft();
 

@@ -348,6 +348,7 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
           onAnswer={(value) => onAnswer(entry, value)}
           confirm={confirm}
           note={paidNote}
+          touch={isMobile}
         />
       </footer>
       {outcome ? (

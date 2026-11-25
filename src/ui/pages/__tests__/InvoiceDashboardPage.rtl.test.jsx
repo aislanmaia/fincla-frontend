@@ -238,6 +238,13 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.queryByRole("button", { name: "Conciliar fatura" })).not.toBeInTheDocument();
   });
 
+  // QA F1: no celular o botão tinha 26 px de altura; alvo de toque é 44 px. No computador, como era.
+  it.each([[false, ""], [true, "44px"]])("Conciliar fatura tem altura de alvo de toque só no celular (mobile=%s)", async (isMobile, height) => {
+    mockApi();
+    renderPage({ isMobile, onReconcileInvoice: vi.fn() });
+    expect((await screen.findByRole("button", { name: "Conciliar fatura" })).style.minHeight).toBe(height);
+  });
+
   it("segue a hierarquia da Direção C com resumos fundamentados e filtro por modalidade", async () => {
     const calls = mockApi();
     const user = userEvent.setup();
