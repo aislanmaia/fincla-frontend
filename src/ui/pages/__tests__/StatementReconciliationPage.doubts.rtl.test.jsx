@@ -13,6 +13,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -111,9 +112,9 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-const openDraft = async () => {
+const openDraft = async (props = {}) => {
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...props} />);
   await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
 };
 
@@ -733,5 +734,16 @@ describe("Confirmar ao lado das respostas nas dúvidas (fincla-api#507)", () => 
         delete Element.prototype.scrollIntoView;
       }
     });
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Decidir casos com dúvida fica abaixo de 44 px; no computador as respostas ficam como eram", async () => {
+    await openDraft({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+    cleanup();
+
+    await openDraft();
+    expect(screen.getAllByRole("button", { name: "Não registrar" })[0].style.minHeight).toBe("32px");
   });
 });

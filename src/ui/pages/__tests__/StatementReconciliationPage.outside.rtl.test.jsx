@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -81,9 +82,9 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-const openDraft = async () => {
+const openDraft = async (props = {}) => {
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...props} />);
   // O rascunho do exemplo parou em "Ver o que fica de fora".
   await screen.findByRole("heading", { name: "Ver o que fica de fora" });
 };
@@ -383,5 +384,12 @@ describe("o mesmo arquivo de novo", () => {
     // A lista "Extratos importados" também já o mostra, e o aviso continua.
     expect(screen.getAllByTestId("imported-statement")).toHaveLength(1);
     expect(screen.getByTestId("draft-in-progress-notice")).toHaveTextContent(contract.draft_in_progress.message);
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Ver o que fica de fora fica abaixo de 44 px", async () => {
+    await openDraft({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
   });
 });

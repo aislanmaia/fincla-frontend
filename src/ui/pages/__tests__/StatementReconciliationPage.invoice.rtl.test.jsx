@@ -12,6 +12,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -64,9 +65,9 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-const openDraft = async () => {
+const openDraft = async (props = {}) => {
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...props} />);
   await screen.findByRole("heading", { name: "Conferir pagamento de fatura" });
 };
 
@@ -438,5 +439,12 @@ describe("desfazer", () => {
     expect(within(row).getByText("Editada depois: data de pagamento")).toBeInTheDocument();
     expect(row).toHaveTextContent("Você mudou o pagamento dela depois da conciliação: fica como você deixou.");
     expect(screen.queryByTestId("undo-invoice-reopens")).not.toBeInTheDocument();
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Conferir pagamento de fatura fica abaixo de 44 px", async () => {
+    await openDraft({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
   });
 });

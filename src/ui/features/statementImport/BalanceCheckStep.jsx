@@ -12,14 +12,14 @@ import { AlertTriangle, Check, Info, Link2, X } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge, Btn, Card } from "../../components/primitives";
+import { Badge, Btn, Card, useTouchTarget } from "../../components/primitives";
 import { plural } from "../../plural.js";
 import { formatMoney, formatMoneySigned } from "../../money/formatMoney.js";
 
 /** Com sinal (−/+), e zero sem sinal: "R$ 0,00". */
 const signed = (value, currency) => (value === 0 ? formatMoney(0, currency) : formatMoneySigned(value, currency));
 import { todayLocalYmd } from "../../data/transactionsAdapter.js";
-import { DELETE_BG, DELETE_CARD_BG, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
+import { CheckTarget, DELETE_BG, DELETE_CARD_BG, MONTH_NAMES, bankDateLabel, dayMonthLabel } from "./StatementEntryCard.jsx";
 import { invoiceLabel, invoiceUnavailable, invoiceUnavailableText, isPaidNow } from "./InvoicePaymentStep.jsx";
 import { ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, TRANSACTION_NOUN, openOnRowClick } from "./entryQueue.jsx";
 
@@ -262,14 +262,16 @@ function UnmatchedSummary({ item, selected, onSelect, busy }) {
   const struck = item.check === "delete";
   return (
     <>
-      <input
-        type="checkbox"
-        aria-label={`Marcar ${item.description}`}
-        checked={selected}
-        disabled={busy}
-        onChange={() => onSelect(item)}
-        style={{ marginTop: 3 }}
-      />
+      <CheckTarget style={{ alignItems: "flex-start" }}>
+        <input
+          type="checkbox"
+          aria-label={`Marcar ${item.description}`}
+          checked={selected}
+          disabled={busy}
+          onChange={() => onSelect(item)}
+          style={{ marginTop: 3 }}
+        />
+      </CheckTarget>
       <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <b style={{ fontSize: 13, color: T.ink, textDecoration: struck ? "line-through" : "none", wordBreak: "break-word" }}>{item.description}</b>
@@ -310,6 +312,7 @@ function ChangeDateForm({ item, periodEnd, busy, onApply, onCancel }) {
   const [day, setDay] = useState(item.new_date ?? item.day);
   const today = todayLocalYmd();
   const valid = Boolean(day) && day <= today && day !== item.day;
+  const touchTarget = useTouchTarget();
   return (
     <div data-testid="change-date-form" style={{ ...G, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12 }}>
       <label htmlFor={`new-date-${item.transaction_id}`} style={{ color: T.inkMid }}>Nova data</label>
@@ -319,7 +322,7 @@ function ChangeDateForm({ item, periodEnd, busy, onApply, onCancel }) {
         value={day}
         max={today}
         onChange={(e) => setDay(e.target.value)}
-        style={{ ...G, fontSize: 13, padding: "4px 8px", border: `1px solid ${T.border}`, borderRadius: 8 }}
+        style={{ ...G, fontSize: 13, padding: "4px 8px", border: `1px solid ${T.border}`, borderRadius: 8, ...touchTarget }}
       />
       <Btn variant="dark" small disabled={!valid || busy} onClick={() => onApply(item, day)}>Mudar para esta data</Btn>
       <Btn variant="outGray" small onClick={onCancel}>Cancelar</Btn>
@@ -655,6 +658,7 @@ export function BalanceCheckStep({
   onUndoLink,
   onGoToPending,
   onRedecide,
+  isMobile = false,
 }) {
   const [selected, setSelected] = useState(() => new Set());
   const [itemHistory, setItemHistory] = useState({});
@@ -722,7 +726,7 @@ export function BalanceCheckStep({
       ) : null}
       {items.length ? (
         <>
-          <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} shortcutKeys={[]} noun={TRANSACTION_NOUN}>
+          <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} shortcutKeys={[]} noun={TRANSACTION_NOUN} touch={isMobile}>
             {items.length > 1 ? (
               <Btn variant="outGray" small onClick={() => setSelected(allOn ? new Set() : new Set(items.map((i) => i.transaction_id)))}>
                 {allOn ? "Desmarcar todas" : `Marcar todas (${items.length.toLocaleString("pt-BR")})`}

@@ -9,15 +9,15 @@
 import { memo, useEffect, useRef } from "react";
 import { ChevronRight } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge, Btn } from "../../components/primitives";
+import { Badge, Btn, useTouchTarget } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
 import {
   CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, StatementEntryCard, bankDateLabel, useDescriptionDraft,
 } from "./StatementEntryCard.jsx";
-import { BankSide, Connector, IgnoredSide, StatusBadge, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
+import { ANSWER_ROW, BankSide, Connector, IgnoredSide, StatusBadge, TOUCH_ANSWER_ROW, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import { FinclaMatchBox, MATCH_BOX, matchTitle, paidWord } from "./FinclaMatchBox.jsx";
 import {
   ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
@@ -85,10 +85,12 @@ function Answers({ entry, busy, wantPair, desc, onYes, onAnswer, onChange, onSea
     { value: "create", label: "Não, adicionar agora", tone: T.green, pressed: entry.answer === "create" },
     { value: "ignore", label: "Não registrar", tone: T.inkLight, pressed: entry.answer === "ignore" },
   ];
+  // Celular: alvos de 44 px e a fileira que quebra sem fio solto, como a dos pares sugeridos.
+  const touch = Boolean(useTouchTarget());
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{QUESTION}</span>
-      <div role="group" data-answer-row="" aria-label={QUESTION} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
+      <div role="group" data-answer-row="" aria-label={QUESTION} style={touch ? TOUCH_ANSWER_ROW : ANSWER_ROW}>
         {buttons.map((b, index) => (
           <button
             key={b.value}
@@ -104,9 +106,12 @@ function Answers({ entry, busy, wantPair, desc, onYes, onAnswer, onChange, onSea
               else onAnswer(entry, { answer: b.value });
             }}
             style={{
-              ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
-              border: 0, borderRight: index < buttons.length - 1 ? `1px solid ${T.border}` : 0,
-              background: b.pressed ? b.tone : "transparent", color: b.pressed ? "#fff" : T.inkLight,
+              ...G, minHeight: touch ? TOUCH_TARGET : 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer",
+              border: 0,
+              ...(touch
+                ? { flex: "1 1 auto", background: b.pressed ? b.tone : T.bg }
+                : { borderRight: index < buttons.length - 1 ? `1px solid ${T.border}` : 0, background: b.pressed ? b.tone : "transparent" }),
+              color: b.pressed ? "#fff" : T.inkLight,
             }}
           >
             {b.label}
@@ -311,7 +316,7 @@ export function DoubtStep({
   const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} />
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} />
       <p role="status" style={{ ...G, ...NUM, fontSize: 13, color: pending ? T.amber : T.green, margin: 0 }}>
         {pending ? `${plural(pending, "lançamento para responder", "lançamentos para responder")} de ${entries.length}` : "Todos respondidos"}
       </p>

@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -337,6 +338,35 @@ describe("confirmar na página", () => {
   });
 });
 
+describe("trocar de importação na mesma rota", () => {
+  it("de A para B: a confirmação aberta e o erro de A não passam para B", async () => {
+    const OTHER = "other-import";
+    server.use(
+      http.post(`${BASE}/undo`, () => HttpResponse.json({ detail: { code: "business_rule", message: "Recusado em A." } }, { status: 422 })),
+      http.get(`*/v1/accounts/${ACCOUNT}/statement-imports/${OTHER}/undo-preview`, () => {
+        calls.push({ preview: OTHER });
+        return HttpResponse.json(clone(contract.undo_preview));
+      }),
+    );
+    const user = userEvent.setup();
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    const { rerender } = render(<StatementImportUndoPage organizationId={ORG} />);
+    await user.click(await screen.findByRole("button", { name: "Desfazer importação" }));
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer importação" }));
+    expect(await screen.findByText("Recusado em A.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    expect(screen.getByRole("group", { name: "Confirmar desfazer importação" })).toBeInTheDocument();
+
+    params = { accountId: ACCOUNT, importId: OTHER };
+    rerender(<StatementImportUndoPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("button", { name: "Desfazer importação" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Confirmar desfazer importação" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Recusado em A.")).not.toBeInTheDocument();
+    expect(calls).toContainEqual({ preview: OTHER });
+  });
+});
+
 describe("quando não dá para desfazer", () => {
   it("importação que não é a mais recente: mostra o motivo e o que ela fez, sem botão", async () => {
     preview = clone(contract.undo_refused);
@@ -371,5 +401,16 @@ describe("quando não dá para desfazer", () => {
     render(<StatementImportUndoPage organizationId={ORG} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Conciliação não encontrada nesta conta.");
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle da prévia nem da confirmação fica abaixo de 44 px", async () => {
+    const user = userEvent.setup();
+    await open({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    expect(smallTouchTargets(document.body)).toEqual([]);
   });
 });

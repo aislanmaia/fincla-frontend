@@ -16,7 +16,7 @@ import { Check, ChevronRight, Info, Link2 } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge, Btn, Card } from "../../components/primitives";
+import { Badge, Btn, Card, useTouchTarget } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { SKIP_BG, SkipBadge, StatementEntryCard, bankDateLabel } from "./StatementEntryCard.jsx";
 import { ConferidoBadge, EntrySlot, ROW_CLICKABLE, answerTone, openOnRowClick } from "./entryQueue.jsx";
@@ -62,13 +62,14 @@ function beforeStartTexts(leftOut) {
 }
 
 function SectionToggle({ expanded, onToggle, title, count, note, tone = "neutral", controls }) {
+  const touchTarget = useTouchTarget();
   return (
     <button
       type="button"
       aria-expanded={expanded}
       aria-controls={controls}
       onClick={onToggle}
-      style={{ ...G, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: "100%", textAlign: "left", cursor: "pointer", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px" }}
+      style={{ ...G, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: "100%", textAlign: "left", cursor: "pointer", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", ...touchTarget }}
     >
       <ChevronRight size={14} aria-hidden="true" style={{ color: T.inkMid, transform: expanded ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
       <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{title}</span>

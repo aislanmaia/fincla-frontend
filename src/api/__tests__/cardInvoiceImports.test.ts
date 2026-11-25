@@ -3,7 +3,13 @@
 import { describe, expect, it } from 'vitest';
 
 import contract from '../__fixtures__/card_invoice_import.example.json';
-import { invoiceDraftInProgressOf, isCardInvoiceResponse, normalizeCardInvoiceImport } from '../cardInvoiceImports';
+import {
+  invoiceDraftInProgressOf,
+  isCardInvoiceResponse,
+  normalizeCardInvoiceImport,
+  normalizeCardInvoiceImportListItem,
+} from '../cardInvoiceImports';
+import { normalizeStatementUndoPreview } from '../statementImports';
 
 const KEYS = [
   'id', 'position', 'date', 'bank_description', 'amount', 'section', 'installment', 'next_installments', 'foreign_amount',
@@ -75,5 +81,79 @@ describe('o envio pela área da conta', () => {
       message: contract.draft_in_progress.message,
     });
     expect(invoiceDraftInProgressOf({ response: { status: 409, data: { detail: { reason: 'draft_in_progress', import_id: 'x' } } } })).toBeNull();
+  });
+});
+
+// Segunda entrega (#556): desfazer, rascunho, "Faturas conciliadas" e reimportação.
+describe('desfazer, rascunho e reimportação (#556)', () => {
+  const raw = (value: unknown) => JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+
+  it('o detalhe traz file_check, undone_at, latest_concluded e já conferidos no resumo', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.draft));
+    expect(draft.file_check).toEqual({ status: 'new', import_id: null, concluded_at: null });
+    expect(draft.undone_at).toBeNull();
+    expect(draft.latest_concluded).toBe(false);
+    expect(draft.summary.already_reconciled).toBe(0);
+    expect(normalizeCardInvoiceImport(raw(contract.concluded)).latest_concluded).toBe(true);
+  });
+
+  it('sem file_check (backend anterior), o arquivo conta como novo', () => {
+    const old = raw(contract.draft);
+    delete old.file_check;
+    delete (old.summary as Record<string, unknown>).already_reconciled;
+    const draft = normalizeCardInvoiceImport(old);
+    expect(draft.file_check.status).toBe('new');
+    expect(draft.summary.already_reconciled).toBe(0);
+  });
+
+  it('reimportação: o arquivo já conciliado e os já conferidos (reconciled), só leitura', () => {
+    for (const entry of contract.reimport.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
+    const again = normalizeCardInvoiceImport(raw(contract.reimport));
+    expect(again.file_check).toEqual(contract.reimport.file_check);
+    expect(again.summary.already_reconciled).toBe(4);
+    const conferred = again.entries.filter((e) => e.classification === 'reconciled');
+    expect(conferred).toHaveLength(4);
+    for (const entry of conferred) {
+      expect(entry.answer).toBe('reconciled');
+      expect(entry.confirmed).toBe(true);
+      expect(entry.answerable).toBe(false);
+      expect(entry.fincla_transaction?.id).toBe(entry.paired_transaction_id);
+    }
+  });
+
+  it('a lista: o detalhe sem entries, com o dinheiro convertido e null que continua null', () => {
+    const items = contract.list.imports.map((i) => normalizeCardInvoiceImportListItem(raw(i)));
+    expect(items.map((i) => i.status)).toEqual(['draft', 'undone', 'concluded']);
+    const [draft, undone, concluded] = items;
+    expect(draft.current_step).toBe('doubt');
+    expect(draft.final_difference).toBeNull();
+    expect(draft.expires_at).toBe(contract.list.imports[0].expires_at);
+    expect(draft.summary.already_reconciled).toBe(4);
+    expect(undone.undone_at).toBe(contract.list.imports[1].undone_at);
+    expect(undone.final_difference).toEqual({ amount: 1512.08, currency: 'BRL' });
+    expect(concluded.latest_concluded).toBe(true);
+    expect(concluded.invoice.total).toEqual({ amount: 890.84, currency: 'BRL' });
+    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 890.84, difference: 1512.08, currency: 'BRL' });
+    expect(items.filter((i) => i.latest_concluded)).toHaveLength(1);
+  });
+
+  it('a prévia do desfazer usa as peças do extrato: o valor que volta vira número + moeda', () => {
+    const preview = normalizeStatementUndoPreview(raw(contract.undo_preview) as never);
+    expect(preview.can_undo).toBe(true);
+    const loja = preview.to_restore.find((r) => r.entity_id === '7')!;
+    expect(loja.edited_after).toBe(true);
+    expect(loja.changed_fields).toEqual(['description']);
+    expect(loja.value_back).toBe(108.33);
+    expect(loja.value_back_currency).toBe('BRL');
+    expect(preview.to_restore.find((r) => r.entity_id === '1')!.value_back).toBeNull();
+    const refused = normalizeStatementUndoPreview(raw(contract.undo_preview_refused) as never);
+    expect(refused.refusal?.code).toBe('not_latest');
+  });
+
+  it('a desfeita: status undone, undone_at e o que o desfazer apagou', () => {
+    const undone = normalizeCardInvoiceImport(raw(contract.undone));
+    expect(undone.status).toBe('undone');
+    expect(undone.undone_at).toBe(contract.undone.undone_at);
+    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(0);
   });
 });

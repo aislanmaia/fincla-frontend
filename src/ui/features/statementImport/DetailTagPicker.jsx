@@ -2,6 +2,7 @@
 import { Check } from "lucide-react";
 
 import { T } from "../../tokens";
+import { useTouchTarget } from "../../components/primitives";
 import { G } from "../../typography";
 
 const HELP = { ...G, fontSize: 11, color: T.inkLight };
@@ -17,6 +18,7 @@ export function detailsOfCategory(details, categoryId) {
  * categoria no backend tira as que não são dela, e a tela mostra o que voltou.
  */
 export function DetailTagPicker({ categoryId, categoryLabel, details, selected, onChange }) {
+  const touchTarget = useTouchTarget();
   const own = detailsOfCategory(details, categoryId);
   if (!categoryId) return <span style={HELP}>Escolha uma categoria para ver as etiquetas dela.</span>;
   if (!own.length) return <span style={HELP}>Esta categoria não tem etiquetas.</span>;
@@ -39,6 +41,7 @@ export function DetailTagPicker({ categoryId, categoryLabel, details, selected, 
               ...G, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
               padding: "4px 10px", borderRadius: 9999,
               border: `1px solid ${on ? T.blue : T.border}`, background: on ? T.blueLight : T.surface, color: on ? T.blue : T.inkMid,
+              ...touchTarget,
             }}
           >
             {on ? <Check size={11} aria-hidden="true" /> : null}

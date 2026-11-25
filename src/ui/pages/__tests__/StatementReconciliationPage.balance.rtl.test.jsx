@@ -13,6 +13,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -92,7 +93,7 @@ const setup = ({ step = "balance", edit = null } = {}) => {
 const openPage = async (options) => {
   setup(options);
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...options?.props} />);
   await screen.findByRole("heading", { name: options?.step === "summary" ? "Revisar e concluir" : "Conferir o saldo" });
   if ((options?.step ?? "balance") === "balance") await screen.findByTestId("balance-step");
   return userEvent.setup();
@@ -431,5 +432,21 @@ describe("Revisar e concluir", () => {
     draft.final_difference = null;
     render(<StatementReconciliationPage organizationId={ORG} />);
     expect(await screen.findByTestId("recorded-difference")).toHaveTextContent("O extrato não informava saldo: nenhuma diferença foi registrada.");
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Conferir o saldo fica abaixo de 44 px, nem marcando nem mudando a data", async () => {
+    const user = await openPage({ props: { isMobile: true } });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Marcar Farmácia" }));
+    await user.click(within(rowOf("Farmácia")).getByRole("button", { name: "Mudar data" }));
+    expect(smallTouchTargets(document.body)).toEqual([]);
+  });
+
+  it("nenhum controle de Revisar e concluir fica abaixo de 44 px", async () => {
+    await openPage({ step: "summary", props: { isMobile: true } });
+    expect(smallTouchTargets(document.body)).toEqual([]);
   });
 });

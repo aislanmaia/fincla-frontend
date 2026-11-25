@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -811,5 +812,27 @@ describe("Extratos importados, agrupados por ano", () => {
     const scroller = screen.getByTestId("imported-statements-scroll");
     expect(scroller).toHaveClass("fincla-scroll");
     expect(scroller.style.overflowY).toBe("auto");
+  });
+});
+
+describe("alvos de toque no celular (QA F2 OBS-02)", () => {
+  const openWithDraft = async (isMobile) => {
+    imports = [openDraft(["suggested"]), clone(CONCLUDED), clone(UNDONE), clone(OLDER)];
+    params = { accountId: ACCOUNT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile={isMobile} />);
+    await screen.findByRole("heading", { name: "Extratos importados" });
+    return screen.findAllByRole("button", { name: "Continuar conciliação" });
+  };
+
+  it("no celular, nenhum controle da tela inicial (quadro do rascunho e lista) fica abaixo de 44 px", async () => {
+    const resume = await openWithDraft(true);
+    expect(resume.length).toBeGreaterThanOrEqual(2);
+    expect(smallTouchTargets(document.body)).toEqual([]);
+  });
+
+  it("no computador, os botões continuam com a altura de antes", async () => {
+    const resume = await openWithDraft(false);
+    for (const button of resume) expect(button.style.minHeight).toBe("");
+    expect(screen.getAllByRole("button", { name: /^Descartar/ })[0].style.minHeight).toBe("");
   });
 });

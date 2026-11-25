@@ -44,6 +44,10 @@ function applyAnswer(entry, body) {
 
 const server = setupServer(
   http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
+  // "Faturas conciliadas" (#556) e a prévia do desfazer da concluída: os testes da F2 ficam em
+  // `CardInvoiceReconciliationPage.f2.rtl.test.jsx`.
+  http.get("*/v1/credit-cards/:cardId/invoice-imports", () => HttpResponse.json({ imports: [] })),
+  http.get(`${BASE}/:importId/undo-preview`, () => HttpResponse.json(contract.undo_preview)),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
   http.patch(`${BASE}/${IMPORT}`, async ({ request }) => {
     const body = await request.json();
@@ -79,9 +83,9 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-const openDraft = async () => {
+const openDraft = async (props = {}) => {
   params = { cardId: CARD.public_id, importId: IMPORT };
-  render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+  render(<CardInvoiceReconciliationPage organizationId={ORG} {...props} />);
   await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
 };
 
@@ -437,6 +441,23 @@ describe("o passo Revisar e concluir", () => {
     expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 890,84 · diferença registrada: +R$ 1.512,08.");
     await user.click(screen.getByRole("button", { name: "Ver a fatura" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/invoices/2026/12` });
+  });
+
+  it("concluída, avisa as outras telas para buscar as transações de novo; recusada, não", async () => {
+    const onConcluded = vi.fn();
+    const user = userEvent.setup();
+    server.use(http.post(`${BASE}/${IMPORT}/conclude`, () => HttpResponse.json({ detail: { code: "business_rule", message: "Falta responder." } }, { status: 422 })));
+    await openDraft({ onConcluded });
+    await user.click(railButton("Revisar e concluir"));
+
+    await user.click(await screen.findByRole("button", { name: "Concluir conciliação da fatura" }));
+    expect(await screen.findByText("Falta responder.")).toBeInTheDocument();
+    expect(onConcluded).not.toHaveBeenCalled();
+
+    server.resetHandlers();
+    await user.click(screen.getByRole("button", { name: "Concluir conciliação da fatura" }));
+    expect(await screen.findByRole("heading", { name: "Fatura de dezembro conciliada" })).toBeInTheDocument();
+    expect(onConcluded).toHaveBeenCalledTimes(1);
   });
 
   it("Concluir fica desligado com o motivo escrito enquanto falta responder", async () => {

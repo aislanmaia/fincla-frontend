@@ -12,6 +12,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -169,12 +170,12 @@ afterEach(() => {
 const rail = () => screen.getByRole("navigation", { name: "Passos da conciliação" });
 const railStep = (title) => within(rail()).getAllByRole("button").find((b) => within(b).getByTestId("step-title").textContent === title);
 
-const openDraft = async ({ step = null, setup = () => {} } = {}) => {
+const openDraft = async ({ step = null, setup = () => {}, props = {} } = {}) => {
   draft = clone(contract.draft);
   setup(draft);
   recompute();
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...props} />);
   await screen.findByRole("navigation", { name: "Passos da conciliação" });
   const user = userEvent.setup();
   if (step) await user.click(railStep(step));
@@ -832,5 +833,21 @@ describe("Desfazer escolha nos lançamentos novos (BUG-07)", () => {
   it("sem resposta desta visita para voltar, a linha de adicionar não oferece Desfazer escolha", async () => {
     await openDraft({ step: "Adicionar lançamentos novos" });
     for (const r of screen.getAllByTestId("entry-row")) expect(within(r).queryByRole("button", { name: "Desfazer escolha" })).toBeNull();
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Adicionar lançamentos novos fica abaixo de 44 px, nem com lançamentos marcados", async () => {
+    const user = await openDraft({ step: "Adicionar lançamentos novos", props: { isMobile: true } });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+
+    await user.click(markBox("02/10/2026"));
+    await user.click(markBox("05/10/2026"));
+    expect(smallTouchTargets(document.body)).toEqual([]);
+  });
+
+  it("no computador, a caixa de marcar não ganha rótulo de toque", async () => {
+    await openDraft({ step: "Adicionar lançamentos novos" });
+    expect(markBox("02/10/2026").closest("label")).toBeNull();
   });
 });

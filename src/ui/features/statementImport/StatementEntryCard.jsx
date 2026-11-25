@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Badge, Btn, Select } from "../../components/primitives";
+import { Badge, Btn, Select, useTouchTarget } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
 import { ConferidoBadge, InlineFields, ROW_CLICKABLE, isAnswered, openOnRowClick, useCompact } from "./entryQueue.jsx";
@@ -98,7 +98,8 @@ export function SkipNote({ children }) {
  * botão fica desligado e novos cliques (duplo clique, Enter repetido) são ignorados, para não sair
  * um segundo PATCH. A nota de bloqueio fica ligada ao botão por `aria-describedby`.
  */
-export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm }) {
+/** `touch` (celular): a altura de um alvo de toque; no computador fica como era. */
+export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm, touch = false }) {
   const noteId = useId();
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
@@ -123,6 +124,7 @@ export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blo
         aria-describedby={showNote ? noteId : undefined}
         onMouseDown={(e) => e.preventDefault()}
         onClick={run}
+        style={touch ? { minHeight: TOUCH_TARGET } : undefined}
       >
         <Check size={13} aria-hidden="true" />{label}
       </Btn>
@@ -239,6 +241,7 @@ const SEG_BTN = (pressed, tone) => ({
 function AnswerSegment({ entry, desc, busy = false, onChange, onSearch = null, onConfirm = null }) {
   const label = "Este lançamento do banco já está no Fincla?";
   const blank = !desc.value.trim();
+  const touchTarget = useTouchTarget();
   const choose = (answer) => {
     if (busy) return;
     if (entry.answer !== answer) onChange(entry.id, { answer });
@@ -248,10 +251,10 @@ function AnswerSegment({ entry, desc, busy = false, onChange, onSearch = null, o
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{label}</span>
       <div role="group" data-answer-row="" aria-label={label} style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
-        <button type="button" aria-pressed={entry.answer === "create"} disabled={busy} onClick={() => choose("create")} style={SEG_BTN(entry.answer === "create", "create")}>
+        <button type="button" aria-pressed={entry.answer === "create"} disabled={busy} onClick={() => choose("create")} style={{ ...SEG_BTN(entry.answer === "create", "create"), ...touchTarget }}>
           <Plus size={12} aria-hidden="true" />Não, adicionar agora
         </button>
-        <button type="button" aria-pressed={entry.answer === "ignore"} disabled={busy} onClick={() => choose("ignore")} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}` }}>
+        <button type="button" aria-pressed={entry.answer === "ignore"} disabled={busy} onClick={() => choose("ignore")} style={{ ...SEG_BTN(entry.answer === "ignore", "ignore"), borderLeft: `1px solid ${T.border}`, ...touchTarget }}>
           <Ban size={12} aria-hidden="true" />Não registrar
         </button>
       </div>
@@ -274,13 +277,29 @@ function AnswerSegment({ entry, desc, busy = false, onChange, onSearch = null, o
 function SelectBox({ entry, selected, onSelect }) {
   if (!onSelect) return null;
   return (
-    <input
-      type="checkbox"
-      checked={selected}
-      onChange={(e) => onSelect(entry.id, e.target.checked)}
-      aria-label={`Marcar lançamento de ${bankDateLabel(entry.date)}`}
-      style={{ width: 16, height: 16, margin: 0, cursor: "pointer" }}
-    />
+    <CheckTarget>
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={(e) => onSelect(entry.id, e.target.checked)}
+        aria-label={`Marcar lançamento de ${bankDateLabel(entry.date)}`}
+        style={{ width: 16, height: 16, margin: 0, cursor: "pointer" }}
+      />
+    </CheckTarget>
+  );
+}
+
+/**
+ * A área de toque de uma caixa de marcar: no celular (`<TouchTargets on>`), um rótulo de 44 px em
+ * volta da caixa, que continua do mesmo tamanho; no computador, só a caixa.
+ */
+export function CheckTarget({ children, style = null }) {
+  const touchTarget = useTouchTarget();
+  if (!touchTarget) return children;
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: TOUCH_TARGET, cursor: "pointer", ...touchTarget, ...style }}>
+      {children}
+    </label>
   );
 }
 
@@ -294,6 +313,7 @@ function SelectBox({ entry, selected, onSelect }) {
  */
 export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, busy = false, focus = false }) {
   const alterRef = useRef(null);
+  const touchTarget = useTouchTarget();
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div
@@ -304,7 +324,7 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
       style={{ ...ROW_CLICKABLE, ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderRadius: 12, border: `1px solid ${T.border}`, background: SKIP_BG }}
     >
       <SelectBox entry={entry} selected={selected} onSelect={onSelect} />
-      <button ref={alterRef} type="button" onClick={() => onExpand(entry.id)} style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}>
+      <button ref={alterRef} type="button" onClick={() => onExpand(entry.id)} style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, ...touchTarget }}>
         <ChevronRight size={12} aria-hidden="true" />Alterar
       </button>
       <span style={{ ...NUM, fontSize: 12, color: T.inkLight, opacity: 0.8 }}>{bankDateLabel(entry.date)}</span>
@@ -327,6 +347,7 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
  */
 export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, onUndo = null, busy = false, focus = false }) {
   const alterRef = useRef(null);
+  const touchTarget = useTouchTarget();
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
     <div
@@ -340,7 +361,7 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
         type="button"
         onClick={() => onExpand(entry.id)}
         aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
-        style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2 }}
+        style={{ ...G, fontSize: 12, fontWeight: 600, color: T.blue, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, ...touchTarget }}
       >
         <ChevronRight size={12} aria-hidden="true" />Alterar
       </button>
@@ -383,7 +404,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   const blank = !skipped && !description.trim();
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
-
+  const touchTarget = useTouchTarget();
 
   return (
     <section
@@ -407,7 +428,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             onChange={(e) => desc.set(e.target.value)}
             onBlur={() => desc.save()}
             aria-invalid={blank}
-            style={{ ...INPUT, borderColor: blank ? T.red : T.border }}
+            style={{ ...INPUT, borderColor: blank ? T.red : T.border, ...touchTarget }}
           />
           {blank
             ? <span style={{ ...HELP, color: T.red }}>Escreva uma descrição.</span>
@@ -510,6 +531,7 @@ export function StatementEntryCard({
   const ownDesc = useDescriptionDraft(entry, onChange);
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const tags = detailLabels(details, entry.detail_tag_ids);
+  const touchTarget = useTouchTarget();
 
   if (embedded) {
     // Só o lado "No Fincla · nova transação", sem moldura: o cartão de um par sugerido respondido
@@ -535,7 +557,7 @@ export function StatementEntryCard({
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{bankDateLabel(entry.date)}</span>
         {ignored ? <SkipBadge /> : <Badge color={T.green} bg={T.greenLight}>Adicionar agora</Badge>}
         <span style={{ flex: 1 }} />
-        {onCollapse ? <button type="button" onClick={() => onCollapse(entry.id)} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer" }}>Minimizar</button> : null}
+        {onCollapse ? <button type="button" onClick={() => onCollapse(entry.id)} style={{ ...G, fontSize: 12, color: T.inkMid, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", ...touchTarget }}>Minimizar</button> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}>
         <section data-testid="bank-side" style={{ ...BOX, background: ignored ? SKIP_BG : T.bg, ...(compact ? { padding: "8px 10px" } : null) }}>
