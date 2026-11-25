@@ -30,6 +30,12 @@ export function invoiceCountsLabel(item) {
     else if (status === "undone") parts.push(plural(summary.to_create, "compra nova adicionada e desfeita", "compras novas adicionadas e desfeitas"));
     else parts.push(plural(summary.to_create, "compra nova adicionada", "compras novas adicionadas"));
   }
+  // O grupo de encargos somado numa transação do Fincla (fincla-api#558).
+  if (summary.summed_charges) {
+    if (status === "draft") parts.push(plural(summary.summed_charges, "encargo a ligar à soma", "encargos a ligar à soma"));
+    else if (status === "undone") parts.push(plural(summary.summed_charges, "encargo somado e desfeito", "encargos somados e desfeitos"));
+    else parts.push(plural(summary.summed_charges, "encargo somado", "encargos somados"));
+  }
   if (summary.already_reconciled) parts.push(plural(summary.already_reconciled, "já conferido", "já conferidos"));
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));

@@ -408,6 +408,10 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
  * ("Cartão de crédito · <cartão>"), o tipo fica travado no `transaction_type` do lançamento
  * (despesa ou estorno), "vem da fatura" no lugar de "vem do extrato", `extraFields` entra no fim do
  * formulário (as opções da compra parcelada) e `skipText` é a nota do "Não registrar".
+ *
+ * Na fatura, um lançamento em que "Adicionar" não vale (`addable: false`: fatura já paga, crédito
+ * parcelado, passo que não responde; fincla-api#558, QA F3 OBS-09) mostra o formulário só leitura:
+ * os valores como estão, sem campo editável nem convite a escolher (nada vai ser criado).
  */
 function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, desc: givenDesc, skipped = false, invoice = null }) {
   const ownDesc = useDescriptionDraft(entry, onChange);
@@ -423,6 +427,10 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const touchTarget = useTouchTarget();
+
+  if (invoice && entry.addable === false) {
+    return <ReadOnlyNewTransaction entry={entry} type={type} category={chosenCategory} tags={detailLabels(details, entry.detail_tag_ids)} isMobile={isMobile} skipped={skipped} invoice={invoice} />;
+  }
 
   return (
     <section
@@ -547,6 +555,36 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
           {invoice?.skipText ?? "Este lançamento não entra no Fincla: nada é adicionado. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo."}
         </SkipNote>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * O formulário da compra nova só para leitura (fatura, `addable: false`): o que o lançamento seria
+ * no Fincla, sem campo editável, sem as opções da parcelada e sem "escolha a categoria".
+ */
+function ReadOnlyNewTransaction({ entry, type, category, tags, isMobile, skipped, invoice }) {
+  const rows = [
+    ["Descrição", entry.description?.trim() || entry.bank_description],
+    ["Data", bankDateLabel(entry.date)],
+    ["Valor", formatMoneyAbs(entry.amount, entry.currency)],
+    ["Tipo", TYPE_LABEL[type] ?? type],
+    ["Forma de pagamento", invoice.paymentLabel],
+    ["Categoria", category],
+    tags.length ? ["Etiquetas", tags.join(", ")] : null,
+  ].filter(Boolean);
+  return (
+    <section data-testid="new-side-read-only" style={{ ...BOX, ...(skipped ? { background: SKIP_BG, borderColor: T.inkFaint } : null) }}>
+      <div style={BOX_LABEL}>No Fincla · nova transação {skipped ? <SkipBadge /> : null}</div>
+      <dl style={{ margin: 0, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "auto minmax(0, 1fr)", gap: "4px 12px", alignItems: "baseline", ...(skipped ? { opacity: 0.7 } : null) }}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={{ display: "contents" }}>
+            <dt style={{ ...G, fontSize: 11, color: T.inkLight }}>{label}</dt>
+            <dd style={{ ...G, ...(label === "Valor" || label === "Data" ? NUM : null), fontSize: 13, color: T.ink, margin: 0, minWidth: 0, wordBreak: "break-word" }}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {skipped ? <SkipNote>{invoice.skipText}</SkipNote> : null}
     </section>
   );
 }

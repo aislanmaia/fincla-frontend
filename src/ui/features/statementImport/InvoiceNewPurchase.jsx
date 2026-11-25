@@ -171,15 +171,31 @@ export function InstallmentScopeChoice({ entry, onChange, busy = false }) {
   );
 }
 
+/** A nota do crédito (#558): "Entra como estorno: diminui o total da fatura". */
+export const REFUND_NOTE = "Entra como estorno: diminui o total da fatura.";
+
+export function RefundNote() {
+  return (
+    <p data-testid="refund-note" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap", lineHeight: 1.5 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap" }}>Crédito</span>
+      <span>{REFUND_NOTE}</span>
+    </p>
+  );
+}
+
 /**
  * O `invoice` do formulário do item novo (`StatementEntryCard`): a forma de pagamento travada, as
- * opções da parcelada (desligadas com `busy`) e a nota do "Não registrar".
+ * opções da parcelada (desligadas com `busy`), a nota do crédito que vira estorno (#558) e a nota
+ * do "Não registrar".
  */
 export function invoiceNewPurchaseForm(entry, cardName, onChange, busy = false) {
+  const refund = entry.transaction_type === "refund";
   return {
     paymentLabel: cardPaymentLabel(cardName),
-    extraFields: <InstallmentScopeChoice entry={entry} onChange={onChange} busy={busy} />,
-    skipText: "Esta compra não entra no Fincla: nada é adicionado. A diferença aparece em Conferir o total.",
+    extraFields: refund ? <RefundNote /> : <InstallmentScopeChoice entry={entry} onChange={onChange} busy={busy} />,
+    skipText: refund
+      ? "Este estorno não entra no Fincla: nada é adicionado. A diferença aparece em Conferir o total."
+      : "Esta compra não entra no Fincla: nada é adicionado. A diferença aparece em Conferir o total.",
   };
 }
 

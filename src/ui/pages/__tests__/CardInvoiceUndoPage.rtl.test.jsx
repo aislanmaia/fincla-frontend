@@ -66,12 +66,14 @@ describe("a prévia", () => {
     expect(await screen.findByText("Se você desfizer esta conciliação:")).toBeInTheDocument();
 
     expect(screen.getByTestId("undo-restore-count")).toHaveTextContent(
-      "4 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
+      "5 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
     );
-    // As compras novas que a conclusão criou (#557) são apagadas.
-    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("5 transações adicionadas serão apagadas");
+    // As transações que a conclusão criou (#557, e os encargos, tarifas e estornos da #558) são apagadas.
+    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("9 transações adicionadas serão apagadas");
     const restored = screen.getAllByTestId("undo-restored");
-    expect(restored).toHaveLength(4);
+    // As 4 compras ligadas e a transação em que os encargos estavam somados (#558): a ligação sai.
+    expect(restored).toHaveLength(5);
+    expect(restored.find((r) => r.textContent.includes("Encargos do cartão"))).toHaveTextContent("Volta ao que era antes da conciliação.");
     const loja = restored.find((r) => r.textContent.includes("Loja (presente)"));
     expect(within(loja).getByText("Editada depois: descrição")).toBeInTheDocument();
     expect(loja).toHaveTextContent("Volta só o que a conciliação mudou; o que você editou depois continua como está.");
@@ -102,11 +104,11 @@ describe("desfazer", () => {
     await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
     expect(calls).not.toContainEqual({ undo: IMPORT });
     const confirm = screen.getByRole("group", { name: "Confirmar desfazer conciliação" });
-    expect(confirm).toHaveTextContent("Tem certeza? As 5 transações adicionadas serão apagadas.");
+    expect(confirm).toHaveTextContent("Tem certeza? As 9 transações adicionadas serão apagadas.");
     await user.click(within(confirm).getByRole("button", { name: "Sim, desfazer conciliação" }));
 
     expect(await screen.findByRole("heading", { name: "Conciliação desfeita" })).toBeInTheDocument();
-    expect(screen.getByText(/5 transações adicionadas foram apagadas\. .*voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
+    expect(screen.getByText(/9 transações adicionadas foram apagadas\. .*voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
     expect(calls).toContainEqual({ undo: IMPORT });
     expect(onUndone).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Conciliar a fatura de novo" }));

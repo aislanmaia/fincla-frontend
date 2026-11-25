@@ -9,6 +9,10 @@
 // motivo ligado por `aria-describedby`); "Não registrar" confirma e recolhe no clique. Fatura já
 // paga (decisão 1) ou crédito parcelado: Adicionar desligado, com o motivo (`aria-describedby`); vem
 // "Não registrar" a confirmar.
+//
+// O passo 4 "Encargos, tarifas e estornos" (fincla-api#558) usa o mesmo passo para a anuidade, a
+// redução, o repasse de IOF e os estornos ("Adicionar" com o formulário; crédito vira estorno, com
+// a nota), com o grupo de encargos no topo da mesma fila (`leading`).
 import { Plus } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -21,6 +25,8 @@ import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase
 import { createdInstallments, isInvoiceEntryAnswered, pad2 } from "./invoiceSteps.js";
 
 const QUESTION = "O que fazer com esta compra?";
+/** A pergunta do passo 4 (protótipo v16): anuidade, tarifa, IOF e estorno não são "compras". */
+export const CHARGE_QUESTION = "Adicionar ao Fincla?";
 
 const ANSWERS = [
   { value: "create", label: "Adicionar", tone: T.green },
@@ -32,7 +38,7 @@ const ANSWERS = [
  * quando o backend aceita); `onConfirm(entry)` confirma e minimiza; clicar de novo na resposta já
  * marcada confirma também (o "Não registrar" a confirmar de uma fatura paga).
  */
-function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfirm }) {
+function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfirm, question = QUESTION, cardLabel = "Compra" }) {
   const desc = useDescriptionDraft(entry, onChange);
   const skipped = entry.answer === "ignore";
   const blank = !desc.value.trim();
@@ -59,7 +65,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
   return (
     <article
       data-testid="new-purchase-card"
-      aria-label={`Compra de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
+      aria-label={`${cardLabel} de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
       style={{ background: T.surface, border: `1px solid ${entry.confirmed ? T.border : T.green}`, borderRadius: 14, boxShadow: T.sm, overflow: "hidden" }}
     >
       <header style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
@@ -86,7 +92,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
         <AnswerSegment
-          label={QUESTION}
+          label={question}
           answers={ANSWERS}
           value={entry.answer}
           busy={busy}
@@ -99,7 +105,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
       </footer>
       <p data-testid="pair-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "8px 14px", borderTop: `1px solid ${T.border}` }}>
         <span aria-hidden="true" style={{ marginRight: 6 }}>→</span>
-        {skipped ? <>Não entra no Fincla. A diferença aparece em Conferir o total.</> : newPurchaseOutcome(entry, form)}
+        {skipped || entry.addable === false ? <>Não entra no Fincla. A diferença aparece em Conferir o total.</> : newPurchaseOutcome(entry, form)}
       </p>
     </article>
   );
@@ -121,12 +127,18 @@ function installmentsDetail(entry) {
  * O passo "Compras novas". `form` = { categories, details, fallbackLabel, cardName, invoiceMonth };
  * `onChangeEntry(id, body, { onSaved })` grava (devolve `false` quando não gravou); `onConfirmEntry`
  * grava a confirmação antes de recolher; `answeredRef` recebe o minimizar dos atalhos (ver
- * `NewEntriesStep`).
+ * `NewEntriesStep`). O passo 4 (#558) passa `stepKey="charges"`, a pergunta e o rótulo do cartão
+ * dele, o grupo de encargos em `leading` e as teclas S/A/N do grupo em `shortcutKeys`.
  */
-export function InvoiceNewStep({ entries, queue, form, isMobile, answering, onChangeEntry, onConfirmEntry, answeredRef = null }) {
+export function InvoiceNewStep({
+  entries, queue, form, isMobile, answering, onChangeEntry, onConfirmEntry, answeredRef = null,
+  stepKey = "new", question = QUESTION, cardLabel = "Compra", leading = null, shortcutKeys = null,
+}) {
   return (
     <NewEntriesStep
-      stepKey="new"
+      stepKey={stepKey}
+      leading={leading}
+      shortcutKeys={shortcutKeys}
       entries={entries}
       groups={[]}
       categories={form.categories}
@@ -156,6 +168,8 @@ export function InvoiceNewStep({ entries, queue, form, isMobile, answering, onCh
           busy={busy}
           onChange={onChange}
           onConfirm={onConfirm}
+          question={question}
+          cardLabel={cardLabel}
         />
       )}
     />

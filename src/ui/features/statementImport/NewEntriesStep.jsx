@@ -140,6 +140,34 @@ function SelectionBar({ stepKey, selected, categories, busy, onClear, onApplyCat
   );
 }
 
+/**
+ * Os lançamentos do banco de uma soma, um por linha: a do "Somar em um só lançamento" do extrato
+ * (#513, com "Tirar da soma") e a do grupo de encargos da fatura (#558, com a linha "Soma" no fim).
+ * `amountOf(entry)` escreve o valor como a tela mostra; `action(entry)` é o botão da linha (ou
+ * nada); `total` é a linha "Soma" (ou nada).
+ */
+export function SummedEntryList({ entries, amountOf, action = null, total = null, label = "Lançamentos do banco nesta soma", style = null }) {
+  const line = { ...G, fontSize: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
+  return (
+    <ul aria-label={label} style={{ ...style, listStyle: "none", margin: 0, padding: 8, display: "flex", flexDirection: "column", gap: 6, background: T.bg }}>
+      {entries.map((e) => (
+        <li key={e.id} data-testid="summed-entry" style={line}>
+          <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(e.date)}</span>
+          <span style={{ flex: "1 1 140px", color: T.ink, wordBreak: "break-word" }}>{e.bank_description}</span>
+          <span style={{ ...NUM, color: T.inkMid }}>{amountOf(e)}</span>
+          {action ? action(e) : null}
+        </li>
+      ))}
+      {total ? (
+        <li data-testid="summed-total" style={{ ...line, borderTop: `1px solid ${T.border}`, paddingTop: 6, fontWeight: 700, color: T.ink }}>
+          <span style={{ flex: 1 }}>Soma</span>
+          <span style={NUM}>{total}</span>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
 /** Um lançamento somado: vira UMA transação; os lançamentos do banco aparecem dentro dele. */
 function GroupCard({ group, entries, categories, details, fallbackLabel, isMobile, onUpdate, onUngroup, onTakeOut }) {
   const [description, setDescription] = useState(group.description);
@@ -214,16 +242,12 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
           <DetailTagPicker categoryId={group.category_tag_id} categoryLabel={chosen} details={details} selected={group.detail_tag_ids} onChange={(next) => onUpdate(group.id, { detail_tag_ids: next })} />
         </div>
       </div>
-      <ul aria-label="Lançamentos do banco nesta soma" style={{ ...BOX, listStyle: "none", margin: 0, padding: 8, display: "flex", flexDirection: "column", gap: 6, background: T.bg }}>
-        {entries.map((e) => (
-          <li key={e.id} data-testid="summed-entry" style={{ ...G, fontSize: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(e.date)}</span>
-            <span style={{ flex: "1 1 140px", color: T.ink, wordBreak: "break-word" }}>{e.bank_description}</span>
-            <span style={{ ...NUM, color: T.inkMid }}>{signed(e.amount, e.currency)}</span>
-            <Btn variant="outGray" small onClick={() => onTakeOut(e.id)}>Tirar da soma</Btn>
-          </li>
-        ))}
-      </ul>
+      <SummedEntryList
+        entries={entries}
+        amountOf={(e) => signed(e.amount, e.currency)}
+        action={(e) => <Btn variant="outGray" small onClick={() => onTakeOut(e.id)}>Tirar da soma</Btn>}
+        style={BOX}
+      />
       <OutcomeLine>
         Ao concluir a conciliação: será adicionado <b>“{group.description}”</b> em <b>{chosen}</b>
         {tags.length ? <> com {tags.join(", ")}</> : null}, {signed(group.amount, group.currency)}, em {bankDateLabel(group.date)}.
@@ -249,13 +273,17 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
  *   o "Desfazer escolha" de um "Não registrar" sem resposta anterior só tira a confirmação;
  * - `answeredRef`: a página recebe em `answeredRef.current(id)` o mesmo minimizar das respostas do
  *   cartão (guarda o "como estava" para o "Desfazer escolha"), para os atalhos A/N usarem.
+ *
+ * O passo "Encargos, tarifas e estornos" da fatura (fincla-api#558) põe o grupo de encargos na mesma
+ * fila: `leading` entra logo abaixo do cabeçalho da lista, antes das linhas (o grupo é o primeiro
+ * item da `queue`, mas não está em `entries`); `shortcutKeys` troca as teclas mostradas.
  */
 export function NewEntriesStep({
   stepKey, entries, groups, categories, details, fallbackLabel, isMobile, queue, view = "detailed", onViewChange = null,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
   onSearch = null, renderMatched = null, answering = false,
   selectable = true, renderCard = null, onConfirmEntry = null, trackConfirmed = false, answered: answeredOf = isAnswered, rowDetail = null, rowAmount = null, createUnavailable = null,
-  answeredRef = null,
+  answeredRef = null, leading = null, shortcutKeys = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [lastBulk, setLastBulk] = useState(null);
@@ -416,7 +444,9 @@ export function NewEntriesStep({
       {free.length && !selectable ? (
         unclassified.length ? (
           <p role="note" data-testid="unclassified-note" style={{ ...G, fontSize: 12, color: T.amber, margin: 0 }}>
-            {plural(unclassified.length, "compra sem categoria vai", "compras sem categoria vão")} para Não classificado ao concluir.
+            {stepKey === "charges"
+              ? plural(unclassified.length, "lançamento sem categoria vai", "lançamentos sem categoria vão")
+              : plural(unclassified.length, "compra sem categoria vai", "compras sem categoria vão")} para Não classificado ao concluir.
           </p>
         ) : null
       ) : free.length ? (
@@ -455,7 +485,8 @@ export function NewEntriesStep({
         />
       ) : null}
 
-      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} shortcutKeys={onSearch ? ["s", "a", "n"] : ["a", "n"]} />
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} shortcutKeys={shortcutKeys ?? (onSearch ? ["s", "a", "n"] : ["a", "n"])} />
+      {leading}
       {free.filter(queue.shown).map((entry) => {
         const current = entry.id === queue.currentId;
         let body;

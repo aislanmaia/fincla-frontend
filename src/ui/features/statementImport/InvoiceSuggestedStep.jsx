@@ -12,7 +12,7 @@
 // das respostas, desligado enquanto a descrição está vazia. Fatura já paga: Adicionar desligado,
 // com o motivo (decisão 1).
 import { memo, useEffect, useRef } from "react";
-import { ArrowRight, Ban, Check, ChevronRight, Info, Link2, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Ban, Check, ChevronRight, Info, Link2, Plus, Sigma, Sparkles } from "lucide-react";
 
 import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -76,12 +76,12 @@ export const paidValueLocked = (entry) => entry.value_locked && bankValueDiffers
 /**
  * A resposta não está disponível? Uma regra só para o botão e para o atalho (S/A/N). "Sim, é esta"
  * precisa da transação do Fincla. "Adicionar" (#557) fica desligado numa fatura já paga (decisão 1:
- * fatura paga não recebe compra nova). "Não registrar" não muda nada no Fincla, então fica
- * disponível mesmo numa fatura paga.
+ * fatura paga não recebe compra nova) e quando o backend diz que não cabe (`addable`, #558). "Não
+ * registrar" não muda nada no Fincla, então fica disponível mesmo numa fatura paga.
  */
 export const invoiceAnswerUnavailable = (entry, value) => {
   if (value === "pair") return !entry.fincla_transaction;
-  if (value === "create") return Boolean(entry.value_locked) || isInstallmentCredit(entry);
+  if (value === "create") return entry.addable === false || Boolean(entry.value_locked) || isInstallmentCredit(entry);
   return false;
 };
 
@@ -248,8 +248,12 @@ export function PairConsequences({ entry }) {
   );
 }
 
-/** "No Fincla": a transação ligada, como está hoje. `skipped` = "Não registrar" (cinza listrado). */
-export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConfirm = null }) {
+/**
+ * "No Fincla": a transação ligada, como está hoje. `skipped` = "Não registrar" (cinza listrado).
+ * O grupo de encargos (#558) usa a mesma caixa para a transação somada: `badge` entra no rótulo ("A
+ * soma bate"), `consequences` fica no lugar das do par e `skipText` no da nota do "Não registrar".
+ */
+export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConfirm = null, badge = null, consequences = undefined, skipText = null }) {
   const match = entry.fincla_transaction;
   if (!match) {
     return (
@@ -268,7 +272,8 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
   const label = (
     <div style={BOX_LABEL}>
       No Fincla
-      {suggested ? <SuggestedBadge /> : null}
+      {suggested && !badge ? <SuggestedBadge /> : null}
+      {badge}
       {!skipped && valueDiffers ? <DifferenceTag>VALOR DIFERENTE</DifferenceTag> : null}
       {skipped ? <SkipBadge /> : null}
     </div>
@@ -289,7 +294,7 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
       <section data-testid="fincla-side-skipped" style={{ ...BOX, background: SKIP_BG, borderColor: T.inkFaint }}>
         {label}
         <div style={{ opacity: 0.6 }}>{rows}</div>
-        <SkipNote>Continua no Fincla como está, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece em Conferir o total.</SkipNote>
+        <SkipNote>{skipText ?? "Continua no Fincla como está, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece em Conferir o total."}</SkipNote>
       </section>
     );
   }
@@ -297,7 +302,7 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
     <section data-testid="fincla-side" style={{ ...BOX, borderColor: entry.answer === "pair" ? T.blue : T.border, ...(onConfirm ? { position: "relative" } : null) }}>
       {label}
       {rows}
-      {entry.answer === "pair" ? <PairConsequences entry={entry} /> : null}
+      {consequences !== undefined ? consequences : entry.answer === "pair" ? <PairConsequences entry={entry} /> : null}
       {onConfirm ? (
         // A sugestão intacta: clicar nela confirma, como o botão (o botão cobre a caixa sem embrulhar a lista).
         <button
@@ -322,6 +327,13 @@ export function InvoiceStatusBadge({ entry }) {
     return <Badge color={T.blue} bg={T.blueLight}><Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Sugerido · falta confirmar</Badge>;
   }
   if (entry.answer === "pair") return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Já está no Fincla</Badge>;
+  if (entry.answer === "pair_sum") {
+    return (
+      <Badge color={T.blue} bg={T.blueLight}>
+        <Sigma size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Já está no Fincla, somado{entry.answerable && !entry.confirmed ? " · falta confirmar" : ""}
+      </Badge>
+    );
+  }
   if (entry.answer === "create") {
     return (
       <Badge color={T.green} bg={T.greenLight}>
