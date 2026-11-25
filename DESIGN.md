@@ -39,6 +39,9 @@
 - `ProgBar` / `AnimBar` — trilho `grayLight`, fill animado; altura 3–4px.
 - `AnimNum` — número animado com prefixo `R$`.
 - `Breadcrumb`, `InfoTip`, `CollapsibleSection`, `PageEnter`.
+- `TouchTargets` / `useTouchTarget()` — no celular, `<TouchTargets on={isMobile}>` dá a `Btn` e `Select` altura mínima
+  `TOUCH_TARGET` (44px, `tokens.js`); controles próprios aplicam `...useTouchTarget()`. Fora dele (e no computador) nada muda.
+  Usado nas telas de conciliação (fatura e extrato).
 
 ## Layout
 - Sidebar (desktop) 195px, `surface`, borda à direita; grupos **PRINCIPAL/GESTÃO/CONFIGURAÇÕES** (Planejamento é item de PRINCIPAL, não grupo).

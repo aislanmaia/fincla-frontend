@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Card } from "../../components/primitives";
 
@@ -21,9 +21,10 @@ export const RAIL_WIDTH = 240;
 /**
  * O trilho dos passos. `statusOf(key)` → `{tone, text}`. `currentText`: o texto do passo aberto
  * quando ele não pede nada nem está conferido (a fatura diz "Você está aqui"). `separatorBefore`:
- * os passos que abrem um grupo novo (o traço antes de "Conferir o total" na fatura).
+ * os passos que abrem um grupo novo (o traço antes de "Conferir o total" na fatura). `touch` (celular):
+ * cada passo tem pelo menos a altura de um alvo de toque.
  */
-export function StepRail({ steps, statusOf, current, onOpen, label = "Passos da conciliação", currentText = null, separatorBefore = null }) {
+export function StepRail({ steps, statusOf, current, onOpen, label = "Passos da conciliação", currentText = null, separatorBefore = null, touch = false }) {
   return (
     <nav aria-label={label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {steps.map((step, index) => {
@@ -42,6 +43,7 @@ export function StepRail({ steps, statusOf, current, onOpen, label = "Passos da 
                 ...G, textAlign: "left", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start",
                 background: active ? T.surface : "transparent", border: `1px solid ${active ? T.border : "transparent"}`,
                 boxShadow: active ? T.sm : "none", borderRadius: 10, padding: "8px 10px",
+                ...(touch ? { minHeight: TOUCH_TARGET } : null),
               }}
             >
               <span aria-hidden="true" style={{ ...NUM, flexShrink: 0, width: 20, height: 20, borderRadius: 9999, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", background: tone.dot, marginTop: 1 }}>

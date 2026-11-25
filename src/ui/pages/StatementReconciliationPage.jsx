@@ -9,7 +9,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { Btn, Card, PageTitle } from "../components/primitives";
+import { Btn, Card, PageTitle, TouchTargets } from "../components/primitives";
 import { plural } from "../plural.js";
 import { formatMoney } from "../money/formatMoney.js";
 import { handleApiError } from "../../api/client";
@@ -1068,7 +1068,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
       <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} isMobile={isMobile} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `${RAIL_WIDTH}px minmax(0, 1fr)`, gap: 16, alignItems: "start" }}>
-        <StepRail steps={STEPS} statusOf={(key) => stepStatus(key, statementImport, passed.has(key))} current={current} onOpen={open} />
+        <StepRail steps={STEPS} statusOf={(key) => stepStatus(key, statementImport, passed.has(key))} current={current} onOpen={open} touch={isMobile} />
         <ViewModeContext.Provider value={view}>
         <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <header>
@@ -1184,6 +1184,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               onUndoLink={undoLink}
               onGoToPending={goToPending}
               onRedecide={redecide}
+              isMobile={isMobile}
             />
           ) : null}
           {current === "summary" ? (
@@ -1242,20 +1243,22 @@ export function StatementReconciliationPage({ organizationId, isMobile = false, 
   const accountName = useAccountName(organizationId, accountId);
   if (!organizationId || !accountId) return null;
   return (
-    <div data-testid="statement-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
-      {importId ? (
-        <DraftView
-          key={importId}
-          organizationId={organizationId}
-          accountId={accountId}
-          importId={importId}
-          accountName={accountName}
-          isMobile={isMobile}
-          onOpenAccountTransactions={onOpenAccountTransactions}
-        />
-      ) : (
-        <AccountStatementsView organizationId={organizationId} accountId={accountId} accountName={accountName} isMobile={isMobile} />
-      )}
-    </div>
+    <TouchTargets on={isMobile}>
+      <div data-testid="statement-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
+        {importId ? (
+          <DraftView
+            key={importId}
+            organizationId={organizationId}
+            accountId={accountId}
+            importId={importId}
+            accountName={accountName}
+            isMobile={isMobile}
+            onOpenAccountTransactions={onOpenAccountTransactions}
+          />
+        ) : (
+          <AccountStatementsView organizationId={organizationId} accountId={accountId} accountName={accountName} isMobile={isMobile} />
+        )}
+      </div>
+    </TouchTargets>
   );
 }

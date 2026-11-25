@@ -416,7 +416,7 @@ export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, b
   const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntryQueueHeader queue={queue} shortcutKeys={["s", "n"]} noun={PURCHASE_NOUN} />
+      <EntryQueueHeader queue={queue} shortcutKeys={["s", "n"]} noun={PURCHASE_NOUN} touch={isMobile} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "compra encontrada", "compras encontradas")}</span>
         {unconfirmed.length ? (

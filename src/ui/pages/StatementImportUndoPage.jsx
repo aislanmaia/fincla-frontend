@@ -8,7 +8,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { T } from "../tokens";
 import { G } from "../typography";
-import { PageTitle } from "../components/primitives";
+import { PageTitle, TouchTargets } from "../components/primitives";
 import { plural } from "../plural.js";
 import { listAccounts } from "../../api/accounts";
 import { previewStatementImportUndo, undoStatementImport } from "../../api/statementImports";
@@ -57,25 +57,27 @@ export function StatementImportUndoPage({ organizationId, isMobile = false, onOp
   const previewKey = `${organizationId}|${accountId}|${importId}`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-      <div>
-        <PageTitle sans="Desfazer" serif="importação" />
-        <p style={{ ...TEXT, marginTop: 6 }}>
-          {accountName ? <><b>{accountName}</b> · </> : null}
-          Só a importação concluída mais recente da conta pode ser desfeita. Nada muda até você confirmar.
-        </p>
+    <TouchTargets on={isMobile}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+        <div>
+          <PageTitle sans="Desfazer" serif="importação" />
+          <p style={{ ...TEXT, marginTop: 6 }}>
+            {accountName ? <><b>{accountName}</b> · </> : null}
+            Só a importação concluída mais recente da conta pode ser desfeita. Nada muda até você confirmar.
+          </p>
+        </div>
+        <UndoPreviewScreen
+          key={previewKey}
+          previewKey={previewKey}
+          loadPreview={() => previewStatementImportUndo(accountId, organizationId, importId)}
+          runUndo={() => undoStatementImport(accountId, organizationId, importId)}
+          words={STATEMENT_UNDO_WORDS}
+          touch={isMobile}
+          onUndone={onUndone}
+          onBack={() => navigate({ to: statementReconciliationPath(accountId, importId) })}
+          renderUndone={(deleted) => <UndoneView deleted={deleted} accountName={accountName} onOpenTransactions={openTransactions} onBack={back} />}
+        />
       </div>
-      <UndoPreviewScreen
-        key={previewKey}
-        previewKey={previewKey}
-        loadPreview={() => previewStatementImportUndo(accountId, organizationId, importId)}
-        runUndo={() => undoStatementImport(accountId, organizationId, importId)}
-        words={STATEMENT_UNDO_WORDS}
-        touch={isMobile}
-        onUndone={onUndone}
-        onBack={() => navigate({ to: statementReconciliationPath(accountId, importId) })}
-        renderUndone={(deleted) => <UndoneView deleted={deleted} accountName={accountName} onOpenTransactions={openTransactions} onBack={back} />}
-      />
-    </div>
+    </TouchTargets>
   );
 }

@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -77,9 +78,9 @@ afterEach(() => {
   navigate.mockReset();
 });
 
-const openDraft = async () => {
+const openDraft = async (props = {}) => {
   params = { accountId: ACCOUNT, importId: IMPORT };
-  render(<StatementReconciliationPage organizationId={ORG} />);
+  render(<StatementReconciliationPage organizationId={ORG} {...props} />);
   await screen.findByRole("heading", { name: "Confirmar lançamentos encontrados" });
 };
 
@@ -509,5 +510,16 @@ describe("Confirmar ao lado das respostas (fincla-api#507)", () => {
 
     await waitFor(() => expect(screen.queryByRole("article", { name: /ALUGUEL/ })).toBeNull());
     expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle de Confirmar lançamentos encontrados fica abaixo de 44 px; no computador o filtro fica como era", async () => {
+    await openDraft({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+    cleanup();
+
+    await openDraft();
+    expect(screen.getByRole("button", { name: /^Todos/ }).style.minHeight).toBe("28px");
   });
 });

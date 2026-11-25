@@ -186,7 +186,7 @@ export function openOnRowClick(onOpen) {
 /** Estilo de linha clicável (cursor de mão). */
 export const ROW_CLICKABLE = { cursor: "pointer" };
 
-function Segmented({ label, options, value, onChange }) {
+function Segmented({ label, options, value, onChange, touch = false }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 12, color: T.inkLight }}>{label}</span>
@@ -200,7 +200,7 @@ function Segmented({ label, options, value, onChange }) {
               aria-pressed={pressed}
               onClick={() => !pressed && onChange(o.value)}
               style={{
-                ...G, ...NUM, minHeight: 28, padding: "0 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", border: 0,
+                ...G, ...NUM, minHeight: touch ? TOUCH_TARGET : 28, padding: "0 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", border: 0,
                 borderRight: index < options.length - 1 ? `1px solid ${T.border}` : 0,
                 background: pressed ? T.ink : "transparent", color: pressed ? "#fff" : T.inkLight,
               }}
@@ -233,6 +233,7 @@ function ShortcutsHint({ keys }) {
 /**
  * O topo da lista de um passo: posição, quantos faltam, visualização, filtro com contagens, atalhos
  * e o aviso do que o filtro esconde. `children` entra na linha da posição (ex.: "Confirmar todos").
+ * `touch` (celular): o filtro, a visualização e "Mostrar todos" com a altura de um alvo de toque.
  */
 /** As palavras da lista: lançamentos do extrato (padrão) ou transações do Fincla ("Conferir o saldo", #514). */
 export const ENTRY_NOUN = {
@@ -254,7 +255,7 @@ export const TRANSACTION_NOUN = {
   pendingMany: "transações sem resposta não aparecem",
 };
 
-export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], noun = ENTRY_NOUN, children = null }) {
+export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], noun = ENTRY_NOUN, touch = false, children = null }) {
   const counts = { all: queue.total, pending: queue.pending, answered: queue.answeredCount };
   let hiddenText = null;
   if (queue.hidden) {
@@ -291,6 +292,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
             label="Visualização:"
             value={view}
             onChange={onViewChange}
+            touch={touch}
             options={[{ value: "detailed", label: "Detalhada" }, { value: "compact", label: "Compacta" }]}
           />
         ) : null}
@@ -298,6 +300,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
           label="Mostrar:"
           value={queue.filter}
           onChange={queue.setFilter}
+          touch={touch}
           options={FILTERS.map((f) => ({ value: f.value, label: `${f.label} (${counts[f.value].toLocaleString("pt-BR")})` }))}
         />
       </div>
@@ -310,7 +313,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
       {hiddenText ? (
         <p data-testid="queue-hidden" style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0, padding: "8px 12px", border: `1px dashed ${T.border}`, borderRadius: 12 }}>
           {hiddenText} com este filtro ·{" "}
-          <Btn variant="outGray" small onClick={() => queue.setFilter("all")}>Mostrar todos</Btn>
+          <Btn variant="outGray" small onClick={() => queue.setFilter("all")} style={touch ? { minHeight: TOUCH_TARGET } : undefined}>Mostrar todos</Btn>
         </p>
       ) : null}
     </div>

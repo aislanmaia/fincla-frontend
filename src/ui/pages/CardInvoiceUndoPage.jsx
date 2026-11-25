@@ -8,7 +8,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { T } from "../tokens";
 import { G } from "../typography";
-import { PageTitle } from "../components/primitives";
+import { PageTitle, TouchTargets } from "../components/primitives";
 import { plural } from "../plural.js";
 import { previewCardInvoiceImportUndo, undoCardInvoiceImport } from "../../api/cardInvoiceImports";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
@@ -62,15 +62,17 @@ export function CardInvoiceUndoPage({ organizationId, isMobile = false, onUndone
   }
 
   return (
-    <div data-testid="card-invoice-undo-page" style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-      <div>
-        <PageTitle sans="Desfazer" serif="conciliação" />
-        <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "6px 0 0" }}>
-          {card ? <><b>{cardName(card)}</b> · </> : null}
-          Só a conciliação de fatura concluída mais recente do cartão pode ser desfeita, e só enquanto a fatura não foi paga. Nada muda até você confirmar.
-        </p>
+    <TouchTargets on={isMobile}>
+      <div data-testid="card-invoice-undo-page" style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+        <div>
+          <PageTitle sans="Desfazer" serif="conciliação" />
+          <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: "6px 0 0" }}>
+            {card ? <><b>{cardName(card)}</b> · </> : null}
+            Só a conciliação de fatura concluída mais recente do cartão pode ser desfeita, e só enquanto a fatura não foi paga. Nada muda até você confirmar.
+          </p>
+        </div>
+        {body}
       </div>
-      {body}
-    </div>
+    </TouchTargets>
   );
 }

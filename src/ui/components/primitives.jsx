@@ -1,5 +1,5 @@
-import React, { forwardRef, useState, useEffect, useRef } from "react";
-import { T } from "../tokens";
+import React, { createContext, forwardRef, useContext, useState, useEffect, useRef } from "react";
+import { T, TOUCH_TARGET } from "../tokens";
 import { G, S, NUM } from "../typography";
 
 /**
@@ -296,8 +296,25 @@ export function CollapsibleSection({ open, children }) {
   );
 }
 
+/**
+ * Alvos de toque (celular): dentro de `<TouchTargets on>`, `Btn` e `Select` têm pelo menos
+ * `TOUCH_TARGET` de altura. A tela que quer isso (as conciliações, QA F2 BUG-01) envolve o conteúdo
+ * no celular; fora dela, e no computador, nada muda. Controles próprios leem `useTouchTarget()`.
+ */
+const TouchTargetContext = createContext(false);
+
+export function TouchTargets({ on = false, children }) {
+  return <TouchTargetContext.Provider value={Boolean(on)}>{children}</TouchTargetContext.Provider>;
+}
+
+/** O estilo de altura de um alvo de toque quando a tela pede (`<TouchTargets on>`); senão, nada. */
+export function useTouchTarget() {
+  return useContext(TouchTargetContext) ? { minHeight: TOUCH_TARGET } : null;
+}
+
 // `ref` chega ao <button> (foco movido pela tela, ex.: o "Alterar" de uma linha da conciliação).
 export const Btn = forwardRef(function BtnView({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }, ref) {
+  const touchTarget = useTouchTarget();
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
     blue: { bg: T.blue, txt: "#fff", brd: T.blue },
@@ -336,6 +353,7 @@ export const Btn = forwardRef(function BtnView({ children, variant = "outline", 
         width: full ? "100%" : undefined,
         transition: "opacity 0.15s",
         opacity: disabled ? 0.48 : 1,
+        ...touchTarget,
         ...style,
       }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.opacity = "0.82"; }}
@@ -347,6 +365,7 @@ export const Btn = forwardRef(function BtnView({ children, variant = "outline", 
 });
 
 export function Select({ children, style, disabled = false, ...selectProps }) {
+  const touchTarget = useTouchTarget();
   return <select
     {...selectProps}
     disabled={disabled}
@@ -360,6 +379,7 @@ export function Select({ children, style, disabled = false, ...selectProps }) {
       fontSize: 12,
       cursor: disabled ? "not-allowed" : "pointer",
       opacity: disabled ? 0.48 : 1,
+      ...touchTarget,
       ...style,
     }}
   >{children}</select>;

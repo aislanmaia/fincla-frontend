@@ -9,7 +9,7 @@ import { Check, Layers, Lock, X } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Btn, Select } from "../../components/primitives";
+import { Btn, Select, useTouchTarget } from "../../components/primitives";
 import { plural } from "../../plural.js";
 import { formatMoney } from "../../money/formatMoney.js";
 import {
@@ -55,6 +55,7 @@ function applyLabel(addable, selected) {
 function GroupDraft({ count, monthName, onConfirm, onCancel, busy }) {
   const [description, setDescription] = useState("");
   const blank = !description.trim();
+  const touchTarget = useTouchTarget();
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.purple}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
@@ -66,7 +67,7 @@ function GroupDraft({ count, monthName, onConfirm, onCancel, busy }) {
           maxLength={255}
           placeholder="ex.: Rendimentos da conta"
           onChange={(e) => setDescription(e.target.value)}
-          style={INPUT}
+          style={{ ...INPUT, ...touchTarget }}
         />
         <span style={HELP}>
           Ao concluir a conciliação, vira um lançamento só{monthName ? ` em ${monthName}` : ""}, com a soma dos {count} lançamentos, na data do último. Os lançamentos do banco ficam guardados.
@@ -148,6 +149,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
   const moneyIn = group.amount > 0;
   const options = categoriesForType(categories, group.transaction_type).filter((c) => !c.is_fallback);
   const chosen = categoryLabel(categories, group.category_tag_id, fallbackLabel);
+  const touchTarget = useTouchTarget();
   const tags = detailLabels(details, group.detail_tag_ids);
   const save = () => {
     if (!blank && description.trim() !== group.description) onUpdate(group.id, { description: description.trim() });
@@ -167,7 +169,7 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label htmlFor={fieldId("description")} style={FIELD_LABEL}>Descrição</label>
-          <input id={fieldId("description")} value={description} maxLength={255} onChange={(e) => setDescription(e.target.value)} onBlur={save} aria-invalid={blank} style={{ ...INPUT, borderColor: blank ? T.red : T.border }} />
+          <input id={fieldId("description")} value={description} maxLength={255} onChange={(e) => setDescription(e.target.value)} onBlur={save} aria-invalid={blank} style={{ ...INPUT, borderColor: blank ? T.red : T.border, ...touchTarget }} />
           {blank ? <span style={{ ...HELP, color: T.red }}>Escreva uma descrição.</span> : null}
         </div>
         <div>
@@ -409,7 +411,7 @@ export function NewEntriesStep({
         />
       ) : null}
 
-      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} shortcutKeys={onSearch ? ["s", "a", "n"] : ["a", "n"]} />
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} shortcutKeys={onSearch ? ["s", "a", "n"] : ["a", "n"]} />
       {free.filter(queue.shown).map((entry) => {
         const current = entry.id === queue.currentId;
         let body;

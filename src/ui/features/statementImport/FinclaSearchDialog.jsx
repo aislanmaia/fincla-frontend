@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Btn } from "../../components/primitives";
+import { Btn, useTouchTarget } from "../../components/primitives";
 import { handleApiError } from "../../../api/client";
 import { searchFinclaForEntry } from "../../../api/statementImports";
 import { formatMoney } from "../../money/formatMoney.js";
@@ -25,6 +25,7 @@ export function FinclaSearchDialog({
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
   const inputRef = useRef(null);
+  const touchTarget = useTouchTarget();
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
@@ -68,7 +69,7 @@ export function FinclaSearchDialog({
             maxLength={100}
             placeholder="Ex.: farmácia, Nubank, 47,20 ou 09/10"
             onChange={(e) => setQuery(e.target.value)}
-            style={INPUT}
+            style={{ ...INPUT, ...touchTarget }}
           />
         </header>
         <div className="fincla-scroll" style={{ padding: 16, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>

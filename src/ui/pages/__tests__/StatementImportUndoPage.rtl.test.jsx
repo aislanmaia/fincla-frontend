@@ -11,6 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/statement_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -400,5 +401,16 @@ describe("quando não dá para desfazer", () => {
     render(<StatementImportUndoPage organizationId={ORG} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Conciliação não encontrada nesta conta.");
+  });
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle da prévia nem da confirmação fica abaixo de 44 px", async () => {
+    const user = userEvent.setup();
+    await open({ isMobile: true });
+    expect(smallTouchTargets(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Desfazer importação" }));
+    expect(smallTouchTargets(document.body)).toEqual([]);
   });
 });

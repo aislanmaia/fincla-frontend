@@ -235,8 +235,9 @@ function AnswerButtons({ entry, isMobile, busy, desc, onAnswer, onChange, onConf
 // A fileira de respostas. No celular (`touch`) ela pode quebrar (390 px, 3 respostas): os divisores
 // vêm do vão de 1 px sobre o fundo da borda e cada botão cresce até o fim da linha, então nenhuma
 // linha termina num divisor solto nem num vão (QA F1). No computador fica como era.
-const ANSWER_ROW = { display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" };
-const TOUCH_ANSWER_ROW = { display: "flex", flexWrap: "wrap", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", maxWidth: "100%" };
+export const ANSWER_ROW = { display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" };
+/** Celular: os botões quebram em linhas sem fio solto (o fundo cinza entre eles faz o traço). */
+export const TOUCH_ANSWER_ROW = { display: "flex", flexWrap: "wrap", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", maxWidth: "100%" };
 
 /**
  * A pergunta e a fileira de respostas de um cartão (a marca da fileira é a faixa que os atalhos e o
@@ -409,7 +410,7 @@ export function SuggestedPairsStep({
   const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} />
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "lançamento encontrado", "lançamentos encontrados")}</span>
         {unconfirmed.length ? (

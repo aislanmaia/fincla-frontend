@@ -19,7 +19,7 @@ import { AlertTriangle, Check, CreditCard, Info, Undo2 } from "lucide-react";
 
 import { T, TOUCH_TARGET } from "../tokens";
 import { G, NUM } from "../typography";
-import { Btn, Card, PageTitle } from "../components/primitives";
+import { Btn, Card, PageTitle, TouchTargets } from "../components/primitives";
 import { plural } from "../plural.js";
 import { formatMoney } from "../money/formatMoney.js";
 import {
@@ -199,8 +199,12 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
 
 const CHIP = { ...G, fontSize: 12, color: T.inkMid, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9999, padding: "4px 10px", display: "inline-flex", gap: 6, alignItems: "center" };
 
-function Breadcrumb({ invoiceImport, onCards, onInvoice }) {
-  const link = { ...G, background: "none", border: 0, padding: 0, fontSize: 12, fontWeight: 600, color: T.blue, cursor: "pointer" };
+/** `touch` (celular): os links ganham a altura de um alvo de toque; o texto fica do mesmo tamanho. */
+function Breadcrumb({ invoiceImport, touch = false, onCards, onInvoice }) {
+  const link = {
+    ...G, background: "none", border: 0, padding: 0, fontSize: 12, fontWeight: 600, color: T.blue, cursor: "pointer",
+    ...(touch ? { minHeight: TOUCH_TARGET, display: "inline-flex", alignItems: "center" } : null),
+  };
   const sep = <span aria-hidden="true" style={{ color: T.inkFaint }}>›</span>;
   return (
     <nav aria-label="Caminho" style={{ ...G, fontSize: 12, color: T.inkMid, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -724,7 +728,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <Breadcrumb invoiceImport={invoiceImport} onCards={() => navigate({ to: "/cards" })} onInvoice={openInvoice} />
+        <Breadcrumb invoiceImport={invoiceImport} touch={isMobile} onCards={() => navigate({ to: "/cards" })} onInvoice={openInvoice} />
         <PageTitle sans="Conciliar" serif="fatura" />
         <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>
           {NOTHING_CHANGES} Suas respostas ficam salvas: dá para fechar e continuar depois.
@@ -749,6 +753,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
           steps={INVOICE_STEPS}
           statusOf={(key) => invoiceStepStatus(key, invoiceImport, passed.has(key))}
           current={current}
+          touch={isMobile}
           onOpen={open}
           label="Etapas da conciliação da fatura"
           currentText="Você está aqui"
@@ -826,8 +831,10 @@ export function CardInvoiceReconciliationPage({ organizationId, isMobile = false
     body = <InvoiceUploadView key={cardPublicId} organizationId={organizationId} card={card} cardPublicId={cardPublicId} isMobile={isMobile} />;
   }
   return (
-    <div data-testid="card-invoice-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
-      {body}
-    </div>
+    <TouchTargets on={isMobile}>
+      <div data-testid="card-invoice-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
+        {body}
+      </div>
+    </TouchTargets>
   );
 }

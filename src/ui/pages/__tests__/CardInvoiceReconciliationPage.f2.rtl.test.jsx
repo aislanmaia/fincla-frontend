@@ -13,6 +13,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/card_invoice_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -353,5 +354,39 @@ describe("alvos de toque no celular (QA F1)", () => {
     detail = clone(contract.concluded);
     openImport(detail.id, { isMobile });
     expect((await screen.findByRole("button", { name: "Desfazer conciliação" })).style.minHeight).toBe(height);
+  });
+
+  it("varredura: no celular nenhum controle do fluxo da fatura fica abaixo de 44 px", async () => {
+    const found = {};
+    await openUpload({ isMobile: true });
+    found.upload = smallTouchTargets(document.body);
+    cleanup();
+
+    detail.card_check = clone(contract.card_check_other_card);
+    openImport(detail.id, { isMobile: true });
+    await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
+    found.step1 = smallTouchTargets(document.body);
+    cleanup();
+
+    detail = clone(contract.concluded);
+    openImport(detail.id, { isMobile: true });
+    await screen.findByRole("button", { name: "Desfazer conciliação" });
+    found.concluded = smallTouchTargets(document.body);
+    cleanup();
+
+    detail = clone(contract.undone);
+    openImport(detail.id, { isMobile: true });
+    await screen.findByTestId("invoice-import-undone");
+    found.undone = smallTouchTargets(document.body);
+
+    expect(found).toEqual({ upload: [], step1: [], concluded: [], undone: [] });
+  });
+
+  it("no computador, o filtro Mostrar e o caminho ficam com a altura de antes", async () => {
+    openImport(detail.id);
+    await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
+    expect(within(screen.getByRole("group", { name: "Mostrar:" })).getByRole("button", { name: /^Falta responder/ }).style.minHeight).toBe("28px");
+    expect(screen.getByRole("button", { name: "Cartões" }).style.minHeight).toBe("");
+    expect(screen.getByRole("button", { name: "Fatura de dezembro" }).style.minHeight).toBe("");
   });
 });

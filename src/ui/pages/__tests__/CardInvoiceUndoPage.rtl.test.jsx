@@ -12,6 +12,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/card_invoice_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -212,4 +213,16 @@ it.each([[false, ""], [true, "44px"]])("os botões têm 44 px só no celular (mo
   expect(screen.getByRole("button", { name: "Voltar para a conciliação" }).style.minHeight).toBe(height);
   await user.click(undo);
   expect(screen.getByRole("button", { name: "Sim, desfazer conciliação" }).style.minHeight).toBe(height);
+});
+
+describe("varredura de alvos de toque no celular (QA F2 BUG-01)", () => {
+  it("nenhum controle da prévia nem da confirmação fica abaixo de 44 px", async () => {
+    const user = userEvent.setup();
+    open({ isMobile: true });
+    await screen.findByText("Se você desfizer esta conciliação:");
+    expect(smallTouchTargets(document.body)).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Desfazer conciliação" }));
+    expect(smallTouchTargets(document.body)).toEqual([]);
+  });
 });
