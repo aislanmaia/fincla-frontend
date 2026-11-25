@@ -17,7 +17,17 @@ export type StatementEntryAnswer =
 export type StatementTransactionType = 'income' | 'expense' | 'refund';
 /** Só o que passa por conta corrente: compra no cartão de crédito sai na fatura, não no extrato. */
 export type StatementPaymentMethod = 'pix' | 'boleto' | 'debit_card' | 'bank_transfer' | 'cash';
-export type ConcludeBlockerCode = 'unanswered' | 'missing_description';
+/**
+ * Por que o concluir está bloqueado. `unconfirmed_creates` (decisão do Owner de 2026-11-26): lançamentos
+ * "Adicionar" ainda sem confirmar, um bloqueio por passo (`step`).
+ */
+export type ConcludeBlockerCode = 'unanswered' | 'missing_description' | 'unconfirmed_creates';
+/** `step` só vem em `unconfirmed_creates` (o passo onde confirmar); `null` nos outros. */
+export interface StatementConcludeBlocker {
+  code: ConcludeBlockerCode;
+  count: number;
+  step?: ReconciliationStep | null;
+}
 /** Os 8 passos da revisão guiada, na ordem (fincla-api#507). */
 export type ReconciliationStep = 'suggested' | 'doubt' | 'invoice' | 'yield' | 'new' | 'outside' | 'balance' | 'summary';
 /** Como o arquivo foi lido (fincla-api#515): OFX, XLS (BIFF), XLSX ou CSV. */
@@ -268,7 +278,7 @@ export interface StatementImport {
   groups: StatementGroup[];
   summary: StatementImportSummary;
   can_conclude: boolean;
-  blockers: { code: ConcludeBlockerCode; count: number }[];
+  blockers: StatementConcludeBlocker[];
   created_at: string;
   concluded_at: string | null;
   /** Quando a importação foi desfeita (`status: 'undone'`, fincla-api#509). */
@@ -331,7 +341,7 @@ export interface StatementImportListItem {
   /** Rascunho sem pendência (o mesmo do detalhe); `false` fora de rascunho. */
   can_conclude: boolean;
   /** O que impede concluir agora (o mesmo do detalhe); vazio fora de rascunho. */
-  blockers: { code: ConcludeBlockerCode; count: number }[];
+  blockers: StatementConcludeBlocker[];
   /** Só em rascunho: quantas transações do Fincla a conferência de saldo exclui e muda de data ao concluir. */
   balance_check_actions: BalanceCheckActions | null;
 }
@@ -471,7 +481,7 @@ type RawListItem = Omit<
   balance_now?: RawPoint | null;
   current_step?: string | null;
   can_conclude?: boolean;
-  blockers?: { code: string; count: number }[];
+  blockers?: { code: string; count: number; step?: string | null }[];
   balance_check_actions?: BalanceCheckActions | null;
 };
 
@@ -637,7 +647,8 @@ export const deleteStatementGroup = async (
 
 /**
  * "Confirmar os N de uma vez" (`confirmed: true`) e o desfazer dele (`confirmed: false`), tudo ou
- * nada. Só lançamentos respondidos "Sim, é esta" podem ser confirmados (fincla-api#510).
+ * nada. Lançamentos respondidos "Sim, é esta" (fincla-api#510) ou, desde a decisão do Owner de
+ * 2026-11-26, "Adicionar" (`create`): é o "Confirmar os N de uma vez" ao lado do motivo do concluir.
  */
 export const confirmStatementSuggestions = async (
   accountId: string,

@@ -30,23 +30,28 @@ describe("stepRemaining (QA F4 OBS-03)", () => {
 describe("a opção escolhida (#559)", () => {
   const option = (invoice, extra = {}) => ({ id: 9, invoice, invoice_id: invoice.id, installment: null, movable: false, series_movable: false, suggested_answer: null, move_refusal: null, ...extra });
   // As parcelas vizinhas da busca, como o backend as grava (search_neighbours): a 06/12 numa série uma
-  // fatura à frente (série sugerida e valendo), a 05/12 nesta fatura e a 04/12 numa série uma atrás.
+  // fatura à frente, a 05/12 nesta fatura e a 04/12 numa série uma atrás. A busca parte de um lançamento à
+  // vista, então nenhuma oferece a série (QA F5 BUG-02); `aheadSeries` é a 06/12 como a opção de um
+  // lançamento que é parcela do banco a traria (série sugerida e valendo).
   const neighbours = contract.search_neighbours.results.map((r) => normalizeCardInvoiceImport({
     ...JSON.parse(JSON.stringify(contract.draft)), entries: [{ ...JSON.parse(JSON.stringify(contract.entry_doubt)), candidates: [r] }],
   }).entries[0].candidates[0]);
   const [ahead, here, behind] = neighbours;
+  const aheadSeries = { ...ahead, suggested_answer: "move_series", series_movable: true };
 
   it("nesta fatura é Sim, é esta; na vizinha, a sugestão da própria opção: a série só quando ela vale", () => {
     expect(pickAnswerOf(option(DECEMBER), DECEMBER)).toBe("pair");
     expect(pickAnswerOf(option(JANUARY, { movable: true, suggested_answer: "move" }), DECEMBER)).toBe("move");
-    expect(ahead).toMatchObject({ suggested_answer: "move_series", series_movable: true });
-    expect(pickAnswerOf(ahead, DECEMBER)).toBe("move_series");
+    // A gravada (a sugestão da própria opção, com ou sem a série: QA F5 BUG-02).
+    expect(pickAnswerOf(ahead, DECEMBER)).toBe(ahead.series_movable ? "move_series" : "move");
+    expect(pickAnswerOf({ ...ahead, suggested_answer: "move", series_movable: false }, DECEMBER)).toBe("move");
+    expect(pickAnswerOf(aheadSeries, DECEMBER)).toBe("move_series");
     expect(pickAnswerOf(here, DECEMBER)).toBe("pair");
     // Série uma fatura atrás: "esta e as próximas" nunca vale (sem motivo), a opção move só esta.
     expect(behind).toMatchObject({ suggested_answer: "move", series_movable: false, move_refusal: null });
     expect(pickAnswerOf(behind, DECEMBER)).toBe("move");
     // Série sugerida mas recusada agora: só esta.
-    expect(pickAnswerOf({ ...ahead, series_movable: false }, DECEMBER)).toBe("move");
+    expect(pickAnswerOf({ ...aheadSeries, series_movable: false }, DECEMBER)).toBe("move");
   });
 
   it("mover vale pelo movable da opção, com o motivo pronto do backend; ligar vale sempre", () => {

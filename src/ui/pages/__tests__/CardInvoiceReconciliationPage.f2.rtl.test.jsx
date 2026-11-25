@@ -118,12 +118,12 @@ describe("Faturas conciliadas do cartão", () => {
     expect(within(draftRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(undoneRow).toHaveTextContent("Desfeita");
-    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: R$ 0,00");
+    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: −R$ 61,00");
     expect(within(undoneRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(concludedRow).toHaveTextContent("Concluída");
     expect(concludedRow).toHaveTextContent("20 lançamentos · 7 compras ligadas · 8 lançamentos adicionados · 4 encargos somados · 1 compra movida");
-    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: R$ 0,00");
+    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: −R$ 61,00");
   });
 
   it("Continuar conciliação abre o rascunho; Ver conciliação, a concluída; Desfazer leva à tela do desfazer", async () => {

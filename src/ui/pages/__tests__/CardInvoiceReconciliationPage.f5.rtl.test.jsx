@@ -38,6 +38,16 @@ const JANUARY = { id: 6, year: 2027, month: 1, status: "open" };
 const PAID_REASON = "Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.";
 const SERIES_REFUSAL = "Uma parcela seguinte desta compra já foi conferida: só dá para mover esta.";
 const neighbours = () => clone(contract.search_neighbours.results);
+/**
+ * A busca gravada parte de um lançamento à vista (POSTO CENTRAL), então a 06/12 da série uma fatura à
+ * frente só oferece mover esta (QA F5 BUG-02: "esta e as próximas" é só para a parcela do próprio
+ * banco). Para a tela da série, a mesma 06/12 como a opção de um lançamento que é parcela a traria.
+ */
+const aheadSeries = () => {
+  const results = neighbours();
+  Object.assign(results[0], { suggested_answer: "move_series", series_movable: true });
+  return results;
+};
 
 const calls = [];
 let draft;
@@ -342,7 +352,7 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
   });
 
   it("uma parcela da série uma fatura à frente responde pela sugestão dela (esta e as próximas); a troca fica no cartão", async () => {
-    searchResults = neighbours();
+    searchResults = aheadSeries();
     const user = userEvent.setup();
     await open();
 
@@ -399,7 +409,9 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
   });
 
   it("um resultado da busca com valor além da folga da dúvida: os dois valores antes de escolher e ao responder (QA F5 OBS-03)", async () => {
+    // POSTO CENTRAL é à vista: a parcela da série à frente só move esta (QA F5 BUG-02).
     searchResults = neighbours();
+    Object.assign(searchResults[0], { suggested_answer: "move", series_movable: false });
     for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
     const user = userEvent.setup();
     await open();
@@ -413,10 +425,11 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
     const difference = within(ahead).getByTestId("candidate-difference");
     expect(difference).toHaveAttribute("data-beyond", "true");
     expect(difference).toHaveTextContent("Valor diferenteO Fincla tem R$ 108,33, o banco R$ 150,00 (diferença de R$ 41,67). Se for esta, ao concluir vale o do banco.");
-    const pick = within(ahead).getByRole("button", { name: /^Mover esta e as próximas parcelas: Loja/ });
+    expect(within(ahead).queryByRole("button", { name: /^Mover esta e as próximas parcelas/ })).not.toBeInTheDocument();
+    const pick = within(ahead).getByRole("button", { name: /^Mover esta parcela: Loja/ });
     expect(pick).toHaveAccessibleName(/, valor diferente: o Fincla tem R\$\s108,33, o banco R\$\s150,00$/);
     await user.click(pick);
-    await waitFor(() => expect(patches(POSTO())).toEqual([{ answer: "move_series", transaction_id: 8 }]));
+    await waitFor(() => expect(patches(POSTO())).toEqual([{ answer: "move", transaction_id: 8 }]));
 
     // Respondida, o cartão diz os dois valores e que vale o do banco (nunca uma troca calada).
     await user.click((await waitFor(() => alter("POSTO CENTRAL")))[0]);
@@ -563,7 +576,7 @@ describe("o passo Compras em outra fatura", () => {
 
   it("parcela da série uma fatura à frente: as quatro respostas e a sugestão pelos meses reais das vizinhas", async () => {
     fresh("draft", "other_invoice");
-    const cafe = asInstallment(neighbours()[0]);
+    const cafe = asInstallment(aheadSeries()[0]);
     const user = userEvent.setup();
     await open();
 
@@ -601,7 +614,7 @@ describe("o passo Compras em outra fatura", () => {
 
   it("série sugerida mas recusada: a sugestão mostrada é só esta (nunca a desligada), a série com o motivo", async () => {
     fresh("draft", "other_invoice");
-    asInstallment(neighbours()[0], {
+    asInstallment(aheadSeries()[0], {
       answer: "move", series_movable: false,
       move_refusal: { code: "series_reconciled", message: SERIES_REFUSAL, invoice_year: null, invoice_month: null },
     });
@@ -761,7 +774,7 @@ describe("celular e computador", () => {
 
   it("varredura: no celular nenhum controle da dúvida, da busca, da troca de mover nem da outra fatura fica abaixo de 44 px", async () => {
     const found = {};
-    searchResults = [...neighbours(), ...searchResults];
+    searchResults = [...aheadSeries(), ...searchResults];
     const user = userEvent.setup();
     await open({ isMobile: true });
     article("UBER .TRIP");

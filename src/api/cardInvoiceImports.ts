@@ -1,7 +1,8 @@
 // api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
 // desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação; terceira #557: compras novas,
 // à vista e parceladas; quarta #558: encargos, tarifas e estornos, com o grupo de encargos; quinta
-// #559: dúvidas, a busca "Procure no Fincla" e as compras em outra fatura, com mover).
+// #559: dúvidas, a busca "Procure no Fincla" e as compras em outra fatura, com mover; sexta #560:
+// "Sobrando no Fincla", "Conferir o total" e as compras novas sem confirmar que seguram o concluir).
 //
 // O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
 // do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
@@ -310,6 +311,28 @@ export interface CardInvoiceImportSummary {
   summed_charges: number;
   /** Respondidos `move`/`move_series` (#559). */
   to_move: number;
+  /** `answer: "create"` ainda sem confirmar (decisão do Owner de 2026-11-26): seguram o concluir. */
+  unconfirmed_creates: number;
+  /**
+   * "Sobrando no Fincla" (#560): rascunho ao vivo; concluída/desfeita, o que a conclusão fez.
+   * `leftovers_waiting` = candidatas de um lançamento ainda sem resposta (fora da lista até a resposta).
+   */
+  leftovers: number;
+  leftovers_undecided: number;
+  leftovers_kept: number;
+  leftovers_to_move: number;
+  leftovers_to_delete: number;
+  leftovers_waiting: number;
+}
+
+/**
+ * Por que o concluir está bloqueado. `step` (#560) diz em que passo resolver: vem em
+ * `unconfirmed_creates` (um por passo) e `undecided_leftovers` (`leftover`); `null` nos outros.
+ */
+export interface ConcludeBlocker {
+  code: 'unanswered' | 'missing_description' | 'unconfirmed_creates' | 'undecided_leftovers' | 'changed_since_read' | string;
+  count: number;
+  step: InvoiceReconciliationStep | null;
 }
 
 /** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
@@ -345,7 +368,7 @@ export interface CardInvoiceImport {
   summary: CardInvoiceImportSummary;
   difference_now: InvoiceDifferenceNow;
   can_conclude: boolean;
-  blockers: { code: string; count: number }[];
+  blockers: ConcludeBlocker[];
   /** Registrada ao concluir. `null` = ainda não (nunca zero). */
   final_difference: InvoiceMoney | null;
   current_step: InvoiceReconciliationStep | null;
@@ -424,6 +447,84 @@ export interface UpdateInvoiceEntryRequest {
   category_tag_id?: string | null;
   detail_tag_ids?: string[];
   installments_scope?: InstallmentsScope;
+}
+
+/** "Sobrando no Fincla" (#560): Manter · Mover para a próxima fatura · Excluir; `null` = falta decidir. */
+export type LeftoverAction = 'keep' | 'move_next' | 'delete';
+
+/**
+ * Por que o item sobrou, a primeira que vale (só valor e dia, nunca texto): `option_not_chosen` (era
+ * uma opção de um lançamento que escolheu outra, ou foi adicionado/não registrado: `chosen_*` `null`;
+ * `charge_group_id` quando era a soma do grupo de encargos), `looks_duplicated` (mesmo valor e dia de
+ * um item ligado, `twin_*`), `maybe_repeated` (só o mesmo valor), `maybe_next_invoice`.
+ */
+export interface LeftoverHint {
+  code: 'option_not_chosen' | 'looks_duplicated' | 'maybe_repeated' | 'maybe_next_invoice' | string;
+  entry_id: string | null;
+  entry_bank_description: string | null;
+  entry_date: string | null;
+  charge_group_id: string | null;
+  chosen_transaction_id: number | null;
+  chosen_description: string | null;
+  twin_transaction_id: number | null;
+  twin_description: string | null;
+}
+
+/** Uma recusa de mover/excluir: `invoice_paid`, `other_invoice_paid`, `goal`, `refunded`. */
+export interface LeftoverRefusal {
+  code: string;
+  message: string | null;
+  invoice_year: number | null;
+  invoice_month: number | null;
+}
+
+export interface LeftoverItem {
+  transaction: InvoiceFinclaTransaction;
+  action: LeftoverAction | null;
+  hint: LeftoverHint | null;
+  movable: boolean;
+  deletable: boolean;
+  move_refusal: LeftoverRefusal | null;
+  delete_refusal: LeftoverRefusal | null;
+}
+
+export interface CardInvoiceLeftovers {
+  import_id: string;
+  items: LeftoverItem[];
+  /** Candidatas de um lançamento ainda sem resposta: não aparecem até a resposta. */
+  waiting_transactions: number;
+  next_invoice_year: number | null;
+  next_invoice_month: number | null;
+  /** A fatura seguinte; `null` = ainda não existe (é criada ao concluir). */
+  next_invoice: InvoiceBrief | null;
+}
+
+/** Uma causa da diferença: `step` é o destino do "Ir para o passo"; `effect` `null` = falta responder. */
+export interface TotalCheckCause {
+  code: 'unanswered' | 'ignored' | 'fincla_value_kept' | 'kept_leftover' | 'undecided_leftover' | string;
+  step: InvoiceReconciliationStep | null;
+  description: string | null;
+  amount: InvoiceMoney | null;
+  effect: InvoiceMoney | null;
+  date: string | null;
+  entry_id: string | null;
+  charge_group_id: string | null;
+  transaction_id: number | null;
+}
+
+/**
+ * "Conferir o total" (#560): `bank` = soma dos lançamentos lidos; `fincla` = a fatura no Fincla com as
+ * respostas aplicadas (estorno subtrai); `difference = bank − fincla`. `null` = não sabemos (nunca zero).
+ */
+export interface CardInvoiceTotalCheck {
+  import_id: string;
+  status: CardInvoiceImportStatus;
+  bank_summary: InvoiceBankSummary;
+  bank: InvoiceMoney | null;
+  fincla: InvoiceMoney | null;
+  difference: InvoiceMoney | null;
+  matches: boolean;
+  causes: TotalCheckCause[];
 }
 
 // --------------------------------------------------------------------------------------------
@@ -596,8 +697,22 @@ const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
     uncategorized: summary.uncategorized ?? 0,
     summed_charges: summary.summed_charges ?? 0,
     to_move: summary.to_move ?? 0,
+    unconfirmed_creates: summary.unconfirmed_creates ?? 0,
+    leftovers: summary.leftovers ?? 0,
+    leftovers_undecided: summary.leftovers_undecided ?? 0,
+    leftovers_kept: summary.leftovers_kept ?? 0,
+    leftovers_to_move: summary.leftovers_to_move ?? 0,
+    leftovers_to_delete: summary.leftovers_to_delete ?? 0,
+    leftovers_waiting: summary.leftovers_waiting ?? 0,
   };
 };
+
+const normalizeBlockers = (raw: unknown): ConcludeBlocker[] =>
+  ((raw as Raw[] | null | undefined) ?? []).map((b) => ({
+    code: String(b.code),
+    count: Number(b.count ?? 0),
+    step: (b.step as InvoiceReconciliationStep | null | undefined) ?? null,
+  }));
 
 /** Os campos de uma conciliação comuns ao detalhe e à linha da lista. */
 const normalizeCommon = (raw: Raw) => ({
@@ -605,7 +720,7 @@ const normalizeCommon = (raw: Raw) => ({
   file_name: (raw.file_name as string | null) ?? null,
   summary: normalizeSummary(raw.summary),
   difference_now: normalizeDifferenceNow(raw.difference_now),
-  blockers: (raw.blockers as CardInvoiceImport['blockers']) ?? [],
+  blockers: normalizeBlockers(raw.blockers),
   final_difference: moneyOrNull(raw.final_difference as WireMoney),
   current_step: (raw.current_step as InvoiceReconciliationStep | null) ?? null,
   expires_at: (raw.expires_at as string | null) ?? null,
@@ -777,7 +892,10 @@ export const searchCardInvoiceEntry = async (
   return (response.data.results ?? []).map(normalizeInvoiceCandidate);
 };
 
-/** "Confirmar as N de uma vez" (`confirmed: true`) e o Desfazer da faixa (`confirmed: false`). */
+/**
+ * "Confirmar as N de uma vez" (`confirmed: true`) e o Desfazer da faixa (`confirmed: false`). Desde
+ * a #560 aceita também `create` (as compras novas sem confirmar que seguram o concluir).
+ */
 export const confirmCardInvoiceSuggestions = async (
   cardId: number,
   organizationId: string,
@@ -832,4 +950,83 @@ export const undoCardInvoiceImport = async (cardId: number, organizationId: stri
   const response = await apiClient.post<Raw>(`${base(cardId)}/${importId}/undo`, null, { params: { organization_id: organizationId } });
   const deleted = response.data.deleted_transactions;
   return { ...normalizeCardInvoiceImport(response.data), deleted_transactions: typeof deleted === 'number' ? deleted : null };
+};
+
+// --------------------------------------------------------------------------------------------
+// Sobrando no Fincla e Conferir o total (#560)
+// --------------------------------------------------------------------------------------------
+
+const normalizeRefusal = (raw: unknown): LeftoverRefusal | null => {
+  const r = raw as Raw | null | undefined;
+  if (!r) return null;
+  return {
+    code: String(r.code ?? ''),
+    message: (r.message as string | null) ?? null,
+    invoice_year: (r.invoice_year as number | null) ?? null,
+    invoice_month: (r.invoice_month as number | null) ?? null,
+  };
+};
+
+export const normalizeCardInvoiceLeftovers = (raw: Raw): CardInvoiceLeftovers => ({
+  import_id: String(raw.import_id ?? ''),
+  items: ((raw.items as Raw[]) ?? []).map((item) => ({
+    transaction: normalizeFincla(item.transaction as Raw) as InvoiceFinclaTransaction,
+    action: (item.action as LeftoverAction | null) ?? null,
+    hint: (item.hint as LeftoverHint | null) ?? null,
+    movable: Boolean(item.movable),
+    deletable: Boolean(item.deletable),
+    move_refusal: normalizeRefusal(item.move_refusal),
+    delete_refusal: normalizeRefusal(item.delete_refusal),
+  })),
+  waiting_transactions: Number(raw.waiting_transactions ?? 0),
+  next_invoice_year: (raw.next_invoice_year as number | null) ?? null,
+  next_invoice_month: (raw.next_invoice_month as number | null) ?? null,
+  next_invoice: normalizeBrief(raw.next_invoice),
+});
+
+export const normalizeCardInvoiceTotalCheck = (raw: Raw): CardInvoiceTotalCheck => ({
+  import_id: String(raw.import_id ?? ''),
+  status: (raw.status as CardInvoiceImportStatus) ?? 'draft',
+  bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
+  bank: moneyOrNull(raw.bank as WireMoney),
+  fincla: moneyOrNull(raw.fincla as WireMoney),
+  difference: moneyOrNull(raw.difference as WireMoney),
+  matches: Boolean(raw.matches),
+  causes: ((raw.causes as Raw[]) ?? []).map((c) => ({
+    code: String(c.code ?? ''),
+    step: (c.step as InvoiceReconciliationStep | null) ?? null,
+    description: (c.description as string | null) ?? null,
+    amount: moneyOrNull(c.amount as WireMoney),
+    effect: moneyOrNull(c.effect as WireMoney),
+    date: (c.date as string | null) ?? null,
+    entry_id: (c.entry_id as string | null) ?? null,
+    charge_group_id: (c.charge_group_id as string | null) ?? null,
+    transaction_id: (c.transaction_id as number | null) ?? null,
+  })),
+});
+
+/** Passo 6: as transações desta fatura no Fincla que o banco não cobrou. Rascunho só. Não muda nada. */
+export const getCardInvoiceLeftovers = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceLeftovers> => {
+  const response = await apiClient.get<Raw>(`${base(cardId)}/${importId}/leftovers`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceLeftovers(response.data);
+};
+
+/** Decide um item (decidir já confirma); `null` = Desfazer escolha. Nada muda no Fincla até concluir. */
+export const updateCardInvoiceLeftover = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  transactionId: number,
+  action: LeftoverAction | null,
+): Promise<CardInvoiceLeftovers> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/leftovers/${transactionId}`, { action }, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceLeftovers(response.data);
+};
+
+/** Passo 7: o total do banco × o da fatura no Fincla, com as causas da diferença. Não muda nada. */
+export const getCardInvoiceTotalCheck = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceTotalCheck> => {
+  const response = await apiClient.get<Raw>(`${base(cardId)}/${importId}/total-check`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceTotalCheck(response.data);
 };
