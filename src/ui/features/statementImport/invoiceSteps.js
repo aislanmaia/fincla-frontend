@@ -141,6 +141,22 @@ export const isMoveAnswer = (answer) => MOVE_ANSWERS.has(answer);
  */
 export const seriesIsAnOption = (item) => Boolean(item.series_movable || item.move_refusal || item.answer === "move_series");
 
+// A folga de uma dúvida (fincla-api#559, a mesma do backend): até R$ 1,00 do valor do banco; numa
+// compra internacional, até 5% dele (decisão 4 do Owner).
+export const DOUBT_AMOUNT_TOLERANCE = 1;
+export const INTERNATIONAL_DOUBT_RATIO = 0.05;
+
+/**
+ * O valor do Fincla está além da folga de uma dúvida? Só a busca chega a uma compra assim (QA F5
+ * OBS-03): escolhê-la troca o valor pelo do banco ao concluir, e a tela diz isso com os dois valores.
+ */
+export function beyondDoubtTolerance(entry, value) {
+  const bank = Math.abs(Number(entry.amount));
+  const gap = Math.abs(Number(value) - bank);
+  const limit = entry.section === "international" ? bank * INTERNATIONAL_DOUBT_RATIO : DOUBT_AMOUNT_TOLERANCE;
+  return gap - limit >= 0.005;
+}
+
 /** A resposta liga o lançamento a uma compra do Fincla (a desta fatura, ou a movida de outra). */
 export const linksTransaction = (answer) => answer === "pair" || isMoveAnswer(answer);
 

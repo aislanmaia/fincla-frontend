@@ -20,6 +20,7 @@ import { setupServer } from "msw/node";
 
 import contract from "../../../api/__fixtures__/card_invoice_import.example.json";
 import { smallTouchTargets } from "../../../test/touchTargets.js";
+import { beyondDoubtTolerance } from "../../features/statementImport/invoiceSteps.js";
 
 const navigate = vi.fn();
 let params = {};
@@ -374,6 +375,61 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
 
     await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
     expect(within(article("UBER .TRIP")).queryByRole("group", { name: "Como mover a parcela" })).not.toBeInTheDocument();
+  });
+
+  it("uma compra à vista da fatura vizinha escolhida na dúvida diz o mesmo que o passo 2: a data fica e a outra fatura diminui (QA F5 OBS-02)", async () => {
+    searchResults = [{
+      ...clone(contract.search.results[0]),
+      id: 99, description: "Posto Janeiro", value: { amount: "150.00", currency: "BRL" }, date: "2026-11-20T00:00:00", purchase_date: "2026-11-20",
+      invoice_id: JANUARY.id, invoice: JANUARY, differences: ["date"], suggested_answer: "move", movable: true, series_movable: false,
+    }];
+    for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("POSTO CENTRAL")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await user.click(await within(dialog).findByRole("button", { name: /^Mover para esta fatura: Posto Janeiro/ }));
+    await waitFor(() => expect(patches(POSTO())).toEqual([{ answer: "move", transaction_id: 99 }]));
+
+    await user.click((await waitFor(() => alter("POSTO CENTRAL")))[0]);
+    expect(within(article("POSTO CENTRAL")).getByTestId("move-consequences")).toHaveTextContent(
+      "Ao concluir, a compra sai da fatura de janeiro/2027 e entra na de dezembro/2026, com a data da compra. A fatura de janeiro/2027 no Fincla fica R$ 150,00 menor.",
+    );
+  });
+
+  it("um resultado da busca com valor além da folga da dúvida: os dois valores antes de escolher e ao responder (QA F5 OBS-03)", async () => {
+    searchResults = neighbours();
+    for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
+    const user = userEvent.setup();
+    await open();
+
+    // A opção da própria dúvida (R$ 0,40, dentro da folga) continua com o texto de antes.
+    expect(within(option(article("POSTO CENTRAL"), "Posto")).getByTestId("candidate-difference")).not.toHaveAttribute("data-beyond");
+    await user.click(within(article("POSTO CENTRAL")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(3));
+    const ahead = within(dialog).getAllByTestId("candidate-option").find((o) => o.textContent.includes("janeiro/2027"));
+    const difference = within(ahead).getByTestId("candidate-difference");
+    expect(difference).toHaveAttribute("data-beyond", "true");
+    expect(difference).toHaveTextContent("Valor diferenteO Fincla tem R$ 108,33, o banco R$ 150,00 (diferença de R$ 41,67). Se for esta, ao concluir vale o do banco.");
+    const pick = within(ahead).getByRole("button", { name: /^Mover esta e as próximas parcelas: Loja/ });
+    expect(pick).toHaveAccessibleName(/, valor diferente: o Fincla tem R\$\s108,33, o banco R\$\s150,00$/);
+    await user.click(pick);
+    await waitFor(() => expect(patches(POSTO())).toEqual([{ answer: "move_series", transaction_id: 8 }]));
+
+    // Respondida, o cartão diz os dois valores e que vale o do banco (nunca uma troca calada).
+    await user.click((await waitFor(() => alter("POSTO CENTRAL")))[0]);
+    const consequences = within(article("POSTO CENTRAL")).getByTestId("pair-consequences");
+    expect(consequences).toHaveTextContent("Valor diferente");
+    expect(consequences).toHaveTextContent("O banco cobrou R$ 150,00; no Fincla está R$ 108,33 (diferença de R$ 41,67).");
+  });
+
+  it("a folga de uma compra internacional é 5% do valor do banco", () => {
+    expect(beyondDoubtTolerance({ amount: -100, section: "international" }, 104.99)).toBe(false);
+    expect(beyondDoubtTolerance({ amount: -100, section: "international" }, 105.5)).toBe(true);
+    expect(beyondDoubtTolerance({ amount: -100, section: "purchases" }, 101)).toBe(false);
+    expect(beyondDoubtTolerance({ amount: -100, section: "purchases" }, 101.01)).toBe(true);
   });
 
   it("a série recusada (parcela seguinte conferida): a opção move só esta, e a troca mostra a série desligada com o motivo", async () => {

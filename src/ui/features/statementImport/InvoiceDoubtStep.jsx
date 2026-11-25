@@ -38,7 +38,9 @@ import {
   PairConsequences, bankValueDiffers, invoiceAnswerNote, invoiceAnswerUnavailable, invoiceDoubtHint, invoiceOutcomeText, moveAnswerLabel,
 } from "./InvoiceSuggestedStep.jsx";
 import { invoiceNewPurchaseForm } from "./InvoiceNewPurchase.jsx";
-import { UNKNOWN_INVOICE, invoiceMonthLabel, isMoveAnswer, linksTransaction, pad2, seriesIsAnOption } from "./invoiceSteps.js";
+import {
+  UNKNOWN_INVOICE, beyondDoubtTolerance, invoiceMonthLabel, isMoveAnswer, linksTransaction, pad2, seriesIsAnOption,
+} from "./invoiceSteps.js";
 
 const DOUBT_QUESTION = "Esta compra do banco já está no Fincla?";
 
@@ -114,20 +116,41 @@ function LeftOutNote({ candidate, invoice }) {
   );
 }
 
-/** "Valor parecido": a diferença em destaque e o que acontece se for esta. */
+/** O valor de uma opção bem diferente do banco, para o leitor de tela: "o Fincla tem X, o banco Y". */
+function bigDifferenceLabel(entry, candidate) {
+  if (!candidate.differences.includes("amount") || !beyondDoubtTolerance(entry, candidate.value)) return "";
+  return `, valor diferente: o Fincla tem ${formatMoney(candidate.value, candidate.currency)}, o banco ${formatMoney(Math.abs(entry.amount), entry.currency)}`;
+}
+
+/**
+ * "Valor parecido": a diferença em destaque e o que acontece se for esta. Além da folga de uma
+ * dúvida (só pela busca, QA F5 OBS-03), os dois valores por extenso: a troca nunca passa calada.
+ */
 function CandidateDifference({ entry, candidate }) {
   if (!candidate.differences.includes("amount")) return null;
   const bank = Math.abs(entry.amount);
   const gap = Math.abs(candidate.value - bank);
+  const currency = entry.currency ?? candidate.currency;
+  const after = entry.value_locked ? <>Fatura já paga: o valor não muda.</> : null;
+  if (beyondDoubtTolerance(entry, candidate.value)) {
+    return (
+      <div data-testid="candidate-difference" data-beyond="true" style={NOTE}>
+        <span style={{ ...TAG, color: T.amber, background: T.amberLight }}>Valor diferente</span>
+        <span style={{ flex: "1 1 180px", minWidth: 0 }}>
+          O Fincla tem <Hl on><b style={NUM}>{formatMoney(candidate.value, candidate.currency)}</b></Hl>, o banco{" "}
+          <Hl on><b style={NUM}>{formatMoney(bank, entry.currency)}</b></Hl> (diferença de <b style={NUM}>{formatMoney(gap, currency)}</b>).{" "}
+          {after ?? <>Se for esta, <b>ao concluir vale o do banco</b>.</>}
+        </span>
+      </div>
+    );
+  }
   return (
     <div data-testid="candidate-difference" style={NOTE}>
       <span style={{ ...TAG, color: T.amber, background: T.amberLight }}>Valor diferente</span>
       <span style={{ flex: "1 1 180px", minWidth: 0 }}>
-        Diferença de <Hl on><b style={NUM}>{formatMoney(gap, entry.currency ?? candidate.currency)}</b></Hl>: o banco cobrou{" "}
+        Diferença de <Hl on><b style={NUM}>{formatMoney(gap, currency)}</b></Hl>: o banco cobrou{" "}
         <b style={NUM}>{formatMoney(bank, entry.currency)}</b>.{" "}
-        {entry.value_locked
-          ? <>Fatura já paga: o valor não muda.</>
-          : <>Se for esta, ao concluir vale o valor do banco.</>}
+        {after ?? <>Se for esta, ao concluir vale o valor do banco.</>}
       </span>
     </div>
   );
@@ -187,7 +210,7 @@ export const InvoiceCandidateOption = memo(function InvoiceCandidateOptionView({
           type="button"
           aria-pressed={pressed}
           disabled={busy}
-          aria-label={`${action}: ${candidate.description}, ${bankDateLabel(day)}, ${formatMoney(candidate.value, candidate.currency)}${here ? "" : `, ${whereText(candidate.invoice)}`}`}
+          aria-label={`${action}: ${candidate.description}, ${bankDateLabel(day)}, ${formatMoney(candidate.value, candidate.currency)}${here ? "" : `, ${whereText(candidate.invoice)}`}${bigDifferenceLabel(entry, candidate)}`}
           onClick={() => onPick(candidate)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", margin: 0, padding: 0, border: 0, borderRadius: "inherit", background: "transparent", cursor: busy ? "not-allowed" : "pointer" }}
         />
@@ -263,7 +286,7 @@ function DoubtOptions({ entry, entries, invoice, invoiceMonth, busy, onPick, onS
           />
         );
       })}
-      {chosenId !== null ? <ChosenConsequences entry={entry} /> : null}
+      {chosenId !== null ? <ChosenConsequences entry={entry} invoice={invoice} /> : null}
     </div>
   );
 }
@@ -338,9 +361,20 @@ export function MoveConsequences({ entry, invoice }) {
   );
 }
 
-/** A escolhida numa dúvida: o que acontece com ela (ligar, ou mover) e o valor do banco. */
-function ChosenConsequences({ entry }) {
-  if (isMoveAnswer(entry.answer)) return bankValueDiffers(entry) ? <PairConsequences entry={entry} /> : null;
+/**
+ * A escolhida numa dúvida: o que acontece com ela (ligar, ou mover) e o valor do banco. Mover diz o
+ * mesmo que o passo 2 (`MoveConsequences`, QA F5 OBS-02): à vista, a data da compra fica e quanto a
+ * outra fatura diminui; parcela, para onde ela (ou a série) vai.
+ */
+function ChosenConsequences({ entry, invoice }) {
+  if (isMoveAnswer(entry.answer)) {
+    return (
+      <>
+        <MoveConsequences entry={entry} invoice={invoice} />
+        {bankValueDiffers(entry) ? <PairConsequences entry={entry} /> : null}
+      </>
+    );
+  }
   return <PairConsequences entry={entry} />;
 }
 
