@@ -14,7 +14,6 @@ import { plural } from "../plural.js";
 import { formatMoney } from "../money/formatMoney.js";
 import { handleApiError } from "../../api/client";
 import { listAccounts } from "../../api/accounts";
-import { listTags } from "../../api/tags";
 import { ROW_GAP, UPLOAD_BASIS, useStartRowWraps } from "../features/statementImport/startRowLayout.js";
 import {
   columnMappingPreviewOf,
@@ -48,6 +47,7 @@ import {
 import { summaryCountRows, unclassifiedText } from "../features/statementImport/summaryRows.js";
 import { bankDateLabel } from "../features/statementImport/StatementEntryCard.jsx";
 import { NewEntriesStep } from "../features/statementImport/NewEntriesStep.jsx";
+import { useCategories } from "../features/statementImport/useCategories.js";
 import { ColumnMappingCard } from "../features/statementImport/ColumnMappingCard.jsx";
 import { SuggestedPairsStep } from "../features/statementImport/SuggestedPairsStep.jsx";
 import { OutsideStep } from "../features/statementImport/OutsideStep.jsx";
@@ -150,34 +150,6 @@ function useAccountName(organizationId, accountId) {
   return name;
 }
 
-const byLabel = (a, b) => (a.label || a.name).localeCompare(b.label || b.name, "pt-BR");
-
-function useCategories(organizationId) {
-  const [categories, setCategories] = useState([]);
-  const [details, setDetails] = useState([]);
-  const [error, setError] = useState("");
-  const [detailsError, setDetailsError] = useState("");
-  useEffect(() => {
-    if (!organizationId) return undefined;
-    let alive = true;
-    listTags(organizationId, "categoria")
-      .then((res) => {
-        if (!alive) return;
-        const active = (res.tags ?? []).filter((t) => t.is_active !== false);
-        setCategories(active.sort(byLabel));
-      })
-      .catch(() => { if (alive) setError("Não foi possível carregar as suas categorias. Recarregue a página para escolher uma."); });
-    // Etiquetas (fincla-api#513): cada uma pertence a uma categoria (`parent_category_tag_id`).
-    listTags(organizationId, "detalhe")
-      .then((res) => {
-        if (alive) setDetails((res.tags ?? []).filter((t) => t.is_active !== false && t.parent_category_tag_id).sort(byLabel));
-      })
-      .catch(() => { if (alive) setDetailsError("Não foi possível carregar as suas etiquetas. Recarregue a página para escolher uma."); });
-    return () => { alive = false; };
-  }, [organizationId]);
-  // Sem categorias não há etiqueta a escolher: o aviso das categorias vem primeiro.
-  return { categories, details, error: error || detailsError };
-}
 
 // --------------------------------------------------------------------------------------------
 // Enviar o extrato

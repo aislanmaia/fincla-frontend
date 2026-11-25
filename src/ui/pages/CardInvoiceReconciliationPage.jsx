@@ -1,4 +1,10 @@
-// Conciliar fatura do cartão (fincla-api#554; primeira entrega #555, segunda #556).
+// Conciliar fatura do cartão (fincla-api#554; primeira entrega #555, segunda #556, terceira #557).
+//
+// #557: o passo 5 "Compras novas" responde (Adicionar · Não registrar), com o formulário do item
+// novo do extrato (o mesmo `NewEntriesStep`/`StatementEntryCard`, com a forma de pagamento travada
+// no cartão e as opções da compra parcelada), e "Não, adicionar agora" do passo 1 abre o mesmo
+// formulário. O resumo conta as transações novas e as sem categoria; compra nova sem descrição
+// segura o Concluir, com o motivo.
 //
 // #556: a tela de envio mostra "Faturas conciliadas" do cartão (continuar/descartar rascunho,
 // desfazer só na concluída mais recente); o rascunho retoma no passo em que parou; o mesmo PDF já
@@ -30,6 +36,7 @@ import {
   invoiceDraftInProgressOf,
   listCardInvoiceImports,
   previewCardInvoiceImportUndo,
+  updateCardInvoiceEntries,
   updateCardInvoiceEntry,
   updateCardInvoiceImportProgress,
   uploadCardInvoice,
@@ -66,6 +73,8 @@ import {
 import {
   InvoiceSuggestedStep, PURCHASE_NOUN, ReadOnlyEntries, ReconciledEntries, invoiceAnswerUnavailable,
 } from "../features/statementImport/InvoiceSuggestedStep.jsx";
+import { InvoiceNewStep } from "../features/statementImport/InvoiceNewStep.jsx";
+import { useCategories } from "../features/statementImport/useCategories.js";
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação da fatura.";
 
@@ -404,8 +413,13 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
   const rows = invoiceSummaryRows(invoiceImport);
   const { difference_now: now, invoice, summary } = invoiceImport;
   const pending = summary.unanswered;
-  const blocked = !invoiceImport.can_conclude || pending > 0;
-  const why = pending ? `Falta responder ${plural(pending, "item", "itens")}.` : invoiceImport.blockers.length ? "Ainda há pendências na conciliação." : "";
+  const missing = summary.missing_description;
+  const blocked = !invoiceImport.can_conclude || pending > 0 || missing > 0;
+  const reasons = [
+    pending ? `Falta responder ${plural(pending, "item", "itens")}.` : null,
+    missing ? `${missing === 1 ? "Uma compra nova está" : `${missing.toLocaleString("pt-BR")} compras novas estão`} sem descrição: escreva a descrição em Compras novas.` : null,
+  ].filter(Boolean);
+  const why = reasons.length ? reasons.join(" ") : invoiceImport.blockers.length ? "Ainda há pendências na conciliação." : "";
   const off = now.difference !== null && Math.abs(now.difference) >= 0.005;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -420,6 +434,14 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
           {!rows.length ? <span style={{ ...G, fontSize: 13, color: T.inkMid }}>Nenhuma mudança no Fincla.</span> : null}
         </div>
       </Card>
+      {summary.uncategorized ? (
+        <div role="note" data-testid="summary-uncategorized" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 8, alignItems: "baseline" }}>
+          <AlertTriangle size={14} aria-hidden="true" style={{ color: T.amber, flexShrink: 0, alignSelf: "center" }} />
+          <span>
+            {summary.uncategorized === 1 ? "Uma compra nova está sem categoria e vai" : `${summary.uncategorized.toLocaleString("pt-BR")} compras novas estão sem categoria e vão`} para <b>Não classificado</b> ao concluir. Dá para escolher a categoria em Compras novas.
+          </span>
+        </div>
+      ) : null}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Card data-testid="summary-fincla-total" style={{ padding: "12px 16px", flex: "1 1 220px" }}>
           <div style={{ ...G, fontSize: 12, color: T.inkMid }}>Fatura de {invoiceMonthName(invoice.month)} no Fincla fica</div>
@@ -436,10 +458,10 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
       </div>
       <ErrorNote>{error}</ErrorNote>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <Btn variant="dark" onClick={onConclude} disabled={blocked || concluding} style={touchHeight(touch)}>
+        <Btn variant="dark" onClick={onConclude} disabled={blocked || concluding} aria-describedby={why ? "conclude-blocked" : undefined} style={touchHeight(touch)}>
           {concluding ? "Concluindo…" : "Concluir conciliação da fatura"}
         </Btn>
-        {why ? <span data-testid="conclude-blocked" style={{ ...G, fontSize: 12, color: T.amber }}>{why}</span> : null}
+        {why ? <span id="conclude-blocked" data-testid="conclude-blocked" style={{ ...G, fontSize: 12, color: T.amber }}>{why}</span> : null}
       </div>
     </div>
   );
@@ -517,6 +539,7 @@ function UndoneInvoiceView({ invoiceImport, touch, onOpenInvoice, onNewUpload })
         <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>
           {undoneAt ? <>Desfeita em <b style={NUM}>{dayOf(undoneAt)}</b>. </> : null}
           As compras que ela tinha conferido voltaram ao que eram antes: o valor de antes e sem a marca de conferida.
+          {invoiceImport.summary.to_create ? <> As compras novas que ela tinha adicionado foram apagadas.</> : null}
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn variant="dark" onClick={onNewUpload} style={touchHeight(touch)}>Conciliar a fatura de novo</Btn>
@@ -551,6 +574,9 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   const setAnswering = useCallback((on) => setInFlight((n) => Math.max(0, n + (on ? 1 : -1))), []);
   // Os PATCH de progresso saem em fila: o servidor fica sempre com o último passo aberto.
   const progressQueue = useRef(Promise.resolve());
+  // O formulário da compra nova (#557): categorias e etiquetas da organização, como no extrato.
+  const { categories, details, error: categoriesError } = useCategories(organizationId);
+  const fallbackLabel = useMemo(() => categories.find((c) => c.is_fallback)?.label || "Não classificado", [categories]);
 
   const reload = useCallback(
     () => getCardInvoiceImport(cardId, organizationId, importId).then(setImport),
@@ -597,18 +623,45 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     setImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
   }, []);
 
+  // Grava uma mudança num lançamento (um campo da compra nova, ou uma resposta). `onSaved` roda assim
+  // que o backend aceita, antes de reler o rascunho: é onde uma resposta recolhe o cartão. Devolve
+  // `false` quando não gravou (o cartão fica aberto, com o erro da página).
+  const changeEntry = async (entryId, body, { onSaved = null } = {}) => {
+    setAnswering(true);
+    setActionError("");
+    try {
+      showSaved(entryId, await updateCardInvoiceEntry(cardId, organizationId, importId, entryId, body));
+      onSaved?.();
+      await reload();
+      return true;
+    } catch (err) {
+      setActionError(cardApiError(err));
+      return false;
+    } finally {
+      setAnswering(false);
+    }
+  };
+
+  // O Confirmar do formulário da compra nova (#557): grava a confirmação (a descrição já foi gravada
+  // pelo campo). Já confirmada, só recolhe.
+  const confirmNew = (entry) => (entry.confirmed ? Promise.resolve(true) : changeEntry(entry.id, { confirmed: true }));
+
   // Responder confirma e recolhe no clique, sem espera; clicar de novo na resposta marcada também.
+  // "Não, adicionar agora" (#557) deixa o cartão aberto com o formulário e o Confirmar ao lado: a
+  // resposta fica gravada sem confirmar até o Confirmar.
   const answer = async (entry, value) => {
     if (value === entry.answer && entry.confirmed) {
       queue.advanceFrom(entry.id);
       return;
     }
+    if (value === "create" && entry.answer === "create") return;
     setAnswering(true);
     setActionError("");
     try {
-      showSaved(entry.id, await updateCardInvoiceEntry(cardId, organizationId, importId, entry.id, { answer: value }));
+      const body = value === "create" ? { answer: value, confirmed: false } : { answer: value };
+      showSaved(entry.id, await updateCardInvoiceEntry(cardId, organizationId, importId, entry.id, body));
       setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }] }));
-      queue.advanceFrom(entry.id);
+      if (value !== "create") queue.advanceFrom(entry.id);
       setLastBulk(null);
       await reload();
     } catch (err) {
@@ -655,9 +708,24 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   };
 
   // "Próximo": confirma as escolhas do passo que faltam confirmar (nada muda no Fincla) e avança.
+  // As sugestões pela confirmação em lote; as outras (Adicionar, Não registrar) pelo lote de respostas.
   const next = async (stepKey) => {
-    const unconfirmed = unconfirmedEntries(stepEntries).filter((e) => e.answer === "pair");
-    if (unconfirmed.length && !(await confirmAll(unconfirmed.map((e) => e.id), true))) return;
+    const unconfirmed = unconfirmedEntries(stepEntries);
+    const pairs = unconfirmed.filter((e) => e.answer === "pair");
+    const others = unconfirmed.filter((e) => e.answer !== "pair");
+    if (pairs.length && !(await confirmAll(pairs.map((e) => e.id), true))) return;
+    if (others.length) {
+      setAnswering(true);
+      setActionError("");
+      try {
+        setImport(await updateCardInvoiceEntries(cardId, organizationId, importId, others.map((e) => ({ id: e.id, confirmed: true }))));
+      } catch (err) {
+        setActionError(cardApiError(err));
+        return;
+      } finally {
+        setAnswering(false);
+      }
+    }
     setLastBulk(null);
     open(stepKey);
   };
@@ -677,14 +745,30 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     }
   };
 
-  // S/N respondem a compra aberta (só com a fileira de respostas inteira à vista, como no extrato).
-  const shortcutAnswers = current === "suggested"
-    ? {
-        s: (e) => (invoiceAnswerUnavailable(e, "pair") ? null : answer(e, "pair")),
-        n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
-      }
-    : {};
-  const listOpen = Boolean(invoiceImport?.status === "draft" && current === "suggested" && queue.total);
+  // O Confirmar pelo atalho A numa compra nova: só com descrição (a mesma regra do botão).
+  const confirmNewAndAdvance = async (entry) => {
+    if (!String(entry.description ?? "").trim()) return;
+    if (await confirmNew(entry)) queue.advanceFrom(entry.id);
+  };
+  // S/A/N respondem a compra aberta (só com a fileira de respostas inteira à vista, como no extrato).
+  const shortcutsByStep = {
+    suggested: {
+      s: (e) => (invoiceAnswerUnavailable(e, "pair") ? null : answer(e, "pair")),
+      a: (e) => (invoiceAnswerUnavailable(e, "create") ? null : answer(e, "create")),
+      n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
+    },
+    new: {
+      a: (e) => {
+        if (invoiceAnswerUnavailable(e, "create")) return null;
+        return e.answer === "create" ? confirmNewAndAdvance(e) : changeEntry(e.id, { answer: "create", confirmed: false });
+      },
+      n: (e) => (e.answer === "ignore"
+        ? confirmNew(e).then((ok) => ok && queue.advanceFrom(e.id))
+        : changeEntry(e.id, { answer: "ignore" }, { onSaved: () => queue.advanceFrom(e.id) })),
+    },
+  };
+  const shortcutAnswers = shortcutsByStep[current] ?? {};
+  const listOpen = Boolean(invoiceImport?.status === "draft" && (current === "suggested" || current === "new") && queue.total);
   useQueueShortcuts(listOpen ? queue : null, shortcutAnswers, { disabled: answering });
 
   const openInvoice = () => navigate({ to: invoiceDashboardPath(cardPublicId, invoiceImport.invoice.year, invoiceImport.invoice.month) });
@@ -724,6 +808,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   const readOnly = stepEntries.filter((e) => !e.answerable);
   // Os já conferidos (reimportação do mesmo PDF) aparecem no passo 1, só para leitura.
   const conferred = current === "suggested" ? reconciledEntries(invoiceImport.entries) : [];
+  const form = { categories, details, fallbackLabel, cardName: invoiceImport.credit_card.name, invoiceMonth: invoiceMonthLabel(invoiceImport.invoice) };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -766,6 +851,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
             {step.then ? <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: "4px 0 0" }}>{step.then}</p> : null}
           </header>
           {current !== "summary" ? <ErrorNote>{actionError}</ErrorNote> : null}
+          {(current === "suggested" || current === "new") && queueEntries.length ? <ErrorNote>{categoriesError}</ErrorNote> : null}
           {conferred.length ? <ReconciledEntries entries={conferred} /> : null}
 
           {current === "suggested" && queueEntries.length ? (
@@ -777,10 +863,25 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
               busy={answering}
               history={answerHistory}
               lastBulk={lastBulk}
+              form={form}
               onAnswer={answer}
+              onChange={changeEntry}
+              onConfirmNew={(entry) => confirmNew(entry).then((ok) => ok && queue.advanceFrom(entry.id))}
               onUndoChoice={undoChoice}
               onConfirmAll={(ids) => confirmAll(ids, true)}
               onUndoConfirmAll={() => confirmAll(lastBulk, false)}
+            />
+          ) : null}
+          {current === "new" && queueEntries.length ? (
+            <InvoiceNewStep
+              key={current}
+              entries={queueEntries}
+              queue={queue}
+              form={form}
+              isMobile={isMobile}
+              answering={answering}
+              onChangeEntry={changeEntry}
+              onConfirmEntry={confirmNew}
             />
           ) : null}
           {INVOICE_ENTRY_STEPS.has(current) && readOnly.length ? <ReadOnlyEntries entries={readOnly} /> : null}
@@ -810,7 +911,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
         </main>
       </div>
       {/* O aviso de quanto falta no passo leva ao primeiro pendente; some com 0. */}
-      {current === "suggested" ? (
+      {current === "suggested" || current === "new" ? (
         <GoToPendingButton key={`pending-${current}`} queue={queue} noun={PURCHASE_NOUN} isMobile={isMobile} indent={isMobile ? 0 : RAIL_WIDTH + 16} />
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 // api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
-// desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação).
+// desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação; terceira #557: compras novas,
+// à vista e parceladas).
 //
 // O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
 // do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
@@ -21,7 +22,7 @@ export type InvoiceReconciliationStep =
  */
 export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
 /**
- * Nesta versão só `pair` e `ignore`; as próximas fatias trazem `create`, `move`, `move_series`.
+ * `pair`, `ignore` e (#557) `create`; as próximas fatias trazem `move`, `move_series`.
  * `reconciled` só vem do servidor (nunca se envia).
  */
 export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled';
@@ -39,6 +40,35 @@ export interface InvoiceMoney {
 export interface InstallmentPosition {
   number: number;
   count: number;
+}
+
+/**
+ * Compra parcelada nova (#557, decisão 5): `full` = Compra inteira (parcelas 1 a M, o padrão);
+ * `from_current` = Só daqui em diante (N a M). `null` à vista.
+ */
+export type InstallmentsScope = 'full' | 'from_current';
+
+/** Uma parcela da compra nova, na fatura em que cai (`invoice_month` = mês em que ela fecha). */
+export interface NewPurchaseInstallment {
+  number: number;
+  amount: number;
+  currency: string | null;
+  invoice_year: number;
+  invoice_month: number;
+  /** `false` = o banco não listou esta parcela: o valor é o da parcela N ("valor estimado"). */
+  from_bank: boolean;
+  /** A fatura dela já está paga: a parcela entra já paga (a única exceção à decisão 1). */
+  invoice_paid: boolean;
+}
+
+/**
+ * A compra parcelada nova inteira (1..M), cada parcela na sua fatura. `total_amount` é o mesmo nas
+ * duas opções. `null` à vista, em crédito e fora de `suggested`/`new`.
+ */
+export interface NewPurchase {
+  installments_count: number;
+  total_amount: InvoiceMoney | null;
+  installments: NewPurchaseInstallment[];
 }
 
 /** O lado "No Fincla", lido ao vivo. */
@@ -91,8 +121,22 @@ export interface InvoiceEntry {
   fincla_transaction: InvoiceFinclaTransaction | null;
   /** Com `pair` e valor diferente: ao concluir a transação passa de `from` para `to` (o valor do banco). */
   value_change: { from: number; to: number; currency: string | null } | null;
-  /** Fatura já paga no Fincla: o par liga sem trocar o valor (decisão 1). */
+  /** Fatura já paga no Fincla: o par liga sem trocar o valor (decisão 1). E `create` é recusado. */
   value_locked: boolean;
+  // A compra nova (#557): o formulário de "Adicionar" / "Não, adicionar agora".
+  /** Pré-preenchida com o texto do banco sem o "NN/MM"; vazia bloqueia o concluir. */
+  description: string;
+  /** Travado: `expense` (cobrança) ou `refund` (crédito). */
+  transaction_type: 'expense' | 'refund';
+  category_tag_id: string | null;
+  /** A categoria pelo histórico (#513); `null` = sem histórico parecido. */
+  suggested_category_tag_id: string | null;
+  /** Só da categoria escolhida. */
+  detail_tag_ids: string[];
+  installments_scope: InstallmentsScope | null;
+  new_purchase: NewPurchase | null;
+  /** Depois de concluir com `create`: a transação criada nesta fatura (na parcelada, a parcela N). */
+  created_transaction_id: number | null;
 }
 
 export interface InvoiceRef {
@@ -149,6 +193,12 @@ export interface CardInvoiceImportSummary {
   unanswered: number;
   /** Já conferidos por uma conciliação concluída deste cartão (reimportação, #556); fora de `read_only`. */
   already_reconciled: number;
+  /** Respondidos `create` (#557). */
+  to_create: number;
+  /** `create` sem descrição: bloqueia o concluir. */
+  missing_description: number;
+  /** `create` sem categoria: vão para Não classificado ao concluir. */
+  uncategorized: number;
 }
 
 /** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
@@ -213,9 +263,14 @@ export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
 export type UndoneCardInvoiceImport = CardInvoiceImport & { deleted_transactions: number | null };
 
 export interface UpdateInvoiceEntryRequest {
-  answer?: 'pair' | 'ignore';
+  answer?: 'pair' | 'ignore' | 'create';
   transaction_id?: number | null;
   confirmed?: boolean;
+  // A compra nova (#557): mudam com ou sem `answer`.
+  description?: string;
+  category_tag_id?: string | null;
+  detail_tag_ids?: string[];
+  installments_scope?: InstallmentsScope;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -242,6 +297,23 @@ const normalizeFincla = (raw: Raw | null | undefined): InvoiceFinclaTransaction 
   };
 };
 
+const normalizeNewPurchase = (raw: Raw | null | undefined): NewPurchase | null => {
+  if (!raw) return null;
+  return {
+    installments_count: Number(raw.installments_count),
+    total_amount: moneyOrNull(raw.total_amount as WireMoney),
+    installments: ((raw.installments as Raw[]) ?? []).map((i) => ({
+      number: Number(i.number),
+      amount: toAmount(i.amount as WireMoney),
+      currency: toCurrency(i.amount),
+      invoice_year: Number(i.invoice_year),
+      invoice_month: Number(i.invoice_month),
+      from_bank: Boolean(i.from_bank),
+      invoice_paid: Boolean(i.invoice_paid),
+    })),
+  };
+};
+
 export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
   const change = raw.value_change as { from: WireMoney; to: WireMoney } | null | undefined;
   return {
@@ -264,6 +336,14 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     fincla_transaction: normalizeFincla(raw.fincla_transaction as Raw | null),
     value_change: change ? { from: toAmount(change.from), to: toAmount(change.to), currency: toCurrency(change.to) } : null,
     value_locked: Boolean(raw.value_locked),
+    description: (raw.description as string | null) ?? '',
+    transaction_type: (raw.transaction_type as InvoiceEntry['transaction_type'] | null) ?? (toAmount(raw.amount as WireMoney) > 0 ? 'refund' : 'expense'),
+    category_tag_id: (raw.category_tag_id as string | null) ?? null,
+    suggested_category_tag_id: (raw.suggested_category_tag_id as string | null) ?? null,
+    detail_tag_ids: (raw.detail_tag_ids as string[] | null) ?? [],
+    installments_scope: (raw.installments_scope as InstallmentsScope | null) ?? null,
+    new_purchase: normalizeNewPurchase(raw.new_purchase as Raw | null),
+    created_transaction_id: (raw.created_transaction_id as number | null) ?? null,
   };
 };
 
@@ -301,7 +381,13 @@ const normalizeInvoiceRef = (raw: unknown): InvoiceRef => {
 
 const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
   const summary = (raw ?? {}) as CardInvoiceImportSummary;
-  return { ...summary, already_reconciled: summary.already_reconciled ?? 0 };
+  return {
+    ...summary,
+    already_reconciled: summary.already_reconciled ?? 0,
+    to_create: summary.to_create ?? 0,
+    missing_description: summary.missing_description ?? 0,
+    uncategorized: summary.uncategorized ?? 0,
+  };
 };
 
 /** Os campos de uma conciliação comuns ao detalhe e à linha da lista. */

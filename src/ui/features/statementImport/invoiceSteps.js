@@ -1,8 +1,8 @@
 // Os 8 passos da conciliação da fatura do cartão (spec fincla-api#554), com os textos do protótipo
 // v16. É o segundo conjunto de passos, ao lado do `STEPS` do extrato (`reconciliationSteps.js`):
-// mesmo molde, palavras de fatura ("compras", "lançamentos"). A primeira entrega (#555) responde só
-// o passo 1; os lançamentos dos passos seguintes aparecem só para leitura, "Fica de fora nesta
-// versão". Cada fluxo tem a sua contagem de passos (decisão 9): o progresso conta os 6 passos de
+// mesmo molde, palavras de fatura ("compras", "lançamentos"). A primeira entrega (#555) responde o
+// passo 1, a terceira (#557) o passo 5 "Compras novas"; os lançamentos dos outros passos aparecem só
+// para leitura, "Fica de fora nesta versão". Cada fluxo tem a sua contagem de passos (decisão 9): o progresso conta os 6 passos de
 // lançamentos, como no protótipo.
 import { plural } from "../../plural.js";
 import { isAnswered } from "./entryQueue.jsx";
@@ -78,8 +78,14 @@ export function invoiceEntriesOfStep(stepKey, entries) {
 /** Os que a pessoa responde neste passo (os outros são "Fica de fora nesta versão"). */
 export const answerableEntries = (entries) => entries.filter((e) => e.answerable);
 
-/** Sem resposta (os "Fica de fora nesta versão" já vêm respondidos). */
-export const pendingEntries = (entries) => entries.filter((e) => e.answerable && e.answer === null);
+/** "Adicionar" com a descrição vazia: bloqueia o concluir (fincla-api#557). */
+export const missingDescription = (entry) => entry.answer === "create" && !String(entry.description ?? "").trim();
+
+/**
+ * Sem resposta (os "Fica de fora nesta versão" já vêm respondidos). Uma compra nova sem descrição
+ * conta como sem resposta, como no extrato: o Confirmar fica desligado até ela ter descrição.
+ */
+export const pendingEntries = (entries) => entries.filter((e) => e.answerable && (e.answer === null || missingDescription(e)));
 
 /** Respondidos e ainda não confirmados (a sugestão que vem marcada "Sim, é esta"). */
 export const unconfirmedEntries = (entries) => entries.filter((e) => e.answerable && e.answer !== null && !e.confirmed);
@@ -88,8 +94,11 @@ export const unconfirmedEntries = (entries) => entries.filter((e) => e.answerabl
 export const unconfirmedInvoiceSuggestions = (entries) =>
   entries.filter((e) => e.answerable && e.classification === "suggested" && e.answer === "pair" && !e.confirmed);
 
-/** Respondido = como no extrato: a sugestão só depois que a pessoa confirma. */
-export const isInvoiceEntryAnswered = (entry) => isAnswered(entry);
+/**
+ * Respondido = confirmado pela pessoa: a sugestão ("Sim, é esta" já marcado) e a compra nova
+ * ("Adicionar" já marcado, #557) só depois do Confirmar; uma resposta escolhida já confirma.
+ */
+export const isInvoiceEntryAnswered = (entry) => (entry.answerable && !entry.confirmed ? false : isAnswered(entry));
 
 /** O primeiro passo com algo a responder; sem nenhum, o resumo. */
 export function firstInvoiceStepWithWork(entries) {
@@ -131,10 +140,27 @@ const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "jul
 export const invoiceMonthName = (month) => MONTHS[(Number(month) || 1) - 1];
 export const invoiceMonthLabel = ({ year, month }) => `${invoiceMonthName(month)}/${year}`;
 
+/** "03" de 3: a parcela como o banco imprime. */
+export const pad2 = (n) => String(n).padStart(2, "0");
+
+/**
+ * As parcelas que a compra nova cria ao concluir, pela opção escolhida (#557, decisão 5): a compra
+ * inteira (1..M) ou só daqui em diante (N..M). À vista: nenhuma (é uma transação só).
+ */
+export function createdInstallments(entry) {
+  const purchase = entry.new_purchase;
+  if (!purchase || !entry.installment) return [];
+  if (entry.installments_scope === "from_current") return purchase.installments.filter((i) => i.number >= entry.installment.number);
+  return purchase.installments;
+}
+
+/** Quantas transações a compra nova vira ao concluir: as parcelas criadas, ou 1 à vista. */
+export const createdTransactionCount = (entry) => (entry.new_purchase && entry.installment ? createdInstallments(entry).length : 1);
+
 /**
  * As contagens de "Revisar e concluir", uma linha por efeito que exista (protótipo v16). Nesta
- * versão: compras ligadas, parcelas com o valor do banco e lançamentos não registrados (com os que
- * ficam de fora nesta versão).
+ * versão: compras ligadas, parcelas com o valor do banco, transações novas (#557) e lançamentos não
+ * registrados (com os que ficam de fora nesta versão).
  */
 export function invoiceSummaryRows(invoiceImport) {
   const entries = invoiceImport.entries;
@@ -148,6 +174,15 @@ export function invoiceSummaryRows(invoiceImport) {
   };
   row(pairs.length, "compra já estava no Fincla e fica ligada ao banco", "compras já estavam no Fincla e ficam ligadas ao banco", "summary-paired");
   row(bankValue, "compra passa a ter o valor do banco", "compras passam a ter o valor do banco", "summary-bank-value");
+  // Compras novas (#557): as transações que entram, com as parcelas das parceladas.
+  const creates = entries.filter((e) => e.answer === "create");
+  const transactions = creates.reduce((sum, e) => sum + createdTransactionCount(e), 0);
+  const paidInstallments = creates.reduce((sum, e) => sum + createdInstallments(e).filter((i) => i.invoice_paid).length, 0);
+  const createdNote = [
+    transactions !== creates.length ? `de ${plural(creates.length, "compra", "compras")}, com as parcelas` : null,
+    paidInstallments ? `${plural(paidInstallments, "parcela entra", "parcelas entram")} já paga${paidInstallments === 1 ? "" : "s"} em fatura já paga` : null,
+  ].filter(Boolean).join(" · ") || null;
+  row(transactions, "transação nova entra no Fincla", "transações novas entram no Fincla", "summary-created", createdNote);
   row(
     reconciledEntries(entries).length,
     "lançamento já foi conferido numa conciliação anterior: nada muda nele",

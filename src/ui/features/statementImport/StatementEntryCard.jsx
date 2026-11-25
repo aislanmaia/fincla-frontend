@@ -311,7 +311,7 @@ export function CheckTarget({ children, style = null }) {
  * de tela chegam a tudo pelos controles. `focus` leva o foco ao "Alterar" quando a linha acaba de
  * aparecer no lugar do cartão.
  */
-export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, busy = false, focus = false }) {
+export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, selected = false, onSelect = null, onExpand, onUndo, busy = false, focus = false, conferred = true, amount = null }) {
   const alterRef = useRef(null);
   const touchTarget = useTouchTarget();
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
@@ -329,10 +329,10 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
       </button>
       <span style={{ ...NUM, fontSize: 12, color: T.inkLight, opacity: 0.8 }}>{bankDateLabel(entry.date)}</span>
       <span style={{ fontSize: 13, color: T.ink, opacity: 0.7, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>{entry.bank_description}</span>
-      <span style={{ ...NUM, fontSize: 13, color: T.inkMid, opacity: 0.7 }}>{formatMoney(entry.amount, entry.currency)}</span>
+      <span style={{ ...NUM, fontSize: 13, color: T.inkMid, opacity: 0.7 }}>{amount ?? formatMoney(entry.amount, entry.currency)}</span>
       <SkipBadge />
       <span style={{ fontSize: 12, color: T.inkLight }}>fica fora do Fincla</span>
-      <ConferidoBadge />
+      {conferred ? <ConferidoBadge /> : null}
       <Btn variant="ghost" small disabled={busy} onClick={() => onUndo(entry.id)}>
         Desfazer escolha
       </Btn>
@@ -345,7 +345,7 @@ export const IgnoredEntryRow = memo(function IgnoredEntryRowView({ entry, select
  * Fincla (descrição e categoria) cabe nela. Clicar em qualquer ponto livre a reabre. Respondido
  * nesta visita ("Confirmar" no cartão), mostra "Desfazer escolha" (`onUndo`), como nos outros passos.
  */
-export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, onUndo = null, busy = false, focus = false }) {
+export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, unclassified, selected = false, onSelect = null, onExpand, onUndo = null, busy = false, focus = false, conferred = undefined, detail = null, amount = null }) {
   const alterRef = useRef(null);
   const touchTarget = useTouchTarget();
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
@@ -367,13 +367,14 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
       </button>
       <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>{bankDateLabel(entry.date)}</span>
       <span style={{ fontSize: 13, color: T.ink, fontWeight: 600, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>{entry.bank_description}</span>
-      <span style={{ ...NUM, fontSize: 13, color: entry.amount > 0 ? T.green : T.ink }}>{formatMoney(entry.amount, entry.currency)}</span>
+      <span style={{ ...NUM, fontSize: 13, color: entry.amount > 0 ? T.green : T.ink }}>{amount ?? formatMoney(entry.amount, entry.currency)}</span>
       <Badge color={T.green} bg={T.greenLight}><Plus size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Adicionar agora</Badge>
       <span style={{ fontSize: 12, color: T.inkMid, flex: "1 1 160px", minWidth: 0 }}>
         Adicionar ao Fincla: <b>{entry.description || "(sem descrição)"}</b> ·{" "}
         {unclassified ? <Badge color={T.amber} bg={T.amberLight}>{categoryText}</Badge> : categoryText}
+        {detail ? <> · {detail}</> : null}
       </span>
-      {isAnswered(entry) ? <ConferidoBadge /> : null}
+      {(conferred ?? isAnswered(entry)) ? <ConferidoBadge /> : null}
       {onUndo ? (
         <Btn variant="ghost" small disabled={busy} onClick={() => onUndo(entry.id)}>
           Desfazer escolha
@@ -392,8 +393,14 @@ export const NewEntryRow = memo(function NewEntryRowView({ entry, categoryText, 
  *
  * `skipped` ("Não registrar"): o formulário continua à vista, sem poder editar, com o fundo
  * listrado do lado do banco e a nota "Fica de fora".
+ *
+ * `invoice` (Conciliar fatura, fincla-api#557): o mesmo formulário para a compra nova no cartão.
+ * `{ paymentLabel, extraFields, skipText }`: a forma de pagamento fica travada no texto dado
+ * ("Cartão de crédito · <cartão>"), o tipo fica travado no `transaction_type` do lançamento
+ * (despesa ou estorno), "vem da fatura" no lugar de "vem do extrato", `extraFields` entra no fim do
+ * formulário (as opções da compra parcelada) e `skipText` é a nota do "Não registrar".
  */
-function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, desc: givenDesc, skipped = false }) {
+function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMobile, onChange, desc: givenDesc, skipped = false, invoice = null }) {
   const ownDesc = useDescriptionDraft(entry, onChange);
   const desc = givenDesc ?? ownDesc;
   const description = desc.value;
@@ -402,6 +409,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
   const type = entry.transaction_type ?? (moneyIn ? "income" : "expense");
   const options = categoriesForType(categories, type).filter((c) => !c.is_fallback);
   const blank = !skipped && !description.trim();
+  const source = invoice ? "fatura" : "extrato";
   const fieldId = (name) => `entry-${entry.id}-${name}`;
   const chosenCategory = categoryLabel(categories, entry.category_tag_id, fallbackLabel);
   const touchTarget = useTouchTarget();
@@ -437,17 +445,23 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
 
         <div>
           <span style={FIELD_LABEL}>Data</span>
-          <LockedValue testId="locked-date" title="Vem do extrato e não pode ser alterada">{bankDateLabel(entry.date)}</LockedValue>
+          <LockedValue testId="locked-date" title={`Vem do ${source} e não pode ser alterada`}>{bankDateLabel(entry.date)}</LockedValue>
           <span style={HELP}>Vem do banco</span>
         </div>
         <div>
           <span style={FIELD_LABEL}>Valor</span>
-          <LockedValue testId="locked-amount" title="Vem do extrato e não pode ser alterado">{formatMoney(entry.amount, entry.currency)}</LockedValue>
+          <LockedValue testId="locked-amount" title={`Vem do ${source} e não pode ser alterado`}>{formatMoney(entry.amount, entry.currency)}</LockedValue>
           <span style={HELP}>Vem do banco</span>
         </div>
 
         <div>
-          {moneyIn ? (
+          {invoice ? (
+            <>
+              <span style={FIELD_LABEL}>Tipo</span>
+              <LockedValue testId="locked-type" title="Cobrança vira despesa; crédito vira estorno">{TYPE_LABEL[type] ?? type}</LockedValue>
+              <span style={HELP}>{type === "refund" ? "Crédito na fatura: diminui o total" : "Cobrança na fatura"}</span>
+            </>
+          ) : moneyIn ? (
             <>
               <label htmlFor={fieldId("type")} style={FIELD_LABEL}>Tipo</label>
               <Select id={fieldId("type")} value={type} onChange={(e) => onChange(entry.id, { transaction_type: e.target.value })} style={{ width: "100%" }}>
@@ -464,6 +478,13 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             </>
           )}
         </div>
+        {invoice ? (
+          <div>
+            <span style={FIELD_LABEL}>Forma de pagamento</span>
+            <LockedValue testId="locked-payment" title="A compra está na fatura deste cartão">{invoice.paymentLabel}</LockedValue>
+            <span style={HELP}>A compra é deste cartão</span>
+          </div>
+        ) : (
         <div>
           <label htmlFor={fieldId("payment")} style={FIELD_LABEL}>Forma de pagamento</label>
           <Select
@@ -476,6 +497,7 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
           </Select>
           <span style={HELP}>Sugerida pelo texto do banco</span>
         </div>
+        )}
         <div style={{ gridColumn: "1 / -1" }}>
           <label htmlFor={fieldId("category")} style={FIELD_LABEL}>Categoria</label>
           <Select
@@ -499,9 +521,12 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
             onChange={(next) => onChange(entry.id, { detail_tag_ids: next })}
           />
         </div>
+        {invoice?.extraFields ? <div style={{ gridColumn: "1 / -1", minWidth: 0 }}>{invoice.extraFields}</div> : null}
       </fieldset>
       {skipped ? (
-        <SkipNote>Este lançamento não entra no Fincla: nada é adicionado. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo.</SkipNote>
+        <SkipNote>
+          {invoice?.skipText ?? "Este lançamento não entra no Fincla: nada é adicionado. O saldo do Fincla fica sem este valor, e a diferença aparece na conferência de saldo."}
+        </SkipNote>
       ) : null}
     </section>
   );
@@ -518,12 +543,13 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
  * `embedded`: só o lado "No Fincla · nova transação", sem moldura, para o cartão de um par sugerido
  * respondido "Não, adicionar agora" (fincla-api#510), que já mostra o lado do banco. Quem embute
  * passa `desc` (`useDescriptionDraft`) para o Confirmar dele ler e gravar a descrição digitada pela
- * mesma trava do campo; `skipped` o mostra inerte.
+ * mesma trava do campo; `skipped` o mostra inerte. `invoice` (fincla-api#557): o formulário da
+ * compra nova no cartão (ver `NewTransactionEditor`); a fatura embute o editor no cartão dela.
  */
 export function StatementEntryCard({
   entry, categories, details = [], fallbackLabel, isMobile, onChange,
   selected = false, onSelect = null, onCollapse = null, embedded = false, onSearch = null,
-  onConfirm = null, desc: embeddedDesc, skipped = false, busy = false,
+  onConfirm = null, desc: embeddedDesc, skipped = false, busy = false, invoice = null,
 }) {
   const moneyIn = entry.amount > 0;
   const ignored = entry.answer === "ignore";
@@ -540,7 +566,7 @@ export function StatementEntryCard({
       <article data-testid="statement-entry-new-side" aria-label="Nova transação" style={{ display: "flex", minWidth: 0 }}>
         <NewTransactionEditor
           entry={entry} categories={categories} details={details} fallbackLabel={fallbackLabel} isMobile={isMobile} onChange={onChange}
-          desc={embeddedDesc} skipped={skipped}
+          desc={embeddedDesc} skipped={skipped} invoice={invoice}
         />
       </article>
     );
