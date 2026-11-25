@@ -35,6 +35,11 @@ let draft = clone(contract.draft);
 
 /** O que o backend faz com uma resposta: o par é a sugestão; responder confirma, a menos que venha `confirmed`. */
 function applyAnswer(entry, body) {
+  // #561: "Ajustar também as próximas" só troca o ajuste; a resposta e o confirmar ficam.
+  if (body.adjust_next_installments !== undefined) {
+    entry.next_adjustment = clone((body.adjust_next_installments ? contract.entry : contract.entry_adjust_off).next_adjustment);
+    return;
+  }
   if (body.answer !== undefined) {
     entry.answer = body.answer;
     entry.paired_transaction_id = body.answer === "pair" ? entry.suggested_transaction_id : null;
@@ -331,11 +336,9 @@ describe("o passo Confirmar compras encontradas", () => {
     const consequences = within(loja).getByTestId("pair-consequences");
     expect(consequences).toHaveTextContent("O banco cobrou R$ 108,30; no Fincla está R$ 108,33 (diferença de R$ 0,03).");
     expect(within(consequences).getByTestId("value-change")).toHaveTextContent(/Ao concluir, vale o valor do banco:\s*R\$ 108,33\s*R\$ 108,30/);
-    // 7 parcelas seguintes: 7 × 108,33 no Fincla contra 7 × 108,27 do banco.
-    expect(within(consequences).getByTestId("future-installments-note")).toHaveTextContent(
-      "As outras 7 parcelas desta compra continuam com o valor do Fincla. Até elas serem conciliadas, o total da compra fica R$ 0,42 diferente do banco.",
-    );
-    expect(within(loja).queryByRole("checkbox")).not.toBeInTheDocument();
+    // #561: o banco listou as 7 seguintes; a caixa vem marcada, com a lista.
+    expect(within(consequences).queryByTestId("future-installments-note")).not.toBeInTheDocument();
+    expect(within(loja).getByRole("checkbox", { name: /Ajustar também as próximas 7 parcelas/ })).toBeChecked();
     expect(within(loja).getByTestId("pair-outcome")).toHaveTextContent("passa a valer R$ 108,30, o valor do banco.");
   });
 
@@ -478,6 +481,7 @@ describe("o passo Revisar e concluir", () => {
 
     expect(await screen.findByTestId("summary-paired")).toHaveTextContent("7 compras já estavam no Fincla e ficam ligadas ao banco");
     expect(screen.getByTestId("summary-bank-value")).toHaveTextContent("1 compra passa a ter o valor do banco");
+    expect(screen.getByTestId("summary-next-installments")).toHaveTextContent("7 parcelas seguintes passam a ter o valor que o banco informou");
     // A compra em outra fatura (#559): sai da fatura de janeiro e entra nesta.
     expect(screen.getByTestId("summary-moved")).toHaveTextContent("1 compra sai de outra fatura e entra nesta");
     expect(screen.queryByTestId("summary-moved-series")).not.toBeInTheDocument();
@@ -642,5 +646,64 @@ describe("enviar o PDF da fatura", () => {
     await user.upload(input, new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` }));
+  });
+});
+
+describe("Ajustar também as próximas parcelas (#561)", () => {
+  const openLoja = async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: /Alterar o lançamento de 14\/07\/2026: LOJA DO BAIRRO 05\/12/ }));
+    return user;
+  };
+
+  it("vem marcada, com a lista de cada parcela (número, fatura, de → para) e sem aviso", async () => {
+    await openLoja();
+    const box = within(card("LOJA DO BAIRRO 05/12")).getByTestId("next-adjustment");
+    expect(within(box).getByRole("checkbox", { name: "Ajustar também as próximas 7 parcelas com os valores que o banco informou na fatura" })).toBeChecked();
+    const lines = within(box).getAllByTestId("next-adjustment-installment");
+    expect(lines).toHaveLength(7);
+    expect(lines[0]).toHaveTextContent(/06\/12\s*· janeiro\/2027 ·\s*R\$ 108,33\s*R\$ 108,27/);
+    expect(lines[6]).toHaveTextContent(/12\/12/);
+    expect(within(box).queryByTestId("next-adjustment-warning")).not.toBeInTheDocument();
+  });
+
+  it("desmarcar manda o PATCH, mostra o aviso da diferença e não recolhe o cartão nem confirma", async () => {
+    const user = await openLoja();
+    const before = draft.entries.find((e) => e.id === LOJA).confirmed;
+    await user.click(within(card("LOJA DO BAIRRO 05/12")).getByRole("checkbox", { name: /Ajustar também as próximas/ }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: LOJA, body: { adjust_next_installments: false } }));
+    const loja = card("LOJA DO BAIRRO 05/12");
+    await waitFor(() => expect(within(loja).getByRole("checkbox", { name: /Ajustar também as próximas/ })).not.toBeChecked());
+    expect(within(loja).getByTestId("next-adjustment-warning")).toHaveTextContent("O total da compra no Fincla fica R$ 0,42 diferente do banco.");
+    expect(draft.entries.find((e) => e.id === LOJA).confirmed).toBe(before);
+
+    await user.click(within(loja).getByRole("checkbox", { name: /Ajustar também as próximas/ }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: LOJA, body: { adjust_next_installments: true } }));
+    await waitFor(() => expect(within(card("LOJA DO BAIRRO 05/12")).getByRole("checkbox", { name: /Ajustar também as próximas/ })).toBeChecked());
+  });
+
+  it("parcela travada mostra o motivo e não entra no N; diferença desconhecida dá o aviso genérico", async () => {
+    const loja = draft.entries.find((e) => e.id === LOJA);
+    loja.next_adjustment = clone(contract.entry_adjust_off.next_adjustment);
+    loja.next_adjustment.installments[0].locked = "invoice_paid";
+    loja.next_adjustment.installments[1].locked = "reconciled";
+    loja.next_adjustment.purchase_difference = null;
+    await openLoja();
+    const box = within(card("LOJA DO BAIRRO 05/12")).getByTestId("next-adjustment");
+    expect(within(box).getByRole("checkbox", { name: /Ajustar também as próximas 5 parcelas/ })).not.toBeChecked();
+    const lines = within(box).getAllByTestId("next-adjustment-installment");
+    expect(lines[0]).toHaveTextContent("(fatura já paga: fica com o valor do Fincla)");
+    expect(lines[1]).toHaveTextContent("(já conferida)");
+    expect(within(box).getByTestId("next-adjustment-warning")).toHaveTextContent("O total da compra no Fincla fica diferente do banco.");
+  });
+
+  it("sem next_adjustment, fica o aviso das próximas parcelas de antes", async () => {
+    draft.entries.find((e) => e.id === LOJA).next_adjustment = null;
+    await openLoja();
+    const loja = card("LOJA DO BAIRRO 05/12");
+    expect(within(loja).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(loja).getByTestId("future-installments-note")).toHaveTextContent("As outras 7 parcelas desta compra continuam com o valor do Fincla.");
   });
 });

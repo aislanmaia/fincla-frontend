@@ -105,6 +105,7 @@ import { InvoiceTotalStep } from "../features/statementImport/InvoiceTotalStep.j
 import {
   InvoiceSuggestedStep, PURCHASE_NOUN, ReadOnlyEntries, ReconciledEntries, invoiceAnswerUnavailable,
 } from "../features/statementImport/InvoiceSuggestedStep.jsx";
+import { NextAdjustmentContext } from "../features/statementImport/InvoiceNextAdjustment.jsx";
 import { InvoiceNewStep } from "../features/statementImport/InvoiceNewStep.jsx";
 import { CHARGE_NOUN, InvoiceChargesStep, chargeGroupAnswerUnavailable } from "../features/statementImport/InvoiceChargesStep.jsx";
 import { useCategories } from "../features/statementImport/useCategories.js";
@@ -807,6 +808,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     setImportRaw((prev) => (prev ? { ...prev, entries: prev.entries.map((e) => (e.id === entryId ? { ...e, ...saved } : e)) } : prev));
   }, []);
 
+  const changeEntryRef = useRef(null);
   // Grava uma mudança num lançamento (um campo da compra nova, ou uma resposta). `onSaved` roda assim
   // que o backend aceita, antes de reler o rascunho: é onde uma resposta recolhe o cartão. Devolve
   // `false` quando não gravou (o cartão fica aberto, com o erro da página).
@@ -825,6 +827,13 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       setAnswering(false);
     }
   };
+
+  changeEntryRef.current = changeEntry;
+  // #561 "Ajustar também as próximas": grava na hora e não recolhe o cartão (sem `onSaved`).
+  const nextAdjustment = useMemo(
+    () => ({ busy: answering, onToggle: (entry, adjust) => changeEntryRef.current(entry.id, { adjust_next_installments: adjust }) }),
+    [answering],
+  );
 
   // Uma resposta recusada com 409 (a transação foi escolhida por outro lançamento, ou mudou): a tela
   // estava lendo um rascunho velho. Relê, sem apagar o erro, para as opções mostrarem o estado de agora.
@@ -1218,6 +1227,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
           currentText="Você está aqui"
           separatorBefore={INVOICE_RAIL_SEPARATOR}
         />
+        <NextAdjustmentContext.Provider value={nextAdjustment}>
         <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <header>
             <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.ink, margin: 0 }}>{step.title}</h2>
@@ -1360,6 +1370,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
             ) : null}
           </div>
         </main>
+        </NextAdjustmentContext.Provider>
       </div>
       {/* O aviso de quanto falta no passo leva ao primeiro pendente; some com 0. */}
       {QUEUE_STEPS.has(current) || current === "leftover" ? (
