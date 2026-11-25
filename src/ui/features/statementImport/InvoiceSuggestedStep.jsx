@@ -92,7 +92,7 @@ export const invoiceAnswerUnavailable = (entry, value) => {
 export const isInstallmentCredit = (entry) => entry.amount >= 0 && (entry.installment?.count ?? 0) > 1;
 
 /** Por que "Adicionar" está desligado neste crédito parcelado. */
-export const INSTALLMENT_CREDIT_REASON = "Crédito parcelado não entra no Fincla como compra: só dá para não registrar.";
+export const INSTALLMENT_CREDIT_REASON = "Crédito parcelado não entra no Fincla como compra nova.";
 
 /** O motivo escrito ao lado das respostas: fatura paga (decisão 1) ou crédito parcelado; `null` = nenhum. */
 export const invoiceAnswerNote = (entry) => {

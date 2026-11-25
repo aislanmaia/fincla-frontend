@@ -575,7 +575,7 @@ describe("crédito parcelado (só Não registrar)", () => {
     Object.assign(PADARIA(), { description: "Padaria", confirmed: true });
     Object.assign(LOJA(), { amount: { amount: "99.90", currency: "BRL" }, transaction_type: "refund", answer: "ignore", confirmed: false });
   };
-  const REASON = "Crédito parcelado não entra no Fincla como compra: só dá para não registrar.";
+  const REASON = "Crédito parcelado não entra no Fincla como compra nova.";
 
   it("Adicionar desligado com o motivo escrito (aria-describedby); o atalho A não adiciona; Não registrar confirma", async () => {
     installmentCredit();
