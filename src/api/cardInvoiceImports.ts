@@ -108,7 +108,10 @@ export interface CardRef {
 export interface CardCheck {
   status: 'same_card' | 'other_card';
   file_last4: string | null;
-  /** O cartão do PDF, quando é outro da organização ("Conciliar no cartão X"). */
+  /**
+   * O cartão do PDF, quando é outro da organização ("Conciliar no cartão X"). Com `other_card` pode
+   * vir `null` (mais de um outro cartão com o final do PDF): o aviso fica, sem o botão.
+   */
   suggested_card: CardRef | null;
 }
 
@@ -155,6 +158,8 @@ export interface CardInvoiceImport {
   credit_card: CardRef & { last4: string | null };
   invoice: InvoiceRef;
   card_check: CardCheck;
+  /** Nome do arquivo enviado, como o navegador mandou; `null` = não veio nome. */
+  file_name: string | null;
   bank_summary: InvoiceBankSummary;
   entries: InvoiceEntry[];
   summary: CardInvoiceImportSummary;
@@ -251,6 +256,7 @@ export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
     kind: 'card_invoice',
     invoice: { ...(invoice as unknown as InvoiceRef), total: moneyOrNull(invoice?.total as WireMoney) },
     card_check: (raw.card_check as CardCheck) ?? { status: 'same_card', file_last4: null, suggested_card: null },
+    file_name: (raw.file_name as string | null) ?? null,
     bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
     entries: ((raw.entries as Raw[]) ?? []).map(normalizeInvoiceEntry),
     difference_now: {
@@ -272,17 +278,27 @@ export const isCardInvoiceResponse = (raw: unknown): boolean =>
 
 /**
  * Já há conciliação em andamento desta fatura (409 `invoice_draft_in_progress`): o rascunho a abrir.
- * `creditCardId` é o `id` inteiro do cartão; a URL da tela pede o `public_id`.
+ * `creditCardId` é o `id` inteiro do cartão; a URL da tela usa `creditCardPublicId`.
  */
-export const invoiceDraftInProgressOf = (
-  error: unknown,
-): { importId: string; creditCardId: number | null; message: string } | null => {
+export interface InvoiceDraftInProgress {
+  importId: string;
+  creditCardId: number | null;
+  creditCardPublicId: string | null;
+  message: string;
+}
+
+export const invoiceDraftInProgressOf = (error: unknown): InvoiceDraftInProgress | null => {
   const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
   const detail = response?.data?.detail as
-    | { reason?: string; import_id?: string; credit_card_id?: number; message?: string }
+    | { reason?: string; import_id?: string; credit_card_id?: number; credit_card_public_id?: string; message?: string }
     | undefined;
   if (response?.status !== 409 || detail?.reason !== 'invoice_draft_in_progress' || !detail.import_id) return null;
-  return { importId: detail.import_id, creditCardId: detail.credit_card_id ?? null, message: detail.message ?? '' };
+  return {
+    importId: detail.import_id,
+    creditCardId: detail.credit_card_id ?? null,
+    creditCardPublicId: detail.credit_card_public_id ?? null,
+    message: detail.message ?? '',
+  };
 };
 
 // --------------------------------------------------------------------------------------------

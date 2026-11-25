@@ -76,7 +76,6 @@ import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/In
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
 import { cardInvoiceReconciliationPath } from "../routing/cardInvoiceImportRoute.js";
 import { invoiceDraftInProgressOf } from "../../api/cardInvoiceImports";
-import { listCreditCards } from "../../api/creditCards";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
 import { EmptyStep, RAIL_WIDTH, StepRail, StickyTop } from "../features/statementImport/ReconciliationFrame.jsx";
 import {
@@ -213,14 +212,12 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
       const asked = columnMappingPreviewOf(err);
       const running = draftInProgressOf(err);
       const invoiceRunning = invoiceDraftInProgressOf(err);
-      if (invoiceRunning) {
-        // A fatura do PDF já tem conciliação em andamento: abre esse rascunho, no cartão dele.
-        const cards = await listCreditCards(organizationId).catch(() => []);
-        const card = cards.find((c) => c.id === invoiceRunning.creditCardId);
-        if (card?.public_id) {
-          navigate({ to: cardInvoiceReconciliationPath(card.public_id, invoiceRunning.importId) });
-          return;
-        }
+      if (invoiceRunning?.creditCardPublicId) {
+        // A fatura do PDF já tem conciliação em andamento: o mesmo aviso do extrato, que leva a esse
+        // rascunho no cartão dele (nada de navegar sem dizer por quê).
+        setPreview(null);
+        setInProgress({ ...invoiceRunning, invoice: true });
+      } else if (invoiceRunning) {
         setError(invoiceRunning.message || handleApiError(err));
       } else if (asked && !columnMapping) setPreview(asked);
       else if (running) {
@@ -272,20 +269,31 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
       {inProgress ? (
         <DraftInProgressNotice
           message={inProgress.message}
-          onContinue={() => navigate({ to: statementReconciliationPath(accountId, inProgress.importId) })}
+          invoice={Boolean(inProgress.invoice)}
+          onContinue={() => navigate({
+            to: inProgress.invoice
+              ? cardInvoiceReconciliationPath(inProgress.creditCardPublicId, inProgress.importId)
+              : statementReconciliationPath(accountId, inProgress.importId),
+          })}
         />
       ) : null}
     </div>
   );
 }
 
-/** O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516): só dá para continuar nela. */
-function DraftInProgressNotice({ message, onContinue }) {
+/**
+ * O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516), ou a fatura do PDF
+ * já tem uma no cartão dela (`invoice`, fincla-api#555): só dá para continuar nela.
+ */
+function DraftInProgressNotice({ message, invoice = false, onContinue }) {
+  const fallback = invoice ? "Você já tem uma conciliação em andamento desta fatura." : "Você já tem uma conciliação em andamento deste arquivo nesta conta.";
   return (
     <div data-testid="draft-in-progress-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <span>
-        <b>{message || "Você já tem uma conciliação em andamento deste arquivo nesta conta."}</b>{" "}
-        Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Continue de onde parou”.
+        <b>{message || fallback}</b>{" "}
+        {invoice
+          ? "Suas respostas estão salvas nela, na tela de conciliação da fatura do cartão."
+          : "Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Continue de onde parou”."}
       </span>
       <div>
         <Btn variant="outGray" small onClick={onContinue}>Continuar conciliação</Btn>

@@ -53,22 +53,29 @@ import {
   pendingEntries,
   unconfirmedEntries,
 } from "../features/statementImport/invoiceSteps.js";
-import { InvoiceSuggestedStep, PURCHASE_NOUN, ReadOnlyEntries } from "../features/statementImport/InvoiceSuggestedStep.jsx";
+import { InvoiceSuggestedStep, PURCHASE_NOUN, ReadOnlyEntries, invoiceAnswerUnavailable } from "../features/statementImport/InvoiceSuggestedStep.jsx";
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação da fatura.";
 
-/** O cartão da URL (`public_id`) na lista de cartões da organização: a API pede o `id` inteiro. */
+/**
+ * O cartão da URL (`public_id`) na lista de cartões da organização: a API pede o `id` inteiro.
+ * O estado é marcado com o par organização + cartão que o pediu: ao trocar de cartão, o anterior
+ * deixa de valer na hora (volta a "carregando"), e nada enviado nesse meio-tempo vai para ele.
+ */
 function useCardOf(organizationId, cardPublicId) {
-  const [state, setState] = useState({ card: null, error: "", loaded: false });
+  const wanted = `${organizationId}|${cardPublicId}`;
+  const [state, setState] = useState({ for: null, card: null, error: "" });
   useEffect(() => {
     if (!organizationId || !cardPublicId) return undefined;
     let alive = true;
+    const forKey = `${organizationId}|${cardPublicId}`;
     listCreditCards(organizationId)
-      .then((cards) => { if (alive) setState({ card: cards.find((c) => c.public_id === cardPublicId) ?? null, error: "", loaded: true }); })
-      .catch((err) => { if (alive) setState({ card: null, error: handleApiError(err), loaded: true }); });
+      .then((cards) => { if (alive) setState({ for: forKey, card: cards.find((c) => c.public_id === cardPublicId) ?? null, error: "" }); })
+      .catch((err) => { if (alive) setState({ for: forKey, card: null, error: handleApiError(err) }); });
     return () => { alive = false; };
   }, [organizationId, cardPublicId]);
-  return state;
+  if (state.for !== wanted) return { card: null, error: "", loaded: false };
+  return { card: state.card, error: state.error, loaded: true };
 }
 
 function cardName(card) {
@@ -126,7 +133,7 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
         <div data-testid="draft-in-progress-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
           <b>{inProgress.message || "Você já tem uma conciliação em andamento desta fatura."}</b>
           <div>
-            <Btn variant="outGray" small onClick={() => navigate({ to: cardInvoiceReconciliationPath(cardPublicId, inProgress.importId) })}>Continuar conciliação</Btn>
+            <Btn variant="outGray" small onClick={() => navigate({ to: cardInvoiceReconciliationPath(inProgress.creditCardPublicId ?? cardPublicId, inProgress.importId) })}>Continuar conciliação</Btn>
           </div>
         </div>
       ) : null}
@@ -154,7 +161,7 @@ function Breadcrumb({ invoiceImport, onCards, onInvoice }) {
 }
 
 function ContextChips({ invoiceImport }) {
-  const { credit_card: card, invoice, entries } = invoiceImport;
+  const { credit_card: card, invoice, entries, file_name: fileName } = invoiceImport;
   return (
     <div data-testid="invoice-chips" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       <span style={CHIP}><CreditCard size={13} aria-hidden="true" />Cartão <b style={{ color: T.ink }}>{card.name}</b></span>
@@ -162,7 +169,8 @@ function ContextChips({ invoiceImport }) {
       <span style={CHIP}>
         Vencimento <b style={{ ...NUM, color: T.ink }}>{fullDate(invoice.due_date)}</b> · fechamento <b style={{ ...NUM, color: T.ink }}>{fullDate(invoice.closing_date)}</b>
       </span>
-      <span style={CHIP}>Arquivo lido do PDF · <span style={{ color: T.green, display: "inline-flex", gap: 4, alignItems: "center" }}>total conferido <Check size={12} aria-hidden="true" /></span></span>
+      <span data-testid="invoice-file-chip" style={CHIP}>
+        {fileName ? <>Arquivo <b style={{ color: T.ink, overflowWrap: "anywhere" }}>{fileName}</b></> : "Arquivo lido do PDF"} · <span style={{ color: T.green, display: "inline-flex", gap: 4, alignItems: "center" }}>total conferido <Check size={12} aria-hidden="true" /></span></span>
       <span style={CHIP}><b style={{ ...NUM, color: T.ink }}>{entries.length.toLocaleString("pt-BR")}</b> {entries.length === 1 ? "lançamento" : "lançamentos"} na fatura</span>
     </div>
   );
@@ -521,8 +529,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   // S/N respondem a compra aberta (só com a fileira de respostas inteira à vista, como no extrato).
   const shortcutAnswers = current === "suggested"
     ? {
-        s: (e) => e.fincla_transaction && answer(e, "pair"),
-        n: (e) => (e.value_locked && e.answer !== "ignore" ? null : answer(e, "ignore")),
+        s: (e) => (invoiceAnswerUnavailable(e, "pair") ? null : answer(e, "pair")),
+        n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
       }
     : {};
   const listOpen = Boolean(invoiceImport?.status === "draft" && current === "suggested" && queue.total);
@@ -639,9 +647,9 @@ export function CardInvoiceReconciliationPage({ organizationId, isMobile = false
   else if (!loaded) body = <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando o cartão…</p>;
   else if (!card) body = <ErrorNote>Cartão não encontrado ou sem acesso.</ErrorNote>;
   else if (importId) {
-    body = <InvoiceDraftView key={importId} organizationId={organizationId} card={card} cardPublicId={cardPublicId} importId={importId} isMobile={isMobile} />;
+    body = <InvoiceDraftView key={`${cardPublicId}:${importId}`} organizationId={organizationId} card={card} cardPublicId={cardPublicId} importId={importId} isMobile={isMobile} />;
   } else {
-    body = <InvoiceUploadView organizationId={organizationId} card={card} cardPublicId={cardPublicId} isMobile={isMobile} />;
+    body = <InvoiceUploadView key={cardPublicId} organizationId={organizationId} card={card} cardPublicId={cardPublicId} isMobile={isMobile} />;
   }
   return (
     <div data-testid="card-invoice-reconciliation-page" style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>

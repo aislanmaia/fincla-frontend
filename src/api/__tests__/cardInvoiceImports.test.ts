@@ -33,6 +33,13 @@ describe('normalizeCardInvoiceImport', () => {
     expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 890.84, difference: 1512.08, currency: 'BRL' });
     expect(draft.bank_summary.payment).toEqual({ amount: { amount: -2900, currency: 'BRL' }, date: '2026-11-10' });
     expect(draft.final_difference).toBeNull();
+    expect(draft.file_name).toBe(contract.draft.file_name);
+  });
+
+  it('sem nome de arquivo, file_name fica null', () => {
+    const raw = JSON.parse(JSON.stringify(contract.draft));
+    delete raw.file_name;
+    expect(normalizeCardInvoiceImport(raw).file_name).toBeNull();
   });
 
   it('o que não sabemos continua null, nunca zero', () => {
@@ -64,6 +71,7 @@ describe('o envio pela área da conta', () => {
     expect(invoiceDraftInProgressOf(error)).toEqual({
       importId: contract.draft_in_progress.import_id,
       creditCardId: contract.draft_in_progress.credit_card_id,
+      creditCardPublicId: contract.draft_in_progress.credit_card_public_id,
       message: contract.draft_in_progress.message,
     });
     expect(invoiceDraftInProgressOf({ response: { status: 409, data: { detail: { reason: 'draft_in_progress', import_id: 'x' } } } })).toBeNull();

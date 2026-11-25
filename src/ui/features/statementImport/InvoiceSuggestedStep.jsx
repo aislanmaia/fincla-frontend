@@ -51,6 +51,27 @@ const QUESTION = "Esta compra do banco já está no Fincla?";
 /** Decisão 1 do Owner: o que a fatura paga não deixa fazer, e como corrigir. */
 export const PAID_INVOICE_REASON = "Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.";
 
+/** O valor do banco é outro que o do Fincla (pelo `differences` do backend ou pela conta). */
+export function bankValueDiffers(entry) {
+  const match = entry.fincla_transaction;
+  if (!match) return false;
+  return match.differences.includes("amount") || Math.abs(match.value - Math.abs(entry.amount)) >= 0.005;
+}
+
+/**
+ * Fatura já paga com valor diferente: o valor do Fincla não pode virar o do banco (decisão 1), e a
+ * tela diz o motivo. Com valor igual não há nada a dizer.
+ */
+export const paidValueLocked = (entry) => entry.value_locked && bankValueDiffers(entry);
+
+/**
+ * A resposta não está disponível? Uma regra só para o botão e para o atalho (S/N). "Sim, é esta"
+ * precisa da transação do Fincla. "Não registrar" não muda nada no Fincla, então fica disponível
+ * mesmo numa fatura paga: a fatura paga só trava o que mexeria nela (adicionar, mover, excluir,
+ * trocar o valor), respostas que esta versão ainda não tem.
+ */
+export const invoiceAnswerUnavailable = (entry, value) => (value === "pair" ? !entry.fincla_transaction : false);
+
 /** O valor como a fatura mostra: cobrança sem sinal; crédito (estorno, redução) com "−", em verde. */
 export function InvoiceAmount({ amount, currency, strong = false }) {
   const credit = amount > 0;
@@ -132,8 +153,7 @@ export function PairConsequences({ entry }) {
   const match = entry.fincla_transaction;
   if (!match) return null;
   const bank = Math.abs(entry.amount);
-  const differs = match.differences.includes("amount") || Math.abs(match.value - bank) >= 0.005;
-  if (!differs) {
+  if (!bankValueDiffers(entry)) {
     return (
       <div data-testid="pair-consequences" style={CONS}>
         <Check size={13} aria-hidden="true" style={{ color: T.green, alignSelf: "center" }} />
@@ -289,8 +309,8 @@ function outcomeText(entry) {
 function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswer, onUndoChoice }) {
   const valueDiffers = entry.answer === "pair" && Boolean(entry.fincla_transaction?.differences.includes("amount"));
   const outcome = outcomeText(entry);
-  // Fatura já paga (decisão 1): só vale ligar; as outras respostas ficam desligadas, com o motivo.
-  const paidLock = entry.value_locked && Boolean(entry.fincla_transaction) && entry.answer !== "ignore";
+  // Fatura já paga (decisão 1): o valor não muda. O motivo só aparece quando o valor do banco é outro.
+  const paidNote = paidValueLocked(entry) ? PAID_INVOICE_REASON : null;
   const confirm = untouchedInvoiceSuggestion(entry)
     ? <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} onConfirm={() => onAnswer(entry, "pair")} />
     : null;
@@ -324,10 +344,10 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
           answers={ANSWERS}
           value={entry.answer}
           busy={busy}
-          unavailable={(a) => (a.value === "pair" ? !entry.fincla_transaction : paidLock)}
+          unavailable={(a) => invoiceAnswerUnavailable(entry, a.value)}
           onAnswer={(value) => onAnswer(entry, value)}
           confirm={confirm}
-          note={paidLock ? PAID_INVOICE_REASON : null}
+          note={paidNote}
         />
       </footer>
       {outcome ? (
@@ -344,7 +364,7 @@ function rowSummary(entry) {
   if (entry.answer === "pair" && match) {
     let tail = "";
     if (entry.value_change) tail = " · vale o valor do banco";
-    else if (entry.value_locked && match.differences.includes("amount")) tail = " · fatura já paga: o valor não muda";
+    else if (paidValueLocked(entry)) tail = " · fatura já paga: o valor não muda";
     return <>É <b>{match.description}</b>{tail}</>;
   }
   return <span style={{ color: T.inkLight }}>Fica fora do Fincla</span>;

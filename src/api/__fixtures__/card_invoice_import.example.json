@@ -60,6 +60,7 @@
       "posting_date": "2026-12-04",
       "next_closing_date": "2027-01-04"
     },
+    "file_name": "fatura.pdf",
     "entries": [
       {
         "id": "004b1858-c2a0-4647-a85b-c3bdb4b473cb",
@@ -939,6 +940,7 @@
       "posting_date": "2026-12-04",
       "next_closing_date": "2027-01-04"
     },
+    "file_name": "fatura.pdf",
     "entries": [
       {
         "id": "004b1858-c2a0-4647-a85b-c3bdb4b473cb",
@@ -1655,6 +1657,7 @@
     "message": "Você já tem uma conciliação em andamento desta fatura. Continue de onde parou.",
     "reason": "invoice_draft_in_progress",
     "import_id": "77cd2d0a-f786-4308-9dbb-4e65de2aaa6e",
-    "credit_card_id": 1
+    "credit_card_id": 1,
+    "credit_card_public_id": "4249be0e-db17-4ec8-80d4-2db8e7be52cf"
   }
 }

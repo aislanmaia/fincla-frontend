@@ -6,6 +6,7 @@
 // linha parada com Alterar/Desfazer, rodapé de pendentes, "Não registrar" listrado, lote com
 // desfazer, fatura paga) e do passo 8 (contagens e Concluir).
 import React from "react";
+import { act } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -99,7 +100,7 @@ describe("o topo da conciliação da fatura", () => {
     expect(chips).toHaveTextContent("Cartão Itaú Visa");
     expect(chips).toHaveTextContent("Fatura dezembro/2026");
     expect(chips).toHaveTextContent("Vencimento 10/12/2026 · fechamento 03/12/2026");
-    expect(chips).toHaveTextContent("lido do PDF · total conferido");
+    expect(within(chips).getByTestId("invoice-file-chip")).toHaveTextContent(`Arquivo ${contract.draft.file_name} · total conferido`);
     expect(chips).toHaveTextContent("20 lançamentos na fatura");
     expect(screen.getByTestId("recognition-notice")).toHaveTextContent(
       "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no PDF. Se não for, escolha outro cartão.",
@@ -126,6 +127,24 @@ describe("o topo da conciliação da fatura", () => {
     expect(railStatus("Decidir casos com dúvida")).toBe("Nada a fazer · 3 ficam de fora nesta versão");
     expect(railStatus("Compras novas")).toBe("Nada a fazer · 5 ficam de fora nesta versão");
     expect(railStatus("Conferir o total")).toBe("Depois dos lançamentos");
+  });
+
+  it("sem nome de arquivo, o chip diz que o arquivo foi lido do PDF", async () => {
+    draft.file_name = null;
+    await openDraft();
+
+    expect(screen.getByTestId("invoice-file-chip")).toHaveTextContent("Arquivo lido do PDF · total conferido");
+  });
+
+  it("outro cartão com o final do PDF que não dá para escolher (suggested_card null): avisa, sem Conciliar no cartão X", async () => {
+    draft.card_check = { ...clone(contract.card_check_other_card), suggested_card: null };
+    await openDraft();
+
+    const notice = screen.getByTestId("other-card-notice");
+    expect(notice).toHaveTextContent("Esta fatura parece ser de outro cartão.");
+    expect(notice).toHaveTextContent("O PDF é do cartão final 4321.");
+    expect(notice).toHaveTextContent("Se ela é mesmo deste cartão, pode seguir");
+    expect(within(notice).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("o PDF de outro cartão da organização só avisa, com Conciliar no cartão X", async () => {
@@ -246,7 +265,7 @@ describe("o passo Confirmar compras encontradas", () => {
     expect(within(loja).getByTestId("pair-outcome")).toHaveTextContent("passa a valer R$ 108,30, o valor do banco.");
   });
 
-  it("fatura já paga: o par liga sem trocar o valor, e o resto fica desligado com o motivo", async () => {
+  it("fatura já paga com valor diferente: o par liga sem trocar o valor, o motivo aparece, e Não registrar continua disponível", async () => {
     const loja = draft.entries.find((e) => e.id === LOJA);
     loja.value_locked = true;
     loja.value_change = null;
@@ -257,9 +276,37 @@ describe("o passo Confirmar compras encontradas", () => {
     const open = card("LOJA DO BAIRRO 05/12");
     expect(within(open).getByTestId("pair-consequences")).toHaveTextContent("Fatura já paga: o valor não muda.");
     expect(within(open).queryByTestId("value-change")).not.toBeInTheDocument();
-    expect(within(open).getByRole("button", { name: "Não registrar" })).toBeDisabled();
     expect(within(open).getByTestId("answer-note")).toHaveTextContent("Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.");
     expect(within(open).getByRole("button", { name: "Confirmar sugestão" })).toBeEnabled();
+    // "Não registrar" não muda nada no Fincla: fica ligado numa fatura paga.
+    expect(within(open).getByRole("button", { name: "Não registrar" })).toBeEnabled();
+    await user.click(within(open).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: LOJA, body: { answer: "ignore" } }));
+  });
+
+  it("fatura já paga: o atalho N também não registra (a mesma regra do botão)", async () => {
+    const loja = draft.entries.find((e) => e.id === LOJA);
+    loja.value_locked = true;
+    loja.value_change = null;
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: /Alterar o lançamento de 14\/07\/2026: LOJA DO BAIRRO/ }));
+    card("LOJA DO BAIRRO 05/12");
+
+    await user.keyboard("n");
+    await waitFor(() => expect(calls).toContainEqual({ patch: LOJA, body: { answer: "ignore" } }));
+  });
+
+  it("fatura já paga com o mesmo valor: nada de aviso de fatura paga, as respostas ligadas", async () => {
+    for (const e of draft.entries) e.value_locked = true;
+    await openDraft();
+
+    const mercado = card("MERCADO BOA VISTA");
+    expect(mercado).not.toHaveTextContent(/fatura já paga/i);
+    expect(within(mercado).queryByTestId("answer-note")).not.toBeInTheDocument();
+    expect(within(mercado).getByTestId("pair-consequences")).toHaveTextContent("Nada mais muda nela.");
+    expect(within(mercado).getByRole("button", { name: "Não registrar" })).toBeEnabled();
+    expect(within(mercado).getByRole("button", { name: "Sim, é esta" })).toBeEnabled();
   });
 
   it("Confirmar as 4 de uma vez, com a faixa de Desfazer", async () => {
@@ -395,6 +442,62 @@ describe("enviar o PDF da fatura", () => {
     expect(notice).toHaveTextContent("Você já tem uma conciliação em andamento desta fatura.");
     await user.click(within(notice).getByRole("button", { name: "Continuar conciliação" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` });
+  });
+
+  it("trocar de cartão no meio: enquanto o novo cartão carrega não há onde soltar, e o PDF vai para o cartão novo", async () => {
+    const OTHER = { id: 2, public_id: "other-card-public-id", description: "Nubank", brand: "Master", last4: "9999" };
+    let release;
+    let listed = 0;
+    const posted = [];
+    server.use(
+      http.get("*/v1/credit-cards", async () => {
+        listed += 1;
+        if (listed > 1) await new Promise((r) => { release = r; });
+        return HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }, OTHER]);
+      }),
+      http.post("*/v1/credit-cards/:cardId/invoice-imports", ({ params: p }) => {
+        posted.push(Number(p.cardId));
+        return HttpResponse.json(draft, { status: 201 });
+      }),
+    );
+    params = { cardId: CARD.public_id };
+    const user = userEvent.setup();
+    const view = render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+    await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)");
+
+    params = { cardId: OTHER.public_id };
+    view.rerender(<CardInvoiceReconciliationPage organizationId={ORG} />);
+    // O cartão anterior deixa de valer na hora: nada de área de envio apontando para ele.
+    expect(screen.queryByLabelText("PDF da fatura do cartão (até 5 MB)")).not.toBeInTheDocument();
+    expect(screen.getByText("Carregando o cartão…")).toBeInTheDocument();
+
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    await act(async () => { release(); });
+    await user.upload(await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    await waitFor(() => expect(posted).toEqual([OTHER.id]));
+  });
+
+  it("pela área de envio da conta, com conciliação da fatura em andamento: o mesmo aviso do extrato leva ao rascunho no cartão", async () => {
+    const ACCOUNT = contract.draft.account_id;
+    server.use(
+      http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
+      http.get(`*/v1/accounts/${ACCOUNT}/statement-imports`, () => HttpResponse.json({ imports: [] })),
+      http.post(`*/v1/accounts/${ACCOUNT}/statement-imports`, () => HttpResponse.json({ detail: contract.draft_in_progress }, { status: 409 })),
+    );
+    params = { accountId: ACCOUNT };
+    const user = userEvent.setup();
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    await user.upload(await screen.findByLabelText(/Arquivo do extrato/), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+
+    const notice = await screen.findByTestId("draft-in-progress-notice");
+    expect(notice).toHaveTextContent(contract.draft_in_progress.message);
+    // Não navega sozinho: a pessoa vê o aviso e escolhe continuar.
+    expect(navigate).not.toHaveBeenCalled();
+    await user.click(within(notice).getByRole("button", { name: "Continuar conciliação" }));
+    expect(navigate).toHaveBeenCalledWith({
+      to: `/cards/${contract.draft_in_progress.credit_card_public_id}/reconcile/${contract.draft_in_progress.import_id}`,
+    });
   });
 
   it("pela área de envio da conta: um PDF reconhecido como fatura abre a conciliação da fatura no cartão", async () => {
