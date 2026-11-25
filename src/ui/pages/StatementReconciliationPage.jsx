@@ -40,6 +40,7 @@ import {
   STEP_KEYS,
   blockerText,
   entriesOfStep,
+  unconfirmedCreatesOf,
   firstStepWithWork,
   stepProgress,
   stepStatus,
@@ -482,7 +483,7 @@ function ProgressCard({ statementImport, passed }) {
   );
 }
 
-function SummaryStep({ statementImport, check, checkLoading, checkError, concluding, error, onConclude, onClassify = null }) {
+function SummaryStep({ statementImport, check, checkLoading, checkError, concluding, error, onConclude, onClassify = null, busy = false, onConfirmCreates = null }) {
   const { summary, blockers } = statementImport;
   const rows = summaryCountRows(statementImport);
   return (
@@ -523,6 +524,17 @@ function SummaryStep({ statementImport, check, checkLoading, checkError, conclud
       {blockers.length ? (
         <div data-testid="conclude-blocked" style={{ ...G, fontSize: 13, color: T.inkMid, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px" }}>
           Ainda não dá para concluir: {blockers.map(blockerText).join(" ")}
+          {onConfirmCreates ? blockers.filter((b) => b.code === "unconfirmed_creates").map((b) => {
+            const ids = unconfirmedCreatesOf(b.step, statementImport.entries).map((e) => e.id);
+            if (!ids.length) return null;
+            return (
+              <div key={`confirm-${b.step}`} style={{ marginTop: 8 }}>
+                <Btn variant="outGray" small disabled={busy || concluding} onClick={() => onConfirmCreates(ids)} data-testid="confirm-creates">
+                  {ids.length === 1 ? "Confirmar o lançamento novo" : `Confirmar os ${ids.length.toLocaleString("pt-BR")} de uma vez`}
+                </Btn>
+              </div>
+            );
+          }) : null}
         </div>
       ) : null}
       <ErrorNote>{error}</ErrorNote>
@@ -1169,6 +1181,8 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
               error={actionError}
               onConclude={conclude}
               onClassify={() => open("new")}
+              busy={answering}
+              onConfirmCreates={(ids) => confirmPairs(ids, true)}
             />
           ) : null}
           {!STEP_KEYS.includes(current) || (ENTRY_BASED_STEPS.has(current) && !stepEntries.length) ? (

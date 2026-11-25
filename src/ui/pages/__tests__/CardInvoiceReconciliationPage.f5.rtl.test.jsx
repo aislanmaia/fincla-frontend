@@ -409,7 +409,9 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
   });
 
   it("um resultado da busca com valor além da folga da dúvida: os dois valores antes de escolher e ao responder (QA F5 OBS-03)", async () => {
+    // POSTO CENTRAL é à vista: a parcela da série à frente só move esta (QA F5 BUG-02).
     searchResults = neighbours();
+    Object.assign(searchResults[0], { suggested_answer: "move", series_movable: false });
     for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
     const user = userEvent.setup();
     await open();
@@ -423,7 +425,6 @@ describe("Está no Fincla com outros dados… (a busca)", () => {
     const difference = within(ahead).getByTestId("candidate-difference");
     expect(difference).toHaveAttribute("data-beyond", "true");
     expect(difference).toHaveTextContent("Valor diferenteO Fincla tem R$ 108,33, o banco R$ 150,00 (diferença de R$ 41,67). Se for esta, ao concluir vale o do banco.");
-    // POSTO CENTRAL é à vista: a parcela da série à frente só move esta (QA F5 BUG-02), sem a série.
     expect(within(ahead).queryByRole("button", { name: /^Mover esta e as próximas parcelas/ })).not.toBeInTheDocument();
     const pick = within(ahead).getByRole("button", { name: /^Mover esta parcela: Loja/ });
     expect(pick).toHaveAccessibleName(/, valor diferente: o Fincla tem R\$\s108,33, o banco R\$\s150,00$/);

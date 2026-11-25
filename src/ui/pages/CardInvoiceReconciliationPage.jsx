@@ -1,5 +1,11 @@
 // Conciliar fatura do cartão (fincla-api#554; primeira entrega #555, segunda #556, terceira #557,
-// quarta #558, quinta #559).
+// quarta #558, quinta #559, sexta #560).
+//
+// #560: o passo 6 "Sobrando no Fincla" decide cada transação desta fatura que o banco não cobrou
+// (Manter · Mover para a próxima fatura · Excluir; `InvoiceLeftoverStep`) e o passo 7 "Conferir o
+// total" compara o banco com o Fincla, com as causas da diferença (`InvoiceTotalStep`). O Concluir
+// fica desligado enquanto houver "Adicionar" sem confirmar (decisão do Owner de 2026-11-26), com o
+// motivo, o passo e "Confirmar as N de uma vez" ao lado, e enquanto houver item sobrando sem decisão.
 //
 // #559: os passos 2 "Compras em outra fatura" e 3 "Decidir casos com dúvida" respondem
 // (`InvoiceChoiceStep`). Na dúvida, clicar numa opção já responde ("Sim, é esta" nesta fatura; "Mover"
@@ -48,6 +54,8 @@ import {
   confirmCardInvoiceSuggestions,
   discardCardInvoiceImport,
   getCardInvoiceImport,
+  getCardInvoiceLeftovers,
+  getCardInvoiceTotalCheck,
   invoiceDraftInProgressOf,
   listCardInvoiceImports,
   previewCardInvoiceImportUndo,
@@ -56,6 +64,7 @@ import {
   updateCardInvoiceEntries,
   updateCardInvoiceEntry,
   updateCardInvoiceImportProgress,
+  updateCardInvoiceLeftover,
   uploadCardInvoice,
 } from "../../api/cardInvoiceImports";
 import { cardInvoiceReconciliationPath, cardInvoiceUndoPath } from "../routing/cardInvoiceImportRoute.js";
@@ -88,8 +97,11 @@ import {
   pendingEntries,
   reconciledEntries,
   stepRemaining,
+  unconfirmedCreatesOfStep,
   unconfirmedEntries,
 } from "../features/statementImport/invoiceSteps.js";
+import { InvoiceLeftoverStep, LEFTOVER_NOUN, leftoverQueueItem, leftoverRefusal } from "../features/statementImport/InvoiceLeftoverStep.jsx";
+import { InvoiceTotalStep } from "../features/statementImport/InvoiceTotalStep.jsx";
 import {
   InvoiceSuggestedStep, PURCHASE_NOUN, ReadOnlyEntries, ReconciledEntries, invoiceAnswerUnavailable,
 } from "../features/statementImport/InvoiceSuggestedStep.jsx";
@@ -461,9 +473,54 @@ const EMPTY_TEXT = {
   doubt: "Nada a fazer aqui: nenhum caso com dúvida nesta fatura.",
   charges: "Nada a fazer aqui: nenhum encargo, tarifa ou estorno sem par nesta fatura.",
   new: "Nada a fazer aqui: nenhuma compra nova nesta fatura.",
-  leftover: "Nada a fazer aqui nesta versão: os itens do Fincla que o banco não cobrou ficam como estão.",
-  total: "Nada a fazer aqui nesta versão: a diferença da fatura agora, no topo, já compara o banco com o Fincla.",
 };
+
+/** Os passos com conteúdo próprio, buscado da rota do passo (#560): nunca o "Nada a fazer" genérico. */
+const OWN_STEPS = new Set(["leftover", "total", "summary"]);
+
+/** "compras novas" / "transações novas" de um passo (encargos, tarifas e estornos são transações). */
+const createsNoun = (step) => (step === "charges"
+  ? { one: "transação nova", many: "transações novas" }
+  : { one: "compra nova", many: "compras novas" });
+
+/**
+ * O que segura o concluir com um passo para resolver (#560): "Falta confirmar 3 compras novas em Compras
+ * novas", com "Confirmar as 3 de uma vez" ao lado; "Falta decidir 1 item em Sobrando no Fincla", com o
+ * caminho até o passo.
+ */
+function StepBlockers({ invoiceImport, busy, touch, onConfirmCreates, onGoToStep }) {
+  const items = invoiceImport.blockers.filter((b) => b.code === "unconfirmed_creates" || b.code === "undecided_leftovers");
+  if (!items.length) return null;
+  return (
+    <div data-testid="step-blockers" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {items.map((b) => {
+        const title = INVOICE_STEPS.find((st) => st.key === b.step)?.title;
+        if (b.code === "undecided_leftovers") {
+          return (
+            <div key={`${b.code}-${b.step}`} data-testid="blocker-undecided-leftovers" role="note" style={BLOCKER_NOTE}>
+              <span style={{ flex: "1 1 220px" }}>Falta decidir {plural(b.count, "item", "itens")}{title ? ` em ${title}` : ""}.</span>
+              {b.step ? <Btn variant="outGray" small={!touch} onClick={() => onGoToStep(b.step)}>Ir para {title ?? "o passo"}</Btn> : null}
+            </div>
+          );
+        }
+        const noun = createsNoun(b.step);
+        const ids = unconfirmedCreatesOfStep(b.step, invoiceImport.entries).map((e) => e.id);
+        return (
+          <div key={`${b.code}-${b.step}`} data-testid="blocker-unconfirmed-creates" data-step={b.step ?? undefined} role="note" style={BLOCKER_NOTE}>
+            <span style={{ flex: "1 1 220px" }}>Falta confirmar {plural(b.count, noun.one, noun.many)}{title ? ` em ${title}` : ""}.</span>
+            {ids.length ? (
+              <Btn variant="outGray" small={!touch} disabled={busy} onClick={() => onConfirmCreates(ids)}>
+                {ids.length === 1 ? `Confirmar a ${noun.one}` : `Confirmar as ${ids.length.toLocaleString("pt-BR")} de uma vez`}
+              </Btn>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const BLOCKER_NOTE = { ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" };
 
 /**
  * Onde corrigir os "Adicionar" que pedem algo (descrição, categoria): o passo de cada um, pela
@@ -500,7 +557,7 @@ function unansweredText(invoiceImport) {
   ].filter(Boolean).join(" e ");
 }
 
-function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclude }) {
+function SummaryStep({ invoiceImport, concluding, error, touch = false, busy = false, onConclude, onConfirmCreates, onGoToStep }) {
   const rows = invoiceSummaryRows(invoiceImport);
   const { difference_now: now, invoice, summary } = invoiceImport;
   const pending = summary.unanswered;
@@ -513,7 +570,10 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
     pending ? `Falta responder ${unansweredText(invoiceImport) || plural(pending, "item", "itens")}.` : null,
     missing ? `${missing === 1 ? `Uma ${blank.one} está` : `${missing.toLocaleString("pt-BR")} ${blank.many} estão`} sem descrição${blank.where ? `: escreva a descrição em ${blank.where}` : ""}.` : null,
   ].filter(Boolean);
-  const why = reasons.length ? reasons.join(" ") : invoiceImport.blockers.length ? "Ainda há pendências na conciliação." : "";
+  const stepBlocked = invoiceImport.blockers.some((b) => b.code === "unconfirmed_creates" || b.code === "undecided_leftovers");
+  let why = reasons.join(" ");
+  if (!why && stepBlocked) why = "Resolva o que falta acima para concluir.";
+  else if (!why && invoiceImport.blockers.length) why = "Ainda há pendências na conciliação.";
   const off = now.difference !== null && Math.abs(now.difference) >= 0.005;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -550,6 +610,7 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
         <Info size={14} aria-hidden="true" style={{ color: T.blue, flexShrink: 0, alignSelf: "center" }} />
         <span>O <b>pagamento</b> desta fatura não é marcado aqui: ele é conferido quando você concilia o extrato da conta corrente, no passo “Conferir pagamento de fatura”.</span>
       </div>
+      <StepBlockers invoiceImport={invoiceImport} busy={busy || concluding} touch={touch} onConfirmCreates={onConfirmCreates} onGoToStep={onGoToStep} />
       <ErrorNote>{error}</ErrorNote>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <Btn variant="dark" onClick={onConclude} disabled={blocked || concluding} aria-describedby={why ? "conclude-blocked" : undefined} style={touchHeight(touch)}>
@@ -671,6 +732,11 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   // As dúvidas em que a pessoa disse "Sim, é esta" sem escolher qual (#559) e o lançamento da busca.
   const [wantPair, setWantPair] = useState(() => new Set());
   const [searchFor, setSearchFor] = useState(null);
+  // "Sobrando no Fincla" e "Conferir o total" (#560): lidos da rota do passo a cada visita.
+  const [leftovers, setLeftovers] = useState(null);
+  const [totalCheck, setTotalCheck] = useState(null);
+  const [stepLoading, setStepLoading] = useState(false);
+  const [stepError, setStepError] = useState("");
   // O minimizar do passo "Compras novas" (dado pelo `NewEntriesStep`), para os atalhos A/N.
   const newStepAnswered = useRef(null);
   // O formulário da compra nova (#557): categorias e etiquetas da organização, como no extrato.
@@ -695,10 +761,27 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     return () => { alive = false; };
   }, [cardId, organizationId, importId, setImport]);
 
-  const stepEntries = useMemo(
-    () => (invoiceImport && current ? invoiceStepItems(current, invoiceImport) : []),
-    [invoiceImport, current],
-  );
+  const isDraft = invoiceImport?.status === "draft";
+  useEffect(() => {
+    if (!isDraft || (current !== "leftover" && current !== "total")) return undefined;
+    let alive = true;
+    setStepLoading(true);
+    setStepError("");
+    const load = current === "leftover"
+      ? getCardInvoiceLeftovers(cardId, organizationId, importId).then((data) => { if (alive) setLeftovers(data); })
+      : getCardInvoiceTotalCheck(cardId, organizationId, importId).then((data) => { if (alive) setTotalCheck(data); });
+    load
+      .catch((err) => { if (alive) setStepError(cardApiError(err)); })
+      .finally(() => { if (alive) setStepLoading(false); });
+    return () => { alive = false; };
+  }, [isDraft, current, cardId, organizationId, importId]);
+
+  const leftoverItems = useMemo(() => (leftovers ? leftovers.items.map(leftoverQueueItem) : []), [leftovers]);
+  const stepEntries = useMemo(() => {
+    if (!invoiceImport || !current) return [];
+    if (current === "leftover") return leftoverItems;
+    return invoiceStepItems(current, invoiceImport);
+  }, [invoiceImport, current, leftoverItems]);
   // A fila (só o atual aberto) é a dos lançamentos que esta versão responde.
   const queueEntries = useMemo(() => answerableEntries(stepEntries), [stepEntries]);
   const queue = useEntryQueue(current ?? "", queueEntries, { answered: isInvoiceEntryAnswered });
@@ -709,6 +792,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     setPassed(reviewed);
     setCurrent(stepKey);
     setLastBulk(null);
+    if (stepKey === "leftover") setLeftovers(null);
+    if (stepKey === "total") setTotalCheck(null);
     const progress = { current_step: stepKey, reviewed_steps: INVOICE_STEPS.map((s) => s.key).filter((key) => reviewed.has(key)) };
     progressQueue.current = progressQueue.current
       .then(() => updateCardInvoiceImportProgress(cardId, organizationId, importId, progress))
@@ -902,6 +987,42 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     }
   };
 
+  // "Sobrando no Fincla" (#560): decidir já confirma e recolhe no clique; a decisão já marcada só
+  // recolhe. "Desfazer escolha" volta à decisão anterior (sem anterior, a "falta decidir": `null`).
+  const sendLeftover = async (queued, action) => {
+    setAnswering(true);
+    setActionError("");
+    try {
+      setLeftovers(await updateCardInvoiceLeftover(cardId, organizationId, importId, queued.leftover.transaction.id, action));
+      await reload();
+      return true;
+    } catch (err) {
+      setActionError(cardApiError(err));
+      return false;
+    } finally {
+      setAnswering(false);
+    }
+  };
+  const decideLeftover = async (queued, item, action) => {
+    if (item.action === action) {
+      queue.advanceFrom(queued.id);
+      return;
+    }
+    if (leftoverRefusal(item, action)) return;
+    if (await sendLeftover(queued, action)) {
+      setAnswerHistory((prev) => ({ ...prev, [queued.id]: [...(prev[queued.id] ?? []), item.action] }));
+      queue.advanceFrom(queued.id);
+    }
+  };
+  const undoLeftover = async (queued) => {
+    const history = answerHistory[queued.id] ?? [];
+    if (!history.length) return;
+    if (await sendLeftover(queued, history.at(-1))) {
+      setAnswerHistory((prev) => ({ ...prev, [queued.id]: (prev[queued.id] ?? []).slice(0, -1) }));
+      queue.open(queued.id);
+    }
+  };
+
   const confirmAll = async (entryIds, confirmed) => {
     setAnswering(true);
     setActionError("");
@@ -1052,7 +1173,9 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   const conferred = current === "suggested" ? reconciledEntries(invoiceImport.entries) : [];
   const form = { categories, details, fallbackLabel, cardName: invoiceImport.credit_card.name, invoiceMonth: invoiceMonthLabel(invoiceImport.invoice) };
   // O que falta no passo, pelo estado de cada item (QA F4 OBS-03): as mesmas palavras do trilho.
-  const noun = current === "charges" ? CHARGE_NOUN : PURCHASE_NOUN;
+  let noun = PURCHASE_NOUN;
+  if (current === "charges") noun = CHARGE_NOUN;
+  else if (current === "leftover") noun = LEFTOVER_NOUN;
   const remaining = stepRemaining(queueEntries, noun.one, noun.many);
   const discardDraft = () => discardCardInvoiceImport(cardId, organizationId, importId);
   const backToUpload = () => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) });
@@ -1184,9 +1307,38 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
             />
           ) : null}
           {INVOICE_ENTRY_STEPS.has(current) && readOnly.length ? <ReadOnlyEntries entries={readOnly} /> : null}
-          {current !== "summary" && !stepEntries.length && !conferred.length ? <EmptyStep>{EMPTY_TEXT[current]}</EmptyStep> : null}
+          {current === "leftover" || current === "total" ? <ErrorNote>{stepError}</ErrorNote> : null}
+          {current === "leftover" ? (
+            <InvoiceLeftoverStep
+              leftovers={leftovers}
+              loading={stepLoading}
+              error={stepError}
+              items={queueEntries}
+              queue={queue}
+              entries={invoiceImport.entries}
+              busy={answering}
+              history={answerHistory}
+              isMobile={isMobile}
+              pendingText={remaining.header}
+              onDecide={decideLeftover}
+              onUndo={undoLeftover}
+            />
+          ) : null}
+          {current === "total" ? (
+            <InvoiceTotalStep check={totalCheck} loading={stepLoading} error={stepError} touch={isMobile} onGoToStep={open} />
+          ) : null}
+          {!OWN_STEPS.has(current) && !stepEntries.length && !conferred.length ? <EmptyStep>{EMPTY_TEXT[current]}</EmptyStep> : null}
           {current === "summary" ? (
-            <SummaryStep invoiceImport={invoiceImport} concluding={concluding} error={actionError} touch={isMobile} onConclude={conclude} />
+            <SummaryStep
+              invoiceImport={invoiceImport}
+              concluding={concluding}
+              error={actionError}
+              touch={isMobile}
+              busy={answering}
+              onConclude={conclude}
+              onConfirmCreates={(ids) => confirmAll(ids, true)}
+              onGoToStep={open}
+            />
           ) : null}
 
           {/* O fim do passo: "← passo anterior" e "Próximo", no fim do conteúdo (no celular só o
@@ -1210,7 +1362,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
         </main>
       </div>
       {/* O aviso de quanto falta no passo leva ao primeiro pendente; some com 0. */}
-      {QUEUE_STEPS.has(current) ? (
+      {QUEUE_STEPS.has(current) || current === "leftover" ? (
         <GoToPendingButton
           key={`pending-${current}`}
           queue={queue}

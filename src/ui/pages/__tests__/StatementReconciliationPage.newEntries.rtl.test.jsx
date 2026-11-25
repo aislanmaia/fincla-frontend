@@ -646,6 +646,28 @@ describe("revisar e concluir", () => {
 
     expect(screen.queryByTestId("unclassified-warning")).toBeNull();
   });
+
+  it("lançamentos novos sem confirmar seguram o concluir: o motivo com o passo e Confirmar os N de uma vez (decisão do Owner 2026-11-26)", async () => {
+    const creates = contract.draft.entries.filter((e) => e.answer === "create" && !e.confirmed && e.classification === "new" && e.amount.amount !== "0.00");
+    server.use(http.post(`${BASE}/${IMPORT}/suggestions/confirm`, async ({ request }) => {
+      const body = await request.json();
+      calls.push({ confirm: body });
+      body.entry_ids.forEach((id) => { entry(id).confirmed = body.confirmed; });
+      draft.blockers = draft.blockers.filter((b) => b.code !== "unconfirmed_creates");
+      return HttpResponse.json(draft);
+    }));
+    const user = await openDraft({ step: "Revisar e concluir" });
+
+    const blocked = screen.getByTestId("conclude-blocked");
+    expect(blocked).toHaveTextContent("Falta confirmar 3 lançamentos novos em Adicionar lançamentos novos.");
+    expect(screen.getByRole("button", { name: "Concluir conciliação" })).toBeDisabled();
+    const confirm = within(blocked).getByTestId("confirm-creates");
+    expect(confirm).toHaveTextContent(`Confirmar os ${creates.length} de uma vez`);
+    await user.click(confirm);
+
+    await waitFor(() => expect(calls).toContainEqual({ confirm: { entry_ids: creates.map((e) => e.id), confirmed: true } }));
+    await waitFor(() => expect(screen.getByTestId("conclude-blocked")).not.toHaveTextContent("Falta confirmar"));
+  });
 });
 
 // Evita aviso de variável não usada quando a fixture muda de ordem: a ordem é presa aqui.

@@ -42,8 +42,9 @@ describe("a opção escolhida (#559)", () => {
   it("nesta fatura é Sim, é esta; na vizinha, a sugestão da própria opção: a série só quando ela vale", () => {
     expect(pickAnswerOf(option(DECEMBER), DECEMBER)).toBe("pair");
     expect(pickAnswerOf(option(JANUARY, { movable: true, suggested_answer: "move" }), DECEMBER)).toBe("move");
-    expect(ahead).toMatchObject({ suggested_answer: "move", series_movable: false });
-    expect(pickAnswerOf(ahead, DECEMBER)).toBe("move");
+    // A gravada (a sugestão da própria opção, com ou sem a série: QA F5 BUG-02).
+    expect(pickAnswerOf(ahead, DECEMBER)).toBe(ahead.series_movable ? "move_series" : "move");
+    expect(pickAnswerOf({ ...ahead, suggested_answer: "move", series_movable: false }, DECEMBER)).toBe("move");
     expect(pickAnswerOf(aheadSeries, DECEMBER)).toBe("move_series");
     expect(pickAnswerOf(here, DECEMBER)).toBe("pair");
     // Série uma fatura atrás: "esta e as próximas" nunca vale (sem motivo), a opção move só esta.

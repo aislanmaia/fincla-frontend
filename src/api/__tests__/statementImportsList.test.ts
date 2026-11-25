@@ -14,7 +14,7 @@ describe('normalizeStatementImportListItem', () => {
     expect(draft.current_step).toBe('new');
     expect(draft.balance_now).toEqual({ date: '2026-10-31', bank: 1834.1, fincla: 1857.16, difference: -23.06, currency: 'BRL' });
     expect(draft.can_conclude).toBe(false);
-    expect(draft.blockers).toEqual([{ code: 'missing_description', count: 1 }]);
+    expect(draft.blockers).toEqual([{ code: 'missing_description', count: 1, step: null }]);
     expect(draft.balance_check_actions).toEqual({ delete: 1, change_date: 0 });
   });
 
