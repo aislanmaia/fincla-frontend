@@ -338,7 +338,7 @@ describe("compra parcelada nova (decisão 5)", () => {
     // O dinheiro sai com o espaço do Intl (U+00A0).
     expect(installments.map((i) => i.textContent.replace(/\u00a0/g, " "))).toEqual([
       "01/06novembro/2026R$ 99,90valor estimado",
-      "02/06dezembro/2026R$ 99,90valor estimado",
+      "02/06dezembro/2026R$ 99,90valor estimadofatura já paga: entra paga",
       "03/06nesta faturaR$ 99,90",
       "04/06fevereiro/2027R$ 99,90",
       "05/06março/2027R$ 99,90",
@@ -366,14 +366,15 @@ describe("compra parcelada nova (decisão 5)", () => {
   });
 
   it("parcela anterior em fatura já paga: a nota diz que entra já paga, e a lista marca a fatura", async () => {
-    LOJA().new_purchase.installments[0].invoice_paid = true;
+    // Na fixture gravada pelo backend, dezembro/2026 já está paga (parcela 02 da LOJA).
     const user = userEvent.setup();
     await open();
     await user.click(alter("LOJA DO BAIRRO 03/06"));
 
     const loja = purchase("LOJA DO BAIRRO 03/06");
-    expect(within(loja).getByTestId("scope-note-full")).toHaveTextContent("A fatura de novembro/2026 já foi paga: a parcela 01 entra nela já paga.");
-    expect(within(loja).getAllByTestId("new-purchase-installment")[0]).toHaveTextContent("fatura já paga: entra paga");
+    expect(within(loja).getByTestId("scope-note-full")).toHaveTextContent("A fatura de dezembro/2026 já foi paga: a parcela 02 entra nela já paga.");
+    expect(within(loja).getAllByTestId("new-purchase-installment")[1]).toHaveTextContent("fatura já paga: entra paga");
+    expect(within(loja).getAllByTestId("new-purchase-installment")[0]).not.toHaveTextContent("fatura já paga");
   });
 
   it("muitas parcelas anteriores: a nota resume as faturas de uma a outra", async () => {
