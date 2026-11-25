@@ -6,21 +6,29 @@
 // lado "Na fatura do banco" com a seção e o final do cartão, a parcela casada pela data da compra da
 // série, o "Valor diferente" (vale o do banco, decisão 2) e a fatura já paga (só ligar, decisão 1).
 // Os lançamentos dos outros passos aparecem só para leitura: "Fica de fora nesta versão".
+//
+// #557: "Não, adicionar agora" abre o formulário da compra nova (o do item novo do extrato, com a
+// forma de pagamento travada no cartão e as opções da compra parcelada), com o "Confirmar" ao lado
+// das respostas, desligado enquanto a descrição está vazia. Fatura já paga: Adicionar desligado,
+// com o motivo (decisão 1).
 import { memo, useEffect, useRef } from "react";
-import { ArrowRight, Ban, Check, ChevronRight, Info, Link2, Sparkles } from "lucide-react";
+import { ArrowRight, Ban, Check, ChevronRight, Info, Link2, Plus, Sparkles } from "lucide-react";
 
 import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { plural } from "../../plural.js";
-import { BOX, BOX_LABEL, ConfirmAnswerButton, SKIP_BG, SkipBadge, SkipNote, bankDateLabel } from "./StatementEntryCard.jsx";
+import {
+  BOX, BOX_LABEL, CONFIRM_BLOCKED_NOTE, ConfirmAnswerButton, SKIP_BG, SkipBadge, SkipNote, StatementEntryCard, bankDateLabel, useDescriptionDraft,
+} from "./StatementEntryCard.jsx";
 import { DifferenceTag, Hl, SuggestedBadge, dayOf } from "./FinclaMatchBox.jsx";
 import { AnswerSegment, Connector, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import {
   ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
 } from "./entryQueue.jsx";
 import { unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
+import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
 
 /** As palavras da lista do passo: compras da fatura. */
 export const PURCHASE_NOUN = {
@@ -40,9 +48,10 @@ export const SECTION_LABEL = {
   charges: "Encargos",
 };
 
-/** Nesta versão a fatura só liga ou deixa de fora; "adicionar" e "mover" chegam nas próximas. */
+/** Liga, adiciona como compra nova (#557) ou deixa de fora; "mover" chega nas próximas. */
 const ANSWERS = [
   { value: "pair", label: "Sim, é esta", tone: T.blue },
+  { value: "create", label: "Não, adicionar agora", tone: T.green },
   { value: "ignore", label: "Não registrar", tone: T.inkLight },
 ];
 
@@ -65,12 +74,32 @@ export function bankValueDiffers(entry) {
 export const paidValueLocked = (entry) => entry.value_locked && bankValueDiffers(entry);
 
 /**
- * A resposta não está disponível? Uma regra só para o botão e para o atalho (S/N). "Sim, é esta"
- * precisa da transação do Fincla. "Não registrar" não muda nada no Fincla, então fica disponível
- * mesmo numa fatura paga: a fatura paga só trava o que mexeria nela (adicionar, mover, excluir,
- * trocar o valor), respostas que esta versão ainda não tem.
+ * A resposta não está disponível? Uma regra só para o botão e para o atalho (S/A/N). "Sim, é esta"
+ * precisa da transação do Fincla. "Adicionar" (#557) fica desligado numa fatura já paga (decisão 1:
+ * fatura paga não recebe compra nova). "Não registrar" não muda nada no Fincla, então fica
+ * disponível mesmo numa fatura paga.
  */
-export const invoiceAnswerUnavailable = (entry, value) => (value === "pair" ? !entry.fincla_transaction : false);
+export const invoiceAnswerUnavailable = (entry, value) => {
+  if (value === "pair") return !entry.fincla_transaction;
+  if (value === "create") return Boolean(entry.value_locked) || isInstallmentCredit(entry);
+  return false;
+};
+
+/**
+ * Crédito parcelado "NN/MM" (#557): o Fincla não o cria como compra, então "Não registrar" é a única
+ * resposta (a regra do backend: crédito, ou zero, com mais de uma parcela).
+ */
+export const isInstallmentCredit = (entry) => entry.amount >= 0 && (entry.installment?.count ?? 0) > 1;
+
+/** Por que "Adicionar" está desligado neste crédito parcelado. */
+export const INSTALLMENT_CREDIT_REASON = "Crédito parcelado não entra no Fincla como compra nova.";
+
+/** O motivo escrito ao lado das respostas: fatura paga (decisão 1) ou crédito parcelado; `null` = nenhum. */
+export const invoiceAnswerNote = (entry) => {
+  if (entry.value_locked) return PAID_INVOICE_REASON;
+  if (isInstallmentCredit(entry)) return INSTALLMENT_CREDIT_REASON;
+  return null;
+};
 
 /** O valor como a fatura mostra: cobrança sem sinal; crédito (estorno, redução) com "−", em verde. */
 export function InvoiceAmount({ amount, currency, strong = false }) {
@@ -117,6 +146,9 @@ function BankStatus({ answer }) {
   }
   if (answer === "pair") {
     return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Ligado ao Fincla</Badge>;
+  }
+  if (answer === "create") {
+    return <Badge color={T.green} bg={T.greenLight}><Plus size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Entra no Fincla</Badge>;
   }
   return null;
 }
@@ -290,6 +322,13 @@ export function InvoiceStatusBadge({ entry }) {
     return <Badge color={T.blue} bg={T.blueLight}><Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Sugerido · falta confirmar</Badge>;
   }
   if (entry.answer === "pair") return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Já está no Fincla</Badge>;
+  if (entry.answer === "create") {
+    return (
+      <Badge color={T.green} bg={T.greenLight}>
+        <Plus size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Adicionar{entry.answerable && !entry.confirmed ? " · falta confirmar" : ""}
+      </Badge>
+    );
+  }
   if (entry.answer === "ignore") return <SkipBadge />;
   return <Badge color={T.amber} bg={T.amberLight}>Falta responder</Badge>;
 }
@@ -297,8 +336,9 @@ export function InvoiceStatusBadge({ entry }) {
 /** A sugestão sem nenhuma mudança: só aí aparece o "Confirmar sugestão" ao lado das respostas. */
 export const untouchedInvoiceSuggestion = (entry) => entry.answer === "pair" && !entry.confirmed && Boolean(entry.fincla_transaction);
 
-function outcomeText(entry) {
+function outcomeText(entry, form) {
   const match = entry.fincla_transaction;
+  if (entry.answer === "create") return newPurchaseOutcome(entry, form);
   if (entry.answer === "pair" && match) {
     if (entry.value_change) {
       return <>Ao concluir: <b>{match.description}</b> fica ligada a este lançamento da fatura e passa a valer <b style={NUM}>{formatMoney(entry.value_change.to, entry.value_change.currency)}</b>, o valor do banco.</>;
@@ -309,14 +349,52 @@ function outcomeText(entry) {
   return null;
 }
 
-function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswer, onUndoChoice }) {
+/**
+ * O cartão aberto. `form` = o que o formulário da compra nova precisa ({ categories, details,
+ * fallbackLabel, cardName, invoiceMonth }); `onChange` grava um campo dela; `onConfirmNew` é o
+ * Confirmar do formulário (grava a descrição antes, pela mesma trava do campo).
+ */
+function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, onAnswer, onChange, onConfirmNew, onUndoChoice }) {
   const valueDiffers = entry.answer === "pair" && Boolean(entry.fincla_transaction?.differences.includes("amount"));
-  const outcome = outcomeText(entry);
-  // Fatura já paga (decisão 1): o valor não muda. O motivo só aparece quando o valor do banco é outro.
-  const paidNote = paidValueLocked(entry) ? PAID_INVOICE_REASON : null;
-  const confirm = untouchedInvoiceSuggestion(entry)
-    ? <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onAnswer(entry, "pair")} />
-    : null;
+  const outcome = outcomeText(entry, form);
+  const desc = useDescriptionDraft(entry, onChange);
+  // Fatura já paga (decisão 1): Adicionar fica desligado e o valor não muda; o motivo aparece. No
+  // crédito parcelado, Adicionar também fica desligado, com o motivo.
+  const paidNote = invoiceAnswerNote(entry);
+  let confirm = null;
+  if (untouchedInvoiceSuggestion(entry)) {
+    confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onAnswer(entry, "pair")} />;
+  } else if (entry.answer === "create") {
+    const blank = !desc.value.trim();
+    confirm = (
+      <ConfirmAnswerButton
+        disabled={busy || blank}
+        blockedNote={blank ? CONFIRM_BLOCKED_NOTE : ""}
+        touch={isMobile}
+        onConfirm={() => desc.confirm(onConfirmNew)}
+      />
+    );
+  }
+  const right = entry.answer === "create" ? (
+    <StatementEntryCard
+      entry={entry}
+      categories={form.categories}
+      details={form.details}
+      fallbackLabel={form.fallbackLabel}
+      isMobile={isMobile}
+      onChange={onChange}
+      embedded
+      desc={desc}
+      invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange, busy)}
+    />
+  ) : (
+    <InvoiceFinclaSide
+      entry={entry}
+      invoiceMonth={invoiceMonth}
+      skipped={entry.answer === "ignore"}
+      onConfirm={untouchedInvoiceSuggestion(entry) && !busy ? () => onAnswer(entry, "pair") : null}
+    />
+  );
   return (
     <article
       data-testid="pair-card"
@@ -332,14 +410,7 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>
         <InvoiceBankSide entry={entry} valueDiffers={valueDiffers} />
         <Connector answer={entry.answer} isMobile={isMobile} />
-        <div style={{ display: "flex", flex: 1, minWidth: 0 }}>
-          <InvoiceFinclaSide
-            entry={entry}
-            invoiceMonth={invoiceMonth}
-            skipped={entry.answer === "ignore"}
-            onConfirm={untouchedInvoiceSuggestion(entry) && !busy ? () => onAnswer(entry, "pair") : null}
-          />
-        </div>
+        <div style={{ display: "flex", flex: 1, minWidth: 0 }}>{right}</div>
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
         <AnswerSegment
@@ -348,7 +419,15 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
           value={entry.answer}
           busy={busy}
           unavailable={(a) => invoiceAnswerUnavailable(entry, a.value)}
-          onAnswer={(value) => onAnswer(entry, value)}
+          onAnswer={(value) => {
+            // "Não, adicionar agora" já marcado: clicar de novo confirma, como o Confirmar (e como o
+            // "Adicionar" do passo 5); sem descrição, nada (o Confirmar diz o motivo).
+            if (value === "create" && entry.answer === "create") {
+              if (!busy && desc.value.trim()) desc.confirm(onConfirmNew);
+              return;
+            }
+            onAnswer(entry, value);
+          }}
           confirm={confirm}
           note={paidNote}
           touch={isMobile}
@@ -371,6 +450,7 @@ function rowSummary(entry) {
     else if (paidValueLocked(entry)) tail = " · fatura já paga: o valor não muda";
     return <>É <b>{match.description}</b>{tail}</>;
   }
+  if (entry.answer === "create") return <>Adicionar ao Fincla: <b>{entry.description?.trim() || "(sem descrição)"}</b></>;
   return <span style={{ color: T.inkLight }}>Fica fora do Fincla</span>;
 }
 
@@ -408,15 +488,18 @@ export function confirmAllPurchasesLabel(count) {
 
 /**
  * O passo 1 inteiro: "Confirmar as N de uma vez" com a faixa de desfazer, e a lista (só o atual
- * aberto). `history`: as respostas anteriores de cada lançamento, para "Desfazer escolha".
+ * aberto). `history`: as respostas anteriores de cada lançamento, para "Desfazer escolha". `form`,
+ * `onChange` e `onConfirmNew`: o formulário da compra nova de "Não, adicionar agora" (#557).
  */
-export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, busy, history, lastBulk, onAnswer, onUndoChoice, onConfirmAll, onUndoConfirmAll }) {
+export function InvoiceSuggestedStep({
+  entries, queue, invoiceMonth, isMobile, busy, history, lastBulk, form, onAnswer, onChange, onConfirmNew, onUndoChoice, onConfirmAll, onUndoConfirmAll,
+}) {
   const unconfirmed = unconfirmedInvoiceSuggestions(entries);
   const openRow = useStableCallback((entry) => queue.open(entry.id));
   const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntryQueueHeader queue={queue} shortcutKeys={["s", "n"]} noun={PURCHASE_NOUN} touch={isMobile} />
+      <EntryQueueHeader queue={queue} shortcutKeys={["s", "a", "n"]} noun={PURCHASE_NOUN} touch={isMobile} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "compra encontrada", "compras encontradas")}</span>
         {unconfirmed.length ? (
@@ -447,7 +530,10 @@ export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, b
                 isMobile={isMobile}
                 busy={busy}
                 canUndo={Boolean(history[entry.id]?.length)}
+                form={{ ...form, invoiceMonth }}
                 onAnswer={onAnswer}
+                onChange={onChange}
+                onConfirmNew={onConfirmNew}
                 onUndoChoice={onUndoChoice}
               />
             </CurrentEntryFrame>

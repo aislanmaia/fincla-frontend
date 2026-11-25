@@ -18,7 +18,7 @@ import {
   MONTH_NAMES, bankDateLabel, categoriesForType, categoryLabel, detailLabels,
 } from "./StatementEntryCard.jsx";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
-import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, answerTone, useStableCallback } from "./entryQueue.jsx";
+import { CurrentEntryFrame, EntryQueueHeader, EntrySlot, answerTone, isAnswered, useStableCallback } from "./entryQueue.jsx";
 
 
 const signed = (amount, currency) => `${amount > 0 ? "+" : ""}${formatMoney(amount, currency)}`;
@@ -236,11 +236,26 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
  * `queue` (fincla-api#517) é a lista dos lançamentos livres (fora das somas): só o atual fica aberto
  * como cartão; os outros são linhas. `renderMatched(entry, { current })` desenha um lançamento
  * pareado pela busca ("Está no Fincla com outros dados…"): o cartão quando é o atual, senão a linha.
+ *
+ * A Conciliar fatura (passo "Compras novas", fincla-api#557) usa o mesmo passo, sem lote nem soma:
+ * - `selectable={false}`: sem caixas de marcar nem barra de lote; fica o aviso de quantas vão para
+ *   Não classificado;
+ * - `renderCard(entry, { busy, onChange, onConfirm })` desenha o cartão aberto (o da fatura, com o
+ *   mesmo formulário); `onChange` minimiza no "Não registrar" e `onConfirm` minimiza no Confirmar;
+ * - `onConfirmEntry(entry)` grava a confirmação antes de minimizar (`false` = não gravou, o cartão
+ *   fica aberto); `trackConfirmed` faz o "Desfazer escolha" devolver também o `confirmed` de antes;
+ * - `answered(entry)` diz quando a linha mostra "Conferido"; `rowDetail(entry)` completa a linha e
+ *   `rowAmount(entry)` mostra o valor como a fatura mostra; `createUnavailable(entry)` (fatura paga):
+ *   o "Desfazer escolha" de um "Não registrar" sem resposta anterior só tira a confirmação;
+ * - `answeredRef`: a página recebe em `answeredRef.current(id)` o mesmo minimizar das respostas do
+ *   cartão (guarda o "como estava" para o "Desfazer escolha"), para os atalhos A/N usarem.
  */
 export function NewEntriesStep({
   stepKey, entries, groups, categories, details, fallbackLabel, isMobile, queue, view = "detailed", onViewChange = null,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
   onSearch = null, renderMatched = null, answering = false,
+  selectable = true, renderCard = null, onConfirmEntry = null, trackConfirmed = false, answered: answeredOf = isAnswered, rowDetail = null, rowAmount = null, createUnavailable = null,
+  answeredRef = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [lastBulk, setLastBulk] = useState(null);
@@ -263,11 +278,17 @@ export function NewEntriesStep({
     if (!currentEntry) return;
     openedAs.current[currentEntry.id] = { answer: currentEntry.answer, confirmed: currentEntry.confirmed, description: currentEntry.description ?? "" };
   }, [currentEntry?.id]); // só a abertura conta, não cada mudança no cartão aberto
-  const answered = (id) => {
+  const answered = useStableCallback((id) => {
     const before = openedAs.current[id];
     if (before) setHistory((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), before] }));
     queue.advanceFrom(id);
-  };
+  });
+  // Os atalhos da página (A/N) minimizam por aqui, para o "Desfazer escolha" ter o que voltar.
+  useEffect(() => {
+    if (!answeredRef) return undefined;
+    answeredRef.current = answered;
+    return () => { if (answeredRef.current === answered) answeredRef.current = null; };
+  }, [answeredRef, answered]);
   const undoChoice = useStableCallback(async (id) => {
     const entry = byId.get(id);
     if (!entry) return;
@@ -278,13 +299,30 @@ export function NewEntriesStep({
       body.confirmed = previous.confirmed;
     }
     if (previous && previous.description !== (entry.description ?? "")) body.description = previous.description;
-    // Sem resposta diferente para voltar, o "Não registrar" volta a "Não, adicionar agora".
-    if (entry.answer === "ignore" && !body.answer) body.answer = "create";
+    if (trackConfirmed && previous && previous.confirmed !== entry.confirmed && body.confirmed === undefined) body.confirmed = previous.confirmed;
+    // Sem resposta diferente para voltar, o "Não registrar" volta a "Não, adicionar agora". Com
+    // `trackConfirmed` (a fatura), o "Adicionar" só se confirma pelo Confirmar do formulário: volta
+    // a confirmar, com o cartão aberto (sem `confirmed`, o backend confirmaria sozinho).
+    if (entry.answer === "ignore" && !body.answer) {
+      if (createUnavailable?.(entry)) body.confirmed = false;
+      else {
+        body.answer = "create";
+        if (trackConfirmed) body.confirmed = false;
+      }
+    }
     if (Object.keys(body).length && (await onChangeEntry(id, body)) === false) return;
     if (previous) setHistory((prev) => ({ ...prev, [id]: (prev[id] ?? []).slice(0, -1) }));
+    const after = { answer: body.answer ?? entry.answer, confirmed: body.confirmed ?? entry.confirmed };
     // O "Confirmar" do adicionar agora só minimizou: desfazer devolve o cartão aberto, como antes.
-    if (entry.answer === "create" && (body.answer ?? "create") === "create") queue.open(id);
+    // Na fatura, um "Adicionar" que volta a confirmar também abre o cartão, com o Confirmar.
+    if ((entry.answer === "create" && after.answer === "create") || (trackConfirmed && after.answer === "create" && !after.confirmed)) queue.open(id);
   });
+
+  // O Confirmar (e o "Não registrar" já marcado): grava a confirmação, quando a tela pede, e minimiza.
+  const confirmEntry = async (entry) => {
+    if (onConfirmEntry && (await onConfirmEntry(entry)) === false) return;
+    answered(entry.id);
+  };
 
   const run = async (work) => {
     setBusy(true);
@@ -375,7 +413,13 @@ export function NewEntriesStep({
         />
       ))}
 
-      {free.length ? (
+      {free.length && !selectable ? (
+        unclassified.length ? (
+          <p role="note" data-testid="unclassified-note" style={{ ...G, fontSize: 12, color: T.amber, margin: 0 }}>
+            {plural(unclassified.length, "compra sem categoria vai", "compras sem categoria vão")} para Não classificado ao concluir.
+          </p>
+        ) : null
+      ) : free.length ? (
         <div style={{ ...G, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <Btn variant="outGray" small onClick={() => setSelectedIds(allSelected ? [] : free.map((e) => e.id))}>
             {allSelected ? "Desmarcar todas" : `Marcar todas (${free.length})`}
@@ -426,7 +470,9 @@ export function NewEntriesStep({
               entry={entry}
               focus={queue.rowFocusId === entry.id}
               selected={selectedIds.includes(entry.id)}
-              onSelect={select}
+              onSelect={selectable ? select : null}
+              conferred={answeredOf(entry)}
+              amount={rowAmount ? rowAmount(entry) : null}
               onExpand={expand}
               onUndo={undoChoice}
               busy={answering}
@@ -438,11 +484,24 @@ export function NewEntriesStep({
               unclassified={!entry.category_tag_id}
               focus={queue.rowFocusId === entry.id}
               selected={selectedIds.includes(entry.id)}
-              onSelect={select}
+              onSelect={selectable ? select : null}
+              conferred={answeredOf(entry)}
+              detail={rowDetail ? rowDetail(entry) : null}
+              amount={rowAmount ? rowAmount(entry) : null}
               onExpand={expand}
               onUndo={history[entry.id]?.length ? undoChoice : null}
               busy={answering}
             />
+          );
+        } else if (renderCard) {
+          body = (
+            <CurrentEntryFrame queue={queue} entry={entry}>
+              {renderCard(entry, {
+                busy: answering,
+                onConfirm: confirmEntry,
+                onChange: (id, change) => onChangeEntry(id, change, { onSaved: change.answer === "ignore" ? () => answered(id) : null }),
+              })}
+            </CurrentEntryFrame>
           );
         } else {
           body = (

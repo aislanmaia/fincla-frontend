@@ -24,6 +24,12 @@ export function invoiceCountsLabel(item) {
     else if (status === "undone") parts.push(plural(summary.to_pair, "compra ligada e desfeita", "compras ligadas e desfeitas"));
     else parts.push(plural(summary.to_pair, "compra ligada", "compras ligadas"));
   }
+  // Compras novas (fincla-api#557).
+  if (summary.to_create) {
+    if (status === "draft") parts.push(plural(summary.to_create, "compra nova a adicionar", "compras novas a adicionar"));
+    else if (status === "undone") parts.push(plural(summary.to_create, "compra nova adicionada e desfeita", "compras novas adicionadas e desfeitas"));
+    else parts.push(plural(summary.to_create, "compra nova adicionada", "compras novas adicionadas"));
+  }
   if (summary.already_reconciled) parts.push(plural(summary.already_reconciled, "já conferido", "já conferidos"));
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));

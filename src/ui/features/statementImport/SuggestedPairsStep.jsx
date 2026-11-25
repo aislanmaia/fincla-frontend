@@ -5,7 +5,7 @@
 // sugestão já vem respondida "Sim, é esta" e falta a pessoa confirmar. Responder (ou "Confirmar
 // os N de uma vez") minimiza o cartão numa linha que continua visível, com "Alterar" e "Desfazer
 // escolha": nada some sem um jeito de voltar. Nada muda no Fincla antes de concluir.
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useId, useRef } from "react";
 import { Ban, Check, ChevronRight, Link2, Plus, Sparkles } from "lucide-react";
 
 import { T, TOUCH_TARGET } from "../../tokens";
@@ -246,6 +246,8 @@ export const TOUCH_ANSWER_ROW = { display: "flex", flexWrap: "wrap", gap: 1, bac
  * `touch` (celular) dá às respostas a altura de um alvo de toque; no computador ficam com 32 px.
  */
 export function AnswerSegment({ label, answers, value, busy, unavailable = () => false, onAnswer, confirm = null, note = null, touch = false }) {
+  // O motivo escrito descreve as respostas desligadas (leitor de tela lê ao focar o botão).
+  const noteId = useId();
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
@@ -259,6 +261,7 @@ export function AnswerSegment({ label, answers, value, busy, unavailable = () =>
               type="button"
               aria-pressed={pressed}
               disabled={busy || off}
+              aria-describedby={off && note ? noteId : undefined}
               onClick={() => onAnswer(a.value)}
               style={{
                 ...G, minHeight: touch ? TOUCH_TARGET : 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy || off ? "not-allowed" : "pointer",
@@ -275,7 +278,7 @@ export function AnswerSegment({ label, answers, value, busy, unavailable = () =>
         })}
       </div>
       {confirm}
-      {note ? <span data-testid="answer-note" style={{ ...G, fontSize: 12, color: T.inkMid, flexBasis: "100%" }}>{note}</span> : null}
+      {note ? <span id={noteId} data-testid="answer-note" style={{ ...G, fontSize: 12, color: T.inkMid, flexBasis: "100%" }}>{note}</span> : null}
     </div>
   );
 }

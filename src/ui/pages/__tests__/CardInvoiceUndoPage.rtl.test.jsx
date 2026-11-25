@@ -24,7 +24,10 @@ const CARD = contract.concluded.credit_card;
 const IMPORT = contract.undo_preview.import_id;
 const BASE = `*/v1/credit-cards/${CARD.id}/invoice-imports/${IMPORT}`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const PAID = "Esta fatura já foi paga. Para desfazer a conciliação, desmarque o pagamento e volte aqui.";
+// A recusa por fatura paga como o backend a grava (QA F3 BUG-01): nomeia a fatura a desmarcar, aqui
+// uma anterior à conciliada (dezembro/2026, onde entrou uma parcela).
+const PAID_REFUSAL = contract.undo_preview_refused_paid.refusal;
+const PAID = PAID_REFUSAL.message;
 
 const calls = [];
 let preview = clone(contract.undo_preview);
@@ -65,7 +68,8 @@ describe("a prévia", () => {
     expect(screen.getByTestId("undo-restore-count")).toHaveTextContent(
       "4 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
     );
-    expect(screen.queryByTestId("undo-delete-count")).not.toBeInTheDocument();
+    // As compras novas que a conclusão criou (#557) são apagadas.
+    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("5 transações adicionadas serão apagadas");
     const restored = screen.getAllByTestId("undo-restored");
     expect(restored).toHaveLength(4);
     const loja = restored.find((r) => r.textContent.includes("Loja (presente)"));
@@ -98,11 +102,11 @@ describe("desfazer", () => {
     await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
     expect(calls).not.toContainEqual({ undo: IMPORT });
     const confirm = screen.getByRole("group", { name: "Confirmar desfazer conciliação" });
-    expect(confirm).toHaveTextContent("Tem certeza? O que esta conciliação mudou no Fincla volta a ser como era antes.");
+    expect(confirm).toHaveTextContent("Tem certeza? As 5 transações adicionadas serão apagadas.");
     await user.click(within(confirm).getByRole("button", { name: "Sim, desfazer conciliação" }));
 
     expect(await screen.findByRole("heading", { name: "Conciliação desfeita" })).toBeInTheDocument();
-    expect(screen.getByText(/voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
+    expect(screen.getByText(/5 transações adicionadas foram apagadas\. .*voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
     expect(calls).toContainEqual({ undo: IMPORT });
     expect(onUndone).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Conciliar a fatura de novo" }));
@@ -127,7 +131,7 @@ describe("desfazer", () => {
     open();
 
     await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
-    preview = { ...clone(contract.undo_preview), can_undo: false, refusal: { code: "invoice_paid", message: PAID } };
+    preview = { ...clone(contract.undo_preview), can_undo: false, refusal: clone(PAID_REFUSAL) };
     await user.click(screen.getByRole("button", { name: "Sim, desfazer conciliação" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(PAID);
@@ -188,10 +192,13 @@ describe("recusas", () => {
   });
 
   it("fatura já paga (decisão 8): recusa com o motivo", async () => {
-    preview = { ...clone(contract.undo_preview), can_undo: false, refusal: { code: "invoice_paid", message: PAID } };
+    preview = { ...clone(contract.undo_preview), can_undo: false, refusal: clone(PAID_REFUSAL) };
     open();
 
     expect(await screen.findByTestId("undo-refusal")).toHaveTextContent(`Não dá para desfazer esta conciliação. ${PAID}`);
+    // O motivo diz qual fatura desmarcar, não "esta fatura" (a conciliada está aberta).
+    expect(screen.getByTestId("undo-refusal")).toHaveTextContent("A fatura de dezembro/2026 foi paga depois da conciliação.");
+    expect(screen.getByTestId("undo-refusal")).not.toHaveTextContent("Esta fatura já foi paga");
     expect(screen.queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
   });
 

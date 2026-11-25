@@ -42,7 +42,21 @@ function applyAnswer(entry, body) {
   entry.confirmed = body.confirmed ?? true;
 }
 
+// Categorias e etiquetas da organização: o id da Padaria é o da fixture `entry_new`.
+const CATEGORIES = [
+  { id: "a643ca47-c39a-40ca-9f67-c69e5aaec686", name: "alimentacao", label: "Alimentação", allowed_transaction_types: ["expense"], is_fallback: false },
+  { id: "cat-casa", name: "casa", label: "Casa", allowed_transaction_types: ["expense"], is_fallback: false },
+  { id: "cat-fallback", name: "nao-classificado", label: "Não classificado", allowed_transaction_types: ["expense", "income", "refund"], is_fallback: true },
+];
+const DETAILS = [
+  { id: "8a2803e0-8264-4821-be73-d56114679006", name: "lanche", label: "Lanche", parent_category_tag_id: "a643ca47-c39a-40ca-9f67-c69e5aaec686" },
+  { id: "det-moveis", name: "moveis", label: "Móveis", parent_category_tag_id: "cat-casa" },
+];
+
 const server = setupServer(
+  // As categorias e as etiquetas do formulário da compra nova (#557).
+  http.get("*/v1/tags", ({ request }) =>
+    HttpResponse.json({ tags: new URL(request.url).searchParams.get("tag_type") === "detalhe" ? DETAILS : CATEGORIES })),
   http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
   // "Faturas conciliadas" (#556) e a prévia do desfazer da concluída: os testes da F2 ficam em
   // `CardInvoiceReconciliationPage.f2.rtl.test.jsx`.
@@ -61,6 +75,12 @@ const server = setupServer(
     const entry = draft.entries.find((e) => e.id === p.entryId);
     applyAnswer(entry, body);
     return HttpResponse.json(entry);
+  }),
+  http.patch(`${BASE}/${IMPORT}/entries`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ batch: body.entries });
+    for (const item of body.entries) applyAnswer(draft.entries.find((e) => e.id === item.id), item);
+    return HttpResponse.json(draft);
   }),
   http.post(`${BASE}/${IMPORT}/suggestions/confirm`, async ({ request }) => {
     const body = await request.json();
@@ -112,12 +132,12 @@ describe("o topo da conciliação da fatura", () => {
     expect(screen.getByTestId("invoice-progress")).toHaveTextContent("Seu progresso: 0 de 6 passos conferidos");
     const difference = screen.getByTestId("invoice-difference");
     expect(difference).toHaveTextContent("Diferença da fatura agora");
-    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("+R$ 1.512,08");
-    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 890,84");
+    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 11,42");
+    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 2.414,34");
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
   });
 
-  it("o trilho tem os 8 passos; os desta versão sem resposta dizem que ficam de fora, os vazios que não há nada a fazer", async () => {
+  it("o trilho tem os 8 passos; os sem resposta nesta versão dizem que ficam de fora, os vazios que não há nada a fazer", async () => {
     await openDraft();
 
     const titles = within(rail()).getAllByTestId("step-title").map((t) => t.textContent);
@@ -129,7 +149,8 @@ describe("o topo da conciliação da fatura", () => {
     expect(railStatus("Confirmar compras encontradas")).toBe("Você está aqui");
     expect(railStatus("Compras em outra fatura")).toBe("Nada a fazer");
     expect(railStatus("Decidir casos com dúvida")).toBe("Nada a fazer · 3 ficam de fora nesta versão");
-    expect(railStatus("Compras novas")).toBe("Nada a fazer · 5 ficam de fora nesta versão");
+    // Compras novas (#557): vêm "Adicionar" marcado, a confirmar.
+    expect(railStatus("Compras novas")).toBe("5 escolhas para confirmar");
     expect(railStatus("Conferir o total")).toBe("Depois dos lançamentos");
   });
 
@@ -348,13 +369,15 @@ describe("o passo Confirmar compras encontradas", () => {
     await waitFor(() => expect(calls).toContainEqual({ patch: LOJA, body: { answer: "ignore" } }));
   });
 
-  it("fatura já paga com o mesmo valor: nada de aviso de fatura paga, as respostas ligadas", async () => {
+  it("fatura já paga com o mesmo valor: o valor não muda sem aviso, Adicionar desligado com o motivo (decisão 1), o resto ligado", async () => {
     for (const e of draft.entries) e.value_locked = true;
     await openDraft();
 
     const mercado = card("MERCADO BOA VISTA");
-    expect(mercado).not.toHaveTextContent(/fatura já paga/i);
-    expect(within(mercado).queryByTestId("answer-note")).not.toBeInTheDocument();
+    expect(within(mercado).getByTestId("pair-consequences")).not.toHaveTextContent(/fatura já paga/i);
+    // Fatura paga não recebe compra nova (#557): o motivo fica escrito.
+    expect(within(mercado).getByRole("button", { name: "Não, adicionar agora" })).toBeDisabled();
+    expect(within(mercado).getByTestId("answer-note")).toHaveTextContent("Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.");
     expect(within(mercado).getByTestId("pair-consequences")).toHaveTextContent("Nada mais muda nela.");
     expect(within(mercado).getByRole("button", { name: "Não registrar" })).toBeEnabled();
     expect(within(mercado).getByRole("button", { name: "Sim, é esta" })).toBeEnabled();
@@ -399,7 +422,11 @@ describe("o passo Confirmar compras encontradas", () => {
     await user.click(screen.getByRole("button", { name: "Próximo: Compras em outra fatura →" }));
 
     expect(await screen.findByRole("heading", { name: "Compras em outra fatura" })).toBeInTheDocument();
-    expect(calls.find((c) => c.confirm).confirm).toEqual({ entry_ids: expect.any(Array), confirmed: true });
+    // Um lote só, tudo ou nada: nenhuma confirmação em separado.
+    expect(calls.filter((c) => c.batch)).toHaveLength(1);
+    expect(calls.find((c) => c.batch).batch).toHaveLength(4);
+    expect(calls.find((c) => c.batch).batch.every((b) => b.confirmed === true && Object.keys(b).length === 2)).toBe(true);
+    expect(calls.some((c) => c.confirm)).toBe(false);
     await waitFor(() => expect(calls).toContainEqual({ progress: { current_step: "other_invoice", reviewed_steps: ["suggested"] } }));
     expect(railStatus("Confirmar compras encontradas")).toBe("Conferido");
     expect(screen.getByText(/Nada a fazer aqui: nenhuma compra desta fatura está em outra fatura/)).toBeInTheDocument();
@@ -430,15 +457,17 @@ describe("o passo Revisar e concluir", () => {
 
     expect(await screen.findByTestId("summary-paired")).toHaveTextContent("4 compras já estavam no Fincla e ficam ligadas ao banco");
     expect(screen.getByTestId("summary-bank-value")).toHaveTextContent("1 compra passa a ter o valor do banco");
-    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("16 lançamentos não serão registrados · 16 ficam de fora nesta versão");
-    expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 890,84/);
-    expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*\+R\$ 1\.512,08/);
+    expect(screen.getByTestId("summary-created")).toHaveTextContent("5 transações novas entram no Fincla");
+    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("11 lançamentos não serão registrados · 11 ficam de fora nesta versão");
+    expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent("5 compras novas estão sem categoria e vão para Não classificado ao concluir.");
+    expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.414,34/);
+    expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 11,42/);
     expect(screen.getByTestId("payment-not-marked")).toHaveTextContent("O pagamento desta fatura não é marcado aqui: ele é conferido quando você concilia o extrato da conta corrente");
 
     await user.click(screen.getByRole("button", { name: "Concluir conciliação da fatura" }));
 
     expect(await screen.findByRole("heading", { name: "Fatura de dezembro conciliada" })).toBeInTheDocument();
-    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 890,84 · diferença registrada: +R$ 1.512,08.");
+    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 2.414,34 · diferença registrada: −R$ 11,42.");
     await user.click(screen.getByRole("button", { name: "Ver a fatura" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/invoices/2026/12` });
   });

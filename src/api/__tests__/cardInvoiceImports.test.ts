@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import contract from '../__fixtures__/card_invoice_import.example.json';
 import {
+  type CardInvoiceUndoPreview,
   invoiceDraftInProgressOf,
   isCardInvoiceResponse,
   normalizeCardInvoiceImport,
@@ -15,12 +16,18 @@ const KEYS = [
   'id', 'position', 'date', 'bank_description', 'amount', 'section', 'installment', 'next_installments', 'foreign_amount',
   'card_last4', 'classification', 'answer', 'confirmed', 'answerable', 'suggested_transaction_id', 'paired_transaction_id',
   'fincla_transaction', 'value_change', 'value_locked',
+  // A compra nova (#557).
+  'description', 'transaction_type', 'category_tag_id', 'suggested_category_tag_id', 'detail_tag_ids', 'installments_scope',
+  'new_purchase', 'created_transaction_id',
 ];
 
 describe('normalizeCardInvoiceImport', () => {
   it('a fixture traz todos os campos que a tela lê em cada lançamento', () => {
     for (const entry of contract.draft.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
     expect(Object.keys(contract.entry).sort()).toEqual([...KEYS].sort());
+    expect(Object.keys(contract.entry_new).sort()).toEqual([...KEYS].sort());
+    expect(Object.keys(contract.entry_installment).sort()).toEqual([...KEYS].sort());
+    for (const entry of contract.new_purchases_draft.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
   });
 
   it('converte o dinheiro em número + moeda, com o sinal do sentido do dinheiro', () => {
@@ -36,7 +43,7 @@ describe('normalizeCardInvoiceImport', () => {
     expect(loja.fincla_transaction?.value).toBe(108.33);
     expect(loja.fincla_transaction?.purchase_date).toBe('2026-07-14');
     expect(draft.invoice.total).toEqual({ amount: 890.87, currency: 'BRL' });
-    expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 890.84, difference: 1512.08, currency: 'BRL' });
+    expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 2414.34, difference: -11.42, currency: 'BRL' });
     expect(draft.bank_summary.payment).toEqual({ amount: { amount: -2900, currency: 'BRL' }, date: '2026-11-10' });
     expect(draft.final_difference).toBeNull();
     expect(draft.file_name).toBe(contract.draft.file_name);
@@ -61,7 +68,7 @@ describe('normalizeCardInvoiceImport', () => {
   it('a concluída traz a diferença registrada', () => {
     const done = normalizeCardInvoiceImport(contract.concluded as unknown as Record<string, unknown>);
     expect(done.status).toBe('concluded');
-    expect(done.final_difference).toEqual({ amount: 1512.08, currency: 'BRL' });
+    expect(done.final_difference).toEqual({ amount: -11.42, currency: 'BRL' });
     expect(done.entries.every((e) => !e.answerable)).toBe(true);
   });
 });
@@ -110,9 +117,10 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     for (const entry of contract.reimport.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
     const again = normalizeCardInvoiceImport(raw(contract.reimport));
     expect(again.file_check).toEqual(contract.reimport.file_check);
-    expect(again.summary.already_reconciled).toBe(4);
+    // Os 4 pares e as 5 compras criadas pela conclusão (#557) voltam como já conferidos.
+    expect(again.summary.already_reconciled).toBe(9);
     const conferred = again.entries.filter((e) => e.classification === 'reconciled');
-    expect(conferred).toHaveLength(4);
+    expect(conferred).toHaveLength(9);
     for (const entry of conferred) {
       expect(entry.answer).toBe('reconciled');
       expect(entry.confirmed).toBe(true);
@@ -128,12 +136,12 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     expect(draft.current_step).toBe('doubt');
     expect(draft.final_difference).toBeNull();
     expect(draft.expires_at).toBe(contract.list.imports[0].expires_at);
-    expect(draft.summary.already_reconciled).toBe(4);
+    expect(draft.summary.already_reconciled).toBe(9);
     expect(undone.undone_at).toBe(contract.list.imports[1].undone_at);
-    expect(undone.final_difference).toEqual({ amount: 1512.08, currency: 'BRL' });
+    expect(undone.final_difference).toEqual({ amount: -11.42, currency: 'BRL' });
     expect(concluded.latest_concluded).toBe(true);
-    expect(concluded.invoice.total).toEqual({ amount: 890.84, currency: 'BRL' });
-    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 890.84, difference: 1512.08, currency: 'BRL' });
+    expect(concluded.invoice.total).toEqual({ amount: 2414.34, currency: 'BRL' });
+    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 2414.34, difference: -11.42, currency: 'BRL' });
     expect(items.filter((i) => i.latest_concluded)).toHaveLength(1);
   });
 
@@ -148,12 +156,73 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     expect(preview.to_restore.find((r) => r.entity_id === '1')!.value_back).toBeNull();
     const refused = normalizeStatementUndoPreview(raw(contract.undo_preview_refused) as never);
     expect(refused.refusal?.code).toBe('not_latest');
+    // Recusa por fatura paga anterior (QA F3 BUG-01): a recusa diz qual fatura desmarcar.
+    const paid = normalizeStatementUndoPreview(raw(contract.undo_preview_refused_paid) as never) as CardInvoiceUndoPreview;
+    expect(paid.refusal).toMatchObject({ code: 'invoice_paid', invoice_year: 2026, invoice_month: 12 });
+    expect(paid.refusal?.message).toMatch(/^A fatura de dezembro\/2026 foi paga depois da conciliação\./);
   });
 
   it('a desfeita: status undone, undone_at e o que o desfazer apagou', () => {
     const undone = normalizeCardInvoiceImport(raw(contract.undone));
     expect(undone.status).toBe('undone');
     expect(undone.undone_at).toBe(contract.undone.undone_at);
-    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(0);
+    // As 5 compras que a conclusão criou (#557) são apagadas.
+    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(5);
+  });
+});
+
+// Terceira entrega (#557): compras novas, à vista e parceladas.
+describe('compras novas (#557)', () => {
+  const raw = (value: unknown) => JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+
+  it('à vista: o formulário (descrição, tipo travado, categoria, etiquetas) e sem compra parcelada', () => {
+    const padaria = normalizeCardInvoiceImport({ ...raw(contract.draft), entries: [raw(contract.entry_new)] }).entries[0];
+    expect(padaria.classification).toBe('new');
+    expect(padaria.answer).toBe('create');
+    expect(padaria.description).toBe('Padaria');
+    expect(padaria.transaction_type).toBe('expense');
+    expect(padaria.category_tag_id).toBe(contract.entry_new.category_tag_id);
+    expect(padaria.detail_tag_ids).toEqual(contract.entry_new.detail_tag_ids);
+    expect(padaria.installments_scope).toBeNull();
+    expect(padaria.new_purchase).toBeNull();
+    expect(padaria.created_transaction_id).toBeNull();
+  });
+
+  it('parcelada: a compra inteira, cada parcela na sua fatura, com o dinheiro convertido', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.new_purchases_draft));
+    const loja = draft.entries.find((e) => e.bank_description === 'LOJA DO BAIRRO 03/06')!;
+    expect(loja.installments_scope).toBe('full');
+    expect(loja.new_purchase?.installments_count).toBe(6);
+    expect(loja.new_purchase?.total_amount).toEqual({ amount: 599.4, currency: 'BRL' });
+    expect(loja.new_purchase?.installments).toHaveLength(6);
+    expect(loja.new_purchase?.installments[0]).toEqual({
+      number: 1, amount: 99.9, currency: 'BRL', invoice_year: 2026, invoice_month: 11, from_bank: false, invoice_paid: false,
+    });
+    expect(loja.new_purchase?.installments[2].from_bank).toBe(true);
+    const moveis = normalizeCardInvoiceImport({ ...raw(contract.draft), entries: [raw(contract.entry_installment)] }).entries[0];
+    expect(moveis.installments_scope).toBe('from_current');
+  });
+
+  it('o resumo conta as novas, as sem descrição (bloqueio) e as sem categoria', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.new_purchases_draft));
+    expect(draft.summary.to_create).toBe(5);
+    expect(draft.summary.missing_description).toBe(1);
+    expect(draft.summary.uncategorized).toBe(5);
+    expect(draft.blockers).toEqual([{ code: 'missing_description', count: 1 }]);
+    expect(draft.can_conclude).toBe(false);
+  });
+
+  it('sem os campos novos (backend anterior), a compra nova fica vazia e o resumo em zero', () => {
+    const old = raw(contract.draft);
+    const entry = (old.entries as Record<string, unknown>[])[0];
+    for (const key of ['description', 'transaction_type', 'category_tag_id', 'detail_tag_ids', 'installments_scope', 'new_purchase']) delete entry[key];
+    const summary = old.summary as Record<string, unknown>;
+    for (const key of ['to_create', 'missing_description', 'uncategorized']) delete summary[key];
+    const draft = normalizeCardInvoiceImport(old);
+    expect(draft.entries[0].description).toBe('');
+    expect(draft.entries[0].transaction_type).toBe('expense');
+    expect(draft.entries[0].detail_tag_ids).toEqual([]);
+    expect(draft.entries[0].new_purchase).toBeNull();
+    expect(draft.summary).toMatchObject({ to_create: 0, missing_description: 0, uncategorized: 0 });
   });
 });

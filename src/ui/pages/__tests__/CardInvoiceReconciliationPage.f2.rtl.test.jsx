@@ -32,7 +32,21 @@ let detail = clone(contract.draft);
 let preview = clone(contract.undo_preview);
 let detailResponse = null;
 
+// Categorias e etiquetas da organização: o id da Padaria é o da fixture `entry_new`.
+const CATEGORIES = [
+  { id: "a643ca47-c39a-40ca-9f67-c69e5aaec686", name: "alimentacao", label: "Alimentação", allowed_transaction_types: ["expense"], is_fallback: false },
+  { id: "cat-casa", name: "casa", label: "Casa", allowed_transaction_types: ["expense"], is_fallback: false },
+  { id: "cat-fallback", name: "nao-classificado", label: "Não classificado", allowed_transaction_types: ["expense", "income", "refund"], is_fallback: true },
+];
+const DETAILS = [
+  { id: "8a2803e0-8264-4821-be73-d56114679006", name: "lanche", label: "Lanche", parent_category_tag_id: "a643ca47-c39a-40ca-9f67-c69e5aaec686" },
+  { id: "det-moveis", name: "moveis", label: "Móveis", parent_category_tag_id: "cat-casa" },
+];
+
 const server = setupServer(
+  // As categorias e as etiquetas do formulário da compra nova (#557).
+  http.get("*/v1/tags", ({ request }) =>
+    HttpResponse.json({ tags: new URL(request.url).searchParams.get("tag_type") === "detalhe" ? DETAILS : CATEGORIES })),
   http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
   http.get(BASE, () => {
     calls.push({ list: true });
@@ -96,7 +110,7 @@ describe("Faturas conciliadas do cartão", () => {
     const [draftRow, undoneRow, concludedRow] = rows;
     expect(draftRow).toHaveTextContent("Fatura de dezembro/2026");
     expect(draftRow).toHaveTextContent("Em andamento");
-    expect(draftRow).toHaveTextContent("20 lançamentos · 4 já conferidos · 16 não registrados");
+    expect(draftRow).toHaveTextContent("20 lançamentos · 9 já conferidos · 11 não registrados");
     expect(draftRow).toHaveTextContent("Você parou em Decidir casos com dúvida.");
     expect(draftRow).toHaveTextContent("Se ficar parada, é descartada em 25/12/2026.");
     expect(within(draftRow).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
@@ -104,12 +118,12 @@ describe("Faturas conciliadas do cartão", () => {
     expect(within(draftRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(undoneRow).toHaveTextContent("Desfeita");
-    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: +R$ 1.512,08");
+    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: −R$ 11,42");
     expect(within(undoneRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(concludedRow).toHaveTextContent("Concluída");
-    expect(concludedRow).toHaveTextContent("20 lançamentos · 4 compras ligadas · 16 não registrados");
-    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: +R$ 1.512,08");
+    expect(concludedRow).toHaveTextContent("20 lançamentos · 4 compras ligadas · 5 compras novas adicionadas · 11 não registrados");
+    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: −R$ 11,42");
   });
 
   it("Continuar conciliação abre o rascunho; Ver conciliação, a concluída; Desfazer leva à tela do desfazer", async () => {
@@ -265,14 +279,15 @@ describe("reimportação do mesmo PDF", () => {
     openImport(detail.id);
     // Nada a responder: abre em Revisar e concluir.
     expect(await screen.findByRole("heading", { name: "Revisar e concluir" })).toBeInTheDocument();
-    expect(railStatus("Confirmar compras encontradas")).toBe("Nada a fazer · 4 já conferidos");
-    expect(screen.getByTestId("summary-already-reconciled")).toHaveTextContent("4 lançamentos já foram conferidos numa conciliação anterior: nada muda neles");
+    // Os 4 pares e as 5 compras novas que a conclusão criou (#557).
+    expect(railStatus("Confirmar compras encontradas")).toBe("Nada a fazer · 9 já conferidos");
+    expect(screen.getByTestId("summary-already-reconciled")).toHaveTextContent("9 lançamentos já foram conferidos numa conciliação anterior: nada muda neles");
     expect(screen.queryByTestId("summary-paired")).not.toBeInTheDocument();
 
     await user.click(railButton("Confirmar compras encontradas"));
 
     const rows = await screen.findAllByTestId("reconciled-row");
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(9);
     expect(rows[0]).toHaveTextContent("MERCADO BOA VISTA");
     expect(rows[0]).toHaveTextContent("Já conferido");
     expect(rows[0]).toHaveTextContent("É Mercado");
