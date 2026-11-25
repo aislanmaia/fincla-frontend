@@ -484,7 +484,7 @@ export default function App() {
       onContinueReconciliation={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: statementReconciliationPath(accountId, importId) }) : null} />,
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
       onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
-    cardInvoiceReconciliation: <CardInvoiceReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId} />,
+    cardInvoiceReconciliation: <CardInvoiceReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId} onConcluded={bumpTransactionsList} />,
     cardInvoiceUndo: <CardInvoiceUndoPage isMobile={isMobile} organizationId={session.activeOrgId} onUndone={bumpTransactionsList} />,
     statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}
       onUndone={bumpTransactionsList}

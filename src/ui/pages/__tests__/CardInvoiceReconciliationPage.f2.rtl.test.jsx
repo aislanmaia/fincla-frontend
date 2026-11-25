@@ -171,6 +171,57 @@ describe("Faturas conciliadas do cartão", () => {
   });
 });
 
+describe("a área de envio e a lista", () => {
+  const LIST_FAILED = { detail: { code: "internal", message: "Não deu para buscar as faturas." } };
+
+  it("com rascunho, a área já nasce menor: não aparece grande enquanto a lista carrega (como a do extrato)", async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    server.use(http.get(BASE, async () => { await gate; return HttpResponse.json(list); }));
+    params = { cardId: CARD.public_id };
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+
+    await screen.findByTestId("card-invoice-upload");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("button", { name: /Solte aqui o PDF da fatura/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ou solte aqui outra fatura/ })).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("button", { name: /Ou solte aqui outra fatura/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Solte aqui o PDF da fatura/ })).not.toBeInTheDocument();
+  });
+
+  it("se a lista não carrega, a área de envio aparece mesmo assim, com o erro", async () => {
+    server.use(http.get(BASE, () => HttpResponse.json(LIST_FAILED, { status: 500 })));
+    params = { cardId: CARD.public_id };
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não deu para buscar as faturas.");
+    expect(screen.getByRole("button", { name: /Solte aqui o PDF da fatura/ })).toBeInTheDocument();
+  });
+
+  it("a busca que falha depois tira a lista velha; a que volta a dar certo apaga o erro", async () => {
+    const user = userEvent.setup();
+    const [draftRow] = await openUpload();
+
+    // Descartou, mas a lista não veio: o rascunho descartado não fica na tela ao lado do erro.
+    server.use(http.get(BASE, () => HttpResponse.json(LIST_FAILED, { status: 500 })));
+    await user.click(within(draftRow).getByRole("button", { name: "Descartar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Sim, descartar" }));
+    expect(await screen.findByText("Não deu para buscar as faturas.")).toBeInTheDocument();
+    expect(screen.queryAllByTestId("reconciled-invoice")).toHaveLength(0);
+
+    // O reenvio do PDF busca a lista de novo, e agora ela vem: o erro some.
+    server.use(
+      http.get(BASE, () => HttpResponse.json(list)),
+      http.post(BASE, () => HttpResponse.json({ detail: contract.draft_in_progress }, { status: 409 })),
+    );
+    await user.upload(screen.getByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    expect(await screen.findAllByTestId("reconciled-invoice")).toHaveLength(2);
+    expect(screen.queryByText("Não deu para buscar as faturas.")).not.toBeInTheDocument();
+  });
+});
+
 describe("retomar o rascunho", () => {
   it("abre no passo em que a pessoa parou, com os passos já vistos", async () => {
     detail.current_step = "doubt";

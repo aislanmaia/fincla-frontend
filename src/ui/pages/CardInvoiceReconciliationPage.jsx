@@ -107,11 +107,15 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
   const [notice, setNotice] = useState("");
   usePreventFileDropOutside();
 
+  // A lista e o erro andam juntos: a busca que dá certo apaga o erro; a que falha tira a lista
+  // velha (um rascunho já descartado não pode continuar na tela ao lado do erro).
   const load = useCallback(async () => {
     try {
-      setItems(await listCardInvoiceImports(card.id, organizationId));
+      const data = await listCardInvoiceImports(card.id, organizationId);
+      setItems(data);
       setListError("");
     } catch (err) {
+      setItems(null);
       setListError(cardApiError(err));
     }
   }, [card.id, organizationId]);
@@ -152,17 +156,22 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
       </div>
       {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
       <div data-testid="start-upload-row" style={{ display: "flex", flexWrap: "wrap", gap: ROW_GAP, alignItems: "stretch", minHeight: 0 }}>
-        <div style={{ flex: `999 1 ${UPLOAD_BASIS}px`, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-          <StatementDropZone kind="invoice" compact={drafts.length > 0} touch={isMobile} readingName={sending && file ? file.name : ""} onFile={send} onError={setError} />
-          <ErrorNote>{error}</ErrorNote>
-          {inProgress ? (
-            <DraftInProgressNotice
-              inProgress={inProgress}
-              touch={isMobile}
-              onContinue={() => navigate({ to: cardInvoiceReconciliationPath(inProgress.creditCardPublicId ?? cardPublicId, inProgress.importId) })}
-            />
-          ) : null}
-        </div>
+        {/* A área só aparece depois da lista (como a do extrato, G4 OBS-12): o tamanho depende de
+            haver rascunho, e nascer grande para encolher em seguida faz a tela pular. Lista com erro:
+            aparece mesmo assim. */}
+        {items || listError ? (
+          <div style={{ flex: `999 1 ${UPLOAD_BASIS}px`, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+            <StatementDropZone kind="invoice" compact={drafts.length > 0} touch={isMobile} readingName={sending && file ? file.name : ""} onFile={send} onError={setError} />
+            <ErrorNote>{error}</ErrorNote>
+            {inProgress ? (
+              <DraftInProgressNotice
+                inProgress={inProgress}
+                touch={isMobile}
+                onContinue={() => navigate({ to: cardInvoiceReconciliationPath(inProgress.creditCardPublicId ?? cardPublicId, inProgress.importId) })}
+              />
+            ) : null}
+          </div>
+        ) : null}
         {listError ? <div style={{ flex: "1 1 300px", minWidth: 0 }}><ErrorNote>{listError}</ErrorNote></div> : null}
         {items ? (
           <ReconciledInvoicesList
@@ -518,7 +527,7 @@ function UndoneInvoiceView({ invoiceImport, touch, onOpenInvoice, onNewUpload })
 // Rascunho
 // --------------------------------------------------------------------------------------------
 
-function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobile }) {
+function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobile, onConcluded = null }) {
   const navigate = useNavigate();
   const cardId = card.id;
   const [invoiceImport, setImportRaw] = useState(null);
@@ -654,6 +663,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     setActionError("");
     try {
       setImport(await concludeCardInvoiceImport(cardId, organizationId, importId));
+      // A conclusão mexe nas transações e na fatura: as outras telas buscam de novo (como no desfazer).
+      onConcluded?.();
     } catch (err) {
       setActionError(cardApiError(err));
       await reload().catch(() => {});
@@ -801,7 +812,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   );
 }
 
-export function CardInvoiceReconciliationPage({ organizationId, isMobile = false }) {
+export function CardInvoiceReconciliationPage({ organizationId, isMobile = false, onConcluded = null }) {
   const { cardId: cardPublicId, importId } = useParams({ strict: false });
   const { card, error, loaded } = useCardOf(organizationId, cardPublicId);
   if (!organizationId || !cardPublicId) return null;
@@ -810,7 +821,7 @@ export function CardInvoiceReconciliationPage({ organizationId, isMobile = false
   else if (!loaded) body = <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando o cartão…</p>;
   else if (!card) body = <ErrorNote>Cartão não encontrado ou sem acesso.</ErrorNote>;
   else if (importId) {
-    body = <InvoiceDraftView key={`${cardPublicId}:${importId}`} organizationId={organizationId} card={card} cardPublicId={cardPublicId} importId={importId} isMobile={isMobile} />;
+    body = <InvoiceDraftView key={`${cardPublicId}:${importId}`} organizationId={organizationId} card={card} cardPublicId={cardPublicId} importId={importId} isMobile={isMobile} onConcluded={onConcluded} />;
   } else {
     body = <InvoiceUploadView key={cardPublicId} organizationId={organizationId} card={card} cardPublicId={cardPublicId} isMobile={isMobile} />;
   }

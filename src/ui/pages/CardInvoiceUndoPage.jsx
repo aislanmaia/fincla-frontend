@@ -36,9 +36,12 @@ export function CardInvoiceUndoPage({ organizationId, isMobile = false, onUndone
   else if (!loaded) body = <p style={{ ...G, fontSize: 13, color: T.inkLight }}>Carregando o cartão…</p>;
   else if (!card) body = <ErrorNote>Cartão não encontrado ou sem acesso.</ErrorNote>;
   else {
+    // `key`: outra conciliação na mesma rota começa do zero (sem confirmação aberta, fim ou erro da anterior).
+    const previewKey = `${organizationId}|${card.id}|${importId}`;
     body = (
       <UndoPreviewScreen
-        previewKey={`${organizationId}|${card.id}|${importId}`}
+        key={previewKey}
+        previewKey={previewKey}
         loadPreview={() => previewCardInvoiceImportUndo(card.id, organizationId, importId)}
         runUndo={() => undoCardInvoiceImport(card.id, organizationId, importId)}
         words={INVOICE_UNDO_WORDS}

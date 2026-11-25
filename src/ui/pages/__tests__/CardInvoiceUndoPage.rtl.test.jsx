@@ -136,6 +136,45 @@ describe("desfazer", () => {
   });
 });
 
+describe("trocar de conciliação na mesma rota", () => {
+  it("de A para B: a confirmação aberta de A não passa para B, e B carrega a própria prévia", async () => {
+    const OTHER = "other-import";
+    server.use(http.get(`*/v1/credit-cards/${CARD.id}/invoice-imports/${OTHER}/undo-preview`, () => {
+      calls.push({ preview: OTHER });
+      return HttpResponse.json({ ...clone(contract.undo_preview), import_id: OTHER });
+    }));
+    const user = userEvent.setup();
+    params = { cardId: CARD.public_id, importId: IMPORT };
+    const { rerender } = render(<CardInvoiceUndoPage organizationId={ORG} />);
+    await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
+    expect(screen.getByRole("group", { name: "Confirmar desfazer conciliação" })).toBeInTheDocument();
+
+    params = { cardId: CARD.public_id, importId: OTHER };
+    rerender(<CardInvoiceUndoPage organizationId={ORG} />);
+
+    expect(await screen.findByRole("button", { name: "Desfazer conciliação" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Confirmar desfazer conciliação" })).not.toBeInTheDocument();
+    expect(calls).toContainEqual({ preview: OTHER });
+  });
+
+  it("de A desfeita para B: o fim de A não aparece em B", async () => {
+    const OTHER = "other-import";
+    server.use(http.get(`*/v1/credit-cards/${CARD.id}/invoice-imports/${OTHER}/undo-preview`, () => HttpResponse.json({ ...clone(contract.undo_preview), import_id: OTHER })));
+    const user = userEvent.setup();
+    params = { cardId: CARD.public_id, importId: IMPORT };
+    const { rerender } = render(<CardInvoiceUndoPage organizationId={ORG} />);
+    await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
+    await user.click(screen.getByRole("button", { name: "Sim, desfazer conciliação" }));
+    expect(await screen.findByRole("heading", { name: "Conciliação desfeita" })).toBeInTheDocument();
+
+    params = { cardId: CARD.public_id, importId: OTHER };
+    rerender(<CardInvoiceUndoPage organizationId={ORG} />);
+
+    expect(await screen.findByText("Se você desfizer esta conciliação:")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Conciliação desfeita" })).not.toBeInTheDocument();
+  });
+});
+
 describe("recusas", () => {
   it("não é a mais recente do cartão: o motivo no lugar do botão, e o que ela fez", async () => {
     preview = clone(contract.undo_preview_refused);

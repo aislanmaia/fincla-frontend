@@ -223,6 +223,8 @@ function ConfirmBox({ preview, words, touch, undoing, onConfirm, onCancel }) {
  * muda), mostra o que vai acontecer e desfaz (`runUndo`) só depois do "Sim" na página. Recusado
  * pelo servidor: o erro aparece e a prévia é buscada de novo (o estado pode ter mudado noutra aba).
  * `renderUndone(deleted)`: o fim (`deleted` = quantas o backend apagou; `null` = já estava desfeita).
+ * Quem usa passa também `key={previewKey}`: a confirmação, o fim e o erro são de UMA conciliação, e
+ * trocar de conciliação na mesma rota remonta a tela do zero.
  */
 export function UndoPreviewScreen({ previewKey, loadPreview, runUndo, words = STATEMENT_UNDO_WORDS, touch = false, renderUndone, onBack, backLabel = "Voltar para a conciliação", onUndone = null }) {
   const [preview, setPreview] = useState(null);

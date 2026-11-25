@@ -53,6 +53,8 @@ export function StatementImportUndoPage({ organizationId, isMobile = false, onOp
 
   const back = () => navigate({ to: "/accounts" });
   const openTransactions = onOpenAccountTransactions ? () => onOpenAccountTransactions(accountId) : null;
+  // `key`: outra importação na mesma rota começa do zero (sem confirmação aberta, fim ou erro da anterior).
+  const previewKey = `${organizationId}|${accountId}|${importId}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -64,7 +66,8 @@ export function StatementImportUndoPage({ organizationId, isMobile = false, onOp
         </p>
       </div>
       <UndoPreviewScreen
-        previewKey={`${organizationId}|${accountId}|${importId}`}
+        key={previewKey}
+        previewKey={previewKey}
         loadPreview={() => previewStatementImportUndo(accountId, organizationId, importId)}
         runUndo={() => undoStatementImport(accountId, organizationId, importId)}
         words={STATEMENT_UNDO_WORDS}
