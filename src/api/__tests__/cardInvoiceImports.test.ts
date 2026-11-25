@@ -11,13 +11,14 @@ import {
   normalizeCardInvoiceImportListItem,
   normalizeCardInvoiceUndoPreview,
   normalizeInvoiceCandidate,
+  normalizeInvoiceEntry,
 } from '../cardInvoiceImports';
 import { normalizeStatementUndoPreview } from '../statementImports';
 
 const KEYS = [
   'id', 'position', 'date', 'bank_description', 'amount', 'section', 'installment', 'next_installments', 'foreign_amount',
   'card_last4', 'classification', 'answer', 'confirmed', 'answerable', 'suggested_transaction_id', 'paired_transaction_id',
-  'fincla_transaction', 'value_change', 'value_locked',
+  'fincla_transaction', 'value_change', 'next_adjustment', 'value_locked',
   // A compra nova (#557).
   'description', 'transaction_type', 'category_tag_id', 'suggested_category_tag_id', 'detail_tag_ids', 'installments_scope',
   'new_purchase', 'created_transaction_id',
@@ -419,5 +420,33 @@ describe('dúvidas e compras em outra fatura (#559)', () => {
     expect(draft.entries.every((e) => e.candidates.length === 0 && !e.movable && e.other_invoice === null)).toBe(true);
     expect(draft.summary.to_move).toBe(0);
     expect(draft.changed_since_read).toBe(false);
+  });
+});
+
+describe('next_adjustment (#561)', () => {
+  it('normaliza a lista das próximas parcelas e a diferença da compra', () => {
+    const on = normalizeInvoiceEntry(contract.entry as never).next_adjustment;
+    expect(on?.adjust).toBe(true);
+    expect(on?.installments).toHaveLength(7);
+    expect(on?.installments[0]).toEqual({
+      number: 6, transaction_id: 8, from: { amount: 108.33, currency: 'BRL' }, to: { amount: 108.27, currency: 'BRL' },
+      invoice: { id: 6, year: 2027, month: 1, status: 'open' }, locked: null,
+    });
+    expect(on?.purchase_difference).toEqual({ amount: 0, currency: 'BRL' });
+    const off = normalizeInvoiceEntry(contract.entry_adjust_off as never).next_adjustment;
+    expect(off?.adjust).toBe(false);
+    expect(off?.purchase_difference).toEqual({ amount: 0.42, currency: 'BRL' });
+  });
+
+  it('null fica null; dinheiro ausente vira null (não sabemos), nunca zero', () => {
+    expect(normalizeInvoiceEntry({ ...contract.entry, next_adjustment: null } as never).next_adjustment).toBeNull();
+    const raw = structuredClone(contract.entry_adjust_off) as { next_adjustment: Record<string, unknown> & { installments: Record<string, unknown>[] } };
+    raw.next_adjustment.purchase_difference = null;
+    raw.next_adjustment.installments[0].to = null;
+    raw.next_adjustment.installments[0].locked = 'invoice_paid';
+    const adj = normalizeInvoiceEntry(raw as never).next_adjustment;
+    expect(adj?.purchase_difference).toBeNull();
+    expect(adj?.installments[0].to).toBeNull();
+    expect(adj?.installments[0].locked).toBe('invoice_paid');
   });
 });
