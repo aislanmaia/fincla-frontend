@@ -1,6 +1,6 @@
 // api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
 // desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação; terceira #557: compras novas,
-// à vista e parceladas).
+// à vista e parceladas; quarta #558: encargos, tarifas e estornos, com o grupo de encargos).
 //
 // O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
 // do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
@@ -23,9 +23,12 @@ export type InvoiceReconciliationStep =
 export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
 /**
  * `pair`, `ignore` e (#557) `create`; as próximas fatias trazem `move`, `move_series`.
- * `reconciled` só vem do servidor (nunca se envia).
+ * `reconciled` e (#558) `pair_sum` (o grupo de encargos somado numa transação, respondido pelo
+ * grupo) só vêm do servidor: nunca se enviam num lançamento.
  */
-export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled';
+export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled' | 'pair_sum';
+/** As respostas do grupo de encargos (#558): Sim, somados em <transação> · Não, adicionar cada um · Não registrar. */
+export type ChargeGroupAnswer = 'pair_sum' | 'create' | 'ignore';
 /** A seção do PDF onde o banco imprimiu o lançamento. */
 export type InvoiceSection = 'purchases' | 'international' | 'services' | 'charges';
 export type CardInvoiceImportStatus = 'draft' | 'concluded' | 'undone';
@@ -137,6 +140,37 @@ export interface InvoiceEntry {
   new_purchase: NewPurchase | null;
   /** Depois de concluir com `create`: a transação criada nesta fatura (na parcelada, a parcela N). */
   created_transaction_id: number | null;
+  /** O grupo de encargos do lançamento (#558): a resposta e o confirmar vêm pelo grupo. `null` fora dele. */
+  charge_group_id: string | null;
+  /**
+   * "Adicionar" é uma resposta possível agora (#558, QA F3 OBS-09): `false` em fatura já paga, em
+   * crédito parcelado e fora dos passos respondíveis. Sem ele, o formulário fica só leitura.
+   */
+  addable: boolean;
+}
+
+/**
+ * O grupo de encargos do passo 4 (#558): os lançamentos da seção Encargos sem par, respondidos
+ * juntos. `total` = a Soma, no sentido do dinheiro (negativa).
+ */
+export interface ChargeGroup {
+  id: string;
+  /** Os lançamentos do grupo, na ordem do banco. */
+  entry_ids: string[];
+  total: number;
+  currency: string | null;
+  /** A transação cujo valor é a soma, ao centavo ("A soma bate"); `null` = nenhuma bate. */
+  suggested_transaction_id: number | null;
+  paired_transaction_id: number | null;
+  /** `null` = sem resposta (bloqueia o concluir). */
+  answer: ChargeGroupAnswer | null;
+  confirmed: boolean;
+  /** `false` numa conciliação concluída ou desfeita. */
+  answerable: boolean;
+  /** "Não, adicionar cada um" é possível: `false` em fatura já paga (decisão 1). */
+  addable: boolean;
+  /** A transação somada, ao vivo, também com `create`/`ignore` (a tela a mostra cinza listrada). */
+  fincla_transaction: InvoiceFinclaTransaction | null;
 }
 
 export interface InvoiceRef {
@@ -199,6 +233,8 @@ export interface CardInvoiceImportSummary {
   missing_description: number;
   /** `create` sem categoria: vão para Não classificado ao concluir. */
   uncategorized: number;
+  /** Lançamentos do grupo de encargos respondidos `pair_sum` ("encargos já somados", #558). */
+  summed_charges: number;
 }
 
 /** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
@@ -229,6 +265,8 @@ export interface CardInvoiceImport {
   file_name: string | null;
   bank_summary: InvoiceBankSummary;
   entries: InvoiceEntry[];
+  /** O grupo de encargos (#558, no máximo um): vazio quando não há encargos sem par. */
+  charge_groups: ChargeGroup[];
   summary: CardInvoiceImportSummary;
   difference_now: InvoiceDifferenceNow;
   can_conclude: boolean;
@@ -271,6 +309,16 @@ export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
 
 /** O desfazer feito: `status: 'undone'`, com quantas transações ele apagou. */
 export type UndoneCardInvoiceImport = CardInvoiceImport & { deleted_transactions: number | null };
+
+/**
+ * O grupo inteiro (#558): responder confirma, a menos que `confirmed` venha junto; só `{confirmed}`
+ * mantém a resposta. `answer: null` (enviado) volta o grupo a sem resposta (`confirmed: false`): o
+ * "Desfazer escolha" da primeira resposta de um grupo que começou sem resposta.
+ */
+export interface UpdateChargeGroupRequest {
+  answer?: ChargeGroupAnswer | null;
+  confirmed?: boolean;
+}
 
 export interface UpdateInvoiceEntryRequest {
   answer?: 'pair' | 'ignore' | 'create';
@@ -354,8 +402,25 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     installments_scope: (raw.installments_scope as InstallmentsScope | null) ?? null,
     new_purchase: normalizeNewPurchase(raw.new_purchase as Raw | null),
     created_transaction_id: (raw.created_transaction_id as number | null) ?? null,
+    charge_group_id: (raw.charge_group_id as string | null) ?? null,
+    // Um backend sem o campo (anterior à #558): Adicionar vale onde a resposta vale.
+    addable: raw.addable === undefined ? Boolean(raw.answerable) : Boolean(raw.addable),
   };
 };
+
+export const normalizeChargeGroup = (raw: Raw): ChargeGroup => ({
+  id: String(raw.id),
+  entry_ids: (raw.entry_ids as string[]) ?? [],
+  total: toAmount(raw.total as WireMoney),
+  currency: toCurrency(raw.total),
+  suggested_transaction_id: (raw.suggested_transaction_id as number | null) ?? null,
+  paired_transaction_id: (raw.paired_transaction_id as number | null) ?? null,
+  answer: (raw.answer as ChargeGroupAnswer | null) ?? null,
+  confirmed: Boolean(raw.confirmed),
+  answerable: Boolean(raw.answerable),
+  addable: Boolean(raw.addable),
+  fincla_transaction: normalizeFincla(raw.fincla_transaction as Raw | null),
+});
 
 const normalizeBankSummary = (raw: Raw | null | undefined): InvoiceBankSummary => {
   const r = raw ?? {};
@@ -397,6 +462,7 @@ const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
     to_create: summary.to_create ?? 0,
     missing_description: summary.missing_description ?? 0,
     uncategorized: summary.uncategorized ?? 0,
+    summed_charges: summary.summed_charges ?? 0,
   };
 };
 
@@ -424,6 +490,7 @@ export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
     card_check: (raw.card_check as CardCheck) ?? { status: 'same_card', file_last4: null, suggested_card: null },
     bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
     entries: ((raw.entries as Raw[]) ?? []).map(normalizeInvoiceEntry),
+    charge_groups: ((raw.charge_groups as Raw[]) ?? []).map(normalizeChargeGroup),
     reviewed_steps: (raw.reviewed_steps as InvoiceReconciliationStep[]) ?? [],
     file_check: {
       status: fileCheck?.status ?? 'new',
@@ -520,14 +587,38 @@ export const updateCardInvoiceEntry = async (
   return normalizeInvoiceEntry(response.data);
 };
 
-/** O mesmo, em lote (tudo ou nada). */
+/**
+ * O mesmo, em lote (tudo ou nada). `groups` (#558) responde/confirma grupos de encargos como a rota
+ * do grupo, aplicados depois dos `entries`, na mesma transação: o "Próximo" que confirma lançamentos
+ * e o grupo é uma chamada só. Só a lista que vier vai no corpo.
+ */
 export const updateCardInvoiceEntries = async (
   cardId: number,
   organizationId: string,
   importId: string,
   entries: (UpdateInvoiceEntryRequest & { id: string })[],
+  groups: (UpdateChargeGroupRequest & { id: string })[] = [],
 ): Promise<CardInvoiceImport> => {
-  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries`, { entries }, {
+  const body = groups.length ? { ...(entries.length ? { entries } : null), groups } : { entries };
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/**
+ * Responde (ou só confirma) o grupo de encargos inteiro (#558). Devolve o rascunho: a resposta vale
+ * para todos os lançamentos do grupo. Um lançamento do grupo nunca é respondido sozinho (`422`
+ * `card_invoice_import.charge_group_member`).
+ */
+export const updateCardInvoiceChargeGroup = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  groupId: string,
+  body: UpdateChargeGroupRequest,
+): Promise<CardInvoiceImport> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/charge-groups/${groupId}`, body, {
     params: { organization_id: organizationId },
   });
   return normalizeCardInvoiceImport(response.data);

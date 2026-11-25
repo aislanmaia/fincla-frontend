@@ -1,7 +1,8 @@
 // Os 8 passos da conciliação da fatura do cartão (spec fincla-api#554), com os textos do protótipo
 // v16. É o segundo conjunto de passos, ao lado do `STEPS` do extrato (`reconciliationSteps.js`):
 // mesmo molde, palavras de fatura ("compras", "lançamentos"). A primeira entrega (#555) responde o
-// passo 1, a terceira (#557) o passo 5 "Compras novas"; os lançamentos dos outros passos aparecem só
+// passo 1, a terceira (#557) o passo 5 "Compras novas", a quarta (#558) o passo 4 "Encargos, tarifas
+// e estornos", onde o grupo de encargos é UM item da fila; os lançamentos dos outros passos aparecem só
 // para leitura, "Fica de fora nesta versão". Cada fluxo tem a sua contagem de passos (decisão 9): o progresso conta os 6 passos de
 // lançamentos, como no protótipo.
 import { plural } from "../../plural.js";
@@ -75,11 +76,71 @@ export function invoiceEntriesOfStep(stepKey, entries) {
   return entries.filter((e) => e.classification === stepKey);
 }
 
+/** O item da fila que é o grupo de encargos (#558), e não um lançamento. */
+export const CHARGE_GROUP = "charge_group";
+export const isChargeGroupItem = (item) => item?.kind === CHARGE_GROUP;
+
+/**
+ * O grupo de encargos como um item da fila do passo 4 (#558): a resposta e o confirmar são do
+ * grupo; `members` são os lançamentos dele, na ordem do banco. `date` é a do último (a do par).
+ */
+export function chargeGroupItem(group, entries) {
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const members = group.entry_ids.map((id) => byId.get(id)).filter(Boolean);
+  return {
+    kind: CHARGE_GROUP,
+    id: group.id,
+    group,
+    members,
+    classification: "charges",
+    answer: group.answer,
+    confirmed: group.confirmed,
+    answerable: group.answerable,
+    amount: group.total,
+    currency: group.currency,
+    date: members.at(-1)?.date ?? "",
+  };
+}
+
+/**
+ * Os itens de um passo, como a fila os mostra: no passo 4 o grupo de encargos vem primeiro, como um
+ * item só, no lugar dos lançamentos dele (nenhum é respondido sozinho, #558). Nos outros passos, os
+ * lançamentos.
+ */
+export function invoiceStepItems(stepKey, invoiceImport) {
+  const entries = invoiceEntriesOfStep(stepKey, invoiceImport.entries);
+  const groups = stepKey === "charges" ? (invoiceImport.charge_groups ?? []) : [];
+  if (!groups.length) return entries;
+  const grouped = new Set(groups.flatMap((g) => g.entry_ids));
+  return [...groups.map((g) => chargeGroupItem(g, invoiceImport.entries)), ...entries.filter((e) => !grouped.has(e.id))];
+}
+
+/**
+ * Quantos itens, com o grupo de encargos (#558) pelo nome: "1 grupo de encargos", "1 grupo de
+ * encargos e 2 lançamentos", "3 lançamentos". O grupo é um item da fila, mas não é "um lançamento".
+ */
+export function itemsCountText(items, one = "lançamento", many = "lançamentos") {
+  const groups = items.filter(isChargeGroupItem).length;
+  const rest = items.length - groups;
+  return [
+    groups ? plural(groups, "grupo de encargos", "grupos de encargos") : null,
+    rest || !groups ? plural(rest, one, many) : null,
+  ].filter(Boolean).join(" e ");
+}
+
 /** Os que a pessoa responde neste passo (os outros são "Fica de fora nesta versão"). */
 export const answerableEntries = (entries) => entries.filter((e) => e.answerable);
 
-/** "Adicionar" com a descrição vazia: bloqueia o concluir (fincla-api#557). */
-export const missingDescription = (entry) => entry.answer === "create" && !String(entry.description ?? "").trim();
+const blankDescription = (entry) => !String(entry.description ?? "").trim();
+
+/**
+ * "Adicionar" com a descrição vazia: bloqueia o concluir (fincla-api#557). No grupo de encargos
+ * (#558), "Não, adicionar cada um" com um lançamento sem descrição.
+ */
+export const missingDescription = (entry) => {
+  if (entry.answer !== "create") return false;
+  return isChargeGroupItem(entry) ? entry.members.some(blankDescription) : blankDescription(entry);
+};
 
 /**
  * Sem resposta (os "Fica de fora nesta versão" já vêm respondidos). Uma compra nova sem descrição
@@ -98,7 +159,11 @@ export const unconfirmedInvoiceSuggestions = (entries) =>
  * Respondido = confirmado pela pessoa: a sugestão ("Sim, é esta" já marcado) e a compra nova
  * ("Adicionar" já marcado, #557) só depois do Confirmar; uma resposta escolhida já confirma.
  */
-export const isInvoiceEntryAnswered = (entry) => (entry.answerable && !entry.confirmed ? false : isAnswered(entry));
+export const isInvoiceEntryAnswered = (entry) => {
+  if (entry.answerable && !entry.confirmed) return false;
+  if (isChargeGroupItem(entry)) return entry.answer !== null && !missingDescription(entry);
+  return isAnswered(entry);
+};
 
 /** O primeiro passo com algo a responder; sem nenhum, o resumo. */
 export function firstInvoiceStepWithWork(entries) {
@@ -115,11 +180,11 @@ export function firstInvoiceStepWithWork(entries) {
 export function invoiceStepStatus(stepKey, invoiceImport, passed) {
   if (stepKey === "total") return { tone: "neutral", text: "Depois dos lançamentos" };
   if (stepKey === "summary") return { tone: "neutral", text: "Último passo" };
-  const entries = invoiceEntriesOfStep(stepKey, invoiceImport.entries);
+  const entries = invoiceStepItems(stepKey, invoiceImport);
   // Os já conferidos (reimportação) aparecem no passo 1, só para leitura.
   const conferred = stepKey === "suggested" ? reconciledEntries(invoiceImport.entries).length : 0;
-  const pending = pendingEntries(entries).length;
-  if (pending) return { tone: "warn", text: plural(pending, "lançamento para responder", "lançamentos para responder") };
+  const pending = pendingEntries(entries);
+  if (pending.length) return { tone: "warn", text: `${itemsCountText(pending)} para responder` };
   const unconfirmed = unconfirmedEntries(entries).length;
   if (unconfirmed) return { tone: "ready", text: plural(unconfirmed, "escolha para confirmar", "escolhas para confirmar") };
   if (passed) return { tone: "done", text: "Conferido" };
@@ -174,12 +239,24 @@ export function invoiceSummaryRows(invoiceImport) {
   };
   row(pairs.length, "compra já estava no Fincla e fica ligada ao banco", "compras já estavam no Fincla e ficam ligadas ao banco", "summary-paired");
   row(bankValue, "compra passa a ter o valor do banco", "compras passam a ter o valor do banco", "summary-bank-value");
+  // O grupo de encargos somado numa transação (#558): os lançamentos ficam ligados a ela, nada mais muda.
+  const summed = entries.filter((e) => e.answer === "pair_sum");
+  const summedInto = (invoiceImport.charge_groups ?? []).find((g) => g.answer === "pair_sum")?.fincla_transaction?.description;
+  row(
+    summed.length,
+    "encargo já estava somado no Fincla",
+    "encargos já estavam somados no Fincla",
+    "summary-summed-charges",
+    summedInto ? `em “${summedInto}”, que fica ligada a ${summed.length === 1 ? "ele" : "todos eles"}` : null,
+  );
   // Compras novas (#557): as transações que entram, com as parcelas das parceladas.
   const creates = entries.filter((e) => e.answer === "create");
   const transactions = creates.reduce((sum, e) => sum + createdTransactionCount(e), 0);
   const paidInstallments = creates.reduce((sum, e) => sum + createdInstallments(e).filter((i) => i.invoice_paid).length, 0);
+  const refunds = creates.filter((e) => e.transaction_type === "refund").length;
   const createdNote = [
     transactions !== creates.length ? `de ${plural(creates.length, "compra", "compras")}, com as parcelas` : null,
+    refunds ? `${plural(refunds, "estorno diminui", "estornos diminuem")} o total da fatura` : null,
     paidInstallments ? `${plural(paidInstallments, "parcela entra", "parcelas entram")} já paga${paidInstallments === 1 ? "" : "s"} em fatura já paga` : null,
   ].filter(Boolean).join(" · ") || null;
   row(transactions, "transação nova entra no Fincla", "transações novas entram no Fincla", "summary-created", createdNote);

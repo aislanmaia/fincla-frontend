@@ -132,8 +132,8 @@ describe("o topo da conciliação da fatura", () => {
     expect(screen.getByTestId("invoice-progress")).toHaveTextContent("Seu progresso: 0 de 6 passos conferidos");
     const difference = screen.getByTestId("invoice-difference");
     expect(difference).toHaveTextContent("Diferença da fatura agora");
-    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 11,42");
-    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 2.414,34");
+    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 0,40");
+    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 2.403,32");
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
   });
 
@@ -442,10 +442,10 @@ describe("o passo Confirmar compras encontradas", () => {
     expect(within(list).getAllByTestId("read-only-row")).toHaveLength(3);
     expect(within(list).getAllByText("Fica de fora nesta versão")).toHaveLength(3);
     expect(screen.queryByRole("group", { name: "Esta compra do banco já está no Fincla?" })).not.toBeInTheDocument();
-    // Estorno é crédito: mostrado com "−" (diminui a fatura).
+    // Encargos, tarifas e estornos responde desde a #558 (ver o teste .f4): nada fica de fora ali.
     await user.click(railButton("Encargos, tarifas e estornos"));
-    const estorno = (await screen.findAllByTestId("read-only-row")).find((r) => r.textContent.includes("ESTORNO LOJA MODA"));
-    expect(estorno).toHaveTextContent("−R$");
+    expect(await screen.findByTestId("charge-group-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("read-only-entries")).not.toBeInTheDocument();
   });
 });
 
@@ -457,17 +457,21 @@ describe("o passo Revisar e concluir", () => {
 
     expect(await screen.findByTestId("summary-paired")).toHaveTextContent("4 compras já estavam no Fincla e ficam ligadas ao banco");
     expect(screen.getByTestId("summary-bank-value")).toHaveTextContent("1 compra passa a ter o valor do banco");
-    expect(screen.getByTestId("summary-created")).toHaveTextContent("5 transações novas entram no Fincla");
-    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("11 lançamentos não serão registrados · 11 ficam de fora nesta versão");
-    expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent("5 compras novas estão sem categoria e vão para Não classificado ao concluir.");
-    expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.414,34/);
-    expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 11,42/);
+    // O grupo de encargos somado (#558) e os encargos, tarifas e estornos que entram como transações.
+    expect(screen.getByTestId("summary-summed-charges")).toHaveTextContent("4 encargos já estavam somados no Fincla · em “Encargos do cartão”, que fica ligada a todos eles");
+    expect(screen.getByTestId("summary-created")).toHaveTextContent("9 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
+    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("3 lançamentos não serão registrados · 3 ficam de fora nesta versão");
+    expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent(
+      "9 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
+    );
+    expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.403,32/);
+    expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 0,40/);
     expect(screen.getByTestId("payment-not-marked")).toHaveTextContent("O pagamento desta fatura não é marcado aqui: ele é conferido quando você concilia o extrato da conta corrente");
 
     await user.click(screen.getByRole("button", { name: "Concluir conciliação da fatura" }));
 
     expect(await screen.findByRole("heading", { name: "Fatura de dezembro conciliada" })).toBeInTheDocument();
-    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 2.414,34 · diferença registrada: −R$ 11,42.");
+    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 2.403,32 · diferença registrada: −R$ 0,40.");
     await user.click(screen.getByRole("button", { name: "Ver a fatura" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/invoices/2026/12` });
   });

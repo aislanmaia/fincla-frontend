@@ -971,6 +971,7 @@ function scrollToCard(card) {
  * Classe por causa da foto antes da troca: ao sumir (o último pendente respondido) a página fica
  * mais curta embaixo; com a rolagem no fim, o navegador a puxaria para trás e a lista desceria. A
  * rolagem de antes fica segura pelo espaço provisório, como nas trocas cartão ↔ linha.
+ * `pendingText` troca o "N lançamentos" (ex.: o grupo de encargos da fatura, pelo nome).
  */
 export class GoToPendingButton extends Component {
   ref = createRef();
@@ -1123,9 +1124,9 @@ export class GoToPendingButton extends Component {
   };
 
   render() {
-    const { queue, noun = ENTRY_NOUN, isMobile = false, indent = 0 } = this.props;
+    const { queue, noun = ENTRY_NOUN, isMobile = false, indent = 0, pendingText = null } = this.props;
     if (!queue?.pending) return null;
-    const what = plural(queue.pending, noun.one, noun.many);
+    const what = pendingText ?? plural(queue.pending, noun.one, noun.many);
     const label = `Falta responder ${what} deste passo`;
     const Arrow = this.state.direction === "down" ? ArrowDown : ArrowUp;
     return (

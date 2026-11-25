@@ -19,6 +19,8 @@ const KEYS = [
   // A compra nova (#557).
   'description', 'transaction_type', 'category_tag_id', 'suggested_category_tag_id', 'detail_tag_ids', 'installments_scope',
   'new_purchase', 'created_transaction_id',
+  // Encargos, tarifas e estornos (#558).
+  'charge_group_id', 'addable',
 ];
 
 describe('normalizeCardInvoiceImport', () => {
@@ -42,8 +44,8 @@ describe('normalizeCardInvoiceImport', () => {
     expect(loja.value_change).toEqual({ from: 108.33, to: 108.3, currency: 'BRL' });
     expect(loja.fincla_transaction?.value).toBe(108.33);
     expect(loja.fincla_transaction?.purchase_date).toBe('2026-07-14');
-    expect(draft.invoice.total).toEqual({ amount: 890.87, currency: 'BRL' });
-    expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 2414.34, difference: -11.42, currency: 'BRL' });
+    expect(draft.invoice.total).toEqual({ amount: 903.46, currency: 'BRL' });
+    expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 2403.32, difference: -0.4, currency: 'BRL' });
     expect(draft.bank_summary.payment).toEqual({ amount: { amount: -2900, currency: 'BRL' }, date: '2026-11-10' });
     expect(draft.final_difference).toBeNull();
     expect(draft.file_name).toBe(contract.draft.file_name);
@@ -68,7 +70,7 @@ describe('normalizeCardInvoiceImport', () => {
   it('a concluída traz a diferença registrada', () => {
     const done = normalizeCardInvoiceImport(contract.concluded as unknown as Record<string, unknown>);
     expect(done.status).toBe('concluded');
-    expect(done.final_difference).toEqual({ amount: -11.42, currency: 'BRL' });
+    expect(done.final_difference).toEqual({ amount: -0.4, currency: 'BRL' });
     expect(done.entries.every((e) => !e.answerable)).toBe(true);
   });
 });
@@ -117,10 +119,11 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     for (const entry of contract.reimport.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
     const again = normalizeCardInvoiceImport(raw(contract.reimport));
     expect(again.file_check).toEqual(contract.reimport.file_check);
-    // Os 4 pares e as 5 compras criadas pela conclusão (#557) voltam como já conferidos.
-    expect(again.summary.already_reconciled).toBe(9);
+    // Os 4 pares, as 9 transações criadas pela conclusão (#557, #558) e os 4 encargos somados (#558)
+    // voltam como já conferidos.
+    expect(again.summary.already_reconciled).toBe(17);
     const conferred = again.entries.filter((e) => e.classification === 'reconciled');
-    expect(conferred).toHaveLength(9);
+    expect(conferred).toHaveLength(17);
     for (const entry of conferred) {
       expect(entry.answer).toBe('reconciled');
       expect(entry.confirmed).toBe(true);
@@ -136,12 +139,12 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     expect(draft.current_step).toBe('doubt');
     expect(draft.final_difference).toBeNull();
     expect(draft.expires_at).toBe(contract.list.imports[0].expires_at);
-    expect(draft.summary.already_reconciled).toBe(9);
+    expect(draft.summary.already_reconciled).toBe(17);
     expect(undone.undone_at).toBe(contract.list.imports[1].undone_at);
-    expect(undone.final_difference).toEqual({ amount: -11.42, currency: 'BRL' });
+    expect(undone.final_difference).toEqual({ amount: -0.4, currency: 'BRL' });
     expect(concluded.latest_concluded).toBe(true);
-    expect(concluded.invoice.total).toEqual({ amount: 2414.34, currency: 'BRL' });
-    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 2414.34, difference: -11.42, currency: 'BRL' });
+    expect(concluded.invoice.total).toEqual({ amount: 2403.32, currency: 'BRL' });
+    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 2403.32, difference: -0.4, currency: 'BRL' });
     expect(items.filter((i) => i.latest_concluded)).toHaveLength(1);
   });
 
@@ -166,8 +169,8 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     const undone = normalizeCardInvoiceImport(raw(contract.undone));
     expect(undone.status).toBe('undone');
     expect(undone.undone_at).toBe(contract.undone.undone_at);
-    // As 5 compras que a conclusão criou (#557) são apagadas.
-    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(5);
+    // As 9 transações que a conclusão criou (#557 e os encargos, tarifas e estornos da #558) são apagadas.
+    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(9);
   });
 });
 
@@ -224,5 +227,74 @@ describe('compras novas (#557)', () => {
     expect(draft.entries[0].detail_tag_ids).toEqual([]);
     expect(draft.entries[0].new_purchase).toBeNull();
     expect(draft.summary).toMatchObject({ to_create: 0, missing_description: 0, uncategorized: 0 });
+  });
+});
+
+// Quarta entrega (#558): encargos, tarifas e estornos, com o grupo de encargos.
+describe('encargos, tarifas e estornos (#558)', () => {
+  const raw = (value: unknown) => JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+
+  it('o grupo de encargos: a Soma negativa, a transação que bate e os lançamentos dele', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.draft));
+    expect(draft.charge_groups).toHaveLength(1);
+    const [group] = draft.charge_groups;
+    expect(group.total).toBe(-12.59);
+    expect(group.currency).toBe('BRL');
+    expect(group.answer).toBe('pair_sum');
+    expect(group.confirmed).toBe(false);
+    expect(group.suggested_transaction_id).toBe(group.fincla_transaction?.id);
+    expect(group.fincla_transaction?.value).toBe(12.59);
+    expect(group.fincla_transaction?.description).toBe('Encargos do cartão');
+    const members = draft.entries.filter((e) => e.charge_group_id === group.id);
+    expect(members.map((e) => e.id)).toEqual(group.entry_ids);
+    expect(members.every((e) => e.answer === 'pair_sum' && e.section === 'charges')).toBe(true);
+    expect(members.reduce((sum, e) => sum + e.amount, 0)).toBeCloseTo(group.total, 2);
+    expect(draft.summary.summed_charges).toBe(members.length);
+  });
+
+  it('crédito vira estorno e Adicionar vale; o repasse de IOF é um lançamento próprio, fora do grupo', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.draft));
+    const charges = draft.entries.filter((e) => e.classification === 'charges' && !e.charge_group_id);
+    const estorno = charges.find((e) => e.bank_description === 'ESTORNO LOJA MODA')!;
+    expect(estorno.amount).toBe(45);
+    expect(estorno.transaction_type).toBe('refund');
+    expect(estorno.answer).toBe('create');
+    expect(estorno.addable).toBe(true);
+    const iof = charges.find((e) => e.bank_description === 'Repasse de IOF')!;
+    expect(iof.section).toBe('international');
+    expect(iof.charge_group_id).toBeNull();
+  });
+
+  it('"Não, adicionar cada um" (charge_group_each): o grupo e os lançamentos create, a soma sai do resumo', () => {
+    const each = normalizeCardInvoiceImport(raw(contract.charge_group_each));
+    const [group] = each.charge_groups;
+    expect(group.answer).toBe('create');
+    expect(group.confirmed).toBe(true);
+    expect(group.paired_transaction_id).toBeNull();
+    // A transação somada continua à vista (a tela a mostra cinza listrada com Não registrar).
+    expect(group.fincla_transaction?.id).toBe(group.suggested_transaction_id);
+    expect(each.entries.filter((e) => e.charge_group_id === group.id).every((e) => e.answer === 'create')).toBe(true);
+    expect(each.summary.summed_charges).toBe(0);
+    expect(each.summary.to_create).toBe(13);
+  });
+
+  it('na concluída nada responde e nada é adicionável', () => {
+    const done = normalizeCardInvoiceImport(raw(contract.concluded));
+    expect(done.charge_groups[0]).toMatchObject({ answerable: false, addable: false, answer: 'pair_sum' });
+    expect(done.entries.every((e) => !e.addable)).toBe(true);
+  });
+
+  it('sem os campos da #558 (backend anterior): sem grupo, addable segue o answerable, summed_charges 0', () => {
+    const old = raw(contract.draft);
+    delete old.charge_groups;
+    for (const entry of old.entries as Record<string, unknown>[]) {
+      delete entry.charge_group_id;
+      delete entry.addable;
+    }
+    delete (old.summary as Record<string, unknown>).summed_charges;
+    const draft = normalizeCardInvoiceImport(old);
+    expect(draft.charge_groups).toEqual([]);
+    expect(draft.entries.every((e) => e.charge_group_id === null && e.addable === e.answerable)).toBe(true);
+    expect(draft.summary.summed_charges).toBe(0);
   });
 });
