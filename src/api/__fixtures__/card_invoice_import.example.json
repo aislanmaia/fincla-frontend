@@ -1,12 +1,12 @@
 {
   "draft": {
-    "id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -63,7 +63,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "af4d4bd3-2fe2-453b-9d0c-ded628c7c41f",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -121,7 +121,7 @@
         "candidates": []
       },
       {
-        "id": "27a0ae99-86a6-40bc-bc08-7057aeaab2cc",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -179,7 +179,7 @@
         "candidates": []
       },
       {
-        "id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -444,7 +444,7 @@
         "candidates": []
       },
       {
-        "id": "8939d854-2719-4fc1-9d7b-5e01efb2146f",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -676,7 +676,7 @@
         "candidates": []
       },
       {
-        "id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -778,7 +778,7 @@
         ]
       },
       {
-        "id": "55f299e8-85d2-401f-af16-f33808d64ed4",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -880,7 +880,7 @@
         ]
       },
       {
-        "id": "f96667aa-600a-4756-bc78-da6357fc1989",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -954,7 +954,7 @@
         ]
       },
       {
-        "id": "c32a978b-38bd-40bc-ac2c-8614e0357377",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -995,7 +995,7 @@
         "candidates": []
       },
       {
-        "id": "a6da1d42-9605-4f9c-aaf9-9cbd38707e49",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -1058,7 +1058,7 @@
         "candidates": []
       },
       {
-        "id": "2bf521f4-ba49-47a1-8b1b-ec1e2ea6ae94",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -1099,7 +1099,7 @@
         "candidates": []
       },
       {
-        "id": "b9176e19-a487-44ba-bb18-a8c7aacf4325",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -1140,7 +1140,7 @@
         "candidates": []
       },
       {
-        "id": "dfdc8f9c-f2ab-46e7-9d85-8bd928e64b0c",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -1181,7 +1181,7 @@
         "candidates": []
       },
       {
-        "id": "87e50f0f-677d-41e5-afb8-408b69dcb0bc",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -1225,7 +1225,7 @@
         "candidates": []
       },
       {
-        "id": "f779c439-5eba-4030-b2a6-9c94998e37d1",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -1266,7 +1266,7 @@
         "candidates": []
       },
       {
-        "id": "cb8f8113-bd8f-4948-bbda-24832c8562f1",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -1307,7 +1307,7 @@
         "candidates": []
       },
       {
-        "id": "2cc522a5-ed88-454d-8a83-59bd002207ab",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -1348,7 +1348,7 @@
         "candidates": []
       },
       {
-        "id": "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -1397,7 +1397,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -1408,7 +1408,7 @@
         "candidates": []
       },
       {
-        "id": "28226ee8-474c-43e8-9c78-6955af8d7f28",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -1457,7 +1457,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -1468,7 +1468,7 @@
         "candidates": []
       },
       {
-        "id": "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -1517,7 +1517,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -1528,7 +1528,7 @@
         "candidates": []
       },
       {
-        "id": "3194d1ba-a232-4544-a4eb-269551688e2e",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -1577,7 +1577,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -1590,12 +1590,12 @@
     ],
     "charge_groups": [
       {
-        "id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
-          "28226ee8-474c-43e8-9c78-6955af8d7f28",
-          "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
-          "3194d1ba-a232-4544-a4eb-269551688e2e"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -1669,9 +1669,9 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:12.678067",
-    "last_activity_at": "2026-11-25T13:45:12.678067",
-    "expires_at": "2026-12-25T13:45:12.678067",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:27:57.445685",
+    "expires_at": "2026-12-25T16:27:57.445685",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -1683,13 +1683,13 @@
     "changed_since_read": false
   },
   "charge_group_each": {
-    "id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -1746,7 +1746,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "af4d4bd3-2fe2-453b-9d0c-ded628c7c41f",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -1804,7 +1804,7 @@
         "candidates": []
       },
       {
-        "id": "27a0ae99-86a6-40bc-bc08-7057aeaab2cc",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -1862,7 +1862,7 @@
         "candidates": []
       },
       {
-        "id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -2127,7 +2127,7 @@
         "candidates": []
       },
       {
-        "id": "8939d854-2719-4fc1-9d7b-5e01efb2146f",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -2359,7 +2359,7 @@
         "candidates": []
       },
       {
-        "id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -2461,7 +2461,7 @@
         ]
       },
       {
-        "id": "55f299e8-85d2-401f-af16-f33808d64ed4",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -2563,7 +2563,7 @@
         ]
       },
       {
-        "id": "f96667aa-600a-4756-bc78-da6357fc1989",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -2637,7 +2637,7 @@
         ]
       },
       {
-        "id": "c32a978b-38bd-40bc-ac2c-8614e0357377",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -2678,7 +2678,7 @@
         "candidates": []
       },
       {
-        "id": "a6da1d42-9605-4f9c-aaf9-9cbd38707e49",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -2741,7 +2741,7 @@
         "candidates": []
       },
       {
-        "id": "2bf521f4-ba49-47a1-8b1b-ec1e2ea6ae94",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -2782,7 +2782,7 @@
         "candidates": []
       },
       {
-        "id": "b9176e19-a487-44ba-bb18-a8c7aacf4325",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -2823,7 +2823,7 @@
         "candidates": []
       },
       {
-        "id": "dfdc8f9c-f2ab-46e7-9d85-8bd928e64b0c",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -2864,7 +2864,7 @@
         "candidates": []
       },
       {
-        "id": "87e50f0f-677d-41e5-afb8-408b69dcb0bc",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -2908,7 +2908,7 @@
         "candidates": []
       },
       {
-        "id": "f779c439-5eba-4030-b2a6-9c94998e37d1",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -2949,7 +2949,7 @@
         "candidates": []
       },
       {
-        "id": "cb8f8113-bd8f-4948-bbda-24832c8562f1",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -2990,7 +2990,7 @@
         "candidates": []
       },
       {
-        "id": "2cc522a5-ed88-454d-8a83-59bd002207ab",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -3031,7 +3031,7 @@
         "candidates": []
       },
       {
-        "id": "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -3080,7 +3080,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -3091,7 +3091,7 @@
         "candidates": []
       },
       {
-        "id": "28226ee8-474c-43e8-9c78-6955af8d7f28",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -3140,7 +3140,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -3151,7 +3151,7 @@
         "candidates": []
       },
       {
-        "id": "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -3200,7 +3200,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -3211,7 +3211,7 @@
         "candidates": []
       },
       {
-        "id": "3194d1ba-a232-4544-a4eb-269551688e2e",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -3260,7 +3260,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": true,
         "suggested_answer": null,
         "other_invoice": null,
@@ -3273,12 +3273,12 @@
     ],
     "charge_groups": [
       {
-        "id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
-          "28226ee8-474c-43e8-9c78-6955af8d7f28",
-          "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
-          "3194d1ba-a232-4544-a4eb-269551688e2e"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -3352,9 +3352,9 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:12.678067",
-    "last_activity_at": "2026-11-25T13:45:12.829330",
-    "expires_at": "2026-12-25T13:45:12.829330",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:27:57.980070",
+    "expires_at": "2026-12-25T16:27:57.980070",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -3366,7 +3366,7 @@
     "changed_since_read": false
   },
   "entry": {
-    "id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+    "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
     "position": 2,
     "date": "2026-07-14",
     "bank_description": "LOJA DO BAIRRO 05/12",
@@ -3631,7 +3631,7 @@
     "candidates": []
   },
   "entry_new": {
-    "id": "c32a978b-38bd-40bc-ac2c-8614e0357377",
+    "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
     "position": 7,
     "date": "2026-11-28",
     "bank_description": "PADARIA PAO QUENTE",
@@ -3655,10 +3655,10 @@
     "value_locked": false,
     "description": "Padaria",
     "transaction_type": "expense",
-    "category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
+    "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
     "suggested_category_tag_id": null,
     "detail_tag_ids": [
-      "a0eb5698-2211-4716-b127-e10db42f30a2"
+      "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
     ],
     "installments_scope": null,
     "new_purchase": null,
@@ -3674,7 +3674,7 @@
     "candidates": []
   },
   "entry_doubt": {
-    "id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+    "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
     "position": 4,
     "date": "2026-11-12",
     "bank_description": "UBER *TRIP",
@@ -3847,7 +3847,7 @@
           "month": 12,
           "status": "open"
         },
-        "taken_by_entry_id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+        "taken_by_entry_id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "suggested_answer": null,
         "movable": false,
         "series_movable": false,
@@ -3888,9 +3888,9 @@
           "status": "open"
         },
         "taken_by_entry_id": null,
-        "suggested_answer": "move_series",
+        "suggested_answer": "move",
         "movable": true,
-        "series_movable": true,
+        "series_movable": false,
         "move_refusal": null,
         "suggestion_basis": {
           "previous": {
@@ -3942,7 +3942,7 @@
           "month": 12,
           "status": "open"
         },
-        "taken_by_entry_id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+        "taken_by_entry_id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "suggested_answer": null,
         "movable": false,
         "series_movable": false,
@@ -4007,7 +4007,7 @@
     ]
   },
   "entry_move": {
-    "id": "a6da1d42-9605-4f9c-aaf9-9cbd38707e49",
+    "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
     "position": 8,
     "date": "2026-11-15",
     "bank_description": "CAFETERIA AROMA",
@@ -4073,27 +4073,27 @@
     "code": "conflict",
     "message": "Você já tem uma conciliação em andamento desta fatura. Continue de onde parou.",
     "reason": "invoice_draft_in_progress",
-    "import_id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "credit_card_id": 1,
-    "credit_card_public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c"
+    "credit_card_public_id": "cbebecfc-aa43-4117-aa98-03153250af3b"
   },
   "card_check_other_card": {
     "status": "other_card",
     "file_last4": "4321",
     "suggested_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa"
     }
   },
   "concluded": {
-    "id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "concluded",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -4150,7 +4150,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "af4d4bd3-2fe2-453b-9d0c-ded628c7c41f",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -4208,7 +4208,7 @@
         "candidates": []
       },
       {
-        "id": "27a0ae99-86a6-40bc-bc08-7057aeaab2cc",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -4266,7 +4266,7 @@
         "candidates": []
       },
       {
-        "id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -4520,7 +4520,7 @@
         "candidates": []
       },
       {
-        "id": "8939d854-2719-4fc1-9d7b-5e01efb2146f",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -4752,7 +4752,7 @@
         "candidates": []
       },
       {
-        "id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -4810,7 +4810,7 @@
         "candidates": []
       },
       {
-        "id": "55f299e8-85d2-401f-af16-f33808d64ed4",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -4868,7 +4868,7 @@
         "candidates": []
       },
       {
-        "id": "f96667aa-600a-4756-bc78-da6357fc1989",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -4926,7 +4926,7 @@
         "candidates": []
       },
       {
-        "id": "c32a978b-38bd-40bc-ac2c-8614e0357377",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -4969,10 +4969,10 @@
         "value_locked": false,
         "description": "Padaria",
         "transaction_type": "expense",
-        "category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "suggested_category_tag_id": null,
         "detail_tag_ids": [
-          "a0eb5698-2211-4716-b127-e10db42f30a2"
+          "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
         ],
         "installments_scope": null,
         "new_purchase": null,
@@ -4988,7 +4988,7 @@
         "candidates": []
       },
       {
-        "id": "a6da1d42-9605-4f9c-aaf9-9cbd38707e49",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -5046,7 +5046,7 @@
         "candidates": []
       },
       {
-        "id": "2bf521f4-ba49-47a1-8b1b-ec1e2ea6ae94",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -5104,7 +5104,7 @@
         "candidates": []
       },
       {
-        "id": "b9176e19-a487-44ba-bb18-a8c7aacf4325",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -5162,7 +5162,7 @@
         "candidates": []
       },
       {
-        "id": "dfdc8f9c-f2ab-46e7-9d85-8bd928e64b0c",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -5220,7 +5220,7 @@
         "candidates": []
       },
       {
-        "id": "87e50f0f-677d-41e5-afb8-408b69dcb0bc",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -5281,7 +5281,7 @@
         "candidates": []
       },
       {
-        "id": "f779c439-5eba-4030-b2a6-9c94998e37d1",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -5339,7 +5339,7 @@
         "candidates": []
       },
       {
-        "id": "cb8f8113-bd8f-4948-bbda-24832c8562f1",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -5397,7 +5397,7 @@
         "candidates": []
       },
       {
-        "id": "2cc522a5-ed88-454d-8a83-59bd002207ab",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -5455,7 +5455,7 @@
         "candidates": []
       },
       {
-        "id": "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -5504,7 +5504,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -5515,7 +5515,7 @@
         "candidates": []
       },
       {
-        "id": "28226ee8-474c-43e8-9c78-6955af8d7f28",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -5564,7 +5564,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -5575,7 +5575,7 @@
         "candidates": []
       },
       {
-        "id": "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -5624,7 +5624,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -5635,7 +5635,7 @@
         "candidates": []
       },
       {
-        "id": "3194d1ba-a232-4544-a4eb-269551688e2e",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -5684,7 +5684,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -5697,12 +5697,12 @@
     ],
     "charge_groups": [
       {
-        "id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
-          "28226ee8-474c-43e8-9c78-6955af8d7f28",
-          "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
-          "3194d1ba-a232-4544-a4eb-269551688e2e"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -5774,10 +5774,10 @@
     },
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:12.678067",
-    "last_activity_at": "2026-11-25T13:45:14.119337",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:28:01.357408",
     "expires_at": null,
-    "concluded_at": "2026-11-25T13:45:14.119337",
+    "concluded_at": "2026-11-25T16:28:01.357408",
     "undone_at": null,
     "latest_concluded": true,
     "file_check": {
@@ -5788,13 +5788,13 @@
     "changed_since_read": false
   },
   "reimport": {
-    "id": "ba9b201b-d070-4c9c-957c-73302d0981ac",
+    "id": "97ec78b7-7202-414d-9365-ed4547c505af",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -5851,7 +5851,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "9ceb214f-6a63-415d-bdde-2fd3f7864821",
+        "id": "65fbf9ec-6411-4018-8f54-624f74758b38",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -5909,7 +5909,7 @@
         "candidates": []
       },
       {
-        "id": "a42f8425-ce2b-434e-873f-803c8961e670",
+        "id": "54258f34-e5e0-4a82-8b83-ac925670b82a",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -5967,7 +5967,7 @@
         "candidates": []
       },
       {
-        "id": "7969d2de-4ac6-48c3-be05-8ca014dae44a",
+        "id": "a836da4b-a8c1-4b27-92bc-1d84aaf5013f",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -6081,7 +6081,7 @@
         "candidates": []
       },
       {
-        "id": "04bffd82-0ec5-4021-bb0c-3d96bc446d05",
+        "id": "417e3c42-8b53-4f57-bfc4-abadee3f616d",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -6195,7 +6195,7 @@
         "candidates": []
       },
       {
-        "id": "2b3b902a-1588-4c91-9d1b-9148647b81b6",
+        "id": "d57cf32b-016b-4423-aff2-05787d4925a0",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -6253,7 +6253,7 @@
         "candidates": []
       },
       {
-        "id": "e7c17864-921e-44f7-90bb-37482cce78d3",
+        "id": "c81b462b-026e-4d1b-9a8d-29f54e83b966",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -6311,7 +6311,7 @@
         "candidates": []
       },
       {
-        "id": "14b8c18b-955f-4e1e-8d9f-87f7ee9276ee",
+        "id": "9eaa0d1f-ada3-4c3a-92bc-eacbb784db3a",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -6369,7 +6369,7 @@
         "candidates": []
       },
       {
-        "id": "eae1d0ab-b83e-4f2e-8dcf-764ad204a610",
+        "id": "669704ca-42fb-4fe6-a829-d6a89f7622e8",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -6412,8 +6412,8 @@
         "value_locked": false,
         "description": "PADARIA PAO QUENTE",
         "transaction_type": "expense",
-        "category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
-        "suggested_category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
+        "suggested_category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "detail_tag_ids": [],
         "installments_scope": null,
         "new_purchase": null,
@@ -6429,7 +6429,7 @@
         "candidates": []
       },
       {
-        "id": "4ea031fb-08e4-4904-b65c-2fb97a4e6433",
+        "id": "3a69b71f-096f-47a5-a9da-19f4a4edb8a5",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -6487,7 +6487,7 @@
         "candidates": []
       },
       {
-        "id": "f00b7932-25ac-4448-a82f-ee29d3154c03",
+        "id": "09247fca-17cb-4869-bf51-a3471d16cdfd",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -6545,7 +6545,7 @@
         "candidates": []
       },
       {
-        "id": "6f613ac1-abf7-4fd9-bade-8c32f6fdde5e",
+        "id": "ccf0dcb9-8d57-4622-bfb8-c29af15e14f2",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -6603,7 +6603,7 @@
         "candidates": []
       },
       {
-        "id": "d8ba0c82-63cb-4ad3-b705-b2c0e29fcb08",
+        "id": "ff77384a-211a-4917-820f-de563327bcae",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -6661,7 +6661,7 @@
         "candidates": []
       },
       {
-        "id": "1e7633bc-c01d-48f5-813f-fd844229069b",
+        "id": "b40857e8-39dd-4e4e-88a5-429142d6a930",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -6722,7 +6722,7 @@
         "candidates": []
       },
       {
-        "id": "350b6f92-03a7-4783-8b3b-766cfae8acc3",
+        "id": "31718ebe-33b5-4438-b3a2-14f0452a1527",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -6780,7 +6780,7 @@
         "candidates": []
       },
       {
-        "id": "8218d04a-b073-4afd-8626-fc13f01c71fe",
+        "id": "1b524635-ea14-4b27-b339-59d6ad054557",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -6838,7 +6838,7 @@
         "candidates": []
       },
       {
-        "id": "ead6b6ff-e9d7-4949-bcfe-1cd0e345bda0",
+        "id": "3a6d7c3f-2d86-4ebb-91ce-6119378e0ec0",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -6896,7 +6896,7 @@
         "candidates": []
       },
       {
-        "id": "a7e2513a-495a-45c2-9777-683b7ca44c9d",
+        "id": "e7dfc86f-7ad8-41f1-862a-22f52d896076",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -6956,7 +6956,7 @@
         "candidates": []
       },
       {
-        "id": "7d49c5d7-0c97-42bb-91f8-132375408543",
+        "id": "54beadff-c663-4732-a15d-1e5c4dfab94f",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -7016,7 +7016,7 @@
         "candidates": []
       },
       {
-        "id": "df2235be-879d-4397-8393-921ad85d0535",
+        "id": "b52a467c-e011-4dc9-8b65-c3dc2d53ac89",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -7076,7 +7076,7 @@
         "candidates": []
       },
       {
-        "id": "dcd7002f-0d16-4e0c-8ee9-09f2cfe5f997",
+        "id": "3d736b5e-131c-4d23-a170-18029b46e545",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -7172,21 +7172,21 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:15.009983",
-    "last_activity_at": "2026-11-25T13:45:15.009983",
-    "expires_at": "2026-12-25T13:45:15.009983",
+    "created_at": "2026-11-25T16:28:03.661683",
+    "last_activity_at": "2026-11-25T16:28:03.661683",
+    "expires_at": "2026-12-25T16:28:03.661683",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
     "file_check": {
       "status": "already_imported",
-      "import_id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
-      "concluded_at": "2026-11-25T13:45:14.119337"
+      "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
+      "concluded_at": "2026-11-25T16:28:01.357408"
     },
     "changed_since_read": false
   },
   "undo_preview_refused": {
-    "import_id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "can_undo": false,
     "refusal": {
       "code": "not_latest",
@@ -7453,7 +7453,7 @@
   "list": {
     "imports": [
       {
-        "id": "ea3c8ca3-3da6-4dbd-9d84-ae34d9c63487",
+        "id": "c804450f-77d2-4620-9d31-e49b6dbfc4c0",
         "status": "draft",
         "invoice": {
           "id": 1,
@@ -7502,16 +7502,16 @@
         "can_conclude": true,
         "blockers": [],
         "current_step": "doubt",
-        "created_at": "2026-11-25T13:45:15.620266",
-        "last_activity_at": "2026-11-25T13:45:15.726990",
-        "expires_at": "2026-12-25T13:45:15.726990",
+        "created_at": "2026-11-25T16:28:04.877033",
+        "last_activity_at": "2026-11-25T16:28:05.057214",
+        "expires_at": "2026-12-25T16:28:05.057214",
         "concluded_at": null,
         "undone_at": null,
         "latest_concluded": false,
         "changed_since_read": false
       },
       {
-        "id": "ba9b201b-d070-4c9c-957c-73302d0981ac",
+        "id": "97ec78b7-7202-414d-9365-ed4547c505af",
         "status": "undone",
         "invoice": {
           "id": 1,
@@ -7563,16 +7563,16 @@
         "can_conclude": false,
         "blockers": [],
         "current_step": null,
-        "created_at": "2026-11-25T13:45:15.009983",
-        "last_activity_at": "2026-11-25T13:45:15.267803",
+        "created_at": "2026-11-25T16:28:03.661683",
+        "last_activity_at": "2026-11-25T16:28:04.293765",
         "expires_at": null,
-        "concluded_at": "2026-11-25T13:45:15.103377",
-        "undone_at": "2026-11-25T13:45:15.267803",
+        "concluded_at": "2026-11-25T16:28:03.930593",
+        "undone_at": "2026-11-25T16:28:04.293765",
         "latest_concluded": false,
         "changed_since_read": false
       },
       {
-        "id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+        "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
         "status": "concluded",
         "invoice": {
           "id": 1,
@@ -7624,10 +7624,10 @@
         "can_conclude": false,
         "blockers": [],
         "current_step": null,
-        "created_at": "2026-11-25T13:45:12.678067",
-        "last_activity_at": "2026-11-25T13:45:14.119337",
+        "created_at": "2026-11-25T16:27:57.445685",
+        "last_activity_at": "2026-11-25T16:28:01.357408",
         "expires_at": null,
-        "concluded_at": "2026-11-25T13:45:14.119337",
+        "concluded_at": "2026-11-25T16:28:01.357408",
         "undone_at": null,
         "latest_concluded": true,
         "changed_since_read": false
@@ -7635,7 +7635,7 @@
     ]
   },
   "undo_preview": {
-    "import_id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "can_undo": true,
     "refusal": null,
     "summary": {
@@ -7897,13 +7897,13 @@
     ]
   },
   "undone": {
-    "id": "64961b01-9b6d-4930-ad6b-e528441b1f59",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "undone",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -7960,7 +7960,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "af4d4bd3-2fe2-453b-9d0c-ded628c7c41f",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -8018,7 +8018,7 @@
         "candidates": []
       },
       {
-        "id": "27a0ae99-86a6-40bc-bc08-7057aeaab2cc",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -8076,7 +8076,7 @@
         "candidates": []
       },
       {
-        "id": "15ec9906-4020-41d4-81d3-36f411c5d938",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -8332,7 +8332,7 @@
         "candidates": []
       },
       {
-        "id": "8939d854-2719-4fc1-9d7b-5e01efb2146f",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -8564,7 +8564,7 @@
         "candidates": []
       },
       {
-        "id": "8952c9f6-92e5-4443-908f-ec5815117be6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -8622,7 +8622,7 @@
         "candidates": []
       },
       {
-        "id": "55f299e8-85d2-401f-af16-f33808d64ed4",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -8680,7 +8680,7 @@
         "candidates": []
       },
       {
-        "id": "f96667aa-600a-4756-bc78-da6357fc1989",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -8740,7 +8740,7 @@
         "candidates": []
       },
       {
-        "id": "c32a978b-38bd-40bc-ac2c-8614e0357377",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -8764,10 +8764,10 @@
         "value_locked": false,
         "description": "Padaria",
         "transaction_type": "expense",
-        "category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "suggested_category_tag_id": null,
         "detail_tag_ids": [
-          "a0eb5698-2211-4716-b127-e10db42f30a2"
+          "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
         ],
         "installments_scope": null,
         "new_purchase": null,
@@ -8783,7 +8783,7 @@
         "candidates": []
       },
       {
-        "id": "a6da1d42-9605-4f9c-aaf9-9cbd38707e49",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -8846,7 +8846,7 @@
         "candidates": []
       },
       {
-        "id": "2bf521f4-ba49-47a1-8b1b-ec1e2ea6ae94",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -8887,7 +8887,7 @@
         "candidates": []
       },
       {
-        "id": "b9176e19-a487-44ba-bb18-a8c7aacf4325",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -8928,7 +8928,7 @@
         "candidates": []
       },
       {
-        "id": "dfdc8f9c-f2ab-46e7-9d85-8bd928e64b0c",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -8969,7 +8969,7 @@
         "candidates": []
       },
       {
-        "id": "87e50f0f-677d-41e5-afb8-408b69dcb0bc",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -9013,7 +9013,7 @@
         "candidates": []
       },
       {
-        "id": "f779c439-5eba-4030-b2a6-9c94998e37d1",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -9054,7 +9054,7 @@
         "candidates": []
       },
       {
-        "id": "cb8f8113-bd8f-4948-bbda-24832c8562f1",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -9095,7 +9095,7 @@
         "candidates": []
       },
       {
-        "id": "2cc522a5-ed88-454d-8a83-59bd002207ab",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -9136,7 +9136,7 @@
         "candidates": []
       },
       {
-        "id": "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -9185,7 +9185,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -9196,7 +9196,7 @@
         "candidates": []
       },
       {
-        "id": "28226ee8-474c-43e8-9c78-6955af8d7f28",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -9245,7 +9245,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -9256,7 +9256,7 @@
         "candidates": []
       },
       {
-        "id": "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -9305,7 +9305,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -9316,7 +9316,7 @@
         "candidates": []
       },
       {
-        "id": "3194d1ba-a232-4544-a4eb-269551688e2e",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -9365,7 +9365,7 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "addable": false,
         "suggested_answer": null,
         "other_invoice": null,
@@ -9378,12 +9378,12 @@
     ],
     "charge_groups": [
       {
-        "id": "91e77446-1fcb-412e-86d7-42c00beb8c80",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "c9b80ce0-a36d-4d10-8c59-75eff3c85107",
-          "28226ee8-474c-43e8-9c78-6955af8d7f28",
-          "815dd79d-71e0-40cb-889e-5d0edb0d76a2",
-          "3194d1ba-a232-4544-a4eb-269551688e2e"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -9455,11 +9455,11 @@
     },
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:12.678067",
-    "last_activity_at": "2026-11-25T13:45:16.299759",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:28:06.566044",
     "expires_at": null,
-    "concluded_at": "2026-11-25T13:45:14.119337",
-    "undone_at": "2026-11-25T13:45:16.299759",
+    "concluded_at": "2026-11-25T16:28:01.357408",
+    "undone_at": "2026-11-25T16:28:06.566044",
     "latest_concluded": false,
     "file_check": {
       "status": "new",
@@ -9470,13 +9470,13 @@
     "deleted_transactions": 8
   },
   "stale_draft": {
-    "id": "ea3c8ca3-3da6-4dbd-9d84-ae34d9c63487",
+    "id": "c804450f-77d2-4620-9d31-e49b6dbfc4c0",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -9533,7 +9533,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "3f4b4565-7764-4c40-a887-1ed55f498cc7",
+        "id": "a882338e-913b-47f2-91b6-f3587b5e97f5",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -9591,7 +9591,7 @@
         "candidates": []
       },
       {
-        "id": "113a817b-d3c5-44a0-8e8f-038c90e89928",
+        "id": "1f718837-0556-43c4-82ff-e93e2f5ac78d",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -9649,7 +9649,7 @@
         "candidates": []
       },
       {
-        "id": "4ec8c279-647b-4b0b-83e8-077c0d5ea456",
+        "id": "ced1c055-4903-4d02-ae8c-1838fb8bbafd",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -9765,7 +9765,7 @@
         "candidates": []
       },
       {
-        "id": "65421754-3c2e-4c32-9a83-f99249e998bd",
+        "id": "cb4ec8cb-03d8-4b37-8e0c-fed1388fa3a4",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -9879,7 +9879,7 @@
         "candidates": []
       },
       {
-        "id": "f183d82c-d685-41f3-a1c4-fe64ef1026a5",
+        "id": "df8b29a8-a775-443f-ab4a-501752b9ff17",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -9937,7 +9937,7 @@
         "candidates": []
       },
       {
-        "id": "9dae119a-aa62-448c-ae9c-42dca937bc8b",
+        "id": "f4d3c058-85b4-4acd-a570-a51a9ade155a",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -9995,7 +9995,7 @@
         "candidates": []
       },
       {
-        "id": "1141255f-ef54-4cb7-bce9-ca457ac57750",
+        "id": "190c86e9-7171-477f-850a-284a1e59f277",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -10055,7 +10055,7 @@
         "candidates": []
       },
       {
-        "id": "67d840f6-04c3-4c2f-9e38-b07d07c3dd6c",
+        "id": "ccb22f88-a6c1-4030-9f00-ad29a09e0a4d",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -10079,8 +10079,8 @@
         "value_locked": false,
         "description": "PADARIA PAO QUENTE",
         "transaction_type": "expense",
-        "category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
-        "suggested_category_tag_id": "69dbab8a-dc3a-451e-bec5-9f7c4d76c56c",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
+        "suggested_category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "detail_tag_ids": [],
         "installments_scope": null,
         "new_purchase": null,
@@ -10096,7 +10096,7 @@
         "candidates": []
       },
       {
-        "id": "7c195275-6752-4294-9196-0808c78dc454",
+        "id": "12b3d874-8022-425e-96cc-5c1902df1392",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -10159,7 +10159,7 @@
         "candidates": []
       },
       {
-        "id": "e575daa6-0de0-4103-994f-ce5efe8703a4",
+        "id": "6579f92a-c596-483b-b457-b84596785884",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -10200,7 +10200,7 @@
         "candidates": []
       },
       {
-        "id": "81ae86d6-331e-430c-82f4-07cbec2f04d0",
+        "id": "fd4c94f1-4814-4521-abe8-2e2058a0be64",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -10241,7 +10241,7 @@
         "candidates": []
       },
       {
-        "id": "a32e1e79-b7f0-4948-9ade-a87227cd4053",
+        "id": "40be6ae9-3472-4473-8e59-4b350034b90c",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -10282,7 +10282,7 @@
         "candidates": []
       },
       {
-        "id": "6d9cef86-d5b4-4de3-893e-1b7a100bc073",
+        "id": "c2ddc11f-425d-4508-8cb3-5c37fc35d8ec",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -10326,7 +10326,7 @@
         "candidates": []
       },
       {
-        "id": "4eaeb34c-b98c-49f2-a7fc-893b6a4a63dd",
+        "id": "911b7766-5b66-4ce9-9e37-38dbadecb855",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -10367,7 +10367,7 @@
         "candidates": []
       },
       {
-        "id": "5b834c20-8262-4337-b9e8-80247d98b741",
+        "id": "d732ff23-2991-457c-80dc-02ff4e3a57ca",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -10408,7 +10408,7 @@
         "candidates": []
       },
       {
-        "id": "8613f766-a613-444c-ab83-19b9aa6c9756",
+        "id": "2f3acac8-c0cc-43cf-8ce5-73194948699c",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -10449,7 +10449,7 @@
         "candidates": []
       },
       {
-        "id": "44418f2c-2287-4f82-95a7-90f01eae3e5d",
+        "id": "4cbcae71-154f-4f50-bc3b-fcf1bdbb5d28",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -10509,7 +10509,7 @@
         "candidates": []
       },
       {
-        "id": "868f8a70-1046-4045-9aae-df702175bed7",
+        "id": "a18857ab-9e38-47ec-9b2d-126231744a0a",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -10569,7 +10569,7 @@
         "candidates": []
       },
       {
-        "id": "6a695e3e-742f-44f6-a507-f2a1a898e8b4",
+        "id": "d5ab97d3-e83f-4e68-ba7f-ce0ac7418947",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -10629,7 +10629,7 @@
         "candidates": []
       },
       {
-        "id": "4d9ce92d-20dc-4952-b4f6-019175f5dee8",
+        "id": "099cce5a-d796-423b-abd8-111c7252c2b1",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -10730,9 +10730,9 @@
     "final_difference": null,
     "current_step": "doubt",
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:15.620266",
-    "last_activity_at": "2026-11-25T13:45:15.726990",
-    "expires_at": "2026-12-25T13:45:15.726990",
+    "created_at": "2026-11-25T16:28:04.877033",
+    "last_activity_at": "2026-11-25T16:28:05.057214",
+    "expires_at": "2026-12-25T16:28:05.057214",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -10744,7 +10744,7 @@
     "changed_since_read": true
   },
   "entry_installment": {
-    "id": "65e1dc65-c618-4ca7-8bdd-fbe13f546545",
+    "id": "2fabcf8b-d5ed-494f-adbd-561ce162559f",
     "position": 3,
     "date": "2026-03-02",
     "bank_description": "MOVEIS CONFORTO 11/12",
@@ -10936,13 +10936,13 @@
     "candidates": []
   },
   "new_purchases_draft": {
-    "id": "ded288cb-124f-4e95-9952-65c3a542d73f",
+    "id": "b010753f-6584-4495-ae6e-000d500fbd6b",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "1f4960c7-9a8e-4b70-a6fe-97c595cf21d1",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "8e3ca5a8-3f3e-493b-a961-88600076df0c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -10999,7 +10999,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "4a2dd5bc-c6d2-49ff-ae0c-bc9ca9b01c24",
+        "id": "849a72e4-2888-459f-afe3-38039830c4c2",
         "position": 0,
         "date": "2026-12-28",
         "bank_description": "MERCADO BOA VISTA",
@@ -11067,7 +11067,7 @@
         "candidates": []
       },
       {
-        "id": "a9bbfdbb-f4fa-452a-801b-fe70877283d5",
+        "id": "35f3785c-c578-401c-9dd7-ba995b7eabe6",
         "position": 1,
         "date": "2027-01-02",
         "bank_description": "PADARIA PAO QUENTE",
@@ -11108,7 +11108,7 @@
         "candidates": []
       },
       {
-        "id": "bcc5abaa-7dc4-4f62-be2e-dbe5062784dc",
+        "id": "662d767d-b138-4f86-9ef4-61ed22a01fd9",
         "position": 2,
         "date": "2026-10-25",
         "bank_description": "LOJA DO BAIRRO 03/06",
@@ -11248,7 +11248,7 @@
         "candidates": []
       },
       {
-        "id": "65e1dc65-c618-4ca7-8bdd-fbe13f546545",
+        "id": "2fabcf8b-d5ed-494f-adbd-561ce162559f",
         "position": 3,
         "date": "2026-03-02",
         "bank_description": "MOVEIS CONFORTO 11/12",
@@ -11440,7 +11440,7 @@
         "candidates": []
       },
       {
-        "id": "67a3f212-5189-4581-8c46-cc1d181b8fdd",
+        "id": "96863d29-8398-4a29-86df-3a74949b80e8",
         "position": 4,
         "date": "2025-12-10",
         "bank_description": "CURSO IDIOMAS 13/24",
@@ -11801,9 +11801,9 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T13:45:16.854032",
-    "last_activity_at": "2026-11-25T13:45:16.977358",
-    "expires_at": "2026-12-25T13:45:16.977358",
+    "created_at": "2026-11-25T16:28:07.693418",
+    "last_activity_at": "2026-11-25T16:28:08.108531",
+    "expires_at": "2026-12-25T16:28:08.108531",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -11815,7 +11815,7 @@
     "changed_since_read": false
   },
   "undo_preview_refused_paid": {
-    "import_id": "ded288cb-124f-4e95-9952-65c3a542d73f",
+    "import_id": "b010753f-6584-4495-ae6e-000d500fbd6b",
     "can_undo": false,
     "refusal": {
       "code": "invoice_paid",
