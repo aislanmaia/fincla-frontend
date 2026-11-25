@@ -29,6 +29,7 @@ import {
 } from "./entryQueue.jsx";
 import { invoiceMonthLabel, invoiceWhereLabel, isInvoiceEntryAnswered, seriesIsAnOption, unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
 import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
+import { NextAdjustment } from "./InvoiceNextAdjustment.jsx";
 
 /** As palavras da lista do passo: compras da fatura. */
 export const PURCHASE_NOUN = {
@@ -213,7 +214,10 @@ export function PairConsequences({ entry }) {
   const installment = entry.installment;
   const left = installment ? installment.count - installment.number : 0;
   let future = null;
-  if (left > 0) {
+  if (entry.next_adjustment) {
+    // #561: o banco listou todas as seguintes; a pessoa escolhe se elas recebem o valor do banco.
+    future = <NextAdjustment entry={entry} />;
+  } else if (left > 0) {
     // Sem o ajuste das próximas parcelas nesta versão: elas continuam com o valor do Fincla.
     const complete = entry.next_installments.length === left;
     const bankFuture = complete ? entry.next_installments.reduce((sum, n) => sum + n.amount, 0) : left * bank;

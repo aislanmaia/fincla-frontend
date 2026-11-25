@@ -160,6 +160,14 @@ export function beyondDoubtTolerance(entry, value) {
 /** A resposta liga o lançamento a uma compra do Fincla (a desta fatura, ou a movida de outra). */
 export const linksTransaction = (answer) => answer === "pair" || isMoveAnswer(answer);
 
+/** #561: as parcelas seguintes que recebem o valor do banco ao concluir (o N de "as próximas N parcelas"). */
+export const adjustableInstallments = (adjustment) => (adjustment?.installments ?? []).filter((i) => i.locked === null);
+
+/** Quantas parcelas seguintes passam a ter o valor do banco ao concluir (#561, "Revisar e concluir"). */
+export const nextInstallmentsToAdjust = (entries) => entries
+  .filter((e) => linksTransaction(e.answer) && e.next_adjustment?.adjust)
+  .reduce((sum, e) => sum + adjustableInstallments(e.next_adjustment).length, 0);
+
 /** Os que a pessoa responde neste passo (os outros são "Fica de fora nesta versão"). */
 export const answerableEntries = (entries) => entries.filter((e) => e.answerable);
 
@@ -303,6 +311,12 @@ export function invoiceSummaryRows(invoiceImport) {
   };
   row(pairs.length, "compra já estava no Fincla e fica ligada ao banco", "compras já estavam no Fincla e ficam ligadas ao banco", "summary-paired");
   row(bankValue, "compra passa a ter o valor do banco", "compras passam a ter o valor do banco", "summary-bank-value");
+  row(
+    nextInstallmentsToAdjust(entries),
+    "parcela seguinte passa a ter o valor que o banco informou",
+    "parcelas seguintes passam a ter o valor que o banco informou",
+    "summary-next-installments",
+  );
   // Compras em outra fatura (#559): a compra (ou só a parcela) que vem para esta fatura, e as séries
   // que voltam uma fatura desta parcela em diante.
   const moved = entries.filter((e) => e.answer === "move");

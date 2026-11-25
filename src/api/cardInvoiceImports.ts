@@ -154,6 +154,29 @@ export interface InvoiceCandidate extends InvoiceFinclaTransaction {
   suggestion_basis: SuggestionBasis | null;
 }
 
+/**
+ * Uma parcela seguinte da compra (#561): `from` = valor no Fincla hoje, `to` = o do banco (`null` =
+ * não sabemos). `locked` = por que fica com o valor do Fincla mesmo ligado; `null` = recebe o do banco.
+ */
+export interface NextAdjustmentInstallment {
+  number: number;
+  transaction_id: number;
+  from: InvoiceMoney | null;
+  to: InvoiceMoney | null;
+  invoice: InvoiceBrief | null;
+  locked: 'invoice_paid' | 'reconciled' | string | null;
+}
+
+/**
+ * "Ajustar também as próximas" (#561). `purchase_difference` = soma das seguintes no Fincla depois de
+ * concluir − a do banco (positivo = Fincla maior); `null` = não sabemos (aviso genérico).
+ */
+export interface NextAdjustment {
+  adjust: boolean;
+  installments: NextAdjustmentInstallment[];
+  purchase_difference: InvoiceMoney | null;
+}
+
 export interface InvoiceEntry {
   id: string;
   position: number;
@@ -182,6 +205,11 @@ export interface InvoiceEntry {
   fincla_transaction: InvoiceFinclaTransaction | null;
   /** Com `pair` e valor diferente: ao concluir a transação passa de `from` para `to` (o valor do banco). */
   value_change: { from: number; to: number; currency: string | null } | null;
+  /**
+   * #561 "Ajustar também as próximas N parcelas com os valores que o banco informou". Só num
+   * rascunho, num par com valor diferente numa parcela com seguintes que o banco listou todas.
+   */
+  next_adjustment: NextAdjustment | null;
   /** Fatura já paga no Fincla: o par liga sem trocar o valor (decisão 1). E `create` é recusado. */
   value_locked: boolean;
   // A compra nova (#557): o formulário de "Adicionar" / "Não, adicionar agora".
@@ -424,6 +452,8 @@ export interface UpdateInvoiceEntryRequest {
   category_tag_id?: string | null;
   detail_tag_ids?: string[];
   installments_scope?: InstallmentsScope;
+  /** #561: liga/desliga "Ajustar também as próximas" (só em parcela com seguintes, senão 422). */
+  adjust_next_installments?: boolean;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -494,6 +524,23 @@ const normalizeMoveFields = (raw: Raw) => ({
   suggestion_basis: normalizeSuggestionBasis(raw.suggestion_basis),
 });
 
+const normalizeNextAdjustment = (raw: unknown): NextAdjustment | null => {
+  const adjustment = raw as Raw | null | undefined;
+  if (!adjustment) return null;
+  return {
+    adjust: Boolean(adjustment.adjust),
+    installments: ((adjustment.installments as Raw[]) ?? []).map((i) => ({
+      number: Number(i.number),
+      transaction_id: Number(i.transaction_id),
+      from: moneyOrNull(i.from as WireMoney),
+      to: moneyOrNull(i.to as WireMoney),
+      invoice: normalizeBrief(i.invoice),
+      locked: (i.locked as string | null) ?? null,
+    })),
+    purchase_difference: moneyOrNull(adjustment.purchase_difference as WireMoney),
+  };
+};
+
 export const normalizeInvoiceCandidate = (raw: Raw): InvoiceCandidate => ({
   ...(normalizeFincla(raw) as InvoiceFinclaTransaction),
   invoice: normalizeBrief(raw.invoice),
@@ -522,6 +569,7 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     paired_transaction_id: (raw.paired_transaction_id as number | null) ?? null,
     fincla_transaction: normalizeFincla(raw.fincla_transaction as Raw | null),
     value_change: change ? { from: toAmount(change.from), to: toAmount(change.to), currency: toCurrency(change.to) } : null,
+    next_adjustment: normalizeNextAdjustment(raw.next_adjustment),
     value_locked: Boolean(raw.value_locked),
     description: (raw.description as string | null) ?? '',
     transaction_type: (raw.transaction_type as InvoiceEntry['transaction_type'] | null) ?? (toAmount(raw.amount as WireMoney) > 0 ? 'refund' : 'expense'),
