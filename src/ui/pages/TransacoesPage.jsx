@@ -59,6 +59,10 @@ import {
   LIST_HEADER_HEIGHT,
   LIST_HEADER_HEIGHT_COMPACT,
 } from "../features/transactions/TransactionsListHeader.jsx";
+import { ReconcileIcon, ReconcileShortcut } from "../features/statementImport/ReconcileShortcut.jsx";
+import { MobileReconcileChip, MobileReconcileSheet } from "../features/statementImport/MobileReconcileShortcut.jsx";
+import { shortcutTarget } from "../features/statementImport/reconcileShortcut.js";
+import { useReconcileShortcutData } from "../features/statementImport/useReconcileShortcutData.js";
 import {
   DAY_HEADER_HEIGHT,
   DENSITIES,
@@ -696,6 +700,9 @@ function TransacoesPageBody({
   organizationId = null,
   transactionsRefreshToken = 0,
   onTransactionsInvalidate,
+  /** Atalho "Conciliar extrato" (decisão do Owner de 2026-11-17): (accountId, importId|null) abre a
+      conciliação. Só o dono concilia: `null` esconde o atalho. */
+  onReconcileStatement = null,
 }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
@@ -948,6 +955,12 @@ function TransacoesPageBody({
 
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuButtonRef = useRef(null);
+  /**
+   * Folha do atalho de conciliação no celular: `{ mode: "started"|"choose", origin: "chip"|"menu",
+   * returnFocusTo }`.
+   */
+  const [reconcileSheet, setReconcileSheet] = useState(null);
   const swipeActions = useSwipeActions();
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
@@ -1381,6 +1394,45 @@ function TransacoesPageBody({
     onAccountScopeChange?.(singleFilteredAccountId);
   }, [onAccountScopeChange, singleFilteredAccountId]);
   useEffect(() => () => onAccountScopeChange?.(null), [onAccountScopeChange]);
+
+  /* Atalho "Conciliar extrato" (decisão do Owner de 2026-11-17): contas elegíveis = as ativas, a
+     mesma regra do "Importar extrato" de Minhas Contas (cartão de crédito não é conta). No
+     computador fica na linha do chip da conta filtrada; sem chip, na linha da contagem. No celular
+     (decisão do Owner de 2026-11-22, M1b/M2/M3): chip entre a busca e a lista só com conciliação
+     começada, e "Conciliar extrato…" como último item do menu ⋯. */
+  const reconcileShortcutOn = !!onReconcileStatement && shouldUseRealData && !!organizationId && accountsForFilter.length > 0;
+  /* Os dados do atalho moram AQUI (G3): o botão muda de lugar conforme o filtro e é remontado; com
+     os dados na página, a troca não repete pedidos nem faz o botão piscar. */
+  const reconcileShortcutData = useReconcileShortcutData({ organizationId, enabled: reconcileShortcutOn });
+  const reconcileShortcut = reconcileShortcutOn && !isMobile ? (
+    <ReconcileShortcut
+      data={reconcileShortcutData}
+      accounts={accountsForFilter}
+      filteredIds={effectiveAccountSel}
+      baseCurrency={orgBase.currency ?? null}
+      onOpen={onReconcileStatement}
+    />
+  ) : null;
+  /** O item "Conciliar extrato…" do ⋯ (celular): direto com destino direto; senão, a escolha. */
+  const onMobileReconcileItem = () => {
+    setMobileMenuOpen(false);
+    const target = shortcutTarget({ accounts: accountsForFilter, filteredIds: effectiveAccountSel });
+    if (!target) return;
+    if (target.kind === "direct") {
+      const draft = reconcileShortcutData.draftByAccount?.[target.account.id] ?? null;
+      onReconcileStatement(target.account.id, draft ? draft.id : null);
+    } else setReconcileSheet({ mode: "choose", origin: "menu", returnFocusTo: mobileMenuButtonRef.current });
+  };
+  /* A folha só existe no celular com o atalho ligado. Quando isso cai (girar para paisagem, contas
+     relidas; na troca de organização as contas zeram e o atalho desliga), ela fecha DE VEZ: sem
+     isto, o estado sobrevivia e a folha reabria sozinha quando a condição voltava. */
+  const reconcileSheetAllowed = isMobile && reconcileShortcutOn;
+  useEffect(() => {
+    if (!reconcileSheetAllowed) setReconcileSheet(null);
+  }, [reconcileSheetAllowed]);
+  // No celular o chip da conta não aparece (decisão do Owner, 2026-11-17): o "Filtros 1" já indica
+  // o recorte e a linha a mais apertava a lista. No computador ele continua (#279).
+  const showsAccountChips = !isMobile && effectiveAccountSel.length > 0 && !!accountsForFilterById;
 
   const categoryTagsData = useCategoryTagsData({
     organizationId,
@@ -3634,8 +3686,8 @@ function TransacoesPageBody({
       background:T.surface, border:`1px solid ${T.border}`, borderRadius:12 }}>
       {/* Chip da conta filtrada, à vista em qualquer largura: chegando de Minhas
           Contas no celular, o filtro só aparecia como "Filtros 1". */}
-      {effectiveAccountSel.length > 0 && accountsForFilterById ? (
-        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 0" }}>
+      {showsAccountChips ? (
+        <div data-testid="account-filter-chips" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "8px 12px 0" }}>
           {effectiveAccountSel.map((id) => {
             const label = anyAccountById[id]?.label || "Conta";
             return (
@@ -3650,9 +3702,15 @@ function TransacoesPageBody({
               </span>
             );
           })}
+          {reconcileShortcut ? (
+            <span style={{ marginLeft: "auto", display: "flex", justifyContent: "flex-end", minWidth: 0, maxWidth: "100%" }}>
+              {reconcileShortcut}
+            </span>
+          ) : null}
         </div>
       ) : null}
       <TransactionsListHeader
+        action={!showsAccountChips ? reconcileShortcut : null}
         leading={selectionEnabled ? (
           <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allLoadedSelected}
             onChange={(e) => setBulkSelected(e.target.checked
@@ -4203,6 +4261,7 @@ function TransacoesPageBody({
         {isMobile ? (
           <div style={{ position:"relative", flexShrink:0 }}>
             <button
+              ref={mobileMenuButtonRef}
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-haspopup="menu"
@@ -4271,6 +4330,19 @@ function TransacoesPageBody({
                       color:T.inkMid, cursor:"pointer", textAlign:"left" }}>
                     <Download size={13}/> Exportar
                   </button>
+                  {/* Último item (M2): o atalho de conciliação, só para o dono com conta elegível. */}
+                  {reconcileShortcutOn ? (
+                    <>
+                      <div role="separator" style={{ height:1, background:T.border, margin:"3px 4px" }}/>
+                      <button type="button" role="menuitem" onClick={onMobileReconcileItem}
+                        style={{ ...G, height:42, borderRadius:9, display:"flex", alignItems:"center",
+                          gap:10, padding:"0 10px", fontSize:12.5, fontWeight:600, border:"none", background:"none",
+                          color:T.ink, cursor:"pointer", textAlign:"left" }}>
+                        <span style={{ color:T.blue, display:"flex" }}><ReconcileIcon size={14}/></span>
+                        Conciliar extrato…
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               </>
             )}
@@ -4645,6 +4717,31 @@ function TransacoesPageBody({
           o cabeçalho da lista e os rótulos de dia grudavam num container que
           nunca rola, ou seja, não grudavam em nada. Ele existe para o painel
           ancorado do desktop, que no mobile não existe. */}
+      {/* Celular (M1b/M3): o chip de conciliação começada, numa linha própria entre a busca e a
+          lista, fora do quadro dela. Sem conciliação começada, nada aqui. */}
+      {isMobile && reconcileShortcutOn ? (
+        <MobileReconcileChip
+          data={reconcileShortcutData}
+          accounts={accountsForFilter}
+          filteredIds={effectiveAccountSel}
+          onOpen={onReconcileStatement}
+          onOpenStarted={(el) => setReconcileSheet({ mode: "started", origin: "chip", returnFocusTo: el })}
+          expanded={reconcileSheet?.origin === "chip"}
+        />
+      ) : null}
+      {reconcileSheetAllowed && reconcileSheet ? (
+        <MobileReconcileSheet
+          data={reconcileShortcutData}
+          accounts={accountsForFilter}
+          filteredIds={effectiveAccountSel}
+          baseCurrency={orgBase.currency ?? null}
+          mode={reconcileSheet.mode}
+          returnFocusTo={reconcileSheet.returnFocusTo}
+          onModeChange={(mode) => setReconcileSheet((cur) => (cur ? { ...cur, mode } : cur))}
+          onClose={() => setReconcileSheet(null)}
+          onOpen={onReconcileStatement}
+        />
+      ) : null}
       <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden",
         /* Referência para a dock FLUTUANTE do desktop estreito. Ancorar no
            wrapper e não na viewport é o que a mantém dentro da área da lista,

@@ -50,6 +50,12 @@ import { CartoesPage } from "./pages/CartoesPage.jsx";
 import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
 import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { CardCommitmentsPage } from "./pages/CardCommitmentsPage.jsx";
+import { StatementReconciliationPage } from "./pages/StatementReconciliationPage.jsx";
+import { fillsAvailableHeight } from "./routing/statementImportRoute.js";
+import { mainScrollStyle } from "./layouts/mainScroll.js";
+import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
+import { CardInvoiceReconciliationPage } from "./pages/CardInvoiceReconciliationPage.jsx";
+import { CardInvoiceUndoPage } from "./pages/CardInvoiceUndoPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { CardAllTransactionsPage } from "./pages/CardAllTransactionsPage.jsx";
@@ -80,6 +86,8 @@ import { FC, FC_MODAL } from "./routing/searchContract.js";
 import { FinclaPageContext } from "./routing/finclaPageContext.jsx";
 import { useNavTo } from "./routing/useNavTo.js";
 import { useAuthRedirects } from "./routing/useAuthRedirects.js";
+import { statementReconciliationPath } from "./routing/statementImportRoute.js";
+import { cardInvoiceReconciliationPath } from "./routing/cardInvoiceImportRoute.js";
 
 import { resolveDataMode } from "./dataMode.js";
 import { nextDuplicateLabel } from "./features/transactions/duplicateLabel.js";
@@ -157,6 +165,8 @@ export default function App() {
      uma página que rola, e numa tela autocontida vira uma faixa morta. */
   const ledgerScreen = isMobile && /^\/cards\/[^/]+\/transactions\/?$/.test(pathname);
   const selfScrollingScreen = isMobile && (activeSegment === "transactions" || ledgerScreen);
+  // A tela inicial do Conciliar extrato no computador ocupa a altura que sobra (área de soltar grande).
+  const fillsHeight = !selfScrollingScreen && fillsAvailableHeight(pathname, isMobile);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactionsListVersion, setTransactionsListVersion] = useState(0);
@@ -376,6 +386,7 @@ export default function App() {
       extraTx={extraTx}
       onNewTx={openNewTxFromTransactions}
       onAccountScopeChange={setTxAccountScope}
+      onReconcileStatement={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: statementReconciliationPath(accountId, importId) }) : null}
       onEditTx={(tx) => {
         flushSync(() => setModalPreConfig(buildTxModalPreConfig(tx)));
         openTxModal({ [FC.TX]: String(tx.id) });
@@ -427,7 +438,9 @@ export default function App() {
               setModalPreConfig(buildEditRecurringPreConfig(rec));
               openTxModal();
             }} />,
-    invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
+    invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion}
+      // Conciliar fatura reescreve os livros da organização: só o dono opera (a API recusa os demais).
+      onReconcileInvoice={activeMembershipRole === "owner" ? (cardPublicId) => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) }) : null} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
     cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
@@ -465,7 +478,17 @@ export default function App() {
       openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(item.transactionId) });
     }} />} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
-    accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onOpenAccountTransactions={(accountId) => navTo("transactions", { accountId })} />,
+    accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onOpenAccountTransactions={(accountId) => navTo("transactions", { accountId })}
+      // Conciliar extrato reescreve os livros da organização: só o dono opera (a API recusa os demais).
+      onImportStatement={activeMembershipRole === "owner" ? (accountId) => navigate({ to: statementReconciliationPath(accountId) }) : null}
+      onContinueReconciliation={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: statementReconciliationPath(accountId, importId) }) : null} />,
+    statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
+      onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
+    cardInvoiceReconciliation: <CardInvoiceReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId} onConcluded={bumpTransactionsList} />,
+    cardInvoiceUndo: <CardInvoiceUndoPage isMobile={isMobile} organizationId={session.activeOrgId} onUndone={bumpTransactionsList} />,
+    statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}
+      onUndone={bumpTransactionsList}
+      onOpenAccountTransactions={(accountId) => { bumpTransactionsList(); navTo("transactions", { accountId }); }} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user}
       membershipRole={activeMembershipRole} onBaseCurrencyChanged={onBaseCurrencyChanged} />,
@@ -641,14 +664,7 @@ export default function App() {
         <div
           data-fincla-main-scroll
           className={selfScrollingScreen ? undefined : "fincla-scroll"}
-          style={{ flex:1, minHeight:0,
-            overflowY: selfScrollingScreen ? "hidden" : "auto",
-            overflowX: selfScrollingScreen ? "clip" : "hidden",
-            display: selfScrollingScreen ? "flex" : undefined,
-            flexDirection: selfScrollingScreen ? "column" : undefined,
-            padding: selfScrollingScreen
-              ? (ledgerScreen ? 0 : "14px 14px 0")
-              : isMobile ? "14px 14px 40px" : "20px 28px 40px" }}>
+          style={mainScrollStyle({ selfScrolling: selfScrollingScreen, ledger: ledgerScreen, fillsHeight, isMobile })}>
           <AccessNotice user={session.user} />
           {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
             <div style={{ display:"flex", alignItems:"flex-start", gap:10, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:11, padding:"12px 14px", marginBottom:14 }}>
@@ -675,7 +691,7 @@ export default function App() {
               onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen}><Outlet /></PageEnter></ErrorBoundary>
+          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen} fillMin={fillsHeight}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
       <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />

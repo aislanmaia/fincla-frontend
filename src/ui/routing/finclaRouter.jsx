@@ -28,6 +28,8 @@ import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.j
 import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
 import { isTransactionEditPathId } from "./transactionPathId.js";
 import { CARD_ALL_TRANSACTIONS_ROUTE_PATTERN, CARD_TRANSACTIONS_ROUTE_PATTERN, INVOICE_ROUTE_PATTERN, isValidInvoiceParams, isValidPublicCardId } from "./invoiceRoute.js";
+import { STATEMENT_IMPORT_UNDO_ROUTE_PATTERN } from "./statementImportRoute.js";
+import { CARD_INVOICE_RECONCILIATION_ROUTE_PATTERN, CARD_INVOICE_UNDO_ROUTE_PATTERN } from "./cardInvoiceImportRoute.js";
 
 const rootRoute = createRootRoute({
   validateSearch: zodValidator(finclaRootSearchSchema),
@@ -151,6 +153,56 @@ const cardCommitmentsRoute = createRoute({
   errorComponent: FinclaAuthenticatedRouteError,
   component: function CardCommitmentsRoute() {
     return <AuthenticatedPageOutlet segment="cardCommitments" />;
+  },
+});
+
+/** Conciliar extrato da conta: envio (`/accounts/:id/reconcile`) e rascunho (`…/reconcile/:importId`). */
+const statementReconciliationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "accounts/$accountId/reconcile/{-$importId}",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function StatementReconciliationRoute() {
+    return <AuthenticatedPageOutlet segment="statementReconciliation" />;
+  },
+});
+
+/** Conciliar fatura do cartão (fincla-api#555): envio (`/cards/:id/reconcile`) e rascunho (`…/reconcile/:importId`). */
+const cardInvoiceReconciliationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: CARD_INVOICE_RECONCILIATION_ROUTE_PATTERN,
+  beforeLoad: (ctx) => {
+    requireSessionTokenBeforeLoad(ctx);
+    if (!isValidPublicCardId(ctx.params?.cardId)) throw notFound();
+  },
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function CardInvoiceReconciliationRoute() {
+    return <AuthenticatedPageOutlet segment="cardInvoiceReconciliation" />;
+  },
+});
+
+/** Desfazer uma conciliação de fatura concluída (fincla-api#556): prévia e confirmação na página. */
+const cardInvoiceUndoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: CARD_INVOICE_UNDO_ROUTE_PATTERN,
+  beforeLoad: (ctx) => {
+    requireSessionTokenBeforeLoad(ctx);
+    if (!isValidPublicCardId(ctx.params?.cardId)) throw notFound();
+  },
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function CardInvoiceUndoRoute() {
+    return <AuthenticatedPageOutlet segment="cardInvoiceUndo" />;
+  },
+});
+
+/** Desfazer uma importação concluída (fincla-api#509): prévia e confirmação na própria página. */
+const statementImportUndoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: STATEMENT_IMPORT_UNDO_ROUTE_PATTERN,
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function StatementImportUndoRoute() {
+    return <AuthenticatedPageOutlet segment="statementImportUndo" />;
   },
 });
 
@@ -318,6 +370,10 @@ const routeTree = rootRoute.addChildren([
   cardTransactionsRoute,
   cardAllTransactionsRoute,
   cardCommitmentsRoute,
+  statementReconciliationRoute,
+  statementImportUndoRoute,
+  cardInvoiceReconciliationRoute,
+  cardInvoiceUndoRoute,
   profileRoute,
   planningRoute,
   consultantRoute,

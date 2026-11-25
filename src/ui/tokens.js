@@ -51,3 +51,6 @@ export const T = {
   xl: "0 16px 48px rgba(0,0,0,0.14)",
   dark: "0 8px 32px rgba(0,0,0,0.35)",
 };
+
+/** A altura mínima de um alvo de toque no celular (WCAG 2.5.5 / diretrizes do iOS e do Android). */
+export const TOUCH_TARGET = 44;

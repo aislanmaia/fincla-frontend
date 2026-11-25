@@ -1,0 +1,1080 @@
+// api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
+// desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação; terceira #557: compras novas,
+// à vista e parceladas; quarta #558: encargos, tarifas e estornos, com o grupo de encargos; quinta
+// #559: dúvidas, a busca "Procure no Fincla" e as compras em outra fatura, com mover; sexta #560:
+// "Sobrando no Fincla", "Conferir o total" e as compras novas sem confirmar que seguram o concluir).
+//
+// O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
+// do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
+// `src/api/__fixtures__/card_invoice_import.example.json`, cópia byte a byte da fixture canônica do
+// backend (presa aos modelos Pydantic por um teste de lá).
+//
+// Dinheiro: o fio manda `{amount, currency}`. A fronteira converte para número + moeda; o que pode
+// faltar (o total do Fincla, a diferença) fica `null` = "não sabemos", nunca zero.
+import apiClient from './client';
+import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
+import { normalizeStatementUndoPreview, type StatementUndoPreview, type UndoRefusalCode } from './statementImports';
+
+/** Os 8 passos da conciliação da fatura, na ordem (cada fluxo com a sua contagem, decisão 9). */
+export type InvoiceReconciliationStep =
+  | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new' | 'leftover' | 'total' | 'summary';
+/**
+ * O passo do lançamento, fixo: responder outra coisa não muda o passo. `reconciled` (#556): já
+ * conferido por uma conciliação concluída deste cartão (reimportação), só leitura, "já conferido".
+ */
+export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
+/**
+ * `pair`, `ignore`, (#557) `create` e (#559) `move` ("Mover para esta fatura" / "Mover só esta") e
+ * `move_series` ("Mover esta e as próximas", só parcela). `reconciled` e (#558) `pair_sum` (o grupo de encargos somado numa transação, respondido pelo
+ * grupo) só vêm do servidor: nunca se enviam num lançamento.
+ */
+export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled' | 'pair_sum';
+/** As respostas do grupo de encargos (#558): Sim, somados em <transação> · Não, adicionar cada um · Não registrar. */
+export type ChargeGroupAnswer = 'pair_sum' | 'create' | 'ignore';
+/** A seção do PDF onde o banco imprimiu o lançamento. */
+export type InvoiceSection = 'purchases' | 'international' | 'services' | 'charges';
+export type CardInvoiceImportStatus = 'draft' | 'concluded' | 'undone';
+
+/** Um valor em dinheiro já convertido: `amount` com sinal como veio, `currency` declarada pelo fio. */
+export interface InvoiceMoney {
+  amount: number;
+  currency: string | null;
+}
+
+/** "NN/MM" da parcela. */
+export interface InstallmentPosition {
+  number: number;
+  count: number;
+}
+
+/**
+ * Compra parcelada nova (#557, decisão 5): `full` = Compra inteira (parcelas 1 a M, o padrão);
+ * `from_current` = Só daqui em diante (N a M). `null` à vista.
+ */
+export type InstallmentsScope = 'full' | 'from_current';
+
+/** Uma fatura do cartão, como a resposta a cita ("Na fatura de <mês>"): `month` = mês em que fecha. */
+export interface InvoiceBrief {
+  id: number;
+  year: number;
+  month: number;
+  status: 'open' | 'closed' | 'paid' | string;
+}
+
+/** "Mover" (#559): o que a compra do Fincla pode fazer agora. */
+export type InvoiceMoveAnswer = 'move' | 'move_series';
+
+/**
+ * Por que "Mover" (ou "Mover esta e as próximas") está desligado (#559). `message` vem pronta, em
+ * PT-BR, e nomeia a fatura; `invoice_year`/`invoice_month` dizem qual fatura paga segura.
+ */
+export interface MoveRefusal {
+  code: 'invoice_paid' | 'other_invoice_paid' | 'series_reconciled' | 'series_off_invoice' | string;
+  message: string;
+  invoice_year: number | null;
+  invoice_month: number | null;
+}
+
+/** Uma parcela vizinha da mesma compra e a fatura onde ela está hoje (`invoice: null` = em nenhuma deste cartão). */
+export interface SuggestionNeighbour {
+  number: number;
+  invoice: InvoiceBrief | null;
+}
+
+/**
+ * Por que a "Sugestão: …" de uma parcela (#559): onde estão HOJE as parcelas vizinhas da mesma compra
+ * (`previous: null` na 1ª, `next: null` na última). `null` à vista e fora do passo 2.
+ */
+export interface SuggestionBasis {
+  previous: SuggestionNeighbour | null;
+  next: SuggestionNeighbour | null;
+}
+
+/** Uma parcela da compra nova, na fatura em que cai (`invoice_month` = mês em que ela fecha). */
+export interface NewPurchaseInstallment {
+  number: number;
+  amount: number;
+  currency: string | null;
+  invoice_year: number;
+  invoice_month: number;
+  /** `false` = o banco não listou esta parcela: o valor é o da parcela N ("valor estimado"). */
+  from_bank: boolean;
+  /** A fatura dela já está paga: a parcela entra já paga (a única exceção à decisão 1). */
+  invoice_paid: boolean;
+}
+
+/**
+ * A compra parcelada nova inteira (1..M), cada parcela na sua fatura. `total_amount` é o mesmo nas
+ * duas opções. `null` à vista, em crédito e fora de `suggested`/`new`.
+ */
+export interface NewPurchase {
+  installments_count: number;
+  total_amount: InvoiceMoney | null;
+  installments: NewPurchaseInstallment[];
+}
+
+/** O lado "No Fincla", lido ao vivo. */
+export interface InvoiceFinclaTransaction {
+  id: number;
+  description: string;
+  type: 'expense' | 'refund' | 'income';
+  /** Sem sinal. */
+  value: number;
+  currency: string | null;
+  /** Numa parcela é o vencimento da fatura (regra aa087); a tela lê os 10 primeiros caracteres. */
+  date: string;
+  /** A data da compra da série (parcela) ou a da própria compra; é por ela que o par é feito. */
+  purchase_date: string | null;
+  installment: InstallmentPosition | null;
+  invoice_id: number | null;
+  status: string;
+  paid_at: string | null;
+  category_name: string | null;
+  tag_names: string[];
+  /** `amount`: valor ≠ do banco; `date`: dia da compra ≠ do banco. */
+  differences: ('amount' | 'date')[];
+}
+
+/**
+ * Uma opção de uma dúvida, ou um resultado da busca (#559): a transação do Fincla, a fatura onde ela
+ * está HOJE (`null` = não sabemos) e o outro lançamento desta conciliação que já a escolheu.
+ */
+export interface InvoiceCandidate extends InvoiceFinclaTransaction {
+  invoice: InvoiceBrief | null;
+  /** Outro lançamento já respondido com ela (`pair`, `pair_sum`, `move`, `move_series`); escolher → 409. */
+  taken_by_entry_id: string | null;
+  /**
+   * Calculados para ela, com o mesmo sentido do lançamento de outra fatura: a resposta que escolhê-la
+   * dá (`move`/`move_series`; `null` nesta fatura, onde é `pair`), se "Mover" e "Mover esta e as
+   * próximas" valem agora, por que um deles está desligado, e as parcelas vizinhas.
+   */
+  suggested_answer: InvoiceMoveAnswer | null;
+  movable: boolean;
+  series_movable: boolean;
+  move_refusal: MoveRefusal | null;
+  suggestion_basis: SuggestionBasis | null;
+}
+
+/**
+ * Uma parcela seguinte da compra (#561): `from` = valor no Fincla hoje, `to` = o do banco (`null` =
+ * não sabemos). `locked` = por que fica com o valor do Fincla mesmo ligado; `null` = recebe o do banco.
+ */
+export interface NextAdjustmentInstallment {
+  number: number;
+  transaction_id: number;
+  from: InvoiceMoney | null;
+  to: InvoiceMoney | null;
+  invoice: InvoiceBrief | null;
+  locked: 'invoice_paid' | 'reconciled' | string | null;
+}
+
+/**
+ * "Ajustar também as próximas" (#561). `purchase_difference` = soma das seguintes no Fincla depois de
+ * concluir − a do banco (positivo = Fincla maior); `null` = não sabemos (aviso genérico).
+ */
+export interface NextAdjustment {
+  adjust: boolean;
+  installments: NextAdjustmentInstallment[];
+  purchase_difference: InvoiceMoney | null;
+}
+
+export interface InvoiceEntry {
+  id: string;
+  position: number;
+  /** Dia da compra no banco, "YYYY-MM-DD" (numa parcela, o da compra original). */
+  date: string;
+  /** Texto do banco, com o "NN/MM" da parcela como o banco imprime. */
+  bank_description: string;
+  /** No sentido do dinheiro: cobrança negativa, crédito positivo. */
+  amount: number;
+  currency: string | null;
+  section: InvoiceSection;
+  installment: InstallmentPosition | null;
+  /** O que o banco vai cobrar nas próximas parcelas desta compra; vazio = não listou. Positivo. */
+  next_installments: { number: number; amount: number; currency: string | null }[];
+  /** Só informativo (compra internacional). */
+  foreign_amount: { amount: string; currency: string } | null;
+  /** Final do cartão (titular ou adicional): etiqueta "final 1234". */
+  card_last4: string | null;
+  classification: InvoiceEntryClassification;
+  answer: InvoiceEntryAnswer | null;
+  confirmed: boolean;
+  /** `false` = "Fica de fora nesta versão": só leitura (e, numa concluída, tudo). */
+  answerable: boolean;
+  suggested_transaction_id: number | null;
+  paired_transaction_id: number | null;
+  fincla_transaction: InvoiceFinclaTransaction | null;
+  /** Com `pair` e valor diferente: ao concluir a transação passa de `from` para `to` (o valor do banco). */
+  value_change: { from: number; to: number; currency: string | null } | null;
+  /**
+   * #561 "Ajustar também as próximas N parcelas com os valores que o banco informou". Só num
+   * rascunho, num par com valor diferente numa parcela com seguintes que o banco listou todas.
+   */
+  next_adjustment: NextAdjustment | null;
+  /** Fatura já paga no Fincla: o par liga sem trocar o valor (decisão 1). E `create` é recusado. */
+  value_locked: boolean;
+  // A compra nova (#557): o formulário de "Adicionar" / "Não, adicionar agora".
+  /** Pré-preenchida com o texto do banco sem o "NN/MM"; vazia bloqueia o concluir. */
+  description: string;
+  /** Travado: `expense` (cobrança) ou `refund` (crédito). */
+  transaction_type: 'expense' | 'refund';
+  category_tag_id: string | null;
+  /** A categoria pelo histórico (#513); `null` = sem histórico parecido. */
+  suggested_category_tag_id: string | null;
+  /** Só da categoria escolhida. */
+  detail_tag_ids: string[];
+  installments_scope: InstallmentsScope | null;
+  new_purchase: NewPurchase | null;
+  /** Depois de concluir com `create`: a transação criada nesta fatura (na parcelada, a parcela N). */
+  created_transaction_id: number | null;
+  /** O grupo de encargos do lançamento (#558): a resposta e o confirmar vêm pelo grupo. `null` fora dele. */
+  charge_group_id: string | null;
+  /**
+   * "Adicionar" é uma resposta possível agora (#558, QA F3 OBS-09): `false` em fatura já paga, em
+   * crédito parcelado e fora dos passos respondíveis. Sem ele, o formulário fica só leitura.
+   */
+  addable: boolean;
+  // Compras em outra fatura e dúvidas (#559).
+  /** A "Sugestão: …" do passo 2, fixa: `move` (à vista ou "só esta") ou `move_series`. `null` fora dele. */
+  suggested_answer: InvoiceMoveAnswer | null;
+  /** A fatura onde a compra do lado "No Fincla" está hoje, quando não é esta ("Na fatura de <mês>"). */
+  other_invoice: InvoiceBrief | null;
+  /** `move` é possível agora com a compra do lado "No Fincla". */
+  movable: boolean;
+  /** `move_series` é possível agora (só parcela). */
+  series_movable: boolean;
+  /** Por que um dos dois está desligado (mostre `message`); `null` = nenhum motivo. */
+  move_refusal: MoveRefusal | null;
+  /** Onde estão hoje as parcelas vizinhas da mesma compra (o motivo da sugestão); `null` à vista. */
+  suggestion_basis: SuggestionBasis | null;
+  /** As opções de uma dúvida, ao vivo, a mais parecida primeiro; vazio fora de `doubt` e de rascunho. */
+  candidates: InvoiceCandidate[];
+}
+
+/**
+ * O grupo de encargos do passo 4 (#558): os lançamentos da seção Encargos sem par, respondidos
+ * juntos. `total` = a Soma, no sentido do dinheiro (negativa).
+ */
+export interface ChargeGroup {
+  id: string;
+  /** Os lançamentos do grupo, na ordem do banco. */
+  entry_ids: string[];
+  total: number;
+  currency: string | null;
+  /** A transação cujo valor é a soma, ao centavo ("A soma bate"); `null` = nenhuma bate. */
+  suggested_transaction_id: number | null;
+  paired_transaction_id: number | null;
+  /** `null` = sem resposta (bloqueia o concluir). */
+  answer: ChargeGroupAnswer | null;
+  confirmed: boolean;
+  /** `false` numa conciliação concluída ou desfeita. */
+  answerable: boolean;
+  /** "Não, adicionar cada um" é possível: `false` em fatura já paga (decisão 1). */
+  addable: boolean;
+  /** A transação somada, ao vivo, também com `create`/`ignore` (a tela a mostra cinza listrada). */
+  fincla_transaction: InvoiceFinclaTransaction | null;
+}
+
+export interface InvoiceRef {
+  id: number;
+  year: number;
+  /** O mês em que a fatura fecha. */
+  month: number;
+  due_date: string;
+  closing_date: string;
+  status: 'open' | 'closed' | 'paid' | string;
+  /** O total no Fincla hoje (estorno subtrai); `null` = a fatura sumiu (não sabemos). */
+  total: InvoiceMoney | null;
+}
+
+export interface CardRef {
+  id: number;
+  public_id: string;
+  name: string;
+}
+
+export interface CardCheck {
+  status: 'same_card' | 'other_card';
+  file_last4: string | null;
+  /**
+   * O cartão do PDF, quando é outro da organização ("Conciliar no cartão X"). Com `other_card` pode
+   * vir `null` (mais de um outro cartão com o final do PDF): o aviso fica, sem o botão.
+   */
+  suggested_card: CardRef | null;
+}
+
+/** O resumo da página 1 do PDF. Pagamento e saldo financiado são só referência (decisão 6). */
+export interface InvoiceBankSummary {
+  previous_total: InvoiceMoney | null;
+  payment: { amount: InvoiceMoney | null; date: string | null } | null;
+  financed_balance: InvoiceMoney | null;
+  charges: InvoiceMoney | null;
+  current_entries: InvoiceMoney | null;
+  total: InvoiceMoney | null;
+  due_date: string | null;
+  issue_date: string | null;
+  posting_date: string | null;
+  next_closing_date: string | null;
+}
+
+export interface CardInvoiceImportSummary {
+  total: number;
+  suggested: number;
+  to_pair: number;
+  unconfirmed: number;
+  value_changes: number;
+  /** Inclui os `read_only`. */
+  ignored: number;
+  read_only: number;
+  unanswered: number;
+  /** Já conferidos por uma conciliação concluída deste cartão (reimportação, #556); fora de `read_only`. */
+  already_reconciled: number;
+  /** Respondidos `create` (#557). */
+  to_create: number;
+  /** `create` sem descrição: bloqueia o concluir. */
+  missing_description: number;
+  /** `create` sem categoria: vão para Não classificado ao concluir. */
+  uncategorized: number;
+  /** Lançamentos do grupo de encargos respondidos `pair_sum` ("encargos já somados", #558). */
+  summed_charges: number;
+  /** Respondidos `move`/`move_series` (#559). */
+  to_move: number;
+  /** `answer: "create"` ainda sem confirmar (decisão do Owner de 2026-11-26): seguram o concluir. */
+  unconfirmed_creates: number;
+  /**
+   * "Sobrando no Fincla" (#560): rascunho ao vivo; concluída/desfeita, o que a conclusão fez.
+   * `leftovers_waiting` = candidatas de um lançamento ainda sem resposta (fora da lista até a resposta).
+   */
+  leftovers: number;
+  leftovers_undecided: number;
+  leftovers_kept: number;
+  leftovers_to_move: number;
+  leftovers_to_delete: number;
+  leftovers_waiting: number;
+}
+
+/**
+ * Por que o concluir está bloqueado. `step` (#560) diz em que passo resolver: vem em
+ * `unconfirmed_creates` (um por passo) e `undecided_leftovers` (`leftover`); `null` nos outros.
+ */
+export interface ConcludeBlocker {
+  code: 'unanswered' | 'missing_description' | 'unconfirmed_creates' | 'undecided_leftovers' | 'changed_since_read' | string;
+  count: number;
+  step: InvoiceReconciliationStep | null;
+}
+
+/** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
+export interface InvoiceFileCheck {
+  status: 'new' | 'already_imported';
+  import_id: string | null;
+  concluded_at: string | null;
+}
+
+/** Banco − Fincla, com as respostas projetadas. `fincla`/`difference` `null` = não sabemos (nunca zero). */
+export interface InvoiceDifferenceNow {
+  bank: number | null;
+  fincla: number | null;
+  difference: number | null;
+  currency: string | null;
+}
+
+export interface CardInvoiceImport {
+  kind: 'card_invoice';
+  id: string;
+  status: CardInvoiceImportStatus;
+  /** A conta de liquidação do cartão. */
+  account_id: string;
+  credit_card: CardRef & { last4: string | null };
+  invoice: InvoiceRef;
+  card_check: CardCheck;
+  /** Nome do arquivo enviado, como o navegador mandou; `null` = não veio nome. */
+  file_name: string | null;
+  bank_summary: InvoiceBankSummary;
+  entries: InvoiceEntry[];
+  /** O grupo de encargos (#558, no máximo um): vazio quando não há encargos sem par. */
+  charge_groups: ChargeGroup[];
+  summary: CardInvoiceImportSummary;
+  difference_now: InvoiceDifferenceNow;
+  can_conclude: boolean;
+  blockers: ConcludeBlocker[];
+  /** Registrada ao concluir. `null` = ainda não (nunca zero). */
+  final_difference: InvoiceMoney | null;
+  current_step: InvoiceReconciliationStep | null;
+  reviewed_steps: InvoiceReconciliationStep[];
+  created_at: string;
+  last_activity_at: string;
+  expires_at: string | null;
+  concluded_at: string | null;
+  undone_at: string | null;
+  /** É a concluída mais recente do cartão: a única que pode ser desfeita. */
+  latest_concluded: boolean;
+  file_check: InvoiceFileCheck;
+  /**
+   * Rascunho cuja leitura não vale mais (QA F4 OBS-01): outra conciliação deste cartão foi concluída ou
+   * desfeita, ou a fatura foi paga/desmarcada, depois da leitura. Concluir é recusado: descarte e
+   * envie o PDF de novo. `false` fora de rascunho.
+   */
+  changed_since_read: boolean;
+}
+
+/** Uma linha de "Faturas conciliadas" do cartão: o detalhe sem `entries` (nem cartão, resumo do banco). */
+export type CardInvoiceImportListItem = Pick<
+  CardInvoiceImport,
+  | 'id' | 'status' | 'invoice' | 'file_name' | 'summary' | 'difference_now' | 'final_difference' | 'can_conclude' | 'blockers'
+  | 'current_step' | 'created_at' | 'last_activity_at' | 'expires_at' | 'concluded_at' | 'undone_at' | 'latest_concluded'
+  | 'changed_since_read'
+>;
+
+/**
+ * A recusa do desfazer: as do extrato, e `invoice_paid` (decisão 8: a fatura já foi paga). Em
+ * `invoice_paid`, `invoice_year`/`invoice_month` dizem QUAL fatura paga segura o desfazer (a
+ * conciliada ou uma anterior, onde entrou uma parcela); `null` nos outros códigos. A `message` já a
+ * nomeia.
+ */
+export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal' | 'to_restore'> & {
+  /**
+   * `invoice_back` (#559): a fatura para onde uma compra movida (`move`/`move_series`) volta, como
+   * está hoje; `null` se a fatura não muda no desfazer.
+   */
+  to_restore: (StatementUndoPreview['to_restore'][number] & { invoice_back: InvoiceBrief | null })[];
+  refusal: {
+    code: UndoRefusalCode | 'invoice_paid';
+    message: string;
+    invoice_year?: number | null;
+    invoice_month?: number | null;
+  } | null;
+};
+
+/** O desfazer feito: `status: 'undone'`, com quantas transações ele apagou. */
+export type UndoneCardInvoiceImport = CardInvoiceImport & { deleted_transactions: number | null };
+
+/**
+ * O grupo inteiro (#558): responder confirma, a menos que `confirmed` venha junto; só `{confirmed}`
+ * mantém a resposta. `answer: null` (enviado) volta o grupo a sem resposta (`confirmed: false`): o
+ * "Desfazer escolha" da primeira resposta de um grupo que começou sem resposta.
+ */
+export interface UpdateChargeGroupRequest {
+  answer?: ChargeGroupAnswer | null;
+  confirmed?: boolean;
+}
+
+export interface UpdateInvoiceEntryRequest {
+  /**
+   * `null` (enviado) volta o lançamento a sem resposta (`confirmed: false`): o "Desfazer escolha" da
+   * primeira resposta. Nunca com `transaction_id` nem `confirmed: true` (→ 422).
+   */
+  answer?: 'pair' | 'ignore' | 'create' | InvoiceMoveAnswer | null;
+  /**
+   * Com `pair`/`move`/`move_series`: a transação escolhida (opção da dúvida ou da busca). Ausente = a
+   * sugerida. `pair` só nesta fatura; `move`/`move_series` só na anterior ou na seguinte.
+   */
+  transaction_id?: number | null;
+  confirmed?: boolean;
+  // A compra nova (#557): mudam com ou sem `answer`.
+  description?: string;
+  category_tag_id?: string | null;
+  detail_tag_ids?: string[];
+  installments_scope?: InstallmentsScope;
+  /** #561: liga/desliga "Ajustar também as próximas" (só em parcela com seguintes, senão 422). */
+  adjust_next_installments?: boolean;
+}
+
+/** "Sobrando no Fincla" (#560): Manter · Mover para a próxima fatura · Excluir; `null` = falta decidir. */
+export type LeftoverAction = 'keep' | 'move_next' | 'delete';
+
+/**
+ * Por que o item sobrou, a primeira que vale (só valor e dia, nunca texto): `option_not_chosen` (era
+ * uma opção de um lançamento que escolheu outra, ou foi adicionado/não registrado: `chosen_*` `null`;
+ * `charge_group_id` quando era a soma do grupo de encargos), `looks_duplicated` (mesmo valor e dia de
+ * um item ligado, `twin_*`), `maybe_repeated` (só o mesmo valor), `maybe_next_invoice`.
+ */
+export interface LeftoverHint {
+  code: 'option_not_chosen' | 'looks_duplicated' | 'maybe_repeated' | 'maybe_next_invoice' | string;
+  entry_id: string | null;
+  entry_bank_description: string | null;
+  entry_date: string | null;
+  charge_group_id: string | null;
+  chosen_transaction_id: number | null;
+  chosen_description: string | null;
+  twin_transaction_id: number | null;
+  twin_description: string | null;
+}
+
+/** Uma recusa de mover/excluir: `invoice_paid`, `other_invoice_paid`, `goal`, `refunded`. */
+export interface LeftoverRefusal {
+  code: string;
+  message: string | null;
+  invoice_year: number | null;
+  invoice_month: number | null;
+}
+
+export interface LeftoverItem {
+  transaction: InvoiceFinclaTransaction;
+  action: LeftoverAction | null;
+  hint: LeftoverHint | null;
+  movable: boolean;
+  deletable: boolean;
+  move_refusal: LeftoverRefusal | null;
+  delete_refusal: LeftoverRefusal | null;
+}
+
+export interface CardInvoiceLeftovers {
+  import_id: string;
+  items: LeftoverItem[];
+  /** Candidatas de um lançamento ainda sem resposta: não aparecem até a resposta. */
+  waiting_transactions: number;
+  next_invoice_year: number | null;
+  next_invoice_month: number | null;
+  /** A fatura seguinte; `null` = ainda não existe (é criada ao concluir). */
+  next_invoice: InvoiceBrief | null;
+}
+
+/** Uma causa da diferença: `step` é o destino do "Ir para o passo"; `effect` `null` = falta responder. */
+export interface TotalCheckCause {
+  code: 'unanswered' | 'ignored' | 'fincla_value_kept' | 'kept_leftover' | 'undecided_leftover' | string;
+  step: InvoiceReconciliationStep | null;
+  description: string | null;
+  amount: InvoiceMoney | null;
+  effect: InvoiceMoney | null;
+  date: string | null;
+  entry_id: string | null;
+  charge_group_id: string | null;
+  transaction_id: number | null;
+}
+
+/**
+ * "Conferir o total" (#560): `bank` = soma dos lançamentos lidos; `fincla` = a fatura no Fincla com as
+ * respostas aplicadas (estorno subtrai); `difference = bank − fincla`. `null` = não sabemos (nunca zero).
+ */
+export interface CardInvoiceTotalCheck {
+  import_id: string;
+  status: CardInvoiceImportStatus;
+  bank_summary: InvoiceBankSummary;
+  bank: InvoiceMoney | null;
+  fincla: InvoiceMoney | null;
+  difference: InvoiceMoney | null;
+  matches: boolean;
+  causes: TotalCheckCause[];
+}
+
+// --------------------------------------------------------------------------------------------
+// Fronteira
+// --------------------------------------------------------------------------------------------
+
+type Raw = Record<string, unknown>;
+
+const moneyOrNull = (value: WireMoney): InvoiceMoney | null => {
+  const amount = toFiniteNumber(value);
+  return amount === null ? null : { amount, currency: toCurrency(value) };
+};
+
+const normalizeFincla = (raw: Raw | null | undefined): InvoiceFinclaTransaction | null => {
+  if (!raw) return null;
+  return {
+    ...(raw as unknown as InvoiceFinclaTransaction),
+    value: toAmount(raw.value as WireMoney),
+    currency: toCurrency(raw.value),
+    purchase_date: (raw.purchase_date as string | null) ?? null,
+    installment: (raw.installment as InstallmentPosition | null) ?? null,
+    tag_names: (raw.tag_names as string[]) ?? [],
+    differences: (raw.differences as InvoiceFinclaTransaction['differences']) ?? [],
+  };
+};
+
+const normalizeNewPurchase = (raw: Raw | null | undefined): NewPurchase | null => {
+  if (!raw) return null;
+  return {
+    installments_count: Number(raw.installments_count),
+    total_amount: moneyOrNull(raw.total_amount as WireMoney),
+    installments: ((raw.installments as Raw[]) ?? []).map((i) => ({
+      number: Number(i.number),
+      amount: toAmount(i.amount as WireMoney),
+      currency: toCurrency(i.amount),
+      invoice_year: Number(i.invoice_year),
+      invoice_month: Number(i.invoice_month),
+      from_bank: Boolean(i.from_bank),
+      invoice_paid: Boolean(i.invoice_paid),
+    })),
+  };
+};
+
+const normalizeBrief = (raw: unknown): InvoiceBrief | null => {
+  const brief = raw as Raw | null | undefined;
+  if (!brief) return null;
+  return { id: Number(brief.id), year: Number(brief.year), month: Number(brief.month), status: String(brief.status ?? '') };
+};
+
+const normalizeNeighbour = (raw: unknown): SuggestionNeighbour | null => {
+  const neighbour = raw as Raw | null | undefined;
+  if (!neighbour) return null;
+  return { number: Number(neighbour.number), invoice: normalizeBrief(neighbour.invoice) };
+};
+
+const normalizeSuggestionBasis = (raw: unknown): SuggestionBasis | null => {
+  const basis = raw as Raw | null | undefined;
+  if (!basis) return null;
+  return { previous: normalizeNeighbour(basis.previous), next: normalizeNeighbour(basis.next) };
+};
+
+/** O que dá para mover (#559), comum ao lançamento de outra fatura e às opções/resultados da busca. */
+const normalizeMoveFields = (raw: Raw) => ({
+  suggested_answer: (raw.suggested_answer as InvoiceMoveAnswer | null) ?? null,
+  movable: Boolean(raw.movable),
+  series_movable: Boolean(raw.series_movable),
+  move_refusal: (raw.move_refusal as MoveRefusal | null) ?? null,
+  suggestion_basis: normalizeSuggestionBasis(raw.suggestion_basis),
+});
+
+const normalizeNextAdjustment = (raw: unknown): NextAdjustment | null => {
+  const adjustment = raw as Raw | null | undefined;
+  if (!adjustment) return null;
+  return {
+    adjust: Boolean(adjustment.adjust),
+    installments: ((adjustment.installments as Raw[]) ?? []).map((i) => ({
+      number: Number(i.number),
+      transaction_id: Number(i.transaction_id),
+      from: moneyOrNull(i.from as WireMoney),
+      to: moneyOrNull(i.to as WireMoney),
+      invoice: normalizeBrief(i.invoice),
+      locked: (i.locked as string | null) ?? null,
+    })),
+    purchase_difference: moneyOrNull(adjustment.purchase_difference as WireMoney),
+  };
+};
+
+export const normalizeInvoiceCandidate = (raw: Raw): InvoiceCandidate => ({
+  ...(normalizeFincla(raw) as InvoiceFinclaTransaction),
+  invoice: normalizeBrief(raw.invoice),
+  taken_by_entry_id: (raw.taken_by_entry_id as string | null) ?? null,
+  ...normalizeMoveFields(raw),
+});
+
+export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
+  const change = raw.value_change as { from: WireMoney; to: WireMoney } | null | undefined;
+  return {
+    ...(raw as unknown as InvoiceEntry),
+    amount: toAmount(raw.amount as WireMoney),
+    currency: toCurrency(raw.amount),
+    installment: (raw.installment as InstallmentPosition | null) ?? null,
+    next_installments: ((raw.next_installments as { number: number; amount: WireMoney }[]) ?? []).map((n) => ({
+      number: n.number,
+      amount: toAmount(n.amount),
+      currency: toCurrency(n.amount),
+    })),
+    foreign_amount: (raw.foreign_amount as InvoiceEntry['foreign_amount']) ?? null,
+    card_last4: (raw.card_last4 as string | null) ?? null,
+    answer: (raw.answer as InvoiceEntryAnswer | null) ?? null,
+    confirmed: Boolean(raw.confirmed),
+    answerable: Boolean(raw.answerable),
+    suggested_transaction_id: (raw.suggested_transaction_id as number | null) ?? null,
+    paired_transaction_id: (raw.paired_transaction_id as number | null) ?? null,
+    fincla_transaction: normalizeFincla(raw.fincla_transaction as Raw | null),
+    value_change: change ? { from: toAmount(change.from), to: toAmount(change.to), currency: toCurrency(change.to) } : null,
+    next_adjustment: normalizeNextAdjustment(raw.next_adjustment),
+    value_locked: Boolean(raw.value_locked),
+    description: (raw.description as string | null) ?? '',
+    transaction_type: (raw.transaction_type as InvoiceEntry['transaction_type'] | null) ?? (toAmount(raw.amount as WireMoney) > 0 ? 'refund' : 'expense'),
+    category_tag_id: (raw.category_tag_id as string | null) ?? null,
+    suggested_category_tag_id: (raw.suggested_category_tag_id as string | null) ?? null,
+    detail_tag_ids: (raw.detail_tag_ids as string[] | null) ?? [],
+    installments_scope: (raw.installments_scope as InstallmentsScope | null) ?? null,
+    new_purchase: normalizeNewPurchase(raw.new_purchase as Raw | null),
+    created_transaction_id: (raw.created_transaction_id as number | null) ?? null,
+    charge_group_id: (raw.charge_group_id as string | null) ?? null,
+    // Um backend sem o campo (anterior à #558): Adicionar vale onde a resposta vale.
+    addable: raw.addable === undefined ? Boolean(raw.answerable) : Boolean(raw.addable),
+    ...normalizeMoveFields(raw),
+    other_invoice: normalizeBrief(raw.other_invoice),
+    candidates: ((raw.candidates as Raw[]) ?? []).map(normalizeInvoiceCandidate),
+  };
+};
+
+export const normalizeChargeGroup = (raw: Raw): ChargeGroup => ({
+  id: String(raw.id),
+  entry_ids: (raw.entry_ids as string[]) ?? [],
+  total: toAmount(raw.total as WireMoney),
+  currency: toCurrency(raw.total),
+  suggested_transaction_id: (raw.suggested_transaction_id as number | null) ?? null,
+  paired_transaction_id: (raw.paired_transaction_id as number | null) ?? null,
+  answer: (raw.answer as ChargeGroupAnswer | null) ?? null,
+  confirmed: Boolean(raw.confirmed),
+  answerable: Boolean(raw.answerable),
+  addable: Boolean(raw.addable),
+  fincla_transaction: normalizeFincla(raw.fincla_transaction as Raw | null),
+});
+
+const normalizeBankSummary = (raw: Raw | null | undefined): InvoiceBankSummary => {
+  const r = raw ?? {};
+  const payment = r.payment as { amount: WireMoney; date: string | null } | null | undefined;
+  return {
+    previous_total: moneyOrNull(r.previous_total as WireMoney),
+    payment: payment ? { amount: moneyOrNull(payment.amount), date: payment.date ?? null } : null,
+    financed_balance: moneyOrNull(r.financed_balance as WireMoney),
+    charges: moneyOrNull(r.charges as WireMoney),
+    current_entries: moneyOrNull(r.current_entries as WireMoney),
+    total: moneyOrNull(r.total as WireMoney),
+    due_date: (r.due_date as string | null) ?? null,
+    issue_date: (r.issue_date as string | null) ?? null,
+    posting_date: (r.posting_date as string | null) ?? null,
+    next_closing_date: (r.next_closing_date as string | null) ?? null,
+  };
+};
+
+const normalizeDifferenceNow = (raw: unknown): InvoiceDifferenceNow => {
+  const diff = (raw as { bank: WireMoney; fincla: WireMoney; difference: WireMoney } | null) ?? null;
+  return {
+    bank: diff ? toFiniteNumber(diff.bank) : null,
+    fincla: diff ? toFiniteNumber(diff.fincla) : null,
+    difference: diff ? toFiniteNumber(diff.difference) : null,
+    currency: diff ? toCurrency(diff.bank) : null,
+  };
+};
+
+const normalizeInvoiceRef = (raw: unknown): InvoiceRef => {
+  const invoice = raw as Raw;
+  return { ...(invoice as unknown as InvoiceRef), total: moneyOrNull(invoice?.total as WireMoney) };
+};
+
+const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
+  const summary = (raw ?? {}) as CardInvoiceImportSummary;
+  return {
+    ...summary,
+    already_reconciled: summary.already_reconciled ?? 0,
+    to_create: summary.to_create ?? 0,
+    missing_description: summary.missing_description ?? 0,
+    uncategorized: summary.uncategorized ?? 0,
+    summed_charges: summary.summed_charges ?? 0,
+    to_move: summary.to_move ?? 0,
+    unconfirmed_creates: summary.unconfirmed_creates ?? 0,
+    leftovers: summary.leftovers ?? 0,
+    leftovers_undecided: summary.leftovers_undecided ?? 0,
+    leftovers_kept: summary.leftovers_kept ?? 0,
+    leftovers_to_move: summary.leftovers_to_move ?? 0,
+    leftovers_to_delete: summary.leftovers_to_delete ?? 0,
+    leftovers_waiting: summary.leftovers_waiting ?? 0,
+  };
+};
+
+const normalizeBlockers = (raw: unknown): ConcludeBlocker[] =>
+  ((raw as Raw[] | null | undefined) ?? []).map((b) => ({
+    code: String(b.code),
+    count: Number(b.count ?? 0),
+    step: (b.step as InvoiceReconciliationStep | null | undefined) ?? null,
+  }));
+
+/** Os campos de uma conciliação comuns ao detalhe e à linha da lista. */
+const normalizeCommon = (raw: Raw) => ({
+  invoice: normalizeInvoiceRef(raw.invoice),
+  file_name: (raw.file_name as string | null) ?? null,
+  summary: normalizeSummary(raw.summary),
+  difference_now: normalizeDifferenceNow(raw.difference_now),
+  blockers: normalizeBlockers(raw.blockers),
+  final_difference: moneyOrNull(raw.final_difference as WireMoney),
+  current_step: (raw.current_step as InvoiceReconciliationStep | null) ?? null,
+  expires_at: (raw.expires_at as string | null) ?? null,
+  concluded_at: (raw.concluded_at as string | null) ?? null,
+  undone_at: (raw.undone_at as string | null) ?? null,
+  latest_concluded: Boolean(raw.latest_concluded),
+  changed_since_read: Boolean(raw.changed_since_read),
+});
+
+export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
+  const fileCheck = raw.file_check as InvoiceFileCheck | null | undefined;
+  return {
+    ...(raw as unknown as CardInvoiceImport),
+    ...normalizeCommon(raw),
+    kind: 'card_invoice',
+    card_check: (raw.card_check as CardCheck) ?? { status: 'same_card', file_last4: null, suggested_card: null },
+    bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
+    entries: ((raw.entries as Raw[]) ?? []).map(normalizeInvoiceEntry),
+    charge_groups: ((raw.charge_groups as Raw[]) ?? []).map(normalizeChargeGroup),
+    reviewed_steps: (raw.reviewed_steps as InvoiceReconciliationStep[]) ?? [],
+    file_check: {
+      status: fileCheck?.status ?? 'new',
+      import_id: fileCheck?.import_id ?? null,
+      concluded_at: fileCheck?.concluded_at ?? null,
+    },
+  };
+};
+
+export const normalizeCardInvoiceImportListItem = (raw: Raw): CardInvoiceImportListItem => ({
+  ...(raw as unknown as CardInvoiceImportListItem),
+  ...normalizeCommon(raw),
+  can_conclude: Boolean(raw.can_conclude),
+});
+
+/** A resposta de um envio é uma fatura de cartão? (a área de envio da conta aceita PDF, #555) */
+export const isCardInvoiceResponse = (raw: unknown): boolean =>
+  Boolean(raw && typeof raw === 'object' && (raw as Raw).kind === 'card_invoice');
+
+/**
+ * Já há conciliação em andamento desta fatura (409 `invoice_draft_in_progress`): o rascunho a abrir.
+ * `creditCardId` é o `id` inteiro do cartão; a URL da tela usa `creditCardPublicId`.
+ */
+export interface InvoiceDraftInProgress {
+  importId: string;
+  creditCardId: number | null;
+  creditCardPublicId: string | null;
+  message: string;
+}
+
+export const invoiceDraftInProgressOf = (error: unknown): InvoiceDraftInProgress | null => {
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+  const detail = response?.data?.detail as
+    | { reason?: string; import_id?: string; credit_card_id?: number; credit_card_public_id?: string; message?: string }
+    | undefined;
+  if (response?.status !== 409 || detail?.reason !== 'invoice_draft_in_progress' || !detail.import_id) return null;
+  return {
+    importId: detail.import_id,
+    creditCardId: detail.credit_card_id ?? null,
+    creditCardPublicId: detail.credit_card_public_id ?? null,
+    message: detail.message ?? '',
+  };
+};
+
+// --------------------------------------------------------------------------------------------
+// Rotas
+// --------------------------------------------------------------------------------------------
+
+const base = (cardId: number) => `/credit-cards/${cardId}/invoice-imports`;
+
+/** Envia o PDF da fatura (até 5 MB) e cria o rascunho. */
+export const uploadCardInvoice = async (cardId: number, organizationId: string, file: File): Promise<CardInvoiceImport> => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await apiClient.post<Raw>(base(cardId), form, {
+    params: { organization_id: organizationId },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+export const getCardInvoiceImport = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceImport> => {
+  const response = await apiClient.get<Raw>(`${base(cardId)}/${importId}`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/** Grava onde a revisão parou (passo aberto e passos já vistos). */
+export const updateCardInvoiceImportProgress = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  body: { current_step?: InvoiceReconciliationStep | null; reviewed_steps?: InvoiceReconciliationStep[] },
+): Promise<CardInvoiceImport> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}`, body, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/** Descarta o rascunho. Nada no Fincla muda. */
+export const discardCardInvoiceImport = async (cardId: number, organizationId: string, importId: string): Promise<void> => {
+  await apiClient.delete(`${base(cardId)}/${importId}`, { params: { organization_id: organizationId } });
+};
+
+/** Responde um lançamento. Responder confirma, a menos que `confirmed` venha junto (Desfazer escolha). */
+export const updateCardInvoiceEntry = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  entryId: string,
+  body: UpdateInvoiceEntryRequest,
+): Promise<InvoiceEntry> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries/${entryId}`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeInvoiceEntry(response.data);
+};
+
+/**
+ * O mesmo, em lote (tudo ou nada). `groups` (#558) responde/confirma grupos de encargos como a rota
+ * do grupo, aplicados depois dos `entries`, na mesma transação: o "Próximo" que confirma lançamentos
+ * e o grupo é uma chamada só. Só a lista que vier vai no corpo.
+ */
+export const updateCardInvoiceEntries = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  entries: (UpdateInvoiceEntryRequest & { id: string })[],
+  groups: (UpdateChargeGroupRequest & { id: string })[] = [],
+): Promise<CardInvoiceImport> => {
+  const body = groups.length ? { ...(entries.length ? { entries } : null), groups } : { entries };
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/entries`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/**
+ * Responde (ou só confirma) o grupo de encargos inteiro (#558). Devolve o rascunho: a resposta vale
+ * para todos os lançamentos do grupo. Um lançamento do grupo nunca é respondido sozinho (`422`
+ * `card_invoice_import.charge_group_member`).
+ */
+export const updateCardInvoiceChargeGroup = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  groupId: string,
+  body: UpdateChargeGroupRequest,
+): Promise<CardInvoiceImport> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/charge-groups/${groupId}`, body, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/**
+ * "Está no Fincla com outros dados…" / "Procure no Fincla" (#559): transações deste cartão na fatura
+ * conciliada, na anterior e na seguinte, do mesmo sinal do lançamento e ainda não conferidas, pela
+ * diferença de valor (até 20). `q` é lido como na #511: um dia, um valor ou um texto. Não muda nada.
+ */
+export const searchCardInvoiceEntry = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  entryId: string,
+  query: string,
+): Promise<InvoiceCandidate[]> => {
+  const q = query.trim();
+  const response = await apiClient.get<{ results: Raw[] }>(`${base(cardId)}/${importId}/entries/${entryId}/search`, {
+    params: { organization_id: organizationId, ...(q ? { q } : null) },
+  });
+  return (response.data.results ?? []).map(normalizeInvoiceCandidate);
+};
+
+/**
+ * "Confirmar as N de uma vez" (`confirmed: true`) e o Desfazer da faixa (`confirmed: false`). Desde
+ * a #560 aceita também `create` (as compras novas sem confirmar que seguram o concluir).
+ */
+export const confirmCardInvoiceSuggestions = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  entryIds: string[],
+  confirmed = true,
+): Promise<CardInvoiceImport> => {
+  const response = await apiClient.post<Raw>(
+    `${base(cardId)}/${importId}/suggestions/confirm`,
+    { entry_ids: entryIds, confirmed },
+    { params: { organization_id: organizationId } },
+  );
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/** Aplica tudo de uma vez (ou nada). Não paga a fatura. */
+export const concludeCardInvoiceImport = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceImport> => {
+  const response = await apiClient.post<Raw>(`${base(cardId)}/${importId}/conclude`, null, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceImport(response.data);
+};
+
+/** "Faturas conciliadas" do cartão: rascunhos, concluídas e desfeitas, da mais nova para a mais antiga. */
+export const listCardInvoiceImports = async (cardId: number, organizationId: string): Promise<CardInvoiceImportListItem[]> => {
+  const response = await apiClient.get<{ imports: Raw[] }>(base(cardId), { params: { organization_id: organizationId } });
+  return (response.data.imports ?? []).map(normalizeCardInvoiceImportListItem);
+};
+
+/** O que desfazer vai fazer agora (e o motivo, se não der). Não muda nada. Mesmas peças do extrato. */
+export const previewCardInvoiceImportUndo = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+): Promise<CardInvoiceUndoPreview> => {
+  const response = await apiClient.get(`${base(cardId)}/${importId}/undo-preview`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceUndoPreview(response.data as Raw);
+};
+
+/** A prévia do desfazer da fatura: as peças do extrato e a fatura para onde cada compra movida volta (#559). */
+export const normalizeCardInvoiceUndoPreview = (raw: Raw): CardInvoiceUndoPreview => {
+  const preview = normalizeStatementUndoPreview(raw as Parameters<typeof normalizeStatementUndoPreview>[0]);
+  const rawRestore = (raw.to_restore as Raw[] | undefined) ?? [];
+  return {
+    ...(preview as unknown as CardInvoiceUndoPreview),
+    to_restore: preview.to_restore.map((r, i) => ({ ...r, invoice_back: normalizeBrief(rawRestore[i]?.invoice_back) })),
+  };
+};
+
+/** Desfaz a conciliação concluída mais recente do cartão (tudo ou nada). */
+export const undoCardInvoiceImport = async (cardId: number, organizationId: string, importId: string): Promise<UndoneCardInvoiceImport> => {
+  const response = await apiClient.post<Raw>(`${base(cardId)}/${importId}/undo`, null, { params: { organization_id: organizationId } });
+  const deleted = response.data.deleted_transactions;
+  return { ...normalizeCardInvoiceImport(response.data), deleted_transactions: typeof deleted === 'number' ? deleted : null };
+};
+
+// --------------------------------------------------------------------------------------------
+// Sobrando no Fincla e Conferir o total (#560)
+// --------------------------------------------------------------------------------------------
+
+const normalizeRefusal = (raw: unknown): LeftoverRefusal | null => {
+  const r = raw as Raw | null | undefined;
+  if (!r) return null;
+  return {
+    code: String(r.code ?? ''),
+    message: (r.message as string | null) ?? null,
+    invoice_year: (r.invoice_year as number | null) ?? null,
+    invoice_month: (r.invoice_month as number | null) ?? null,
+  };
+};
+
+export const normalizeCardInvoiceLeftovers = (raw: Raw): CardInvoiceLeftovers => ({
+  import_id: String(raw.import_id ?? ''),
+  items: ((raw.items as Raw[]) ?? []).map((item) => ({
+    transaction: normalizeFincla(item.transaction as Raw) as InvoiceFinclaTransaction,
+    action: (item.action as LeftoverAction | null) ?? null,
+    hint: (item.hint as LeftoverHint | null) ?? null,
+    movable: Boolean(item.movable),
+    deletable: Boolean(item.deletable),
+    move_refusal: normalizeRefusal(item.move_refusal),
+    delete_refusal: normalizeRefusal(item.delete_refusal),
+  })),
+  waiting_transactions: Number(raw.waiting_transactions ?? 0),
+  next_invoice_year: (raw.next_invoice_year as number | null) ?? null,
+  next_invoice_month: (raw.next_invoice_month as number | null) ?? null,
+  next_invoice: normalizeBrief(raw.next_invoice),
+});
+
+export const normalizeCardInvoiceTotalCheck = (raw: Raw): CardInvoiceTotalCheck => ({
+  import_id: String(raw.import_id ?? ''),
+  status: (raw.status as CardInvoiceImportStatus) ?? 'draft',
+  bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
+  bank: moneyOrNull(raw.bank as WireMoney),
+  fincla: moneyOrNull(raw.fincla as WireMoney),
+  difference: moneyOrNull(raw.difference as WireMoney),
+  matches: Boolean(raw.matches),
+  causes: ((raw.causes as Raw[]) ?? []).map((c) => ({
+    code: String(c.code ?? ''),
+    step: (c.step as InvoiceReconciliationStep | null) ?? null,
+    description: (c.description as string | null) ?? null,
+    amount: moneyOrNull(c.amount as WireMoney),
+    effect: moneyOrNull(c.effect as WireMoney),
+    date: (c.date as string | null) ?? null,
+    entry_id: (c.entry_id as string | null) ?? null,
+    charge_group_id: (c.charge_group_id as string | null) ?? null,
+    transaction_id: (c.transaction_id as number | null) ?? null,
+  })),
+});
+
+/** Passo 6: as transações desta fatura no Fincla que o banco não cobrou. Rascunho só. Não muda nada. */
+export const getCardInvoiceLeftovers = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceLeftovers> => {
+  const response = await apiClient.get<Raw>(`${base(cardId)}/${importId}/leftovers`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceLeftovers(response.data);
+};
+
+/** Decide um item (decidir já confirma); `null` = Desfazer escolha. Nada muda no Fincla até concluir. */
+export const updateCardInvoiceLeftover = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  transactionId: number,
+  action: LeftoverAction | null,
+): Promise<CardInvoiceLeftovers> => {
+  const response = await apiClient.patch<Raw>(`${base(cardId)}/${importId}/leftovers/${transactionId}`, { action }, {
+    params: { organization_id: organizationId },
+  });
+  return normalizeCardInvoiceLeftovers(response.data);
+};
+
+/** Passo 7: o total do banco × o da fatura no Fincla, com as causas da diferença. Não muda nada. */
+export const getCardInvoiceTotalCheck = async (cardId: number, organizationId: string, importId: string): Promise<CardInvoiceTotalCheck> => {
+  const response = await apiClient.get<Raw>(`${base(cardId)}/${importId}/total-check`, { params: { organization_id: organizationId } });
+  return normalizeCardInvoiceTotalCheck(response.data);
+};
