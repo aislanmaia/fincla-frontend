@@ -142,8 +142,8 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
 }
 
 /**
- * A API devolve o mesmo 404 do extrato ("Conciliação não encontrada nesta conta.") nas rotas do
- * cartão; aqui a pessoa está num cartão, então a frase diz "neste cartão" (QA F1, entrega 001).
+ * A partir de fincla-api 051b9025, as rotas do cartão já respondem "…neste cartão." Esta troca só
+ * protege contra um backend anterior, que respondia com a frase do extrato (QA F1, entrega 001).
  */
 const ACCOUNT_NOT_FOUND = "Conciliação não encontrada nesta conta.";
 function cardApiError(err) {
