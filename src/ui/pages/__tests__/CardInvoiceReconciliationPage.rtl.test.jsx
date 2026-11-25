@@ -44,6 +44,10 @@ function applyAnswer(entry, body) {
 
 const server = setupServer(
   http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
+  // "Faturas conciliadas" (#556) e a prévia do desfazer da concluída: os testes da F2 ficam em
+  // `CardInvoiceReconciliationPage.f2.rtl.test.jsx`.
+  http.get("*/v1/credit-cards/:cardId/invoice-imports", () => HttpResponse.json({ imports: [] })),
+  http.get(`${BASE}/:importId/undo-preview`, () => HttpResponse.json(contract.undo_preview)),
   http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
   http.patch(`${BASE}/${IMPORT}`, async ({ request }) => {
     const body = await request.json();

@@ -148,6 +148,40 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     for (const button of within(answers).getAllByRole("button")) expect(button.style.minHeight).toBe(height);
   });
 
+  // QA F1: "Confirmar sugestão" também é alvo de toque no celular; no computador fica como era.
+  it.each([[false, ""], [true, "44px"]])("Confirmar sugestão tem altura de alvo de toque só no celular (mobile=%s → %s)", async (isMobile, height) => {
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile={isMobile} />);
+    await screen.findByRole("heading", { name: "Confirmar lançamentos encontrados" });
+
+    expect(within(padariaCard()).getByRole("button", { name: "Confirmar sugestão" }).style.minHeight).toBe(height);
+  });
+
+  // QA F1 (390 px): as 3 respostas quebram de linha; no celular nenhuma termina num divisor solto.
+  // Os divisores vêm do vão do grupo (fundo da borda) e cada botão cresce até o fim da linha; no
+  // computador o grupo continua com o divisor à direita de cada resposta, como antes.
+  it("no celular, a fileira das 3 respostas quebra sem divisor solto; no computador fica como era", async () => {
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    const view = render(<StatementReconciliationPage organizationId={ORG} isMobile />);
+    await screen.findByRole("heading", { name: "Confirmar lançamentos encontrados" });
+    let group = within(padariaCard()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+    expect(group.style.display).toBe("flex");
+    expect(group.style.flexWrap).toBe("wrap");
+    expect(group.style.gap).toBe("1px");
+    for (const button of within(group).getAllByRole("button")) {
+      expect(button.style.borderRight).not.toMatch(/solid/);
+      expect(button.style.flexGrow).toBe("1");
+    }
+    view.unmount();
+
+    render(<StatementReconciliationPage organizationId={ORG} />);
+    await screen.findByRole("heading", { name: "Confirmar lançamentos encontrados" });
+    group = within(padariaCard()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+    const buttons = within(group).getAllByRole("button");
+    expect(group.style.display).toBe("inline-flex");
+    expect(buttons.slice(0, -1).every((b) => b.style.borderRight.startsWith("1px solid"))).toBe(true);
+  });
+
   it("Sim, é esta confirma o par e o cartão minimiza; Desfazer escolha o traz de volta como estava", async () => {
     const user = userEvent.setup();
     await openDraft();

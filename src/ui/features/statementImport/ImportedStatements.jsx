@@ -8,9 +8,9 @@
 // - `ImportedStatementsList`: "Extratos importados" da conta, agrupados pelo ano do fim do período,
 //   rolando dentro da coluna, com a diferença registrada (`null` vira "—", nunca zero) e "Desfazer"
 //   só na concluída mais recente.
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Btn, Card } from "../../components/primitives";
 import { plural } from "../../plural.js";
@@ -33,7 +33,7 @@ const STATUS = {
 
 
 /** "2026-11-14T10:20:00" → "14/11/2026". */
-function dayOf(timestamp) {
+export function dayOf(timestamp) {
   return timestamp ? bankDateLabel(String(timestamp).slice(0, 10)) : "";
 }
 
@@ -61,7 +61,7 @@ export function countsLabel(item) {
   return parts.join(" · ");
 }
 
-function StatusPill({ status }) {
+export function StatusPill({ status }) {
   const tone = STATUS[status] ?? STATUS.undone;
   return (
     <span data-testid="import-status" style={{ ...G, fontSize: 11, fontWeight: 700, color: tone.color, background: tone.bg, borderRadius: 9999, padding: "2px 9px", whiteSpace: "nowrap" }}>
@@ -74,7 +74,9 @@ function StatusPill({ status }) {
  * "Descartar rascunho" com a confirmação na própria linha. `discard` troca o pedido (a conciliação da
  * fatura descarta pela rota do cartão); sem ele, descarta o rascunho do extrato da conta.
  */
-export function DiscardDraftControl({ organizationId, accountId, importId, onDiscarded, label = "Descartar rascunho", discard: discardDraft = null }) {
+export function DiscardDraftControl({ organizationId, accountId, importId, onDiscarded, label = "Descartar rascunho", discard: discardDraft = null, touch = false }) {
+  // No celular, os botões têm a altura de um alvo de toque (QA F1); no computador ficam como eram.
+  const height = touch ? { minHeight: TOUCH_TARGET } : undefined;
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -103,7 +105,7 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
   };
 
   if (!asking) {
-    return <Btn ref={openRef} variant="outRed" small onClick={() => setAsking(true)}>{label}</Btn>;
+    return <Btn ref={openRef} variant="outRed" small onClick={() => setAsking(true)} style={height}>{label}</Btn>;
   }
   return (
     <div ref={askRef} tabIndex={-1} role="group" aria-label="Confirmar descarte do rascunho" style={{ ...G, outline: "none", flexBasis: "100%", background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -113,8 +115,8 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
       </p>
       {error ? <p role="alert" style={{ fontSize: 13, color: T.red, margin: 0 }}>{error}</p> : null}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Btn variant="outRed" small onClick={discard} disabled={busy}>{busy ? "Descartando…" : "Sim, descartar"}</Btn>
-        <Btn variant="outGray" small onClick={() => { returnFocus.current = true; setAsking(false); setError(""); }} disabled={busy}>Manter rascunho</Btn>
+        <Btn variant="outRed" small onClick={discard} disabled={busy} style={height}>{busy ? "Descartando…" : "Sim, descartar"}</Btn>
+        <Btn variant="outGray" small onClick={() => { returnFocus.current = true; setAsking(false); setError(""); }} disabled={busy} style={height}>Manter rascunho</Btn>
       </div>
     </div>
   );
@@ -337,16 +339,19 @@ export function continueTip(items) {
 /** O dia que ordena e agrupa uma importação: o fim do período; sem ele, o dia em que foi importada. */
 const sortDay = (item) => item.period?.end ?? String(item.created_at ?? "").slice(0, 10);
 
-/** Os rascunhos no topo; o resto em grupos por ano (do mais novo), cada grupo do fim mais recente. */
-export function groupImports(items) {
+/**
+ * Os rascunhos no topo; o resto em grupos por ano (do mais novo), cada grupo do fim mais recente.
+ * `orderDay` dá o dia que ordena e agrupa (o extrato usa o fim do período; a fatura, o mês dela).
+ */
+export function groupImports(items, orderDay = sortDay) {
   const drafts = items.filter((i) => i.status === "draft");
   const rest = items
     .filter((i) => i.status !== "draft")
     .slice()
-    .sort((a, b) => sortDay(b).localeCompare(sortDay(a)) || String(b.created_at).localeCompare(String(a.created_at)));
+    .sort((a, b) => orderDay(b).localeCompare(orderDay(a)) || String(b.created_at).localeCompare(String(a.created_at)));
   const years = [];
   for (const item of rest) {
-    const year = sortDay(item).slice(0, 4);
+    const year = orderDay(item).slice(0, 4);
     const group = years.at(-1);
     if (group && group.year === year) group.items.push(item);
     else years.push({ year, items: [item] });
@@ -393,8 +398,22 @@ function ImportedStatementRow({ item, first, onOpen, onUndo }) {
  *   lista ocupa a coluna inteira e rola dentro dela (G3 achado 3). Sem `fill`, ela mede o próprio
  *   conteúdo até um teto (G4 BUG-03: lista curta nunca cortada ao lado da área compacta).
  */
-export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false, fill = false }) {
-  const { drafts, years } = groupImports(items);
+export function ImportedStatementsList({
+  items,
+  onOpen,
+  onUndo,
+  isMobile = false,
+  fill = false,
+  title = "Extratos importados",
+  emptyText = "Nenhum extrato importado nesta conta ainda.",
+  orderDay = sortDay,
+  renderRow = null,
+}) {
+  const { drafts, years } = groupImports(items, orderDay);
+  // A fatura do cartão (#556) troca a linha; o extrato usa a dele.
+  const row = (item, index) => (renderRow
+    ? <Fragment key={item.id}>{renderRow(item, index === 0)}</Fragment>
+    : <ImportedStatementRow key={item.id} item={item} first={index === 0} onOpen={onOpen} onUndo={onUndo} />);
   return (
     <section
       aria-labelledby="imported-statements-title"
@@ -405,7 +424,7 @@ export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false
     >
       <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "baseline", gap: 8 }}>
         <h2 id="imported-statements-title" style={{ fontSize: 12, fontWeight: 700, color: T.inkMid, margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          Extratos importados
+          {title}
         </h2>
         {items.length ? <span style={{ ...NUM, fontSize: 12, color: T.inkLight }}>{items.length}</span> : null}
       </div>
@@ -427,9 +446,7 @@ export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false
             <>
               {drafts.length ? (
                 <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {drafts.map((item, index) => (
-                    <ImportedStatementRow key={item.id} item={item} first={index === 0} onOpen={onOpen} onUndo={onUndo} />
-                  ))}
+                  {drafts.map(row)}
                 </ul>
               ) : null}
               {years.map((group) => (
@@ -438,15 +455,13 @@ export function ImportedStatementsList({ items, onOpen, onUndo, isMobile = false
                     {group.year}
                   </h3>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                    {group.items.map((item, index) => (
-                      <ImportedStatementRow key={item.id} item={item} first={index === 0} onOpen={onOpen} onUndo={onUndo} />
-                    ))}
+                    {group.items.map(row)}
                   </ul>
                 </div>
               ))}
             </>
           ) : (
-            <p style={{ fontSize: 13, color: T.inkLight, margin: "12px 0" }}>Nenhum extrato importado nesta conta ainda.</p>
+            <p style={{ fontSize: 13, color: T.inkLight, margin: "12px 0" }}>{emptyText}</p>
           )}
         </div>
       </div>

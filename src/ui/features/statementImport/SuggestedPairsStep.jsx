@@ -208,7 +208,7 @@ function AnswerButtons({ entry, isMobile, busy, desc, onAnswer, onChange, onConf
   const label = "Este lançamento do banco já está no Fincla?";
   let confirm = null;
   if (untouchedSuggestion(entry)) {
-    confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} onConfirm={() => onAnswer(entry, "pair")} />;
+    confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onAnswer(entry, "pair")} />;
   } else if (entry.answer === "create" && onConfirm) {
     confirm = (
       <ConfirmAnswerButton
@@ -232,6 +232,12 @@ function AnswerButtons({ entry, isMobile, busy, desc, onAnswer, onChange, onConf
   );
 }
 
+// A fileira de respostas. No celular (`touch`) ela pode quebrar (390 px, 3 respostas): os divisores
+// vêm do vão de 1 px sobre o fundo da borda e cada botão cresce até o fim da linha, então nenhuma
+// linha termina num divisor solto nem num vão (QA F1). No computador fica como era.
+const ANSWER_ROW = { display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" };
+const TOUCH_ANSWER_ROW = { display: "flex", flexWrap: "wrap", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden", maxWidth: "100%" };
+
 /**
  * A pergunta e a fileira de respostas de um cartão (a marca da fileira é a faixa que os atalhos e o
  * aviso do rodapé medem), com o Confirmar ao lado quando ele cabe. Comum ao extrato e à fatura.
@@ -242,7 +248,7 @@ export function AnswerSegment({ label, answers, value, busy, unavailable = () =>
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
-      <div role="group" data-answer-row="" aria-label={label} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
+      <div role="group" data-answer-row="" aria-label={label} style={touch ? TOUCH_ANSWER_ROW : ANSWER_ROW}>
         {answers.map((a, index) => {
           const pressed = value === a.value;
           const off = unavailable(a);
@@ -255,8 +261,11 @@ export function AnswerSegment({ label, answers, value, busy, unavailable = () =>
               onClick={() => onAnswer(a.value)}
               style={{
                 ...G, minHeight: touch ? TOUCH_TARGET : 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy || off ? "not-allowed" : "pointer",
-                border: 0, borderRight: index < answers.length - 1 ? `1px solid ${T.border}` : 0,
-                background: pressed ? a.tone : "transparent", color: pressed ? "#fff" : T.inkLight,
+                border: 0,
+                ...(touch
+                  ? { flex: "1 1 auto", background: pressed ? a.tone : T.bg }
+                  : { borderRight: index < answers.length - 1 ? `1px solid ${T.border}` : 0, background: pressed ? a.tone : "transparent" }),
+                color: pressed ? "#fff" : T.inkLight,
               }}
             >
               {a.label}
@@ -271,9 +280,9 @@ export function AnswerSegment({ label, answers, value, busy, unavailable = () =>
 }
 
 /** "Desfazer escolha": vermelho no cartão; discreto (`inRow`) na linha minimizada, que já é clicável. */
-export function UndoChoiceButton({ entry, onUndoChoice, inRow = false }) {
+export function UndoChoiceButton({ entry, onUndoChoice, inRow = false, touch = false }) {
   return (
-    <Btn variant={inRow ? "ghost" : "outGray"} small onClick={() => onUndoChoice(entry)}>
+    <Btn variant={inRow ? "ghost" : "outGray"} small onClick={() => onUndoChoice(entry)} style={touch ? { minHeight: TOUCH_TARGET } : undefined}>
       Desfazer escolha
     </Btn>
   );
@@ -311,7 +320,7 @@ function PairCard({ entry, isMobile, busy, canUndo, categories, details, fallbac
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{bankDateLabel(entry.date)}</span>
         <StatusBadge entry={entry} />
         <span style={{ flex: 1 }} />
-        {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
+        {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} touch={isMobile} /> : null}
         {onMinimize ? <Btn variant="outGray" small onClick={() => onMinimize(entry)}>Minimizar</Btn> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>

@@ -63,6 +63,12 @@ export const INVOICE_PROGRESS_STEPS = INVOICE_STEPS.filter((s) => s.key !== "tot
 /** O traço do trilho antes de "Conferir o total": os dois últimos passos vêm depois dos lançamentos. */
 export const INVOICE_RAIL_SEPARATOR = new Set(["total"]);
 
+/**
+ * Já conferidos por uma conciliação concluída deste cartão (reimportação, fincla-api#556): só
+ * leitura, mostrados no passo 1 como "já conferido". Nada acontece com eles ao concluir.
+ */
+export const reconciledEntries = (entries) => entries.filter((e) => e.classification === "reconciled");
+
 /** Os lançamentos da fatura que pertencem a um passo (a classificação é fixa). */
 export function invoiceEntriesOfStep(stepKey, entries) {
   if (!INVOICE_ENTRY_STEPS.has(stepKey)) return [];
@@ -101,6 +107,8 @@ export function invoiceStepStatus(stepKey, invoiceImport, passed) {
   if (stepKey === "total") return { tone: "neutral", text: "Depois dos lançamentos" };
   if (stepKey === "summary") return { tone: "neutral", text: "Último passo" };
   const entries = invoiceEntriesOfStep(stepKey, invoiceImport.entries);
+  // Os já conferidos (reimportação) aparecem no passo 1, só para leitura.
+  const conferred = stepKey === "suggested" ? reconciledEntries(invoiceImport.entries).length : 0;
   const pending = pendingEntries(entries).length;
   if (pending) return { tone: "warn", text: plural(pending, "lançamento para responder", "lançamentos para responder") };
   const unconfirmed = unconfirmedEntries(entries).length;
@@ -108,6 +116,7 @@ export function invoiceStepStatus(stepKey, invoiceImport, passed) {
   if (passed) return { tone: "done", text: "Conferido" };
   if (answerableEntries(entries).length) return { tone: "ready", text: "Pronto · falta você conferir" };
   if (entries.length) return { tone: "neutral", text: `Nada a fazer · ${plural(entries.length, "fica de fora nesta versão", "ficam de fora nesta versão")}` };
+  if (conferred) return { tone: "neutral", text: `Nada a fazer · ${plural(conferred, "já conferido", "já conferidos")}` };
   return { tone: "neutral", text: "Nada a fazer" };
 }
 
@@ -139,6 +148,12 @@ export function invoiceSummaryRows(invoiceImport) {
   };
   row(pairs.length, "compra já estava no Fincla e fica ligada ao banco", "compras já estavam no Fincla e ficam ligadas ao banco", "summary-paired");
   row(bankValue, "compra passa a ter o valor do banco", "compras passam a ter o valor do banco", "summary-bank-value");
+  row(
+    reconciledEntries(entries).length,
+    "lançamento já foi conferido numa conciliação anterior: nada muda nele",
+    "lançamentos já foram conferidos numa conciliação anterior: nada muda neles",
+    "summary-already-reconciled",
+  );
   row(
     ignored.length,
     "lançamento não será registrado",

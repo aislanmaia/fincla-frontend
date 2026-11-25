@@ -1,7 +1,7 @@
 // Peças comuns da conciliação e do desfazer (fincla-api#507/#509).
 import { Check } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G } from "../../typography";
 import { Btn, Card } from "../../components/primitives";
 
@@ -14,17 +14,29 @@ export function ErrorNote({ children }) {
   );
 }
 
-/** "Importação desfeita": o que aconteceu (`children`) e para onde ir. */
-export function ImportUndoneCard({ children, onOpenTransactions = null, onBack }) {
+/**
+ * "Importação desfeita": o que aconteceu (`children`) e para onde ir. A fatura do cartão (#556) troca
+ * o título e os destinos ("Conciliação desfeita", "Ver a fatura").
+ */
+export function ImportUndoneCard({
+  children,
+  onOpenTransactions = null,
+  onBack,
+  title = "Importação desfeita",
+  openLabel = "Ver transações da conta",
+  backLabel = "Voltar para Contas",
+  touch = false,
+}) {
+  const height = touch ? { minHeight: TOUCH_TARGET } : undefined;
   return (
     <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
       <h2 style={{ ...G, fontSize: 18, fontWeight: 800, color: T.green, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-        <Check size={18} aria-hidden="true" /> Importação desfeita
+        <Check size={18} aria-hidden="true" /> {title}
       </h2>
       <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0 }}>{children}</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {onOpenTransactions ? <Btn variant="dark" onClick={onOpenTransactions}>Ver transações da conta</Btn> : null}
-        <Btn variant="outGray" onClick={onBack}>Voltar para Contas</Btn>
+        {onOpenTransactions ? <Btn variant="dark" onClick={onOpenTransactions} style={height}>{openLabel}</Btn> : null}
+        <Btn variant="outGray" onClick={onBack} style={height}>{backLabel}</Btn>
       </div>
     </Card>
   );

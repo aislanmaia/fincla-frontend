@@ -1,4 +1,5 @@
-// api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554, primeira entrega #555).
+// api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
+// desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação).
 //
 // O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
 // do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
@@ -9,17 +10,24 @@
 // faltar (o total do Fincla, a diferença) fica `null` = "não sabemos", nunca zero.
 import apiClient from './client';
 import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
+import { normalizeStatementUndoPreview, type StatementUndoPreview, type UndoRefusalCode } from './statementImports';
 
 /** Os 8 passos da conciliação da fatura, na ordem (cada fluxo com a sua contagem, decisão 9). */
 export type InvoiceReconciliationStep =
   | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new' | 'leftover' | 'total' | 'summary';
-/** O passo do lançamento, fixo: responder outra coisa não muda o passo. */
-export type InvoiceEntryClassification = 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
-/** Nesta versão só `pair` e `ignore`; as próximas fatias trazem `create`, `move`, `move_series`. */
-export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series';
+/**
+ * O passo do lançamento, fixo: responder outra coisa não muda o passo. `reconciled` (#556): já
+ * conferido por uma conciliação concluída deste cartão (reimportação), só leitura, "já conferido".
+ */
+export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
+/**
+ * Nesta versão só `pair` e `ignore`; as próximas fatias trazem `create`, `move`, `move_series`.
+ * `reconciled` só vem do servidor (nunca se envia).
+ */
+export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled';
 /** A seção do PDF onde o banco imprimiu o lançamento. */
 export type InvoiceSection = 'purchases' | 'international' | 'services' | 'charges';
-export type CardInvoiceImportStatus = 'draft' | 'concluded';
+export type CardInvoiceImportStatus = 'draft' | 'concluded' | 'undone';
 
 /** Um valor em dinheiro já convertido: `amount` com sinal como veio, `currency` declarada pelo fio. */
 export interface InvoiceMoney {
@@ -139,6 +147,15 @@ export interface CardInvoiceImportSummary {
   ignored: number;
   read_only: number;
   unanswered: number;
+  /** Já conferidos por uma conciliação concluída deste cartão (reimportação, #556); fora de `read_only`. */
+  already_reconciled: number;
+}
+
+/** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
+export interface InvoiceFileCheck {
+  status: 'new' | 'already_imported';
+  import_id: string | null;
+  concluded_at: string | null;
 }
 
 /** Banco − Fincla, com as respostas projetadas. `fincla`/`difference` `null` = não sabemos (nunca zero). */
@@ -174,7 +191,26 @@ export interface CardInvoiceImport {
   last_activity_at: string;
   expires_at: string | null;
   concluded_at: string | null;
+  undone_at: string | null;
+  /** É a concluída mais recente do cartão: a única que pode ser desfeita. */
+  latest_concluded: boolean;
+  file_check: InvoiceFileCheck;
 }
+
+/** Uma linha de "Faturas conciliadas" do cartão: o detalhe sem `entries` (nem cartão, resumo do banco). */
+export type CardInvoiceImportListItem = Pick<
+  CardInvoiceImport,
+  | 'id' | 'status' | 'invoice' | 'file_name' | 'summary' | 'difference_now' | 'final_difference' | 'can_conclude' | 'blockers'
+  | 'current_step' | 'created_at' | 'last_activity_at' | 'expires_at' | 'concluded_at' | 'undone_at' | 'latest_concluded'
+>;
+
+/** A recusa do desfazer: as do extrato, e `invoice_paid` (decisão 8: a fatura já foi paga). */
+export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
+  refusal: { code: UndoRefusalCode | 'invoice_paid'; message: string } | null;
+};
+
+/** O desfazer feito: `status: 'undone'`, com quantas transações ele apagou. */
+export type UndoneCardInvoiceImport = CardInvoiceImport & { deleted_transactions: number | null };
 
 export interface UpdateInvoiceEntryRequest {
   answer?: 'pair' | 'ignore';
@@ -248,29 +284,64 @@ const normalizeBankSummary = (raw: Raw | null | undefined): InvoiceBankSummary =
   };
 };
 
-export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
-  const invoice = raw.invoice as Raw;
-  const diff = (raw.difference_now as { bank: WireMoney; fincla: WireMoney; difference: WireMoney } | null) ?? null;
+const normalizeDifferenceNow = (raw: unknown): InvoiceDifferenceNow => {
+  const diff = (raw as { bank: WireMoney; fincla: WireMoney; difference: WireMoney } | null) ?? null;
   return {
-    ...(raw as unknown as CardInvoiceImport),
-    kind: 'card_invoice',
-    invoice: { ...(invoice as unknown as InvoiceRef), total: moneyOrNull(invoice?.total as WireMoney) },
-    card_check: (raw.card_check as CardCheck) ?? { status: 'same_card', file_last4: null, suggested_card: null },
-    file_name: (raw.file_name as string | null) ?? null,
-    bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
-    entries: ((raw.entries as Raw[]) ?? []).map(normalizeInvoiceEntry),
-    difference_now: {
-      bank: diff ? toFiniteNumber(diff.bank) : null,
-      fincla: diff ? toFiniteNumber(diff.fincla) : null,
-      difference: diff ? toFiniteNumber(diff.difference) : null,
-      currency: diff ? toCurrency(diff.bank) : null,
-    },
-    blockers: (raw.blockers as CardInvoiceImport['blockers']) ?? [],
-    final_difference: moneyOrNull(raw.final_difference as WireMoney),
-    current_step: (raw.current_step as InvoiceReconciliationStep | null) ?? null,
-    reviewed_steps: (raw.reviewed_steps as InvoiceReconciliationStep[]) ?? [],
+    bank: diff ? toFiniteNumber(diff.bank) : null,
+    fincla: diff ? toFiniteNumber(diff.fincla) : null,
+    difference: diff ? toFiniteNumber(diff.difference) : null,
+    currency: diff ? toCurrency(diff.bank) : null,
   };
 };
+
+const normalizeInvoiceRef = (raw: unknown): InvoiceRef => {
+  const invoice = raw as Raw;
+  return { ...(invoice as unknown as InvoiceRef), total: moneyOrNull(invoice?.total as WireMoney) };
+};
+
+const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
+  const summary = (raw ?? {}) as CardInvoiceImportSummary;
+  return { ...summary, already_reconciled: summary.already_reconciled ?? 0 };
+};
+
+/** Os campos de uma conciliação comuns ao detalhe e à linha da lista. */
+const normalizeCommon = (raw: Raw) => ({
+  invoice: normalizeInvoiceRef(raw.invoice),
+  file_name: (raw.file_name as string | null) ?? null,
+  summary: normalizeSummary(raw.summary),
+  difference_now: normalizeDifferenceNow(raw.difference_now),
+  blockers: (raw.blockers as CardInvoiceImport['blockers']) ?? [],
+  final_difference: moneyOrNull(raw.final_difference as WireMoney),
+  current_step: (raw.current_step as InvoiceReconciliationStep | null) ?? null,
+  expires_at: (raw.expires_at as string | null) ?? null,
+  concluded_at: (raw.concluded_at as string | null) ?? null,
+  undone_at: (raw.undone_at as string | null) ?? null,
+  latest_concluded: Boolean(raw.latest_concluded),
+});
+
+export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
+  const fileCheck = raw.file_check as InvoiceFileCheck | null | undefined;
+  return {
+    ...(raw as unknown as CardInvoiceImport),
+    ...normalizeCommon(raw),
+    kind: 'card_invoice',
+    card_check: (raw.card_check as CardCheck) ?? { status: 'same_card', file_last4: null, suggested_card: null },
+    bank_summary: normalizeBankSummary(raw.bank_summary as Raw),
+    entries: ((raw.entries as Raw[]) ?? []).map(normalizeInvoiceEntry),
+    reviewed_steps: (raw.reviewed_steps as InvoiceReconciliationStep[]) ?? [],
+    file_check: {
+      status: fileCheck?.status ?? 'new',
+      import_id: fileCheck?.import_id ?? null,
+      concluded_at: fileCheck?.concluded_at ?? null,
+    },
+  };
+};
+
+export const normalizeCardInvoiceImportListItem = (raw: Raw): CardInvoiceImportListItem => ({
+  ...(raw as unknown as CardInvoiceImportListItem),
+  ...normalizeCommon(raw),
+  can_conclude: Boolean(raw.can_conclude),
+});
 
 /** A resposta de um envio é uma fatura de cartão? (a área de envio da conta aceita PDF, #555) */
 export const isCardInvoiceResponse = (raw: unknown): boolean =>
@@ -388,4 +459,27 @@ export const concludeCardInvoiceImport = async (cardId: number, organizationId: 
     params: { organization_id: organizationId },
   });
   return normalizeCardInvoiceImport(response.data);
+};
+
+/** "Faturas conciliadas" do cartão: rascunhos, concluídas e desfeitas, da mais nova para a mais antiga. */
+export const listCardInvoiceImports = async (cardId: number, organizationId: string): Promise<CardInvoiceImportListItem[]> => {
+  const response = await apiClient.get<{ imports: Raw[] }>(base(cardId), { params: { organization_id: organizationId } });
+  return (response.data.imports ?? []).map(normalizeCardInvoiceImportListItem);
+};
+
+/** O que desfazer vai fazer agora (e o motivo, se não der). Não muda nada. Mesmas peças do extrato. */
+export const previewCardInvoiceImportUndo = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+): Promise<CardInvoiceUndoPreview> => {
+  const response = await apiClient.get(`${base(cardId)}/${importId}/undo-preview`, { params: { organization_id: organizationId } });
+  return normalizeStatementUndoPreview(response.data as Parameters<typeof normalizeStatementUndoPreview>[0]) as CardInvoiceUndoPreview;
+};
+
+/** Desfaz a conciliação concluída mais recente do cartão (tudo ou nada). */
+export const undoCardInvoiceImport = async (cardId: number, organizationId: string, importId: string): Promise<UndoneCardInvoiceImport> => {
+  const response = await apiClient.post<Raw>(`${base(cardId)}/${importId}/undo`, null, { params: { organization_id: organizationId } });
+  const deleted = response.data.deleted_transactions;
+  return { ...normalizeCardInvoiceImport(response.data), deleted_transactions: typeof deleted === 'number' ? deleted : null };
 };

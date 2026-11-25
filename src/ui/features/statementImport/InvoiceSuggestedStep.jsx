@@ -9,7 +9,7 @@
 import { memo, useEffect, useRef } from "react";
 import { ArrowRight, Ban, Check, ChevronRight, Info, Link2, Sparkles } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
@@ -280,6 +280,9 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
 }
 
 export function InvoiceStatusBadge({ entry }) {
+  if (entry.answer === "reconciled") {
+    return <Badge color={T.green} bg={T.greenLight}><Check size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Já conferido</Badge>;
+  }
   if (!entry.answerable && entry.answer === "ignore") {
     return <Badge color={T.inkMid} bg={T.grayLight}>Fica de fora nesta versão</Badge>;
   }
@@ -312,7 +315,7 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
   // Fatura já paga (decisão 1): o valor não muda. O motivo só aparece quando o valor do banco é outro.
   const paidNote = paidValueLocked(entry) ? PAID_INVOICE_REASON : null;
   const confirm = untouchedInvoiceSuggestion(entry)
-    ? <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} onConfirm={() => onAnswer(entry, "pair")} />
+    ? <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onAnswer(entry, "pair")} />
     : null;
   return (
     <article
@@ -324,7 +327,7 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, onAnswe
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{bankDateLabel(entry.date)}</span>
         <InvoiceStatusBadge entry={entry} />
         <span style={{ flex: 1 }} />
-        {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} /> : null}
+        {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} touch={isMobile} /> : null}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>
         <InvoiceBankSide entry={entry} valueDiffers={valueDiffers} />
@@ -372,7 +375,7 @@ function rowSummary(entry) {
 }
 
 /** Um par recolhido numa linha que continua visível; um clique em qualquer ponto a reabre. */
-const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus = false, onOpen, onUndoChoice }) {
+const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus = false, touch = false, onOpen, onUndoChoice }) {
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
@@ -383,7 +386,7 @@ const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus 
         small
         onClick={() => onOpen(entry)}
         aria-label={`Alterar o lançamento de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
-        style={{ color: T.blue, gap: 2 }}
+        style={{ color: T.blue, gap: 2, ...(touch ? { minHeight: TOUCH_TARGET } : null) }}
       >
         <ChevronRight size={13} aria-hidden="true" />Alterar
       </Btn>
@@ -393,7 +396,7 @@ const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus 
       <InvoiceStatusBadge entry={entry} />
       <span style={{ flex: 1, minWidth: 160 }}>{rowSummary(entry)}</span>
       {isAnswered(entry) ? <ConferidoBadge /> : null}
-      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow /> : null}
+      {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow touch={touch} /> : null}
     </div>
   );
 });
@@ -418,7 +421,7 @@ export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, b
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "compra encontrada", "compras encontradas")}</span>
         {unconfirmed.length ? (
           <>
-            <Btn variant="dark" small disabled={busy} onClick={() => onConfirmAll(unconfirmed.map((e) => e.id))}>
+            <Btn variant="dark" small disabled={busy} onClick={() => onConfirmAll(unconfirmed.map((e) => e.id))} style={isMobile ? { minHeight: TOUCH_TARGET } : undefined}>
               <Check size={13} aria-hidden="true" /> {confirmAllPurchasesLabel(unconfirmed.length)}
             </Btn>
             <span style={{ ...G, fontSize: 12, color: T.inkLight }}>Cada par continua com “Alterar” e “Desfazer escolha”.</span>
@@ -431,7 +434,7 @@ export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, b
         <div role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "8px 12px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <Check size={14} aria-hidden="true" style={{ color: T.green }} />
           <span style={{ flex: 1 }}>{plural(lastBulk.length, "compra confirmada", "compras confirmadas")}.</span>
-          <Btn variant="outGray" small onClick={onUndoConfirmAll} disabled={busy}>Desfazer</Btn>
+          <Btn variant="outGray" small onClick={onUndoConfirmAll} disabled={busy} style={isMobile ? { minHeight: TOUCH_TARGET } : undefined}>Desfazer</Btn>
         </div>
       ) : null}
       {entries.filter(queue.shown).map((entry) => (
@@ -450,11 +453,45 @@ export function InvoiceSuggestedStep({ entries, queue, invoiceMonth, isMobile, b
             </CurrentEntryFrame>
           ) : (
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-              <InvoicePairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} onOpen={openRow} onUndoChoice={undoChoice} />
+              <InvoicePairRow entry={entry} canUndo={Boolean(history[entry.id]?.length)} focus={queue.rowFocusId === entry.id} touch={isMobile} onOpen={openRow} onUndoChoice={undoChoice} />
             </div>
           )}
         </EntrySlot>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Os lançamentos que uma conciliação concluída deste cartão já conferiu (reimportação do mesmo PDF,
+ * fincla-api#556): só leitura, com a compra do Fincla a que estão ligados. Nada a clicar, nada
+ * acontece com eles ao concluir, e nada se duplica.
+ */
+export function ReconciledEntries({ entries }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <p role="note" style={{ ...G, fontSize: 13, color: T.ink, margin: 0, background: T.greenLight, border: `1px solid ${T.greenBorder}`, borderRadius: 10, padding: "10px 12px" }}>
+        {entries.length === 1
+          ? "Este lançamento já foi conferido numa conciliação anterior desta fatura. Ele continua ligado à compra do Fincla e nada muda nele ao concluir."
+          : `Estes ${entries.length.toLocaleString("pt-BR")} lançamentos já foram conferidos numa conciliação anterior desta fatura. Eles continuam ligados às compras do Fincla e nada muda neles ao concluir.`}
+      </p>
+      <div data-testid="reconciled-entries" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+        {entries.map((entry, index) => (
+          <div
+            key={entry.id}
+            data-testid="reconciled-row"
+            style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 12px", borderTop: index ? `1px solid ${T.border}` : "none", ...G, fontSize: 12, color: T.inkMid }}
+          >
+            <span style={{ ...NUM, color: T.inkLight }}>{bankDateLabel(entry.date)}</span>
+            <span style={{ color: T.ink, fontWeight: 600, minWidth: 0, wordBreak: "break-word", flex: "1 1 160px" }}>{entry.bank_description}</span>
+            <InvoiceAmount amount={entry.amount} currency={entry.currency} />
+            <InvoiceStatusBadge entry={entry} />
+            {entry.fincla_transaction ? (
+              <span style={{ flex: "1 1 160px", minWidth: 0 }}>É <b style={{ color: T.ink }}>{entry.fincla_transaction.description}</b></span>
+            ) : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

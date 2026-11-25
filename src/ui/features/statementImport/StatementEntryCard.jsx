@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn, Select } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
@@ -98,7 +98,8 @@ export function SkipNote({ children }) {
  * botão fica desligado e novos cliques (duplo clique, Enter repetido) são ignorados, para não sair
  * um segundo PATCH. A nota de bloqueio fica ligada ao botão por `aria-describedby`.
  */
-export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm }) {
+/** `touch` (celular): a altura de um alvo de toque; no computador fica como era. */
+export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blockedNote = "", onConfirm, touch = false }) {
   const noteId = useId();
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
@@ -123,6 +124,7 @@ export function ConfirmAnswerButton({ label = "Confirmar", disabled = false, blo
         aria-describedby={showNote ? noteId : undefined}
         onMouseDown={(e) => e.preventDefault()}
         onClick={run}
+        style={touch ? { minHeight: TOUCH_TARGET } : undefined}
       >
         <Check size={13} aria-hidden="true" />{label}
       </Btn>

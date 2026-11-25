@@ -55,6 +55,7 @@ import { fillsAvailableHeight } from "./routing/statementImportRoute.js";
 import { mainScrollStyle } from "./layouts/mainScroll.js";
 import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
 import { CardInvoiceReconciliationPage } from "./pages/CardInvoiceReconciliationPage.jsx";
+import { CardInvoiceUndoPage } from "./pages/CardInvoiceUndoPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { CardAllTransactionsPage } from "./pages/CardAllTransactionsPage.jsx";
@@ -484,6 +485,7 @@ export default function App() {
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
       onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
     cardInvoiceReconciliation: <CardInvoiceReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId} />,
+    cardInvoiceUndo: <CardInvoiceUndoPage isMobile={isMobile} organizationId={session.activeOrgId} onUndone={bumpTransactionsList} />,
     statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}
       onUndone={bumpTransactionsList}
       onOpenAccountTransactions={(accountId) => { bumpTransactionsList(); navTo("transactions", { accountId }); }} />,

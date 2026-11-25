@@ -29,7 +29,7 @@ import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
 import { isTransactionEditPathId } from "./transactionPathId.js";
 import { CARD_ALL_TRANSACTIONS_ROUTE_PATTERN, CARD_TRANSACTIONS_ROUTE_PATTERN, INVOICE_ROUTE_PATTERN, isValidInvoiceParams, isValidPublicCardId } from "./invoiceRoute.js";
 import { STATEMENT_IMPORT_UNDO_ROUTE_PATTERN } from "./statementImportRoute.js";
-import { CARD_INVOICE_RECONCILIATION_ROUTE_PATTERN } from "./cardInvoiceImportRoute.js";
+import { CARD_INVOICE_RECONCILIATION_ROUTE_PATTERN, CARD_INVOICE_UNDO_ROUTE_PATTERN } from "./cardInvoiceImportRoute.js";
 
 const rootRoute = createRootRoute({
   validateSearch: zodValidator(finclaRootSearchSchema),
@@ -178,6 +178,20 @@ const cardInvoiceReconciliationRoute = createRoute({
   errorComponent: FinclaAuthenticatedRouteError,
   component: function CardInvoiceReconciliationRoute() {
     return <AuthenticatedPageOutlet segment="cardInvoiceReconciliation" />;
+  },
+});
+
+/** Desfazer uma conciliação de fatura concluída (fincla-api#556): prévia e confirmação na página. */
+const cardInvoiceUndoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: CARD_INVOICE_UNDO_ROUTE_PATTERN,
+  beforeLoad: (ctx) => {
+    requireSessionTokenBeforeLoad(ctx);
+    if (!isValidPublicCardId(ctx.params?.cardId)) throw notFound();
+  },
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function CardInvoiceUndoRoute() {
+    return <AuthenticatedPageOutlet segment="cardInvoiceUndo" />;
   },
 });
 
@@ -359,6 +373,7 @@ const routeTree = rootRoute.addChildren([
   statementReconciliationRoute,
   statementImportUndoRoute,
   cardInvoiceReconciliationRoute,
+  cardInvoiceUndoRoute,
   profileRoute,
   planningRoute,
   consultantRoute,
