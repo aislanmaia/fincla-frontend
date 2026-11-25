@@ -1,12 +1,12 @@
 {
   "draft": {
-    "id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -63,7 +63,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "6fe40c02-a6c0-4721-88b9-15de2added3d",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -111,10 +111,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b9c90d14-7e21-4ece-b67d-c1fca7968f38",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -162,10 +169,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b21d6784-8983-460a-be3f-5f75eaf34521",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -420,10 +434,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "fe1e67ac-2ff6-4714-9df9-ab910e5f6bc9",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -645,10 +666,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "00ff6cfb-8faf-45b8-be29-95eaf3c323d6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -662,9 +690,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -679,10 +707,78 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 25,
+            "description": "Uber 1",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          },
+          {
+            "id": 26,
+            "description": "Uber 2",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "7c739211-fa1d-49a9-a321-bc6970c376a1",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -696,9 +792,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -713,10 +809,78 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 25,
+            "description": "Uber 1",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          },
+          {
+            "id": 26,
+            "description": "Uber 2",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "65c4f4b6-4d64-491f-9d83-13adf33cf5e0",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -730,9 +894,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -747,10 +911,50 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 27,
+            "description": "Posto",
+            "type": "expense",
+            "value": {
+              "amount": "150.40",
+              "currency": "BRL"
+            },
+            "date": "2026-11-20T00:00:00",
+            "purchase_date": "2026-11-20",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [
+              "amount"
+            ],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "dad298ae-8b5b-4916-a690-c5f396665dde",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -781,10 +985,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cac2e8ab-12b5-4494-bde9-fb43bcf3acc8",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -797,13 +1008,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "new",
-        "answer": "create",
+        "classification": "other_invoice",
+        "answer": "move",
         "confirmed": false,
         "answerable": true,
-        "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "suggested_transaction_id": 29,
+        "paired_transaction_id": 29,
+        "fincla_transaction": {
+          "id": 29,
+          "description": "Cafeteria",
+          "type": "expense",
+          "value": {
+            "amount": "18.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-15T00:00:00",
+          "purchase_date": "2026-11-15",
+          "installment": null,
+          "invoice_id": 6,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "CAFETERIA AROMA",
@@ -815,10 +1043,22 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": "move",
+        "other_invoice": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        },
+        "movable": true,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "d0585d8d-5d78-4a26-a44b-5419123126a2",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -849,10 +1089,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "a0dd9d8a-cdc0-41f0-aee1-a43c69792c0f",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -883,10 +1130,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7e37b773-b443-4595-a504-a06b4b88ce9a",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -917,10 +1171,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "768b6895-7b88-4640-b6c1-1eeee224d68b",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -954,10 +1215,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b1a66037-08aa-4e5e-b84c-706f08aef943",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -988,10 +1256,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7a083e59-ce37-4297-9211-611c8607f7ba",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -1022,10 +1297,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "ab411da7-22fc-4924-ac36-9a8ec9d9b120",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -1056,10 +1338,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -1108,11 +1397,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "758227ff-10ff-428c-945b-d898eeae30e1",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -1161,11 +1457,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dc764ece-3e14-4657-950c-41d9a64fdaee",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -1214,11 +1517,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "6ab17fcc-6d3e-496f-aab1-1f74907408de",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -1267,18 +1577,25 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [
       {
-        "id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
-          "758227ff-10ff-428c-945b-d898eeae30e1",
-          "dc764ece-3e14-4657-950c-41d9a64fdaee",
-          "6ab17fcc-6d3e-496f-aab1-1f74907408de"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -1318,14 +1635,15 @@
       "to_pair": 4,
       "unconfirmed": 4,
       "value_changes": 1,
-      "ignored": 3,
-      "read_only": 3,
-      "unanswered": 0,
+      "ignored": 0,
+      "read_only": 0,
+      "unanswered": 3,
       "already_reconciled": 0,
-      "to_create": 9,
+      "to_create": 8,
       "missing_description": 0,
-      "uncategorized": 9,
-      "summed_charges": 4
+      "uncategorized": 8,
+      "summed_charges": 4,
+      "to_move": 1
     },
     "difference_now": {
       "bank": {
@@ -1341,14 +1659,19 @@
         "currency": "BRL"
       }
     },
-    "can_conclude": true,
-    "blockers": [],
+    "can_conclude": false,
+    "blockers": [
+      {
+        "code": "unanswered",
+        "count": 3
+      }
+    ],
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:27.565691",
-    "last_activity_at": "2026-11-25T08:34:27.565691",
-    "expires_at": "2026-12-25T08:34:27.565691",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:27:57.445685",
+    "expires_at": "2026-12-25T16:27:57.445685",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -1356,16 +1679,17 @@
       "status": "new",
       "import_id": null,
       "concluded_at": null
-    }
+    },
+    "changed_since_read": false
   },
   "charge_group_each": {
-    "id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -1422,7 +1746,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "6fe40c02-a6c0-4721-88b9-15de2added3d",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -1470,10 +1794,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b9c90d14-7e21-4ece-b67d-c1fca7968f38",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -1521,10 +1852,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b21d6784-8983-460a-be3f-5f75eaf34521",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -1779,10 +2117,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "fe1e67ac-2ff6-4714-9df9-ab910e5f6bc9",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -2004,10 +2349,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "00ff6cfb-8faf-45b8-be29-95eaf3c323d6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -2021,9 +2373,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -2038,10 +2390,78 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 25,
+            "description": "Uber 1",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          },
+          {
+            "id": 26,
+            "description": "Uber 2",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "7c739211-fa1d-49a9-a321-bc6970c376a1",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -2055,9 +2475,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -2072,10 +2492,78 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 25,
+            "description": "Uber 1",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          },
+          {
+            "id": 26,
+            "description": "Uber 2",
+            "type": "expense",
+            "value": {
+              "amount": "23.47",
+              "currency": "BRL"
+            },
+            "date": "2026-11-12T00:00:00",
+            "purchase_date": "2026-11-12",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "65c4f4b6-4d64-491f-9d83-13adf33cf5e0",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -2089,9 +2577,9 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
-        "confirmed": true,
-        "answerable": false,
+        "answer": null,
+        "confirmed": false,
+        "answerable": true,
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": null,
@@ -2106,10 +2594,50 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": [
+          {
+            "id": 27,
+            "description": "Posto",
+            "type": "expense",
+            "value": {
+              "amount": "150.40",
+              "currency": "BRL"
+            },
+            "date": "2026-11-20T00:00:00",
+            "purchase_date": "2026-11-20",
+            "installment": null,
+            "invoice_id": 1,
+            "status": "confirmed",
+            "paid_at": null,
+            "category_name": "Alimentação",
+            "tag_names": [],
+            "differences": [
+              "amount"
+            ],
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            },
+            "taken_by_entry_id": null,
+            "suggested_answer": null,
+            "movable": false,
+            "series_movable": false,
+            "move_refusal": null,
+            "suggestion_basis": null
+          }
+        ]
       },
       {
-        "id": "dad298ae-8b5b-4916-a690-c5f396665dde",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -2140,10 +2668,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cac2e8ab-12b5-4494-bde9-fb43bcf3acc8",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -2156,13 +2691,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "new",
-        "answer": "create",
+        "classification": "other_invoice",
+        "answer": "move",
         "confirmed": false,
         "answerable": true,
-        "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "suggested_transaction_id": 29,
+        "paired_transaction_id": 29,
+        "fincla_transaction": {
+          "id": 29,
+          "description": "Cafeteria",
+          "type": "expense",
+          "value": {
+            "amount": "18.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-15T00:00:00",
+          "purchase_date": "2026-11-15",
+          "installment": null,
+          "invoice_id": 6,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "CAFETERIA AROMA",
@@ -2174,10 +2726,22 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": "move",
+        "other_invoice": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        },
+        "movable": true,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "d0585d8d-5d78-4a26-a44b-5419123126a2",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -2208,10 +2772,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "a0dd9d8a-cdc0-41f0-aee1-a43c69792c0f",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -2242,10 +2813,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7e37b773-b443-4595-a504-a06b4b88ce9a",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -2276,10 +2854,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "768b6895-7b88-4640-b6c1-1eeee224d68b",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -2313,10 +2898,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b1a66037-08aa-4e5e-b84c-706f08aef943",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -2347,10 +2939,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7a083e59-ce37-4297-9211-611c8607f7ba",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -2381,10 +2980,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "ab411da7-22fc-4924-ac36-9a8ec9d9b120",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -2415,10 +3021,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -2467,11 +3080,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "758227ff-10ff-428c-945b-d898eeae30e1",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -2520,11 +3140,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dc764ece-3e14-4657-950c-41d9a64fdaee",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -2573,11 +3200,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "6ab17fcc-6d3e-496f-aab1-1f74907408de",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -2626,18 +3260,25 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": true
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [
       {
-        "id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
-          "758227ff-10ff-428c-945b-d898eeae30e1",
-          "dc764ece-3e14-4657-950c-41d9a64fdaee",
-          "6ab17fcc-6d3e-496f-aab1-1f74907408de"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -2677,14 +3318,15 @@
       "to_pair": 4,
       "unconfirmed": 4,
       "value_changes": 1,
-      "ignored": 3,
-      "read_only": 3,
-      "unanswered": 0,
+      "ignored": 0,
+      "read_only": 0,
+      "unanswered": 3,
       "already_reconciled": 0,
-      "to_create": 13,
+      "to_create": 12,
       "missing_description": 0,
-      "uncategorized": 13,
-      "summed_charges": 0
+      "uncategorized": 12,
+      "summed_charges": 0,
+      "to_move": 1
     },
     "difference_now": {
       "bank": {
@@ -2700,14 +3342,19 @@
         "currency": "BRL"
       }
     },
-    "can_conclude": true,
-    "blockers": [],
+    "can_conclude": false,
+    "blockers": [
+      {
+        "code": "unanswered",
+        "count": 3
+      }
+    ],
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:27.565691",
-    "last_activity_at": "2026-11-25T08:34:27.688241",
-    "expires_at": "2026-12-25T08:34:27.688241",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:27:57.980070",
+    "expires_at": "2026-12-25T16:27:57.980070",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -2715,10 +3362,11 @@
       "status": "new",
       "import_id": null,
       "concluded_at": null
-    }
+    },
+    "changed_since_read": false
   },
   "entry": {
-    "id": "b21d6784-8983-460a-be3f-5f75eaf34521",
+    "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
     "position": 2,
     "date": "2026-07-14",
     "bank_description": "LOJA DO BAIRRO 05/12",
@@ -2973,10 +3621,17 @@
     },
     "created_transaction_id": null,
     "charge_group_id": null,
-    "addable": true
+    "addable": true,
+    "suggested_answer": null,
+    "other_invoice": null,
+    "movable": false,
+    "series_movable": false,
+    "move_refusal": null,
+    "suggestion_basis": null,
+    "candidates": []
   },
   "entry_new": {
-    "id": "dad298ae-8b5b-4916-a690-c5f396665dde",
+    "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
     "position": 7,
     "date": "2026-11-28",
     "bank_description": "PADARIA PAO QUENTE",
@@ -3000,42 +3655,445 @@
     "value_locked": false,
     "description": "Padaria",
     "transaction_type": "expense",
-    "category_tag_id": "05dfec29-0285-4e29-9974-285077033db7",
+    "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
     "suggested_category_tag_id": null,
     "detail_tag_ids": [
-      "78a00318-5752-41b2-b5f6-4d5d6d72cab0"
+      "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
     ],
     "installments_scope": null,
     "new_purchase": null,
     "created_transaction_id": null,
     "charge_group_id": null,
-    "addable": true
+    "addable": true,
+    "suggested_answer": null,
+    "other_invoice": null,
+    "movable": false,
+    "series_movable": false,
+    "move_refusal": null,
+    "suggestion_basis": null,
+    "candidates": []
+  },
+  "entry_doubt": {
+    "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
+    "position": 4,
+    "date": "2026-11-12",
+    "bank_description": "UBER *TRIP",
+    "amount": {
+      "amount": "-23.47",
+      "currency": "BRL"
+    },
+    "section": "purchases",
+    "installment": null,
+    "next_installments": [],
+    "foreign_amount": null,
+    "card_last4": "4321",
+    "classification": "doubt",
+    "answer": "pair",
+    "confirmed": true,
+    "answerable": true,
+    "suggested_transaction_id": null,
+    "paired_transaction_id": 25,
+    "fincla_transaction": {
+      "id": 25,
+      "description": "Uber 1",
+      "type": "expense",
+      "value": {
+        "amount": "23.47",
+        "currency": "BRL"
+      },
+      "date": "2026-11-12T00:00:00",
+      "purchase_date": "2026-11-12",
+      "installment": null,
+      "invoice_id": 1,
+      "status": "confirmed",
+      "paid_at": null,
+      "category_name": "Alimentação",
+      "tag_names": [],
+      "differences": []
+    },
+    "value_change": null,
+    "value_locked": false,
+    "description": "UBER *TRIP",
+    "transaction_type": "expense",
+    "category_tag_id": null,
+    "suggested_category_tag_id": null,
+    "detail_tag_ids": [],
+    "installments_scope": null,
+    "new_purchase": null,
+    "created_transaction_id": null,
+    "charge_group_id": null,
+    "addable": true,
+    "suggested_answer": null,
+    "other_invoice": null,
+    "movable": false,
+    "series_movable": false,
+    "move_refusal": null,
+    "suggestion_basis": null,
+    "candidates": [
+      {
+        "id": 25,
+        "description": "Uber 1",
+        "type": "expense",
+        "value": {
+          "amount": "23.47",
+          "currency": "BRL"
+        },
+        "date": "2026-11-12T00:00:00",
+        "purchase_date": "2026-11-12",
+        "installment": null,
+        "invoice_id": 1,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [],
+        "invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "open"
+        },
+        "taken_by_entry_id": null,
+        "suggested_answer": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null
+      },
+      {
+        "id": 26,
+        "description": "Uber 2",
+        "type": "expense",
+        "value": {
+          "amount": "23.47",
+          "currency": "BRL"
+        },
+        "date": "2026-11-12T00:00:00",
+        "purchase_date": "2026-11-12",
+        "installment": null,
+        "invoice_id": 1,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [],
+        "invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "open"
+        },
+        "taken_by_entry_id": null,
+        "suggested_answer": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null
+      }
+    ]
+  },
+  "search": {
+    "results": [
+      {
+        "id": 26,
+        "description": "Uber 2",
+        "type": "expense",
+        "value": {
+          "amount": "23.47",
+          "currency": "BRL"
+        },
+        "date": "2026-11-12T00:00:00",
+        "purchase_date": "2026-11-12",
+        "installment": null,
+        "invoice_id": 1,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [],
+        "invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "open"
+        },
+        "taken_by_entry_id": null,
+        "suggested_answer": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null
+      },
+      {
+        "id": 25,
+        "description": "Uber 1",
+        "type": "expense",
+        "value": {
+          "amount": "23.47",
+          "currency": "BRL"
+        },
+        "date": "2026-11-12T00:00:00",
+        "purchase_date": "2026-11-12",
+        "installment": null,
+        "invoice_id": 1,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [],
+        "invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "open"
+        },
+        "taken_by_entry_id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
+        "suggested_answer": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null
+      }
+    ]
+  },
+  "search_neighbours": {
+    "results": [
+      {
+        "id": 8,
+        "description": "Loja",
+        "type": "expense",
+        "value": {
+          "amount": "108.33",
+          "currency": "BRL"
+        },
+        "date": "2027-01-10T00:00:00",
+        "purchase_date": "2026-07-14",
+        "installment": {
+          "number": 6,
+          "count": 12
+        },
+        "invoice_id": 6,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [
+          "amount",
+          "date"
+        ],
+        "invoice": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        },
+        "taken_by_entry_id": null,
+        "suggested_answer": "move",
+        "movable": true,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": {
+          "previous": {
+            "number": 5,
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            }
+          },
+          "next": {
+            "number": 7,
+            "invoice": {
+              "id": 7,
+              "year": 2027,
+              "month": 2,
+              "status": "open"
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "description": "Loja",
+        "type": "expense",
+        "value": {
+          "amount": "108.33",
+          "currency": "BRL"
+        },
+        "date": "2026-12-10T00:00:00",
+        "purchase_date": "2026-07-14",
+        "installment": {
+          "number": 5,
+          "count": 12
+        },
+        "invoice_id": 1,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [
+          "amount",
+          "date"
+        ],
+        "invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "open"
+        },
+        "taken_by_entry_id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
+        "suggested_answer": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null
+      },
+      {
+        "id": 6,
+        "description": "Loja",
+        "type": "expense",
+        "value": {
+          "amount": "108.33",
+          "currency": "BRL"
+        },
+        "date": "2026-11-10T00:00:00",
+        "purchase_date": "2026-07-14",
+        "installment": {
+          "number": 4,
+          "count": 12
+        },
+        "invoice_id": 5,
+        "status": "confirmed",
+        "paid_at": null,
+        "category_name": "Alimentação",
+        "tag_names": [],
+        "differences": [
+          "amount",
+          "date"
+        ],
+        "invoice": {
+          "id": 5,
+          "year": 2026,
+          "month": 11,
+          "status": "open"
+        },
+        "taken_by_entry_id": null,
+        "suggested_answer": "move",
+        "movable": true,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": {
+          "previous": {
+            "number": 3,
+            "invoice": {
+              "id": 4,
+              "year": 2026,
+              "month": 10,
+              "status": "open"
+            }
+          },
+          "next": {
+            "number": 5,
+            "invoice": {
+              "id": 1,
+              "year": 2026,
+              "month": 12,
+              "status": "open"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "entry_move": {
+    "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
+    "position": 8,
+    "date": "2026-11-15",
+    "bank_description": "CAFETERIA AROMA",
+    "amount": {
+      "amount": "-18.00",
+      "currency": "BRL"
+    },
+    "section": "purchases",
+    "installment": null,
+    "next_installments": [],
+    "foreign_amount": null,
+    "card_last4": "4321",
+    "classification": "other_invoice",
+    "answer": "move",
+    "confirmed": true,
+    "answerable": true,
+    "suggested_transaction_id": 29,
+    "paired_transaction_id": 29,
+    "fincla_transaction": {
+      "id": 29,
+      "description": "Cafeteria",
+      "type": "expense",
+      "value": {
+        "amount": "18.00",
+        "currency": "BRL"
+      },
+      "date": "2026-11-15T00:00:00",
+      "purchase_date": "2026-11-15",
+      "installment": null,
+      "invoice_id": 6,
+      "status": "confirmed",
+      "paid_at": null,
+      "category_name": "Alimentação",
+      "tag_names": [],
+      "differences": []
+    },
+    "value_change": null,
+    "value_locked": false,
+    "description": "CAFETERIA AROMA",
+    "transaction_type": "expense",
+    "category_tag_id": null,
+    "suggested_category_tag_id": null,
+    "detail_tag_ids": [],
+    "installments_scope": null,
+    "new_purchase": null,
+    "created_transaction_id": null,
+    "charge_group_id": null,
+    "addable": true,
+    "suggested_answer": "move",
+    "other_invoice": {
+      "id": 6,
+      "year": 2027,
+      "month": 1,
+      "status": "open"
+    },
+    "movable": true,
+    "series_movable": false,
+    "move_refusal": null,
+    "suggestion_basis": null,
+    "candidates": []
   },
   "draft_in_progress": {
     "code": "conflict",
     "message": "Você já tem uma conciliação em andamento desta fatura. Continue de onde parou.",
     "reason": "invoice_draft_in_progress",
-    "import_id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "credit_card_id": 1,
-    "credit_card_public_id": "cd299227-8d31-4665-98cf-c308bd262d5c"
+    "credit_card_public_id": "cbebecfc-aa43-4117-aa98-03153250af3b"
   },
   "card_check_other_card": {
     "status": "other_card",
     "file_last4": "4321",
     "suggested_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa"
     }
   },
   "concluded": {
-    "id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "concluded",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -3047,7 +4105,7 @@
       "closing_date": "2026-12-03",
       "status": "open",
       "total": {
-        "amount": "2403.32",
+        "amount": "2402.92",
         "currency": "BRL"
       }
     },
@@ -3092,7 +4150,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "6fe40c02-a6c0-4721-88b9-15de2added3d",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -3140,10 +4198,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b9c90d14-7e21-4ece-b67d-c1fca7968f38",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -3191,10 +4256,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b21d6784-8983-460a-be3f-5f75eaf34521",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -3438,10 +4510,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "fe1e67ac-2ff6-4714-9df9-ab910e5f6bc9",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -3663,10 +4742,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "00ff6cfb-8faf-45b8-be29-95eaf3c323d6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -3680,12 +4766,29 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 25,
+        "fincla_transaction": {
+          "id": 25,
+          "description": "Uber 1",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -3697,10 +4800,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7c739211-fa1d-49a9-a321-bc6970c376a1",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -3714,12 +4824,29 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 26,
+        "fincla_transaction": {
+          "id": 26,
+          "description": "Uber 2",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -3731,10 +4858,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "65c4f4b6-4d64-491f-9d83-13adf33cf5e0",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -3748,12 +4882,29 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 27,
+        "fincla_transaction": {
+          "id": 27,
+          "description": "Posto",
+          "type": "expense",
+          "value": {
+            "amount": "150.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-20T00:00:00",
+          "purchase_date": "2026-11-20",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "POSTO CENTRAL",
@@ -3765,10 +4916,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dad298ae-8b5b-4916-a690-c5f396665dde",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -3788,7 +4946,7 @@
         "suggested_transaction_id": null,
         "paired_transaction_id": null,
         "fincla_transaction": {
-          "id": 29,
+          "id": 30,
           "description": "Padaria",
           "type": "expense",
           "value": {
@@ -3811,19 +4969,26 @@
         "value_locked": false,
         "description": "Padaria",
         "transaction_type": "expense",
-        "category_tag_id": "05dfec29-0285-4e29-9974-285077033db7",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "suggested_category_tag_id": null,
         "detail_tag_ids": [
-          "78a00318-5752-41b2-b5f6-4d5d6d72cab0"
+          "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
         ],
         "installments_scope": null,
         "new_purchase": null,
-        "created_transaction_id": 29,
+        "created_transaction_id": 30,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cac2e8ab-12b5-4494-bde9-fb43bcf3acc8",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -3836,15 +5001,15 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "new",
-        "answer": "create",
-        "confirmed": false,
+        "classification": "other_invoice",
+        "answer": "move",
+        "confirmed": true,
         "answerable": false,
-        "suggested_transaction_id": null,
-        "paired_transaction_id": null,
+        "suggested_transaction_id": 29,
+        "paired_transaction_id": 29,
         "fincla_transaction": {
-          "id": 30,
-          "description": "CAFETERIA AROMA",
+          "id": 29,
+          "description": "Cafeteria",
           "type": "expense",
           "value": {
             "amount": "18.00",
@@ -3856,7 +5021,7 @@
           "invoice_id": 1,
           "status": "confirmed",
           "paid_at": null,
-          "category_name": "Não classificado",
+          "category_name": "Alimentação",
           "tag_names": [],
           "differences": []
         },
@@ -3869,12 +5034,19 @@
         "detail_tag_ids": [],
         "installments_scope": null,
         "new_purchase": null,
-        "created_transaction_id": 30,
+        "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": "move",
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "d0585d8d-5d78-4a26-a44b-5419123126a2",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -3922,10 +5094,17 @@
         "new_purchase": null,
         "created_transaction_id": 31,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "a0dd9d8a-cdc0-41f0-aee1-a43c69792c0f",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -3973,10 +5152,17 @@
         "new_purchase": null,
         "created_transaction_id": 32,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7e37b773-b443-4595-a504-a06b4b88ce9a",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -4024,10 +5210,17 @@
         "new_purchase": null,
         "created_transaction_id": 33,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "768b6895-7b88-4640-b6c1-1eeee224d68b",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -4078,10 +5271,17 @@
         "new_purchase": null,
         "created_transaction_id": 34,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b1a66037-08aa-4e5e-b84c-706f08aef943",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -4129,10 +5329,17 @@
         "new_purchase": null,
         "created_transaction_id": 35,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7a083e59-ce37-4297-9211-611c8607f7ba",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -4180,10 +5387,17 @@
         "new_purchase": null,
         "created_transaction_id": 36,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "ab411da7-22fc-4924-ac36-9a8ec9d9b120",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -4231,10 +5445,17 @@
         "new_purchase": null,
         "created_transaction_id": 37,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -4283,11 +5504,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "758227ff-10ff-428c-945b-d898eeae30e1",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -4336,11 +5564,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dc764ece-3e14-4657-950c-41d9a64fdaee",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -4389,11 +5624,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "6ab17fcc-6d3e-496f-aab1-1f74907408de",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -4442,18 +5684,25 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [
       {
-        "id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
-          "758227ff-10ff-428c-945b-d898eeae30e1",
-          "dc764ece-3e14-4657-950c-41d9a64fdaee",
-          "6ab17fcc-6d3e-496f-aab1-1f74907408de"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -4490,17 +5739,18 @@
     "summary": {
       "total": 20,
       "suggested": 4,
-      "to_pair": 4,
+      "to_pair": 7,
       "unconfirmed": 3,
       "value_changes": 0,
-      "ignored": 3,
-      "read_only": 3,
+      "ignored": 0,
+      "read_only": 0,
       "unanswered": 0,
       "already_reconciled": 0,
-      "to_create": 9,
+      "to_create": 8,
       "missing_description": 0,
-      "uncategorized": 8,
-      "summed_charges": 4
+      "uncategorized": 7,
+      "summed_charges": 4,
+      "to_move": 1
     },
     "difference_now": {
       "bank": {
@@ -4508,42 +5758,43 @@
         "currency": "BRL"
       },
       "fincla": {
-        "amount": "2403.32",
+        "amount": "2402.92",
         "currency": "BRL"
       },
       "difference": {
-        "amount": "-0.40",
+        "amount": "0.00",
         "currency": "BRL"
       }
     },
     "can_conclude": false,
     "blockers": [],
     "final_difference": {
-      "amount": "-0.40",
+      "amount": "0.00",
       "currency": "BRL"
     },
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:27.565691",
-    "last_activity_at": "2026-11-25T08:34:28.568025",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:28:01.357408",
     "expires_at": null,
-    "concluded_at": "2026-11-25T08:34:28.568025",
+    "concluded_at": "2026-11-25T16:28:01.357408",
     "undone_at": null,
     "latest_concluded": true,
     "file_check": {
       "status": "new",
       "import_id": null,
       "concluded_at": null
-    }
+    },
+    "changed_since_read": false
   },
   "reimport": {
-    "id": "be809fb8-9151-4c6a-adff-392c700d1166",
+    "id": "97ec78b7-7202-414d-9365-ed4547c505af",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -4555,7 +5806,7 @@
       "closing_date": "2026-12-03",
       "status": "open",
       "total": {
-        "amount": "2403.32",
+        "amount": "2402.92",
         "currency": "BRL"
       }
     },
@@ -4600,7 +5851,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "649aff2c-58f9-44b7-8fd5-d1ea1db76a5a",
+        "id": "65fbf9ec-6411-4018-8f54-624f74758b38",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -4648,10 +5899,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "f754f22b-8b60-40c7-9e31-f88158feb1bc",
+        "id": "54258f34-e5e0-4a82-8b83-ac925670b82a",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -4699,10 +5957,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "20bbe852-6375-4785-9bd3-01d23355660c",
+        "id": "a836da4b-a8c1-4b27-92bc-1d84aaf5013f",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -4806,10 +6071,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "0d886bc2-aa5d-4885-9495-2c87e314c1e8",
+        "id": "417e3c42-8b53-4f57-bfc4-abadee3f616d",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -4913,10 +6185,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "babc7ce3-4c89-4cc5-8fed-1d72fb7b39b6",
+        "id": "d57cf32b-016b-4423-aff2-05787d4925a0",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -4929,13 +6208,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "doubt",
-        "answer": "ignore",
+        "classification": "reconciled",
+        "answer": "reconciled",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 25,
+        "fincla_transaction": {
+          "id": 25,
+          "description": "Uber 1",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -4947,10 +6243,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "fc556007-0571-4f97-a53b-fdfad0d8b75e",
+        "id": "c81b462b-026e-4d1b-9a8d-29f54e83b966",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -4963,13 +6266,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "doubt",
-        "answer": "ignore",
+        "classification": "reconciled",
+        "answer": "reconciled",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 26,
+        "fincla_transaction": {
+          "id": 26,
+          "description": "Uber 2",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -4981,10 +6301,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "493abe97-603d-4b51-a558-05a3d59c1211",
+        "id": "9eaa0d1f-ada3-4c3a-92bc-eacbb784db3a",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -4997,13 +6324,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "doubt",
-        "answer": "ignore",
+        "classification": "reconciled",
+        "answer": "reconciled",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 27,
+        "fincla_transaction": {
+          "id": 27,
+          "description": "Posto",
+          "type": "expense",
+          "value": {
+            "amount": "150.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-20T00:00:00",
+          "purchase_date": "2026-11-20",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "POSTO CENTRAL",
@@ -5015,10 +6359,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "76752f61-0fa8-4e25-afcc-3b35fdcbcbb1",
+        "id": "669704ca-42fb-4fe6-a829-d6a89f7622e8",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -5036,9 +6387,9 @@
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": 29,
+        "paired_transaction_id": 30,
         "fincla_transaction": {
-          "id": 29,
+          "id": 30,
           "description": "Padaria",
           "type": "expense",
           "value": {
@@ -5061,17 +6412,24 @@
         "value_locked": false,
         "description": "PADARIA PAO QUENTE",
         "transaction_type": "expense",
-        "category_tag_id": "05dfec29-0285-4e29-9974-285077033db7",
-        "suggested_category_tag_id": "05dfec29-0285-4e29-9974-285077033db7",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
+        "suggested_category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "detail_tag_ids": [],
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "1675ac20-a9e5-4cd7-8ccb-22cddae87854",
+        "id": "3a69b71f-096f-47a5-a9da-19f4a4edb8a5",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -5089,10 +6447,10 @@
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": 30,
+        "paired_transaction_id": 29,
         "fincla_transaction": {
-          "id": 30,
-          "description": "CAFETERIA AROMA",
+          "id": 29,
+          "description": "Cafeteria",
           "type": "expense",
           "value": {
             "amount": "18.00",
@@ -5104,7 +6462,7 @@
           "invoice_id": 1,
           "status": "confirmed",
           "paid_at": null,
-          "category_name": "Não classificado",
+          "category_name": "Alimentação",
           "tag_names": [],
           "differences": []
         },
@@ -5119,10 +6477,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "8f99e0ce-eece-4b9f-8ad4-eb08463b0ffe",
+        "id": "09247fca-17cb-4869-bf51-a3471d16cdfd",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -5170,10 +6535,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cad9b452-fe89-46a2-b08a-79f7e6ee7af2",
+        "id": "ccf0dcb9-8d57-4622-bfb8-c29af15e14f2",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -5221,10 +6593,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "e814bf7e-b281-4834-b22d-8247767f61a9",
+        "id": "ff77384a-211a-4917-820f-de563327bcae",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -5272,10 +6651,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cf28e265-bf06-4f2f-ad35-806df732b657",
+        "id": "b40857e8-39dd-4e4e-88a5-429142d6a930",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -5326,10 +6712,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "3a5c50ca-1c2a-423f-b670-d3031a893569",
+        "id": "31718ebe-33b5-4438-b3a2-14f0452a1527",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -5377,10 +6770,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "5792e9d2-3fc7-4048-95ca-d7d793a654a2",
+        "id": "1b524635-ea14-4b27-b339-59d6ad054557",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -5428,10 +6828,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "3d1c5b3a-999f-49e7-a11d-2cd4ba45e647",
+        "id": "3a6d7c3f-2d86-4ebb-91ce-6119378e0ec0",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -5479,10 +6886,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "0d338fc0-e0cd-4764-8041-abbc5fb9bfe7",
+        "id": "e7dfc86f-7ad8-41f1-862a-22f52d896076",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -5532,10 +6946,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "2d574948-9c69-45d3-9cfe-5d448df5577f",
+        "id": "54beadff-c663-4732-a15d-1e5c4dfab94f",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -5585,10 +7006,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "ef73c9d5-f583-4547-b001-ba140f433469",
+        "id": "b52a467c-e011-4dc9-8b65-c3dc2d53ac89",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -5638,10 +7066,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "e40e807c-cad4-4805-994b-1264f785b5c9",
+        "id": "3d736b5e-131c-4d23-a170-18029b46e545",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -5691,7 +7126,14 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [],
@@ -5701,14 +7143,15 @@
       "to_pair": 0,
       "unconfirmed": 0,
       "value_changes": 0,
-      "ignored": 3,
-      "read_only": 3,
+      "ignored": 0,
+      "read_only": 0,
       "unanswered": 0,
-      "already_reconciled": 17,
+      "already_reconciled": 20,
       "to_create": 0,
       "missing_description": 0,
       "uncategorized": 0,
-      "summed_charges": 0
+      "summed_charges": 0,
+      "to_move": 0
     },
     "difference_now": {
       "bank": {
@@ -5716,11 +7159,11 @@
         "currency": "BRL"
       },
       "fincla": {
-        "amount": "2403.32",
+        "amount": "2402.92",
         "currency": "BRL"
       },
       "difference": {
-        "amount": "-0.40",
+        "amount": "0.00",
         "currency": "BRL"
       }
     },
@@ -5729,20 +7172,21 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:29.291376",
-    "last_activity_at": "2026-11-25T08:34:29.291376",
-    "expires_at": "2026-12-25T08:34:29.291376",
+    "created_at": "2026-11-25T16:28:03.661683",
+    "last_activity_at": "2026-11-25T16:28:03.661683",
+    "expires_at": "2026-12-25T16:28:03.661683",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
     "file_check": {
       "status": "already_imported",
-      "import_id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
-      "concluded_at": "2026-11-25T08:34:28.568025"
-    }
+      "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
+      "concluded_at": "2026-11-25T16:28:01.357408"
+    },
+    "changed_since_read": false
   },
   "undo_preview_refused": {
-    "import_id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "can_undo": false,
     "refusal": {
       "code": "not_latest",
@@ -5751,34 +7195,22 @@
       "invoice_month": null
     },
     "summary": {
-      "to_delete": 9,
+      "to_delete": 8,
       "edited_after": 0,
       "already_deleted": 0,
-      "to_restore": 5,
-      "restored_transactions": 5,
+      "to_restore": 9,
+      "restored_transactions": 9,
       "recreated_transactions": 0,
       "restored_invoices": 0
     },
     "transactions_to_delete": [
       {
-        "transaction_id": 29,
+        "transaction_id": 30,
         "description": "Padaria",
         "date": "2026-11-28",
         "type": "expense",
         "amount": {
           "amount": "32.50",
-          "currency": "BRL"
-        },
-        "edited_after": false,
-        "changed_fields": []
-      },
-      {
-        "transaction_id": 30,
-        "description": "CAFETERIA AROMA",
-        "date": "2026-11-15",
-        "type": "expense",
-        "amount": {
-          "amount": "18.00",
           "currency": "BRL"
         },
         "edited_after": false,
@@ -5882,7 +7314,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -5896,7 +7329,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -5913,7 +7347,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -5927,7 +7362,76 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "25",
+        "action": "updated",
+        "description": "Uber 1",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "26",
+        "action": "updated",
+        "description": "Uber 2",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "27",
+        "action": "updated",
+        "description": "Posto",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": {
+          "amount": "150.40",
+          "currency": "BRL"
+        },
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "29",
+        "action": "updated",
+        "description": "Cafeteria",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        }
       },
       {
         "entity_type": "transaction",
@@ -5941,14 +7445,15 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       }
     ]
   },
   "list": {
     "imports": [
       {
-        "id": "7b59469d-1ced-41e7-bcef-00277cc77f04",
+        "id": "c804450f-77d2-4620-9d31-e49b6dbfc4c0",
         "status": "draft",
         "invoice": {
           "id": 1,
@@ -5958,7 +7463,7 @@
           "closing_date": "2026-12-03",
           "status": "open",
           "total": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           }
         },
@@ -5969,14 +7474,15 @@
           "to_pair": 0,
           "unconfirmed": 0,
           "value_changes": 0,
-          "ignored": 3,
-          "read_only": 3,
+          "ignored": 0,
+          "read_only": 0,
           "unanswered": 0,
-          "already_reconciled": 17,
+          "already_reconciled": 20,
           "to_create": 0,
           "missing_description": 0,
           "uncategorized": 0,
-          "summed_charges": 0
+          "summed_charges": 0,
+          "to_move": 0
         },
         "difference_now": {
           "bank": {
@@ -5984,11 +7490,11 @@
             "currency": "BRL"
           },
           "fincla": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           },
           "difference": {
-            "amount": "-0.40",
+            "amount": "0.00",
             "currency": "BRL"
           }
         },
@@ -5996,15 +7502,16 @@
         "can_conclude": true,
         "blockers": [],
         "current_step": "doubt",
-        "created_at": "2026-11-25T08:34:29.714392",
-        "last_activity_at": "2026-11-25T08:34:29.804327",
-        "expires_at": "2026-12-25T08:34:29.804327",
+        "created_at": "2026-11-25T16:28:04.877033",
+        "last_activity_at": "2026-11-25T16:28:05.057214",
+        "expires_at": "2026-12-25T16:28:05.057214",
         "concluded_at": null,
         "undone_at": null,
-        "latest_concluded": false
+        "latest_concluded": false,
+        "changed_since_read": false
       },
       {
-        "id": "be809fb8-9151-4c6a-adff-392c700d1166",
+        "id": "97ec78b7-7202-414d-9365-ed4547c505af",
         "status": "undone",
         "invoice": {
           "id": 1,
@@ -6014,7 +7521,7 @@
           "closing_date": "2026-12-03",
           "status": "open",
           "total": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           }
         },
@@ -6025,14 +7532,15 @@
           "to_pair": 0,
           "unconfirmed": 0,
           "value_changes": 0,
-          "ignored": 3,
-          "read_only": 3,
+          "ignored": 0,
+          "read_only": 0,
           "unanswered": 0,
-          "already_reconciled": 17,
+          "already_reconciled": 20,
           "to_create": 0,
           "missing_description": 0,
           "uncategorized": 0,
-          "summed_charges": 0
+          "summed_charges": 0,
+          "to_move": 0
         },
         "difference_now": {
           "bank": {
@@ -6040,30 +7548,31 @@
             "currency": "BRL"
           },
           "fincla": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           },
           "difference": {
-            "amount": "-0.40",
+            "amount": "0.00",
             "currency": "BRL"
           }
         },
         "final_difference": {
-          "amount": "-0.40",
+          "amount": "0.00",
           "currency": "BRL"
         },
         "can_conclude": false,
         "blockers": [],
         "current_step": null,
-        "created_at": "2026-11-25T08:34:29.291376",
-        "last_activity_at": "2026-11-25T08:34:29.454671",
+        "created_at": "2026-11-25T16:28:03.661683",
+        "last_activity_at": "2026-11-25T16:28:04.293765",
         "expires_at": null,
-        "concluded_at": "2026-11-25T08:34:29.354939",
-        "undone_at": "2026-11-25T08:34:29.454671",
-        "latest_concluded": false
+        "concluded_at": "2026-11-25T16:28:03.930593",
+        "undone_at": "2026-11-25T16:28:04.293765",
+        "latest_concluded": false,
+        "changed_since_read": false
       },
       {
-        "id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+        "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
         "status": "concluded",
         "invoice": {
           "id": 1,
@@ -6073,7 +7582,7 @@
           "closing_date": "2026-12-03",
           "status": "open",
           "total": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           }
         },
@@ -6081,17 +7590,18 @@
         "summary": {
           "total": 20,
           "suggested": 4,
-          "to_pair": 4,
+          "to_pair": 7,
           "unconfirmed": 3,
           "value_changes": 0,
-          "ignored": 3,
-          "read_only": 3,
+          "ignored": 0,
+          "read_only": 0,
           "unanswered": 0,
           "already_reconciled": 0,
-          "to_create": 9,
+          "to_create": 8,
           "missing_description": 0,
-          "uncategorized": 8,
-          "summed_charges": 4
+          "uncategorized": 7,
+          "summed_charges": 4,
+          "to_move": 1
         },
         "difference_now": {
           "bank": {
@@ -6099,63 +7609,52 @@
             "currency": "BRL"
           },
           "fincla": {
-            "amount": "2403.32",
+            "amount": "2402.92",
             "currency": "BRL"
           },
           "difference": {
-            "amount": "-0.40",
+            "amount": "0.00",
             "currency": "BRL"
           }
         },
         "final_difference": {
-          "amount": "-0.40",
+          "amount": "0.00",
           "currency": "BRL"
         },
         "can_conclude": false,
         "blockers": [],
         "current_step": null,
-        "created_at": "2026-11-25T08:34:27.565691",
-        "last_activity_at": "2026-11-25T08:34:28.568025",
+        "created_at": "2026-11-25T16:27:57.445685",
+        "last_activity_at": "2026-11-25T16:28:01.357408",
         "expires_at": null,
-        "concluded_at": "2026-11-25T08:34:28.568025",
+        "concluded_at": "2026-11-25T16:28:01.357408",
         "undone_at": null,
-        "latest_concluded": true
+        "latest_concluded": true,
+        "changed_since_read": false
       }
     ]
   },
   "undo_preview": {
-    "import_id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "import_id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "can_undo": true,
     "refusal": null,
     "summary": {
-      "to_delete": 9,
+      "to_delete": 8,
       "edited_after": 0,
       "already_deleted": 0,
-      "to_restore": 5,
-      "restored_transactions": 5,
+      "to_restore": 9,
+      "restored_transactions": 9,
       "recreated_transactions": 0,
       "restored_invoices": 0
     },
     "transactions_to_delete": [
       {
-        "transaction_id": 29,
+        "transaction_id": 30,
         "description": "Padaria",
         "date": "2026-11-28",
         "type": "expense",
         "amount": {
           "amount": "32.50",
-          "currency": "BRL"
-        },
-        "edited_after": false,
-        "changed_fields": []
-      },
-      {
-        "transaction_id": 30,
-        "description": "CAFETERIA AROMA",
-        "date": "2026-11-15",
-        "type": "expense",
-        "amount": {
-          "amount": "18.00",
           "currency": "BRL"
         },
         "edited_after": false,
@@ -6259,7 +7758,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -6273,7 +7773,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -6292,7 +7793,8 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       },
       {
         "entity_type": "transaction",
@@ -6306,7 +7808,76 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "25",
+        "action": "updated",
+        "description": "Uber 1",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "26",
+        "action": "updated",
+        "description": "Uber 2",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "27",
+        "action": "updated",
+        "description": "Posto",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": {
+          "amount": "150.40",
+          "currency": "BRL"
+        },
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": null
+      },
+      {
+        "entity_type": "transaction",
+        "entity_id": "29",
+        "action": "updated",
+        "description": "Cafeteria",
+        "edited_after": false,
+        "changed_fields": [],
+        "kept_fields": [],
+        "value_back": null,
+        "account_back": null,
+        "date_back": null,
+        "date_changed_to": null,
+        "invoice": null,
+        "invoice_back": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        }
       },
       {
         "entity_type": "transaction",
@@ -6320,18 +7891,19 @@
         "account_back": null,
         "date_back": null,
         "date_changed_to": null,
-        "invoice": null
+        "invoice": null,
+        "invoice_back": null
       }
     ]
   },
   "undone": {
-    "id": "50ef3a48-5385-402b-bb23-918f1402fe6d",
+    "id": "73e61dcd-4829-4e52-8e46-1a4cdf0c2558",
     "kind": "card_invoice",
     "status": "undone",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -6388,7 +7960,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "6fe40c02-a6c0-4721-88b9-15de2added3d",
+        "id": "d13fd288-6abb-43f4-9f8a-a1c9238b2829",
         "position": 0,
         "date": "2026-11-05",
         "bank_description": "MERCADO BOA VISTA",
@@ -6436,10 +8008,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b9c90d14-7e21-4ece-b67d-c1fca7968f38",
+        "id": "cecf7c52-764f-4b98-8cbc-9eb511297911",
         "position": 1,
         "date": "2026-11-08",
         "bank_description": "FARMACIA SAO JOAO",
@@ -6487,10 +8066,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b21d6784-8983-460a-be3f-5f75eaf34521",
+        "id": "4186c7bb-4783-4a60-a1c6-ee0fb8628be2",
         "position": 2,
         "date": "2026-07-14",
         "bank_description": "LOJA DO BAIRRO 05/12",
@@ -6736,10 +8322,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "fe1e67ac-2ff6-4714-9df9-ab910e5f6bc9",
+        "id": "0398c11e-2dc3-4f96-a12f-4f8affd036d3",
         "position": 3,
         "date": "2026-09-05",
         "bank_description": "ELETRO CASA 03/10",
@@ -6961,10 +8554,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "00ff6cfb-8faf-45b8-be29-95eaf3c323d6",
+        "id": "b0621b0b-cfec-4490-8347-22e4ae6448cb",
         "position": 4,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -6978,12 +8578,29 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 25,
+        "fincla_transaction": {
+          "id": 25,
+          "description": "Uber 1",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -6995,10 +8612,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7c739211-fa1d-49a9-a321-bc6970c376a1",
+        "id": "81f63985-9899-45b5-8ed9-3225e974a929",
         "position": 5,
         "date": "2026-11-12",
         "bank_description": "UBER *TRIP",
@@ -7012,12 +8636,29 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 26,
+        "fincla_transaction": {
+          "id": 26,
+          "description": "Uber 2",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "UBER *TRIP",
@@ -7029,10 +8670,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "65c4f4b6-4d64-491f-9d83-13adf33cf5e0",
+        "id": "c51c7a3e-b05f-447a-ba27-f2b8afc7e76b",
         "position": 6,
         "date": "2026-11-20",
         "bank_description": "POSTO CENTRAL",
@@ -7046,12 +8694,31 @@
         "foreign_amount": null,
         "card_last4": "4321",
         "classification": "doubt",
-        "answer": "ignore",
+        "answer": "pair",
         "confirmed": true,
         "answerable": false,
         "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "paired_transaction_id": 27,
+        "fincla_transaction": {
+          "id": 27,
+          "description": "Posto",
+          "type": "expense",
+          "value": {
+            "amount": "150.40",
+            "currency": "BRL"
+          },
+          "date": "2026-11-20T00:00:00",
+          "purchase_date": "2026-11-20",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "amount"
+          ]
+        },
         "value_change": null,
         "value_locked": false,
         "description": "POSTO CENTRAL",
@@ -7063,10 +8730,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dad298ae-8b5b-4916-a690-c5f396665dde",
+        "id": "e78cf5a4-aac5-4321-8607-3c69898f53d2",
         "position": 7,
         "date": "2026-11-28",
         "bank_description": "PADARIA PAO QUENTE",
@@ -7090,19 +8764,26 @@
         "value_locked": false,
         "description": "Padaria",
         "transaction_type": "expense",
-        "category_tag_id": "05dfec29-0285-4e29-9974-285077033db7",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
         "suggested_category_tag_id": null,
         "detail_tag_ids": [
-          "78a00318-5752-41b2-b5f6-4d5d6d72cab0"
+          "50ccd2a2-2172-4faf-ae26-b0470aaa8be2"
         ],
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "cac2e8ab-12b5-4494-bde9-fb43bcf3acc8",
+        "id": "4bc58066-405d-4eb7-9b00-ca39f885d13f",
         "position": 8,
         "date": "2026-11-15",
         "bank_description": "CAFETERIA AROMA",
@@ -7115,13 +8796,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "new",
-        "answer": "create",
-        "confirmed": false,
+        "classification": "other_invoice",
+        "answer": "move",
+        "confirmed": true,
         "answerable": false,
-        "suggested_transaction_id": null,
-        "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "suggested_transaction_id": 29,
+        "paired_transaction_id": 29,
+        "fincla_transaction": {
+          "id": 29,
+          "description": "Cafeteria",
+          "type": "expense",
+          "value": {
+            "amount": "18.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-15T00:00:00",
+          "purchase_date": "2026-11-15",
+          "installment": null,
+          "invoice_id": 6,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "CAFETERIA AROMA",
@@ -7133,10 +8831,22 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": "move",
+        "other_invoice": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        },
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "d0585d8d-5d78-4a26-a44b-5419123126a2",
+        "id": "cf14acb1-1e61-4980-a907-7347ff3d46d6",
         "position": 9,
         "date": "2026-11-17",
         "bank_description": "AMAZON MARKETPLACE",
@@ -7167,10 +8877,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "a0dd9d8a-cdc0-41f0-aee1-a43c69792c0f",
+        "id": "9ca56011-34c3-4dec-b50f-3ce0afaad4ac",
         "position": 10,
         "date": "2026-11-30",
         "bank_description": "ESTORNO LOJA MODA",
@@ -7201,10 +8918,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7e37b773-b443-4595-a504-a06b4b88ce9a",
+        "id": "b59f4f81-7ff7-41a7-870a-8e8a368229a8",
         "position": 11,
         "date": "2026-11-22",
         "bank_description": "RESTAURANTE SABOR",
@@ -7235,10 +8959,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "768b6895-7b88-4640-b6c1-1eeee224d68b",
+        "id": "edb4bdf5-2c64-4827-a77c-1ea16fabebe5",
         "position": 12,
         "date": "2026-11-10",
         "bank_description": "STEAMGAMES.COM",
@@ -7272,10 +9003,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b1a66037-08aa-4e5e-b84c-706f08aef943",
+        "id": "b5f30385-889c-4556-b5d6-a7c8c0d9b28e",
         "position": 13,
         "date": "2026-11-10",
         "bank_description": "Repasse de IOF",
@@ -7306,10 +9044,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "7a083e59-ce37-4297-9211-611c8607f7ba",
+        "id": "c7d6159f-7476-4d96-a498-d8e4978f4fcb",
         "position": 14,
         "date": "2026-12-03",
         "bank_description": "ANUIDADE DIFERENCIADA",
@@ -7340,10 +9085,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "ab411da7-22fc-4924-ac36-9a8ec9d9b120",
+        "id": "89799fa6-bc38-419f-a5aa-22cd625e1213",
         "position": 15,
         "date": "2026-12-03",
         "bank_description": "REDUCAO ANUIDADE",
@@ -7374,10 +9126,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": false
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
+        "id": "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
         "position": 16,
         "date": "2026-12-03",
         "bank_description": "JUROS DO ROTATIVO",
@@ -7426,11 +9185,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "758227ff-10ff-428c-945b-d898eeae30e1",
+        "id": "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
         "position": 17,
         "date": "2026-12-03",
         "bank_description": "JUROS DE MORA",
@@ -7479,11 +9245,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "dc764ece-3e14-4657-950c-41d9a64fdaee",
+        "id": "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
         "position": 18,
         "date": "2026-12-03",
         "bank_description": "MULTA POR ATRASO",
@@ -7532,11 +9305,18 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "6ab17fcc-6d3e-496f-aab1-1f74907408de",
+        "id": "fd422818-db67-4950-a28e-b0955b4af26a",
         "position": 19,
         "date": "2026-12-03",
         "bank_description": "IOF DE FINANCIAMENTO",
@@ -7585,18 +9365,25 @@
         "installments_scope": null,
         "new_purchase": null,
         "created_transaction_id": null,
-        "charge_group_id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
-        "addable": false
+        "charge_group_id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [
       {
-        "id": "fb80067b-ab8b-4619-abd9-e49a14800d40",
+        "id": "23e3345f-b4be-4606-ba3f-ce9138bf2045",
         "entry_ids": [
-          "5d5a0ec8-c829-4a2d-8914-3c5b9c372948",
-          "758227ff-10ff-428c-945b-d898eeae30e1",
-          "dc764ece-3e14-4657-950c-41d9a64fdaee",
-          "6ab17fcc-6d3e-496f-aab1-1f74907408de"
+          "31d5d9eb-6ef6-4006-b985-e8b6dc3d4cc4",
+          "9c6d765d-a353-4d84-9e95-77c234ec6ad2",
+          "60aa37b4-77ca-4a4a-9ccb-a0e9e90c7486",
+          "fd422818-db67-4950-a28e-b0955b4af26a"
         ],
         "total": {
           "amount": "-12.59",
@@ -7633,17 +9420,18 @@
     "summary": {
       "total": 20,
       "suggested": 4,
-      "to_pair": 4,
+      "to_pair": 7,
       "unconfirmed": 3,
       "value_changes": 0,
-      "ignored": 3,
-      "read_only": 3,
+      "ignored": 0,
+      "read_only": 0,
       "unanswered": 0,
       "already_reconciled": 0,
-      "to_create": 9,
+      "to_create": 8,
       "missing_description": 0,
-      "uncategorized": 8,
-      "summed_charges": 4
+      "uncategorized": 7,
+      "summed_charges": 4,
+      "to_move": 1
     },
     "difference_now": {
       "bank": {
@@ -7662,26 +9450,1301 @@
     "can_conclude": false,
     "blockers": [],
     "final_difference": {
-      "amount": "-0.40",
+      "amount": "0.00",
       "currency": "BRL"
     },
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:27.565691",
-    "last_activity_at": "2026-11-25T08:34:30.244271",
+    "created_at": "2026-11-25T16:27:57.445685",
+    "last_activity_at": "2026-11-25T16:28:06.566044",
     "expires_at": null,
-    "concluded_at": "2026-11-25T08:34:28.568025",
-    "undone_at": "2026-11-25T08:34:30.244271",
+    "concluded_at": "2026-11-25T16:28:01.357408",
+    "undone_at": "2026-11-25T16:28:06.566044",
     "latest_concluded": false,
     "file_check": {
       "status": "new",
       "import_id": null,
       "concluded_at": null
     },
-    "deleted_transactions": 9
+    "changed_since_read": false,
+    "deleted_transactions": 8
+  },
+  "stale_draft": {
+    "id": "c804450f-77d2-4620-9d31-e49b6dbfc4c0",
+    "kind": "card_invoice",
+    "status": "draft",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
+    "credit_card": {
+      "id": 1,
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
+      "name": "Itaú Visa",
+      "last4": "4321"
+    },
+    "invoice": {
+      "id": 1,
+      "year": 2026,
+      "month": 12,
+      "due_date": "2026-12-10",
+      "closing_date": "2026-12-03",
+      "status": "open",
+      "total": {
+        "amount": "903.46",
+        "currency": "BRL"
+      }
+    },
+    "card_check": {
+      "status": "same_card",
+      "file_last4": "4321",
+      "suggested_card": null
+    },
+    "bank_summary": {
+      "previous_total": {
+        "amount": "3000.00",
+        "currency": "BRL"
+      },
+      "payment": {
+        "amount": {
+          "amount": "-2900.00",
+          "currency": "BRL"
+        },
+        "date": "2026-11-10"
+      },
+      "financed_balance": {
+        "amount": "100.00",
+        "currency": "BRL"
+      },
+      "charges": {
+        "amount": "12.59",
+        "currency": "BRL"
+      },
+      "current_entries": {
+        "amount": "2390.33",
+        "currency": "BRL"
+      },
+      "total": {
+        "amount": "2502.92",
+        "currency": "BRL"
+      },
+      "due_date": "2026-12-10",
+      "issue_date": "2026-12-03",
+      "posting_date": "2026-12-04",
+      "next_closing_date": "2027-01-04"
+    },
+    "file_name": "fatura.pdf",
+    "entries": [
+      {
+        "id": "a882338e-913b-47f2-91b6-f3587b5e97f5",
+        "position": 0,
+        "date": "2026-11-05",
+        "bank_description": "MERCADO BOA VISTA",
+        "amount": {
+          "amount": "-245.30",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 1,
+        "fincla_transaction": {
+          "id": 1,
+          "description": "Mercado",
+          "type": "expense",
+          "value": {
+            "amount": "245.30",
+            "currency": "BRL"
+          },
+          "date": "2026-11-05T00:00:00",
+          "purchase_date": "2026-11-05",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "MERCADO BOA VISTA",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "1f718837-0556-43c4-82ff-e93e2f5ac78d",
+        "position": 1,
+        "date": "2026-11-08",
+        "bank_description": "FARMACIA SAO JOAO",
+        "amount": {
+          "amount": "-89.90",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 2,
+        "fincla_transaction": {
+          "id": 2,
+          "description": "Farmácia",
+          "type": "expense",
+          "value": {
+            "amount": "89.90",
+            "currency": "BRL"
+          },
+          "date": "2026-11-08T00:00:00",
+          "purchase_date": "2026-11-08",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "FARMACIA SAO JOAO",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "ced1c055-4903-4d02-ae8c-1838fb8bbafd",
+        "position": 2,
+        "date": "2026-07-14",
+        "bank_description": "LOJA DO BAIRRO 05/12",
+        "amount": {
+          "amount": "-108.30",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": {
+          "number": 5,
+          "count": 12
+        },
+        "next_installments": [
+          {
+            "number": 6,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 7,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 8,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 9,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 10,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 11,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 12,
+            "amount": {
+              "amount": "108.27",
+              "currency": "BRL"
+            }
+          }
+        ],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 7,
+        "fincla_transaction": {
+          "id": 7,
+          "description": "Loja (presente)",
+          "type": "expense",
+          "value": {
+            "amount": "108.33",
+            "currency": "BRL"
+          },
+          "date": "2026-12-10T00:00:00",
+          "purchase_date": "2026-07-14",
+          "installment": {
+            "number": 5,
+            "count": 12
+          },
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "amount"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "LOJA DO BAIRRO",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": "full",
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "cb4ec8cb-03d8-4b37-8e0c-fed1388fa3a4",
+        "position": 3,
+        "date": "2026-09-05",
+        "bank_description": "ELETRO CASA 03/10",
+        "amount": {
+          "amount": "-250.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": {
+          "number": 3,
+          "count": 10
+        },
+        "next_installments": [
+          {
+            "number": 4,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 5,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 6,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 7,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 8,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 9,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          },
+          {
+            "number": 10,
+            "amount": {
+              "amount": "250.00",
+              "currency": "BRL"
+            }
+          }
+        ],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 17,
+        "fincla_transaction": {
+          "id": 17,
+          "description": "Eletro",
+          "type": "expense",
+          "value": {
+            "amount": "250.00",
+            "currency": "BRL"
+          },
+          "date": "2026-12-10T00:00:00",
+          "purchase_date": "2026-09-05",
+          "installment": {
+            "number": 3,
+            "count": 10
+          },
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "ELETRO CASA",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": "full",
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "df8b29a8-a775-443f-ab4a-501752b9ff17",
+        "position": 4,
+        "date": "2026-11-12",
+        "bank_description": "UBER *TRIP",
+        "amount": {
+          "amount": "-23.47",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 25,
+        "fincla_transaction": {
+          "id": 25,
+          "description": "Uber 1",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "UBER *TRIP",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "f4d3c058-85b4-4acd-a570-a51a9ade155a",
+        "position": 5,
+        "date": "2026-11-12",
+        "bank_description": "UBER *TRIP",
+        "amount": {
+          "amount": "-23.47",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 26,
+        "fincla_transaction": {
+          "id": 26,
+          "description": "Uber 2",
+          "type": "expense",
+          "value": {
+            "amount": "23.47",
+            "currency": "BRL"
+          },
+          "date": "2026-11-12T00:00:00",
+          "purchase_date": "2026-11-12",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "UBER *TRIP",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "190c86e9-7171-477f-850a-284a1e59f277",
+        "position": 6,
+        "date": "2026-11-20",
+        "bank_description": "POSTO CENTRAL",
+        "amount": {
+          "amount": "-150.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 27,
+        "fincla_transaction": {
+          "id": 27,
+          "description": "Posto",
+          "type": "expense",
+          "value": {
+            "amount": "150.40",
+            "currency": "BRL"
+          },
+          "date": "2026-11-20T00:00:00",
+          "purchase_date": "2026-11-20",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "amount"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "POSTO CENTRAL",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "ccb22f88-a6c1-4030-9f00-ad29a09e0a4d",
+        "position": 7,
+        "date": "2026-11-28",
+        "bank_description": "PADARIA PAO QUENTE",
+        "amount": {
+          "amount": "-32.50",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "PADARIA PAO QUENTE",
+        "transaction_type": "expense",
+        "category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
+        "suggested_category_tag_id": "df7426e3-04b8-4d1b-bcb9-96a2cfd8b6eb",
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "12b3d874-8022-425e-96cc-5c1902df1392",
+        "position": 8,
+        "date": "2026-11-15",
+        "bank_description": "CAFETERIA AROMA",
+        "amount": {
+          "amount": "-18.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 29,
+        "fincla_transaction": {
+          "id": 29,
+          "description": "Cafeteria",
+          "type": "expense",
+          "value": {
+            "amount": "18.00",
+            "currency": "BRL"
+          },
+          "date": "2026-11-15T00:00:00",
+          "purchase_date": "2026-11-15",
+          "installment": null,
+          "invoice_id": 6,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "CAFETERIA AROMA",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": {
+          "id": 6,
+          "year": 2027,
+          "month": 1,
+          "status": "open"
+        },
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "6579f92a-c596-483b-b457-b84596785884",
+        "position": 9,
+        "date": "2026-11-17",
+        "bank_description": "AMAZON MARKETPLACE",
+        "amount": {
+          "amount": "-1299.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "AMAZON MARKETPLACE",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "fd4c94f1-4814-4521-abe8-2e2058a0be64",
+        "position": 10,
+        "date": "2026-11-30",
+        "bank_description": "ESTORNO LOJA MODA",
+        "amount": {
+          "amount": "45.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "4321",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "ESTORNO LOJA MODA",
+        "transaction_type": "refund",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "40be6ae9-3472-4473-8e59-4b350034b90c",
+        "position": 11,
+        "date": "2026-11-22",
+        "bank_description": "RESTAURANTE SABOR",
+        "amount": {
+          "amount": "-120.00",
+          "currency": "BRL"
+        },
+        "section": "purchases",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": "8765",
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "RESTAURANTE SABOR",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "c2ddc11f-425d-4508-8cb3-5c37fc35d8ec",
+        "position": 12,
+        "date": "2026-11-10",
+        "bank_description": "STEAMGAMES.COM",
+        "amount": {
+          "amount": "-54.00",
+          "currency": "BRL"
+        },
+        "section": "international",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": {
+          "amount": "10.00",
+          "currency": "USD"
+        },
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "STEAMGAMES.COM",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "911b7766-5b66-4ce9-9e37-38dbadecb855",
+        "position": 13,
+        "date": "2026-11-10",
+        "bank_description": "Repasse de IOF",
+        "amount": {
+          "amount": "-1.89",
+          "currency": "BRL"
+        },
+        "section": "international",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "Repasse de IOF",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "d732ff23-2991-457c-80dc-02ff4e3a57ca",
+        "position": 14,
+        "date": "2026-12-03",
+        "bank_description": "ANUIDADE DIFERENCIADA",
+        "amount": {
+          "amount": "-39.00",
+          "currency": "BRL"
+        },
+        "section": "services",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "ANUIDADE DIFERENCIADA",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "2f3acac8-c0cc-43cf-8ce5-73194948699c",
+        "position": 15,
+        "date": "2026-12-03",
+        "bank_description": "REDUCAO ANUIDADE",
+        "amount": {
+          "amount": "19.50",
+          "currency": "BRL"
+        },
+        "section": "services",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": null,
+        "fincla_transaction": null,
+        "value_change": null,
+        "value_locked": false,
+        "description": "REDUCAO ANUIDADE",
+        "transaction_type": "refund",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "4cbcae71-154f-4f50-bc3b-fcf1bdbb5d28",
+        "position": 16,
+        "date": "2026-12-03",
+        "bank_description": "JUROS DO ROTATIVO",
+        "amount": {
+          "amount": "-8.90",
+          "currency": "BRL"
+        },
+        "section": "charges",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 28,
+        "fincla_transaction": {
+          "id": 28,
+          "description": "Encargos do cartão",
+          "type": "expense",
+          "value": {
+            "amount": "12.59",
+            "currency": "BRL"
+          },
+          "date": "2026-12-01T00:00:00",
+          "purchase_date": "2026-12-01",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "date"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "JUROS DO ROTATIVO",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "a18857ab-9e38-47ec-9b2d-126231744a0a",
+        "position": 17,
+        "date": "2026-12-03",
+        "bank_description": "JUROS DE MORA",
+        "amount": {
+          "amount": "-1.20",
+          "currency": "BRL"
+        },
+        "section": "charges",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 28,
+        "fincla_transaction": {
+          "id": 28,
+          "description": "Encargos do cartão",
+          "type": "expense",
+          "value": {
+            "amount": "12.59",
+            "currency": "BRL"
+          },
+          "date": "2026-12-01T00:00:00",
+          "purchase_date": "2026-12-01",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "date"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "JUROS DE MORA",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "d5ab97d3-e83f-4e68-ba7f-ce0ac7418947",
+        "position": 18,
+        "date": "2026-12-03",
+        "bank_description": "MULTA POR ATRASO",
+        "amount": {
+          "amount": "-2.00",
+          "currency": "BRL"
+        },
+        "section": "charges",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 28,
+        "fincla_transaction": {
+          "id": 28,
+          "description": "Encargos do cartão",
+          "type": "expense",
+          "value": {
+            "amount": "12.59",
+            "currency": "BRL"
+          },
+          "date": "2026-12-01T00:00:00",
+          "purchase_date": "2026-12-01",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "date"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "MULTA POR ATRASO",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      },
+      {
+        "id": "099cce5a-d796-423b-abd8-111c7252c2b1",
+        "position": 19,
+        "date": "2026-12-03",
+        "bank_description": "IOF DE FINANCIAMENTO",
+        "amount": {
+          "amount": "-0.49",
+          "currency": "BRL"
+        },
+        "section": "charges",
+        "installment": null,
+        "next_installments": [],
+        "foreign_amount": null,
+        "card_last4": null,
+        "classification": "reconciled",
+        "answer": "reconciled",
+        "confirmed": true,
+        "answerable": false,
+        "suggested_transaction_id": null,
+        "paired_transaction_id": 28,
+        "fincla_transaction": {
+          "id": 28,
+          "description": "Encargos do cartão",
+          "type": "expense",
+          "value": {
+            "amount": "12.59",
+            "currency": "BRL"
+          },
+          "date": "2026-12-01T00:00:00",
+          "purchase_date": "2026-12-01",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "confirmed",
+          "paid_at": null,
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": [
+            "date"
+          ]
+        },
+        "value_change": null,
+        "value_locked": false,
+        "description": "IOF DE FINANCIAMENTO",
+        "transaction_type": "expense",
+        "category_tag_id": null,
+        "suggested_category_tag_id": null,
+        "detail_tag_ids": [],
+        "installments_scope": null,
+        "new_purchase": null,
+        "created_transaction_id": null,
+        "charge_group_id": null,
+        "addable": false,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
+      }
+    ],
+    "charge_groups": [],
+    "summary": {
+      "total": 20,
+      "suggested": 0,
+      "to_pair": 0,
+      "unconfirmed": 0,
+      "value_changes": 0,
+      "ignored": 0,
+      "read_only": 0,
+      "unanswered": 0,
+      "already_reconciled": 20,
+      "to_create": 0,
+      "missing_description": 0,
+      "uncategorized": 0,
+      "summed_charges": 0,
+      "to_move": 0
+    },
+    "difference_now": {
+      "bank": {
+        "amount": "2402.92",
+        "currency": "BRL"
+      },
+      "fincla": {
+        "amount": "903.46",
+        "currency": "BRL"
+      },
+      "difference": {
+        "amount": "1499.46",
+        "currency": "BRL"
+      }
+    },
+    "can_conclude": false,
+    "blockers": [
+      {
+        "code": "changed_since_read",
+        "count": 1
+      }
+    ],
+    "final_difference": null,
+    "current_step": "doubt",
+    "reviewed_steps": [],
+    "created_at": "2026-11-25T16:28:04.877033",
+    "last_activity_at": "2026-11-25T16:28:05.057214",
+    "expires_at": "2026-12-25T16:28:05.057214",
+    "concluded_at": null,
+    "undone_at": null,
+    "latest_concluded": false,
+    "file_check": {
+      "status": "new",
+      "import_id": null,
+      "concluded_at": null
+    },
+    "changed_since_read": true
   },
   "entry_installment": {
-    "id": "e23f4058-9fe6-4106-8f55-6ebae9d6c0c8",
+    "id": "2fabcf8b-d5ed-494f-adbd-561ce162559f",
     "position": 3,
     "date": "2026-03-02",
     "bank_description": "MOVEIS CONFORTO 11/12",
@@ -7863,16 +10926,23 @@
     },
     "created_transaction_id": null,
     "charge_group_id": null,
-    "addable": true
+    "addable": true,
+    "suggested_answer": null,
+    "other_invoice": null,
+    "movable": false,
+    "series_movable": false,
+    "move_refusal": null,
+    "suggestion_basis": null,
+    "candidates": []
   },
   "new_purchases_draft": {
-    "id": "4b523870-755e-441d-976d-0bfa11650388",
+    "id": "b010753f-6584-4495-ae6e-000d500fbd6b",
     "kind": "card_invoice",
     "status": "draft",
-    "account_id": "414eb55b-9397-442c-930e-2be3bb90c81b",
+    "account_id": "065446f0-6696-46ce-89ea-dd9216d90e2a",
     "credit_card": {
       "id": 1,
-      "public_id": "cd299227-8d31-4665-98cf-c308bd262d5c",
+      "public_id": "cbebecfc-aa43-4117-aa98-03153250af3b",
       "name": "Itaú Visa",
       "last4": "4321"
     },
@@ -7884,7 +10954,7 @@
       "closing_date": "2027-01-03",
       "status": "open",
       "total": {
-        "amount": "358.33",
+        "amount": "376.33",
         "currency": "BRL"
       }
     },
@@ -7929,7 +10999,7 @@
     "file_name": "fatura.pdf",
     "entries": [
       {
-        "id": "97285cdb-a894-4abb-a44c-eeb739b9f777",
+        "id": "849a72e4-2888-459f-afe3-38039830c4c2",
         "position": 0,
         "date": "2026-12-28",
         "bank_description": "MERCADO BOA VISTA",
@@ -7942,13 +11012,30 @@
         "next_installments": [],
         "foreign_amount": null,
         "card_last4": "4321",
-        "classification": "new",
-        "answer": "create",
+        "classification": "other_invoice",
+        "answer": null,
         "confirmed": false,
         "answerable": true,
-        "suggested_transaction_id": null,
+        "suggested_transaction_id": 38,
         "paired_transaction_id": null,
-        "fincla_transaction": null,
+        "fincla_transaction": {
+          "id": 38,
+          "description": "Mercado",
+          "type": "expense",
+          "value": {
+            "amount": "310.10",
+            "currency": "BRL"
+          },
+          "date": "2026-12-28T00:00:00",
+          "purchase_date": "2026-12-28",
+          "installment": null,
+          "invoice_id": 1,
+          "status": "paid",
+          "paid_at": "2026-11-20T00:00:00Z",
+          "category_name": "Alimentação",
+          "tag_names": [],
+          "differences": []
+        },
         "value_change": null,
         "value_locked": false,
         "description": "MERCADO BOA VISTA",
@@ -7960,10 +11047,27 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": "move",
+        "other_invoice": {
+          "id": 1,
+          "year": 2026,
+          "month": 12,
+          "status": "paid"
+        },
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": {
+          "code": "other_invoice_paid",
+          "message": "A fatura de dezembro/2026 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.",
+          "invoice_year": 2026,
+          "invoice_month": 12
+        },
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "17d79def-894a-4e45-8219-680f53981ecb",
+        "id": "35f3785c-c578-401c-9dd7-ba995b7eabe6",
         "position": 1,
         "date": "2027-01-02",
         "bank_description": "PADARIA PAO QUENTE",
@@ -7994,10 +11098,17 @@
         "new_purchase": null,
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "b06807fb-2e60-4ad7-92d1-8ac336bdac13",
+        "id": "662d767d-b138-4f86-9ef4-61ed22a01fd9",
         "position": 2,
         "date": "2026-10-25",
         "bank_description": "LOJA DO BAIRRO 03/06",
@@ -8127,10 +11238,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "e23f4058-9fe6-4106-8f55-6ebae9d6c0c8",
+        "id": "2fabcf8b-d5ed-494f-adbd-561ce162559f",
         "position": 3,
         "date": "2026-03-02",
         "bank_description": "MOVEIS CONFORTO 11/12",
@@ -8312,10 +11430,17 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       },
       {
-        "id": "8192016f-46c3-4672-965a-d36acb51012d",
+        "id": "96863d29-8398-4a29-86df-3a74949b80e8",
         "position": 4,
         "date": "2025-12-10",
         "bank_description": "CURSO IDIOMAS 13/24",
@@ -8621,7 +11746,14 @@
         },
         "created_transaction_id": null,
         "charge_group_id": null,
-        "addable": true
+        "addable": true,
+        "suggested_answer": null,
+        "other_invoice": null,
+        "movable": false,
+        "series_movable": false,
+        "move_refusal": null,
+        "suggestion_basis": null,
+        "candidates": []
       }
     ],
     "charge_groups": [],
@@ -8633,12 +11765,13 @@
       "value_changes": 0,
       "ignored": 0,
       "read_only": 0,
-      "unanswered": 0,
+      "unanswered": 1,
       "already_reconciled": 0,
-      "to_create": 5,
+      "to_create": 4,
       "missing_description": 1,
-      "uncategorized": 5,
-      "summed_charges": 0
+      "uncategorized": 4,
+      "summed_charges": 0,
+      "to_move": 0
     },
     "difference_now": {
       "bank": {
@@ -8646,16 +11779,20 @@
         "currency": "BRL"
       },
       "fincla": {
-        "amount": "1339.33",
+        "amount": "1047.23",
         "currency": "BRL"
       },
       "difference": {
-        "amount": "-358.33",
+        "amount": "-66.23",
         "currency": "BRL"
       }
     },
     "can_conclude": false,
     "blockers": [
+      {
+        "code": "unanswered",
+        "count": 1
+      },
       {
         "code": "missing_description",
         "count": 1
@@ -8664,9 +11801,9 @@
     "final_difference": null,
     "current_step": null,
     "reviewed_steps": [],
-    "created_at": "2026-11-25T08:34:30.610280",
-    "last_activity_at": "2026-11-25T08:34:30.708084",
-    "expires_at": "2026-12-25T08:34:30.708084",
+    "created_at": "2026-11-25T16:28:07.693418",
+    "last_activity_at": "2026-11-25T16:28:08.108531",
+    "expires_at": "2026-12-25T16:28:08.108531",
     "concluded_at": null,
     "undone_at": null,
     "latest_concluded": false,
@@ -8674,10 +11811,11 @@
       "status": "new",
       "import_id": null,
       "concluded_at": null
-    }
+    },
+    "changed_since_read": false
   },
   "undo_preview_refused_paid": {
-    "import_id": "4b523870-755e-441d-976d-0bfa11650388",
+    "import_id": "b010753f-6584-4495-ae6e-000d500fbd6b",
     "can_undo": false,
     "refusal": {
       "code": "invoice_paid",
@@ -8696,7 +11834,7 @@
     },
     "transactions_to_delete": [
       {
-        "transaction_id": 38,
+        "transaction_id": 39,
         "description": "LOJA DO BAIRRO",
         "date": "2026-11-10",
         "type": "expense",
@@ -8708,7 +11846,7 @@
         "changed_fields": []
       },
       {
-        "transaction_id": 39,
+        "transaction_id": 40,
         "description": "LOJA DO BAIRRO",
         "date": "2026-12-10",
         "type": "expense",
@@ -8720,7 +11858,7 @@
         "changed_fields": []
       },
       {
-        "transaction_id": 40,
+        "transaction_id": 41,
         "description": "LOJA DO BAIRRO",
         "date": "2027-01-10",
         "type": "expense",
@@ -8732,7 +11870,7 @@
         "changed_fields": []
       },
       {
-        "transaction_id": 41,
+        "transaction_id": 42,
         "description": "LOJA DO BAIRRO",
         "date": "2027-02-10",
         "type": "expense",
@@ -8744,7 +11882,7 @@
         "changed_fields": []
       },
       {
-        "transaction_id": 42,
+        "transaction_id": 43,
         "description": "LOJA DO BAIRRO",
         "date": "2027-03-10",
         "type": "expense",
@@ -8756,7 +11894,7 @@
         "changed_fields": []
       },
       {
-        "transaction_id": 43,
+        "transaction_id": 44,
         "description": "LOJA DO BAIRRO",
         "date": "2027-04-10",
         "type": "expense",

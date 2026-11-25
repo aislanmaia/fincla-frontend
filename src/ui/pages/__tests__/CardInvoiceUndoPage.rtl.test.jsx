@@ -66,13 +66,14 @@ describe("a prévia", () => {
     expect(await screen.findByText("Se você desfizer esta conciliação:")).toBeInTheDocument();
 
     expect(screen.getByTestId("undo-restore-count")).toHaveTextContent(
-      "5 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
+      "9 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
     );
     // As transações que a conclusão criou (#557, e os encargos, tarifas e estornos da #558) são apagadas.
-    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("9 transações adicionadas serão apagadas");
+    expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("8 transações adicionadas serão apagadas");
     const restored = screen.getAllByTestId("undo-restored");
-    // As 4 compras ligadas e a transação em que os encargos estavam somados (#558): a ligação sai.
-    expect(restored).toHaveLength(5);
+    // As 4 compras ligadas, as 3 escolhidas nas dúvidas, a compra movida (#559) e a transação em que
+    // os encargos estavam somados (#558): a ligação sai.
+    expect(restored).toHaveLength(9);
     expect(restored.find((r) => r.textContent.includes("Encargos do cartão"))).toHaveTextContent("Volta ao que era antes da conciliação.");
     const loja = restored.find((r) => r.textContent.includes("Loja (presente)"));
     expect(within(loja).getByText("Editada depois: descrição")).toBeInTheDocument();
@@ -93,6 +94,15 @@ describe("a prévia", () => {
     expect(within(loja).getByTestId("undo-kept")).toHaveTextContent("Você mudou de novo depois: fica como você deixou (valor).");
     expect(within(loja).queryByTestId("undo-value-back")).not.toBeInTheDocument();
   });
+
+  it("a compra movida (#559) diz para qual fatura volta (invoice_back); as outras não falam de fatura", async () => {
+    open();
+
+    const restored = await screen.findAllByTestId("undo-restored");
+    const cafe = restored.find((r) => r.textContent.includes("Cafeteria"));
+    expect(within(cafe).getByTestId("undo-invoice-back")).toHaveTextContent("Volta para a fatura de janeiro/2027 (a conciliação a tinha movido para esta).");
+    expect(screen.getAllByTestId("undo-invoice-back")).toHaveLength(1);
+  });
 });
 
 describe("desfazer", () => {
@@ -104,11 +114,11 @@ describe("desfazer", () => {
     await user.click(await screen.findByRole("button", { name: "Desfazer conciliação" }));
     expect(calls).not.toContainEqual({ undo: IMPORT });
     const confirm = screen.getByRole("group", { name: "Confirmar desfazer conciliação" });
-    expect(confirm).toHaveTextContent("Tem certeza? As 9 transações adicionadas serão apagadas.");
+    expect(confirm).toHaveTextContent("Tem certeza? As 8 transações adicionadas serão apagadas.");
     await user.click(within(confirm).getByRole("button", { name: "Sim, desfazer conciliação" }));
 
     expect(await screen.findByRole("heading", { name: "Conciliação desfeita" })).toBeInTheDocument();
-    expect(screen.getByText(/9 transações adicionadas foram apagadas\. .*voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
+    expect(screen.getByText(/8 transações adicionadas foram apagadas\. .*voltaram ao que eram antes: o valor de antes e sem a marca de conferida/)).toBeInTheDocument();
     expect(calls).toContainEqual({ undo: IMPORT });
     expect(onUndone).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Conciliar a fatura de novo" }));

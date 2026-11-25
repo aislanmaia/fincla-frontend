@@ -25,9 +25,9 @@ import {
 import { DifferenceTag, Hl, SuggestedBadge, dayOf } from "./FinclaMatchBox.jsx";
 import { AnswerSegment, Connector, UndoChoiceButton } from "./SuggestedPairsStep.jsx";
 import {
-  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, isAnswered, openOnRowClick, useStableCallback,
+  ConferidoBadge, CurrentEntryFrame, EntryQueueHeader, EntrySlot, ROW_CLICKABLE, answerTone, openOnRowClick, useStableCallback,
 } from "./entryQueue.jsx";
-import { unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
+import { invoiceMonthLabel, invoiceWhereLabel, isInvoiceEntryAnswered, seriesIsAnOption, unconfirmedInvoiceSuggestions } from "./invoiceSteps.js";
 import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
 
 /** As palavras da lista do passo: compras da fatura. */
@@ -144,7 +144,7 @@ function BankStatus({ answer }) {
   if (answer === "ignore") {
     return <Badge color={T.surface} bg={T.inkMid}><Ban size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Não entra no Fincla</Badge>;
   }
-  if (answer === "pair") {
+  if (answer === "pair" || answer === "move" || answer === "move_series") {
     return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Ligado ao Fincla</Badge>;
   }
   if (answer === "create") {
@@ -248,13 +248,27 @@ export function PairConsequences({ entry }) {
   );
 }
 
+/** "Na fatura de janeiro/2027": a compra está em outra fatura do cartão (#559); "Fatura: não sabemos" sem ela. */
+export function OtherInvoiceBadge({ invoice }) {
+  return (
+    <Badge color={T.amber} bg={T.amberLight}>
+      <span data-testid="other-invoice-badge">{invoice.unknown ? "Fatura: não sabemos" : `Na fatura de ${invoiceMonthLabel(invoice)}`}</span>
+    </Badge>
+  );
+}
+
 /**
  * "No Fincla": a transação ligada, como está hoje. `skipped` = "Não registrar" (cinza listrado).
  * O grupo de encargos (#558) usa a mesma caixa para a transação somada: `badge` entra no rótulo ("A
  * soma bate"), `consequences` fica no lugar das do par e `skipText` no da nota do "Não registrar".
+ * `match` troca a transação mostrada (uma opção de dúvida, #559) e `elsewhere` é a fatura onde ela
+ * está hoje quando não é esta ("Na fatura de <mês>", com o mês destacado).
  */
-export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConfirm = null, badge = null, consequences = undefined, skipText = null }) {
-  const match = entry.fincla_transaction;
+export function InvoiceFinclaSide({
+  entry, invoiceMonth, skipped = false, onConfirm = null, badge = null, consequences = undefined, skipText = null,
+  match: shown = undefined, elsewhere = null, linked = undefined,
+}) {
+  const match = shown === undefined ? entry.fincla_transaction : shown;
   if (!match) {
     return (
       <section style={{ ...BOX, background: skipped ? SKIP_BG : T.grayLight }}>
@@ -274,6 +288,7 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
       No Fincla
       {suggested && !badge ? <SuggestedBadge /> : null}
       {badge}
+      {elsewhere ? <OtherInvoiceBadge invoice={elsewhere} /> : null}
       {!skipped && valueDiffers ? <DifferenceTag>VALOR DIFERENTE</DifferenceTag> : null}
       {skipped ? <SkipBadge /> : null}
     </div>
@@ -284,7 +299,7 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
         [match.installment ? "Data da compra" : "Data", <Hl key="d" on={!skipped && dateDiffers}><span style={NUM}>{bankDateLabel(day)}</span></Hl>],
         ["Descrição", <span key="n"><b>{match.description}</b><InstallmentBadge installment={match.installment} /></span>],
         ["Valor", <Hl key="v" on={!skipped && valueDiffers}><FinclaAmount match={match} /></Hl>],
-        ["Fatura", invoiceMonth],
+        ["Fatura", elsewhere ? <Hl key="i" on={!skipped}>{invoiceWhereLabel(elsewhere)}</Hl> : invoiceMonth],
         ["Categoria", [match.category_name ?? "Não classificado", ...match.tag_names].join(" · ")],
       ]}
     />
@@ -294,12 +309,12 @@ export function InvoiceFinclaSide({ entry, invoiceMonth, skipped = false, onConf
       <section data-testid="fincla-side-skipped" style={{ ...BOX, background: SKIP_BG, borderColor: T.inkFaint }}>
         {label}
         <div style={{ opacity: 0.6 }}>{rows}</div>
-        <SkipNote>{skipText ?? "Continua no Fincla como está, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece em Conferir o total."}</SkipNote>
+        {skipText === "" ? null : <SkipNote>{skipText ?? "Continua no Fincla como está, sem mudança. Este lançamento do banco não entra no Fincla, e a diferença aparece em Conferir o total."}</SkipNote>}
       </section>
     );
   }
   return (
-    <section data-testid="fincla-side" style={{ ...BOX, borderColor: entry.answer === "pair" ? T.blue : T.border, ...(onConfirm ? { position: "relative" } : null) }}>
+    <section data-testid="fincla-side" style={{ ...BOX, borderColor: (linked ?? entry.answer === "pair") ? T.blue : T.border, ...(onConfirm ? { position: "relative" } : null) }}>
       {label}
       {rows}
       {consequences !== undefined ? consequences : entry.answer === "pair" ? <PairConsequences entry={entry} /> : null}
@@ -327,6 +342,15 @@ export function InvoiceStatusBadge({ entry }) {
     return <Badge color={T.blue} bg={T.blueLight}><Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Sugerido · falta confirmar</Badge>;
   }
   if (entry.answer === "pair") return <Badge color={T.blue} bg={T.blueLight}><Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />Já está no Fincla</Badge>;
+  if (entry.answer === "move" || entry.answer === "move_series") {
+    const unconfirmed = entry.answerable && !entry.confirmed;
+    return (
+      <Badge color={T.blue} bg={T.blueLight}>
+        {unconfirmed ? <Sparkles size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} /> : <Link2 size={11} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-1px" }} />}
+        {moveAnswerLabel(entry, entry.answer)}{unconfirmed ? " · falta confirmar" : ""}
+      </Badge>
+    );
+  }
   if (entry.answer === "pair_sum") {
     return (
       <Badge color={T.blue} bg={T.blueLight}>
@@ -348,9 +372,18 @@ export function InvoiceStatusBadge({ entry }) {
 /** A sugestão sem nenhuma mudança: só aí aparece o "Confirmar sugestão" ao lado das respostas. */
 export const untouchedInvoiceSuggestion = (entry) => entry.answer === "pair" && !entry.confirmed && Boolean(entry.fincla_transaction);
 
-function outcomeText(entry, form) {
+/** O que acontece ao concluir, em uma linha (o "→" embaixo do cartão). Comum aos passos 1, 2 e 3. */
+export function invoiceOutcomeText(entry, form) {
   const match = entry.fincla_transaction;
   if (entry.answer === "create") return newPurchaseOutcome(entry, form);
+  if ((entry.answer === "move" || entry.answer === "move_series") && match) {
+    const from = entry.other_invoice ? <> da fatura de {invoiceMonthLabel(entry.other_invoice)}</> : null;
+    const value = entry.value_change
+      ? <> e passa a valer <b style={NUM}>{formatMoney(entry.value_change.to, entry.value_change.currency)}</b>, o valor do banco</>
+      : null;
+    const series = entry.answer === "move_series" ? <>, com as próximas parcelas da compra</> : null;
+    return <>Ao concluir: <b>{match.description}</b> vem{from} para esta fatura{series}, fica ligada a este lançamento{value}.</>;
+  }
   if (entry.answer === "pair" && match) {
     if (entry.value_change) {
       return <>Ao concluir: <b>{match.description}</b> fica ligada a este lançamento da fatura e passa a valer <b style={NUM}>{formatMoney(entry.value_change.to, entry.value_change.currency)}</b>, o valor do banco.</>;
@@ -368,7 +401,7 @@ function outcomeText(entry, form) {
  */
 function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, onAnswer, onChange, onConfirmNew, onUndoChoice }) {
   const valueDiffers = entry.answer === "pair" && Boolean(entry.fincla_transaction?.differences.includes("amount"));
-  const outcome = outcomeText(entry, form);
+  const outcome = invoiceOutcomeText(entry, form);
   const desc = useDescriptionDraft(entry, onChange);
   // Fatura já paga (decisão 1): Adicionar fica desligado e o valor não muda; o motivo aparece. No
   // crédito parcelado, Adicionar também fica desligado, com o motivo.
@@ -454,8 +487,26 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, o
   );
 }
 
+/**
+ * Os nomes das respostas de mover (#559): "Mover para esta fatura" (à vista), "Mover só esta" e
+ * "Mover esta e as próximas parcelas" (parcela), e "Mover esta parcela" quando a série não é uma
+ * opção (série uma fatura atrás: não há "só" a escolher).
+ */
+export function moveAnswerLabel(entry, answer) {
+  if (answer === "move_series") return "Mover esta e as próximas parcelas";
+  const installment = entry.installment ?? entry.fincla_transaction?.installment;
+  if (!installment) return "Mover para esta fatura";
+  return seriesIsAnOption(entry) ? "Mover só esta" : "Mover esta parcela";
+}
+
 function rowSummary(entry) {
   const match = entry.fincla_transaction;
+  if ((entry.answer === "move" || entry.answer === "move_series") && match) {
+    const from = entry.other_invoice ? <> da fatura de {invoiceMonthLabel(entry.other_invoice)}</> : null;
+    const tail = entry.value_change ? " · vale o valor do banco" : "";
+    if (entry.answer === "move_series") return <>Mover <b>{match.description}</b>{from} e as próximas parcelas{tail}</>;
+    return <>Mover <b>{match.description}</b>{from} para esta fatura{tail}</>;
+  }
   if (entry.answer === "pair" && match) {
     let tail = "";
     if (entry.value_change) tail = " · vale o valor do banco";
@@ -463,11 +514,24 @@ function rowSummary(entry) {
     return <>É <b>{match.description}</b>{tail}</>;
   }
   if (entry.answer === "create") return <>Adicionar ao Fincla: <b>{entry.description?.trim() || "(sem descrição)"}</b></>;
+  if (entry.answer === null || entry.answer === undefined) return <span style={{ color: T.inkLight }}>{invoiceDoubtHint(entry)}</span>;
   return <span style={{ color: T.inkLight }}>Fica fora do Fincla</span>;
 }
 
+/**
+ * Por que o lançamento ainda não tem resposta, em poucas palavras (linha recolhida e cabeçalho do
+ * cartão): as opções de uma dúvida (#559), ou a compra em outra fatura que não dá para mover.
+ */
+export function invoiceDoubtHint(entry) {
+  if (entry.classification === "other_invoice") return "Escolha o que fazer com esta compra";
+  const options = entry.candidates ?? [];
+  if (options.length > 1) return `${plural(options.length, "opção parecida", "opções parecidas")} no Fincla`;
+  if (options.length === 1) return options[0].differences.includes("amount") ? "Valor parecido no Fincla" : "1 opção no Fincla";
+  return "Sem opção parecida nesta fatura";
+}
+
 /** Um par recolhido numa linha que continua visível; um clique em qualquer ponto a reabre. */
-const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus = false, touch = false, onOpen, onUndoChoice }) {
+export const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus = false, touch = false, onOpen, onUndoChoice }) {
   const alterRef = useRef(null);
   useEffect(() => { if (focus) alterRef.current?.focus({ preventScroll: true }); }, [focus]);
   return (
@@ -487,7 +551,7 @@ const InvoicePairRow = memo(function InvoicePairRowView({ entry, canUndo, focus 
       <InvoiceAmount amount={entry.amount} currency={entry.currency} />
       <InvoiceStatusBadge entry={entry} />
       <span style={{ flex: 1, minWidth: 160 }}>{rowSummary(entry)}</span>
-      {isAnswered(entry) ? <ConferidoBadge /> : null}
+      {isInvoiceEntryAnswered(entry) ? <ConferidoBadge /> : null}
       {canUndo ? <UndoChoiceButton entry={entry} onUndoChoice={onUndoChoice} inRow touch={touch} /> : null}
     </div>
   );
@@ -505,13 +569,14 @@ export function confirmAllPurchasesLabel(count) {
  */
 export function InvoiceSuggestedStep({
   entries, queue, invoiceMonth, isMobile, busy, history, lastBulk, form, onAnswer, onChange, onConfirmNew, onUndoChoice, onConfirmAll, onUndoConfirmAll,
+  pendingText = undefined,
 }) {
   const unconfirmed = unconfirmedInvoiceSuggestions(entries);
   const openRow = useStableCallback((entry) => queue.open(entry.id));
   const undoChoice = useStableCallback(onUndoChoice);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <EntryQueueHeader queue={queue} shortcutKeys={["s", "a", "n"]} noun={PURCHASE_NOUN} touch={isMobile} />
+      <EntryQueueHeader queue={queue} shortcutKeys={["s", "a", "n"]} noun={PURCHASE_NOUN} touch={isMobile} pendingText={pendingText} />
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...G, ...NUM, fontSize: 13, color: T.inkMid }}>{plural(entries.length, "compra encontrada", "compras encontradas")}</span>
         {unconfirmed.length ? (

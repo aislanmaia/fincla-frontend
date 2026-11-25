@@ -1,6 +1,7 @@
 // api/cardInvoiceImports.ts — Conciliar fatura (fincla-api#554; primeira entrega #555, segunda #556:
 // desfazer, rascunho, "Faturas conciliadas" do cartão e reimportação; terceira #557: compras novas,
-// à vista e parceladas; quarta #558: encargos, tarifas e estornos, com o grupo de encargos).
+// à vista e parceladas; quarta #558: encargos, tarifas e estornos, com o grupo de encargos; quinta
+// #559: dúvidas, a busca "Procure no Fincla" e as compras em outra fatura, com mover).
 //
 // O recurso vive aninhado no cartão: `/credit-cards/{cardId}/invoice-imports`, com o `id` INTEIRO
 // do cartão (a URL da tela usa o `public_id`). A forma da resposta é a de
@@ -22,8 +23,8 @@ export type InvoiceReconciliationStep =
  */
 export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_invoice' | 'doubt' | 'charges' | 'new';
 /**
- * `pair`, `ignore` e (#557) `create`; as próximas fatias trazem `move`, `move_series`.
- * `reconciled` e (#558) `pair_sum` (o grupo de encargos somado numa transação, respondido pelo
+ * `pair`, `ignore`, (#557) `create` e (#559) `move` ("Mover para esta fatura" / "Mover só esta") e
+ * `move_series` ("Mover esta e as próximas", só parcela). `reconciled` e (#558) `pair_sum` (o grupo de encargos somado numa transação, respondido pelo
  * grupo) só vêm do servidor: nunca se enviam num lançamento.
  */
 export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled' | 'pair_sum';
@@ -50,6 +51,43 @@ export interface InstallmentPosition {
  * `from_current` = Só daqui em diante (N a M). `null` à vista.
  */
 export type InstallmentsScope = 'full' | 'from_current';
+
+/** Uma fatura do cartão, como a resposta a cita ("Na fatura de <mês>"): `month` = mês em que fecha. */
+export interface InvoiceBrief {
+  id: number;
+  year: number;
+  month: number;
+  status: 'open' | 'closed' | 'paid' | string;
+}
+
+/** "Mover" (#559): o que a compra do Fincla pode fazer agora. */
+export type InvoiceMoveAnswer = 'move' | 'move_series';
+
+/**
+ * Por que "Mover" (ou "Mover esta e as próximas") está desligado (#559). `message` vem pronta, em
+ * PT-BR, e nomeia a fatura; `invoice_year`/`invoice_month` dizem qual fatura paga segura.
+ */
+export interface MoveRefusal {
+  code: 'invoice_paid' | 'other_invoice_paid' | 'series_reconciled' | 'series_off_invoice' | string;
+  message: string;
+  invoice_year: number | null;
+  invoice_month: number | null;
+}
+
+/** Uma parcela vizinha da mesma compra e a fatura onde ela está hoje (`invoice: null` = em nenhuma deste cartão). */
+export interface SuggestionNeighbour {
+  number: number;
+  invoice: InvoiceBrief | null;
+}
+
+/**
+ * Por que a "Sugestão: …" de uma parcela (#559): onde estão HOJE as parcelas vizinhas da mesma compra
+ * (`previous: null` na 1ª, `next: null` na última). `null` à vista e fora do passo 2.
+ */
+export interface SuggestionBasis {
+  previous: SuggestionNeighbour | null;
+  next: SuggestionNeighbour | null;
+}
 
 /** Uma parcela da compra nova, na fatura em que cai (`invoice_month` = mês em que ela fecha). */
 export interface NewPurchaseInstallment {
@@ -94,6 +132,26 @@ export interface InvoiceFinclaTransaction {
   tag_names: string[];
   /** `amount`: valor ≠ do banco; `date`: dia da compra ≠ do banco. */
   differences: ('amount' | 'date')[];
+}
+
+/**
+ * Uma opção de uma dúvida, ou um resultado da busca (#559): a transação do Fincla, a fatura onde ela
+ * está HOJE (`null` = não sabemos) e o outro lançamento desta conciliação que já a escolheu.
+ */
+export interface InvoiceCandidate extends InvoiceFinclaTransaction {
+  invoice: InvoiceBrief | null;
+  /** Outro lançamento já respondido com ela (`pair`, `pair_sum`, `move`, `move_series`); escolher → 409. */
+  taken_by_entry_id: string | null;
+  /**
+   * Calculados para ela, com o mesmo sentido do lançamento de outra fatura: a resposta que escolhê-la
+   * dá (`move`/`move_series`; `null` nesta fatura, onde é `pair`), se "Mover" e "Mover esta e as
+   * próximas" valem agora, por que um deles está desligado, e as parcelas vizinhas.
+   */
+  suggested_answer: InvoiceMoveAnswer | null;
+  movable: boolean;
+  series_movable: boolean;
+  move_refusal: MoveRefusal | null;
+  suggestion_basis: SuggestionBasis | null;
 }
 
 export interface InvoiceEntry {
@@ -147,6 +205,21 @@ export interface InvoiceEntry {
    * crédito parcelado e fora dos passos respondíveis. Sem ele, o formulário fica só leitura.
    */
   addable: boolean;
+  // Compras em outra fatura e dúvidas (#559).
+  /** A "Sugestão: …" do passo 2, fixa: `move` (à vista ou "só esta") ou `move_series`. `null` fora dele. */
+  suggested_answer: InvoiceMoveAnswer | null;
+  /** A fatura onde a compra do lado "No Fincla" está hoje, quando não é esta ("Na fatura de <mês>"). */
+  other_invoice: InvoiceBrief | null;
+  /** `move` é possível agora com a compra do lado "No Fincla". */
+  movable: boolean;
+  /** `move_series` é possível agora (só parcela). */
+  series_movable: boolean;
+  /** Por que um dos dois está desligado (mostre `message`); `null` = nenhum motivo. */
+  move_refusal: MoveRefusal | null;
+  /** Onde estão hoje as parcelas vizinhas da mesma compra (o motivo da sugestão); `null` à vista. */
+  suggestion_basis: SuggestionBasis | null;
+  /** As opções de uma dúvida, ao vivo, a mais parecida primeiro; vazio fora de `doubt` e de rascunho. */
+  candidates: InvoiceCandidate[];
 }
 
 /**
@@ -235,6 +308,8 @@ export interface CardInvoiceImportSummary {
   uncategorized: number;
   /** Lançamentos do grupo de encargos respondidos `pair_sum` ("encargos já somados", #558). */
   summed_charges: number;
+  /** Respondidos `move`/`move_series` (#559). */
+  to_move: number;
 }
 
 /** O mesmo PDF já veio numa conciliação concluída deste cartão (`already_imported`): só avisa. */
@@ -283,6 +358,12 @@ export interface CardInvoiceImport {
   /** É a concluída mais recente do cartão: a única que pode ser desfeita. */
   latest_concluded: boolean;
   file_check: InvoiceFileCheck;
+  /**
+   * Rascunho cuja leitura não vale mais (QA F4 OBS-01): outra conciliação deste cartão foi concluída ou
+   * desfeita, ou a fatura foi paga/desmarcada, depois da leitura. Concluir é recusado: descarte e
+   * envie o PDF de novo. `false` fora de rascunho.
+   */
+  changed_since_read: boolean;
 }
 
 /** Uma linha de "Faturas conciliadas" do cartão: o detalhe sem `entries` (nem cartão, resumo do banco). */
@@ -290,6 +371,7 @@ export type CardInvoiceImportListItem = Pick<
   CardInvoiceImport,
   | 'id' | 'status' | 'invoice' | 'file_name' | 'summary' | 'difference_now' | 'final_difference' | 'can_conclude' | 'blockers'
   | 'current_step' | 'created_at' | 'last_activity_at' | 'expires_at' | 'concluded_at' | 'undone_at' | 'latest_concluded'
+  | 'changed_since_read'
 >;
 
 /**
@@ -298,7 +380,12 @@ export type CardInvoiceImportListItem = Pick<
  * conciliada ou uma anterior, onde entrou uma parcela); `null` nos outros códigos. A `message` já a
  * nomeia.
  */
-export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal'> & {
+export type CardInvoiceUndoPreview = Omit<StatementUndoPreview, 'refusal' | 'to_restore'> & {
+  /**
+   * `invoice_back` (#559): a fatura para onde uma compra movida (`move`/`move_series`) volta, como
+   * está hoje; `null` se a fatura não muda no desfazer.
+   */
+  to_restore: (StatementUndoPreview['to_restore'][number] & { invoice_back: InvoiceBrief | null })[];
   refusal: {
     code: UndoRefusalCode | 'invoice_paid';
     message: string;
@@ -321,7 +408,15 @@ export interface UpdateChargeGroupRequest {
 }
 
 export interface UpdateInvoiceEntryRequest {
-  answer?: 'pair' | 'ignore' | 'create';
+  /**
+   * `null` (enviado) volta o lançamento a sem resposta (`confirmed: false`): o "Desfazer escolha" da
+   * primeira resposta. Nunca com `transaction_id` nem `confirmed: true` (→ 422).
+   */
+  answer?: 'pair' | 'ignore' | 'create' | InvoiceMoveAnswer | null;
+  /**
+   * Com `pair`/`move`/`move_series`: a transação escolhida (opção da dúvida ou da busca). Ausente = a
+   * sugerida. `pair` só nesta fatura; `move`/`move_series` só na anterior ou na seguinte.
+   */
   transaction_id?: number | null;
   confirmed?: boolean;
   // A compra nova (#557): mudam com ou sem `answer`.
@@ -372,6 +467,40 @@ const normalizeNewPurchase = (raw: Raw | null | undefined): NewPurchase | null =
   };
 };
 
+const normalizeBrief = (raw: unknown): InvoiceBrief | null => {
+  const brief = raw as Raw | null | undefined;
+  if (!brief) return null;
+  return { id: Number(brief.id), year: Number(brief.year), month: Number(brief.month), status: String(brief.status ?? '') };
+};
+
+const normalizeNeighbour = (raw: unknown): SuggestionNeighbour | null => {
+  const neighbour = raw as Raw | null | undefined;
+  if (!neighbour) return null;
+  return { number: Number(neighbour.number), invoice: normalizeBrief(neighbour.invoice) };
+};
+
+const normalizeSuggestionBasis = (raw: unknown): SuggestionBasis | null => {
+  const basis = raw as Raw | null | undefined;
+  if (!basis) return null;
+  return { previous: normalizeNeighbour(basis.previous), next: normalizeNeighbour(basis.next) };
+};
+
+/** O que dá para mover (#559), comum ao lançamento de outra fatura e às opções/resultados da busca. */
+const normalizeMoveFields = (raw: Raw) => ({
+  suggested_answer: (raw.suggested_answer as InvoiceMoveAnswer | null) ?? null,
+  movable: Boolean(raw.movable),
+  series_movable: Boolean(raw.series_movable),
+  move_refusal: (raw.move_refusal as MoveRefusal | null) ?? null,
+  suggestion_basis: normalizeSuggestionBasis(raw.suggestion_basis),
+});
+
+export const normalizeInvoiceCandidate = (raw: Raw): InvoiceCandidate => ({
+  ...(normalizeFincla(raw) as InvoiceFinclaTransaction),
+  invoice: normalizeBrief(raw.invoice),
+  taken_by_entry_id: (raw.taken_by_entry_id as string | null) ?? null,
+  ...normalizeMoveFields(raw),
+});
+
 export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
   const change = raw.value_change as { from: WireMoney; to: WireMoney } | null | undefined;
   return {
@@ -405,6 +534,9 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     charge_group_id: (raw.charge_group_id as string | null) ?? null,
     // Um backend sem o campo (anterior à #558): Adicionar vale onde a resposta vale.
     addable: raw.addable === undefined ? Boolean(raw.answerable) : Boolean(raw.addable),
+    ...normalizeMoveFields(raw),
+    other_invoice: normalizeBrief(raw.other_invoice),
+    candidates: ((raw.candidates as Raw[]) ?? []).map(normalizeInvoiceCandidate),
   };
 };
 
@@ -463,6 +595,7 @@ const normalizeSummary = (raw: unknown): CardInvoiceImportSummary => {
     missing_description: summary.missing_description ?? 0,
     uncategorized: summary.uncategorized ?? 0,
     summed_charges: summary.summed_charges ?? 0,
+    to_move: summary.to_move ?? 0,
   };
 };
 
@@ -479,6 +612,7 @@ const normalizeCommon = (raw: Raw) => ({
   concluded_at: (raw.concluded_at as string | null) ?? null,
   undone_at: (raw.undone_at as string | null) ?? null,
   latest_concluded: Boolean(raw.latest_concluded),
+  changed_since_read: Boolean(raw.changed_since_read),
 });
 
 export const normalizeCardInvoiceImport = (raw: Raw): CardInvoiceImport => {
@@ -624,6 +758,25 @@ export const updateCardInvoiceChargeGroup = async (
   return normalizeCardInvoiceImport(response.data);
 };
 
+/**
+ * "Está no Fincla com outros dados…" / "Procure no Fincla" (#559): transações deste cartão na fatura
+ * conciliada, na anterior e na seguinte, do mesmo sinal do lançamento e ainda não conferidas, pela
+ * diferença de valor (até 20). `q` é lido como na #511: um dia, um valor ou um texto. Não muda nada.
+ */
+export const searchCardInvoiceEntry = async (
+  cardId: number,
+  organizationId: string,
+  importId: string,
+  entryId: string,
+  query: string,
+): Promise<InvoiceCandidate[]> => {
+  const q = query.trim();
+  const response = await apiClient.get<{ results: Raw[] }>(`${base(cardId)}/${importId}/entries/${entryId}/search`, {
+    params: { organization_id: organizationId, ...(q ? { q } : null) },
+  });
+  return (response.data.results ?? []).map(normalizeInvoiceCandidate);
+};
+
 /** "Confirmar as N de uma vez" (`confirmed: true`) e o Desfazer da faixa (`confirmed: false`). */
 export const confirmCardInvoiceSuggestions = async (
   cardId: number,
@@ -661,7 +814,17 @@ export const previewCardInvoiceImportUndo = async (
   importId: string,
 ): Promise<CardInvoiceUndoPreview> => {
   const response = await apiClient.get(`${base(cardId)}/${importId}/undo-preview`, { params: { organization_id: organizationId } });
-  return normalizeStatementUndoPreview(response.data as Parameters<typeof normalizeStatementUndoPreview>[0]) as CardInvoiceUndoPreview;
+  return normalizeCardInvoiceUndoPreview(response.data as Raw);
+};
+
+/** A prévia do desfazer da fatura: as peças do extrato e a fatura para onde cada compra movida volta (#559). */
+export const normalizeCardInvoiceUndoPreview = (raw: Raw): CardInvoiceUndoPreview => {
+  const preview = normalizeStatementUndoPreview(raw as Parameters<typeof normalizeStatementUndoPreview>[0]);
+  const rawRestore = (raw.to_restore as Raw[] | undefined) ?? [];
+  return {
+    ...(preview as unknown as CardInvoiceUndoPreview),
+    to_restore: preview.to_restore.map((r, i) => ({ ...r, invoice_back: normalizeBrief(rawRestore[i]?.invoice_back) })),
+  };
 };
 
 /** Desfaz a conciliação concluída mais recente do cartão (tudo ou nada). */

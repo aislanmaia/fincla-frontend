@@ -110,7 +110,7 @@ describe("Faturas conciliadas do cartão", () => {
     const [draftRow, undoneRow, concludedRow] = rows;
     expect(draftRow).toHaveTextContent("Fatura de dezembro/2026");
     expect(draftRow).toHaveTextContent("Em andamento");
-    expect(draftRow).toHaveTextContent("20 lançamentos · 17 já conferidos · 3 não registrados");
+    expect(draftRow).toHaveTextContent("20 lançamentos · 20 já conferidos");
     expect(draftRow).toHaveTextContent("Você parou em Decidir casos com dúvida.");
     expect(draftRow).toHaveTextContent("Se ficar parada, é descartada em 25/12/2026.");
     expect(within(draftRow).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
@@ -118,12 +118,12 @@ describe("Faturas conciliadas do cartão", () => {
     expect(within(draftRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(undoneRow).toHaveTextContent("Desfeita");
-    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: −R$ 0,40");
+    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: R$ 0,00");
     expect(within(undoneRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(concludedRow).toHaveTextContent("Concluída");
-    expect(concludedRow).toHaveTextContent("20 lançamentos · 4 compras ligadas · 9 lançamentos adicionados · 4 encargos somados · 3 não registrados");
-    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: −R$ 0,40");
+    expect(concludedRow).toHaveTextContent("20 lançamentos · 7 compras ligadas · 8 lançamentos adicionados · 4 encargos somados · 1 compra movida");
+    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: R$ 0,00");
   });
 
   it("Continuar conciliação abre o rascunho; Ver conciliação, a concluída; Desfazer leva à tela do desfazer", async () => {
@@ -241,10 +241,13 @@ describe("retomar o rascunho", () => {
   it("abre no passo em que a pessoa parou, com os passos já vistos", async () => {
     detail.current_step = "doubt";
     detail.reviewed_steps = ["suggested", "other_invoice"];
+    // Ao sair dos passos 1 e 2 com "Próximo", as escolhas deles ficaram confirmadas.
+    for (const e of detail.entries) if (e.classification === "suggested" || e.classification === "other_invoice") e.confirmed = true;
     openImport(detail.id);
 
     expect(await screen.findByRole("heading", { name: "Decidir casos com dúvida" })).toBeInTheDocument();
-    expect(railStatus("Decidir casos com dúvida")).toBe("Você está aqui");
+    // O passo aberto com dúvidas sem resposta (#559) diz quantas faltam, como no protótipo.
+    expect(railStatus("Decidir casos com dúvida")).toBe("3 lançamentos para responder");
     expect(railStatus("Compras em outra fatura")).toBe("Conferido");
   });
 
@@ -279,15 +282,16 @@ describe("reimportação do mesmo PDF", () => {
     openImport(detail.id);
     // Nada a responder: abre em Revisar e concluir.
     expect(await screen.findByRole("heading", { name: "Revisar e concluir" })).toBeInTheDocument();
-    // Os 4 pares, as 9 transações que a conclusão criou (#557, #558) e os 4 encargos somados (#558).
-    expect(railStatus("Confirmar compras encontradas")).toBe("Nada a fazer · 17 já conferidos");
-    expect(screen.getByTestId("summary-already-reconciled")).toHaveTextContent("17 lançamentos já foram conferidos numa conciliação anterior: nada muda neles");
+    // Os 4 pares, as 3 dúvidas e a compra movida (#559), as 8 transações criadas (#557, #558) e os 4
+    // encargos somados (#558).
+    expect(railStatus("Confirmar compras encontradas")).toBe("Nada a fazer · 20 já conferidos");
+    expect(screen.getByTestId("summary-already-reconciled")).toHaveTextContent("20 lançamentos já foram conferidos numa conciliação anterior: nada muda neles");
     expect(screen.queryByTestId("summary-paired")).not.toBeInTheDocument();
 
     await user.click(railButton("Confirmar compras encontradas"));
 
     const rows = await screen.findAllByTestId("reconciled-row");
-    expect(rows).toHaveLength(17);
+    expect(rows).toHaveLength(20);
     expect(rows[0]).toHaveTextContent("MERCADO BOA VISTA");
     expect(rows[0]).toHaveTextContent("Já conferido");
     expect(rows[0]).toHaveTextContent("É Mercado");

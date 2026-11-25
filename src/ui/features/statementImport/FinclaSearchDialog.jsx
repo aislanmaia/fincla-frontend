@@ -2,6 +2,10 @@
 // as contas ativas da mesma moeda. Diálogo na própria página (nunca `window.confirm`); a busca não
 // muda nada, e escolher uma transação só responde o lançamento ("Sim, é esta") — uma de outra
 // conta é movida para esta conta só ao concluir.
+//
+// A mesma busca serve a fatura do cartão (fincla-api#559, "Procure no Fincla"): quem chama passa
+// `search` (a rota da busca), `renderResult` (como cada resultado aparece e é escolhido) e os textos
+// (`copy`); sem eles, é a busca do extrato.
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
@@ -18,9 +22,23 @@ import { ErrorNote } from "./StatementImportNotes.jsx";
 /** Espera a pessoa parar de digitar antes de buscar. */
 const SEARCH_DELAY_MS = 250;
 
+/** Os textos da busca do extrato; a fatura troca o que é dela (título, rótulo, dica, o lado do banco). */
+const STATEMENT_COPY = {
+  title: "Procurar a transação no Fincla",
+  bankLabel: "No extrato do banco",
+  inputLabel: "Buscar por descrição, conta, valor ou data",
+  placeholder: "Ex.: farmácia, Nubank, 47,20 ou 09/10",
+  hint: "Mostra transações de todas as suas contas na moeda deste extrato, no mesmo sentido do lançamento. Contas em outra moeda não aparecem.",
+};
+
+/** O valor do lançamento como o extrato mostra (com sinal). */
+const statementAmount = (entry) => formatMoney(entry.amount, entry.currency);
+
 export function FinclaSearchDialog({
   organizationId, accountId, importId, entry, entries, accountName, busy, onPick, onUndoThere, onClose,
+  search = null, renderResult = null, copy = null, amountText = statementAmount, pickError = "",
 }) {
+  const text = { ...STATEMENT_COPY, ...copy };
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
@@ -31,11 +49,12 @@ export function FinclaSearchDialog({
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => {
-      searchFinclaForEntry(accountId, organizationId, importId, entry.id, query)
+      (search ? search(query) : searchFinclaForEntry(accountId, organizationId, importId, entry.id, query))
         .then((found) => { if (alive) { setResults(found); setError(""); } })
         .catch((err) => { if (alive) setError(handleApiError(err)); });
     }, SEARCH_DELAY_MS);
     return () => { alive = false; clearTimeout(timer); };
+    // `search` é refeita a cada render de quem chama: a busca segue o texto e o lançamento, não ela.
   }, [accountId, organizationId, importId, entry.id, query]);
 
   const onKeyDown = (event) => { if (event.key === "Escape") onClose(); };
@@ -54,29 +73,30 @@ export function FinclaSearchDialog({
       >
         <header style={{ padding: 16, borderBottom: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <b id="fincla-search-title" style={{ fontSize: 15, color: T.ink, flex: 1 }}>Procurar a transação no Fincla</b>
+            <b id="fincla-search-title" style={{ fontSize: 15, color: T.ink, flex: 1 }}>{text.title}</b>
             <Btn variant="ghost" small onClick={onClose} aria-label="Fechar"><X size={14} aria-hidden="true" /></Btn>
           </div>
           <div style={{ fontSize: 13, color: T.inkMid, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>
-            No extrato do banco: <span style={NUM}>{bankDateLabel(entry.date)}</span> · <b>{entry.bank_description}</b> ·{" "}
-            <b style={NUM}>{formatMoney(entry.amount, entry.currency)}</b>
+            {text.bankLabel}: <span style={NUM}>{bankDateLabel(entry.date)}</span> · <b>{entry.bank_description}</b> ·{" "}
+            <b style={NUM}>{amountText(entry)}</b>
           </div>
-          <label htmlFor="fincla-search-input" style={{ fontSize: 12, fontWeight: 600, color: T.inkMid }}>Buscar por descrição, conta, valor ou data</label>
+          <label htmlFor="fincla-search-input" style={{ fontSize: 12, fontWeight: 600, color: T.inkMid }}>{text.inputLabel}</label>
           <input
             id="fincla-search-input"
             ref={inputRef}
             value={query}
             maxLength={100}
-            placeholder="Ex.: farmácia, Nubank, 47,20 ou 09/10"
+            placeholder={text.placeholder}
             onChange={(e) => setQuery(e.target.value)}
             style={{ ...INPUT, ...touchTarget }}
           />
         </header>
         <div className="fincla-scroll" style={{ padding: 16, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-          <ErrorNote>{error}</ErrorNote>
+          <ErrorNote>{error || pickError}</ErrorNote>
           {results === null && !error ? <p style={{ fontSize: 13, color: T.inkLight, margin: 0 }}>Procurando…</p> : null}
           {results && !results.length ? <p style={{ fontSize: 13, color: T.inkMid, margin: 0 }}>Nada encontrado.</p> : null}
-          {(results ?? []).map((match) => {
+          {renderResult ? (results ?? []).map((match) => renderResult(match)) : null}
+          {renderResult ? null : (results ?? []).map((match) => {
             // Lido das respostas de agora (não da busca): depois de um "Desfazer lá" a opção libera na hora.
             const taken = entries.find((e) => e.id !== entry.id && e.answer === "pair" && (
               match.kind === "transfer" ? e.paired_transfer_id === match.transfer_id : e.paired_transaction_id === match.transaction_id
@@ -95,7 +115,7 @@ export function FinclaSearchDialog({
             );
           })}
           <p style={{ fontSize: 12, color: T.inkLight, margin: 0 }}>
-            Mostra transações de todas as suas contas na moeda deste extrato, no mesmo sentido do lançamento. Contas em outra moeda não aparecem.
+            {text.hint}
           </p>
         </div>
         <footer style={{ padding: 12, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end" }}>

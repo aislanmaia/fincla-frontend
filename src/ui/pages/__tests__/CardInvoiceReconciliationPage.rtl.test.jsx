@@ -137,7 +137,7 @@ describe("o topo da conciliação da fatura", () => {
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
   });
 
-  it("o trilho tem os 8 passos; os sem resposta nesta versão dizem que ficam de fora, os vazios que não há nada a fazer", async () => {
+  it("o trilho tem os 8 passos, cada um com o estado dos seus itens", async () => {
     await openDraft();
 
     const titles = within(rail()).getAllByTestId("step-title").map((t) => t.textContent);
@@ -147,10 +147,11 @@ describe("o topo da conciliação da fatura", () => {
     ]);
     // O passo aberto diz "Você está aqui" (protótipo v16); os outros, o estado deles.
     expect(railStatus("Confirmar compras encontradas")).toBe("Você está aqui");
-    expect(railStatus("Compras em outra fatura")).toBe("Nada a fazer");
-    expect(railStatus("Decidir casos com dúvida")).toBe("Nada a fazer · 3 ficam de fora nesta versão");
+    // #559: a compra em outra fatura vem com a sugestão marcada; as dúvidas, sem resposta.
+    expect(railStatus("Compras em outra fatura")).toBe("1 escolha para confirmar");
+    expect(railStatus("Decidir casos com dúvida")).toBe("3 lançamentos para responder");
     // Compras novas (#557): vêm "Adicionar" marcado, a confirmar.
-    expect(railStatus("Compras novas")).toBe("5 escolhas para confirmar");
+    expect(railStatus("Compras novas")).toBe("4 escolhas para confirmar");
     expect(railStatus("Conferir o total")).toBe("Depois dos lançamentos");
   });
 
@@ -429,19 +430,21 @@ describe("o passo Confirmar compras encontradas", () => {
     expect(calls.some((c) => c.confirm)).toBe(false);
     await waitFor(() => expect(calls).toContainEqual({ progress: { current_step: "other_invoice", reviewed_steps: ["suggested"] } }));
     expect(railStatus("Confirmar compras encontradas")).toBe("Conferido");
-    expect(screen.getByText(/Nada a fazer aqui: nenhuma compra desta fatura está em outra fatura/)).toBeInTheDocument();
+    // Desde a #559 o passo 2 responde: a compra em outra fatura abre (ver o teste .f5).
+    expect(await screen.findByRole("article", { name: /CAFETERIA AROMA/ })).toBeInTheDocument();
   });
 
-  it("os lançamentos dos outros passos aparecem só para leitura: Fica de fora nesta versão", async () => {
+  it("desde a #559 nenhum passo de lançamentos fica só para leitura", async () => {
     const user = userEvent.setup();
     await openDraft();
 
     await user.click(railButton("Decidir casos com dúvida"));
-
-    const list = await screen.findByTestId("read-only-entries");
-    expect(within(list).getAllByTestId("read-only-row")).toHaveLength(3);
-    expect(within(list).getAllByText("Fica de fora nesta versão")).toHaveLength(3);
-    expect(screen.queryByRole("group", { name: "Esta compra do banco já está no Fincla?" })).not.toBeInTheDocument();
+    expect(await screen.findByTestId("doubt-card")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Esta compra do banco já está no Fincla?" })).toBeInTheDocument();
+    expect(screen.queryByTestId("read-only-entries")).not.toBeInTheDocument();
+    await user.click(railButton("Compras em outra fatura"));
+    expect(await screen.findByTestId("move-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("read-only-entries")).not.toBeInTheDocument();
     // Encargos, tarifas e estornos responde desde a #558 (ver o teste .f4): nada fica de fora ali.
     await user.click(railButton("Encargos, tarifas e estornos"));
     expect(await screen.findByTestId("charge-group-card")).toBeInTheDocument();
@@ -449,20 +452,40 @@ describe("o passo Confirmar compras encontradas", () => {
   });
 });
 
+/**
+ * As três dúvidas respondidas (#559): cada Uber com uma das duas corridas, o posto com a opção de
+ * valor parecido. Sem nada sem resposta, o rascunho pode ser concluído.
+ */
+function answerDoubts(d) {
+  const ids = [25, 26, 27];
+  d.entries.filter((e) => e.classification === "doubt").forEach((e, i) => {
+    const chosen = e.candidates.find((c) => c.id === ids[i]);
+    Object.assign(e, { answer: "pair", confirmed: true, paired_transaction_id: chosen.id, fincla_transaction: { ...chosen } });
+  });
+  d.summary.unanswered = 0;
+  d.summary.to_pair += 3;
+  d.blockers = [];
+  d.can_conclude = true;
+}
+
 describe("o passo Revisar e concluir", () => {
   it("mostra as contagens, o total da fatura no Fincla, a diferença e conclui", async () => {
+    answerDoubts(draft);
     const user = userEvent.setup();
     await openDraft();
     await user.click(railButton("Revisar e concluir"));
 
-    expect(await screen.findByTestId("summary-paired")).toHaveTextContent("4 compras já estavam no Fincla e ficam ligadas ao banco");
+    expect(await screen.findByTestId("summary-paired")).toHaveTextContent("7 compras já estavam no Fincla e ficam ligadas ao banco");
     expect(screen.getByTestId("summary-bank-value")).toHaveTextContent("1 compra passa a ter o valor do banco");
+    // A compra em outra fatura (#559): sai da fatura de janeiro e entra nesta.
+    expect(screen.getByTestId("summary-moved")).toHaveTextContent("1 compra sai de outra fatura e entra nesta");
+    expect(screen.queryByTestId("summary-moved-series")).not.toBeInTheDocument();
     // O grupo de encargos somado (#558) e os encargos, tarifas e estornos que entram como transações.
     expect(screen.getByTestId("summary-summed-charges")).toHaveTextContent("4 encargos já estavam somados no Fincla · em “Encargos do cartão”, que fica ligada a todos eles");
-    expect(screen.getByTestId("summary-created")).toHaveTextContent("9 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
-    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("3 lançamentos não serão registrados · 3 ficam de fora nesta versão");
+    expect(screen.getByTestId("summary-created")).toHaveTextContent("8 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
+    expect(screen.queryByTestId("summary-ignored")).not.toBeInTheDocument();
     expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent(
-      "9 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
+      "8 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
     );
     expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.403,32/);
     expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 0,40/);
@@ -471,13 +494,14 @@ describe("o passo Revisar e concluir", () => {
     await user.click(screen.getByRole("button", { name: "Concluir conciliação da fatura" }));
 
     expect(await screen.findByRole("heading", { name: "Fatura de dezembro conciliada" })).toBeInTheDocument();
-    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 2.403,32 · diferença registrada: −R$ 0,40.");
+    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 2.402,92 · diferença registrada: R$ 0,00.");
     await user.click(screen.getByRole("button", { name: "Ver a fatura" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/invoices/2026/12` });
   });
 
   it("concluída, avisa as outras telas para buscar as transações de novo; recusada, não", async () => {
     const onConcluded = vi.fn();
+    answerDoubts(draft);
     const user = userEvent.setup();
     server.use(http.post(`${BASE}/${IMPORT}/conclude`, () => HttpResponse.json({ detail: { code: "business_rule", message: "Falta responder." } }, { status: 422 })));
     await openDraft({ onConcluded });

@@ -216,6 +216,12 @@ function Segmented({ label, options, value, onChange, touch = false }) {
 
 const KBD = { ...G, fontSize: 11, border: `1px solid ${T.border}`, borderBottomWidth: 2, borderRadius: 4, padding: "0 4px", background: T.surface, color: T.inkMid };
 
+/**
+ * Tela de toque sem teclado (celular, tablet): ponteiro grosso e sem "hover". O jsdom e navegadores
+ * sem `matchMedia` contam como teclado.
+ */
+const coarsePointerOnly = () => Boolean(globalThis.matchMedia?.("(hover: none) and (pointer: coarse)")?.matches);
+
 /** "S sim · A adicionar · N não registrar · J/K próximo/anterior", conforme o passo. */
 function ShortcutsHint({ keys }) {
   const parts = [];
@@ -255,7 +261,12 @@ export const TRANSACTION_NOUN = {
   pendingMany: "transações sem resposta não aparecem",
 };
 
-export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], noun = ENTRY_NOUN, touch = false, children = null }) {
+/**
+ * `pendingText` troca o "N sem resposta" pelo estado de cada item (a fatura diz "N sem resposta · M
+ * escolhas para confirmar", como o trilho; QA F4 OBS-03). No celular, ou em tela só de toque, os
+ * atalhos de teclado não aparecem (não há teclado para eles).
+ */
+export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s", "a", "n"], noun = ENTRY_NOUN, touch = false, pendingText = undefined, children = null }) {
   const counts = { all: queue.total, pending: queue.pending, answered: queue.answeredCount };
   let hiddenText = null;
   if (queue.hidden) {
@@ -283,7 +294,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
           {queue.position ? `${noun.title} ${queue.position.toLocaleString("pt-BR")} de ${queue.total.toLocaleString("pt-BR")}` : plural(queue.total, noun.one, noun.many)}
         </span>
         <span data-testid="queue-pending" style={{ ...G, ...NUM, fontSize: 12, fontWeight: 600, color: queue.pending ? T.amber : T.green }}>
-          {queue.pending ? plural(queue.pending, "sem resposta", "sem resposta") : "Todos respondidos"}
+          {queue.pending ? (pendingText ?? plural(queue.pending, "sem resposta", "sem resposta")) : "Todos respondidos"}
         </span>
         {children}
         <span style={{ flex: 1 }} />
@@ -304,7 +315,7 @@ export function EntryQueueHeader({ queue, view, onViewChange, shortcutKeys = ["s
           options={FILTERS.map((f) => ({ value: f.value, label: `${f.label} (${counts[f.value].toLocaleString("pt-BR")})` }))}
         />
       </div>
-      <ShortcutsHint keys={shortcutKeys} />
+      {touch || coarsePointerOnly() ? null : <ShortcutsHint keys={shortcutKeys} />}
       {!queue.pending && queue.currentId === null && queue.total ? (
         <p role="note" style={{ ...G, fontSize: 12, color: T.green, margin: 0, display: "flex", gap: 6, alignItems: "center" }}>
           <Check size={13} aria-hidden="true" />Tudo respondido neste passo. Clique em qualquer {noun.one} para rever.
@@ -971,7 +982,9 @@ function scrollToCard(card) {
  * Classe por causa da foto antes da troca: ao sumir (o último pendente respondido) a página fica
  * mais curta embaixo; com a rolagem no fim, o navegador a puxaria para trás e a lista desceria. A
  * rolagem de antes fica segura pelo espaço provisório, como nas trocas cartão ↔ linha.
- * `pendingText` troca o "N lançamentos" (ex.: o grupo de encargos da fatura, pelo nome).
+ * `pendingText` troca o "N lançamentos" (ex.: o grupo de encargos da fatura, pelo nome); `label`
+ * troca a frase inteira (a fatura diz "Falta confirmar N escolhas…" quando só faltam confirmações,
+ * QA F4 OBS-03).
  */
 export class GoToPendingButton extends Component {
   ref = createRef();
@@ -1124,10 +1137,10 @@ export class GoToPendingButton extends Component {
   };
 
   render() {
-    const { queue, noun = ENTRY_NOUN, isMobile = false, indent = 0, pendingText = null } = this.props;
+    const { queue, noun = ENTRY_NOUN, isMobile = false, indent = 0, pendingText = null, label: fullLabel = null } = this.props;
     if (!queue?.pending) return null;
     const what = pendingText ?? plural(queue.pending, noun.one, noun.many);
-    const label = `Falta responder ${what} deste passo`;
+    const label = fullLabel ?? `Falta responder ${what} deste passo`;
     const Arrow = this.state.direction === "down" ? ArrowDown : ArrowUp;
     return (
       <div
@@ -1142,7 +1155,7 @@ export class GoToPendingButton extends Component {
           full={isMobile}
           data-testid="go-to-pending"
           data-direction={this.state.direction}
-          aria-label={`${label}. Ir para o primeiro item que falta responder`}
+          aria-label={`${label}. Ir para o primeiro item que falta ${label.startsWith("Falta confirmar") ? "confirmar" : "responder"}`}
           onClick={this.go}
           style={{ minHeight: TOUCH_TARGET, padding: "0 16px", fontSize: 13, color: T.ink, background: T.amberLight, boxShadow: T.sm, whiteSpace: "normal", textAlign: "left" }}
         >
