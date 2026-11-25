@@ -1,0 +1,526 @@
+/** @vitest-environment jsdom */
+// Conciliar fatura, quinta entrega (fincla-api#559): dúvidas, a busca "Procure no Fincla" e as
+// compras em outra fatura, no nível da página, com a fixture de contrato (`draft`, `entry_doubt`,
+// `search`, `entry_move`, `new_purchases_draft`, `stale_draft`; cópia byte a byte da do backend).
+// Confere o que a pessoa vê e o que a tela manda: nada marcado na dúvida, clicar numa opção já
+// responde (`pair` nesta fatura, `move` na vizinha), as outras esmaecidas com "Fica de fora… vai
+// para Sobrando no Fincla", a opção já escolhida por outro lançamento sem clique, a diferença de
+// valor em destaque, "Não registrar" listrado com as opções à vista, a busca nas faturas vizinhas,
+// a troca "Mover só esta" ⇄ "Mover esta e as próximas" ali mesmo; no passo 2, a sugestão marcada com
+// "Confirmar sugestão", as respostas de mover e o motivo quando a fatura está paga (decisão 1); a
+// leitura desatualizada (QA F4 OBS-01); as palavras do que falta (OBS-03); e os alvos de toque.
+import React from "react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+
+import contract from "../../../api/__fixtures__/card_invoice_import.example.json";
+import { smallTouchTargets } from "../../../test/touchTargets.js";
+
+const navigate = vi.fn();
+let params = {};
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, useParams: () => params }));
+import { CardInvoiceReconciliationPage } from "../CardInvoiceReconciliationPage.jsx";
+
+const ORG = "org";
+const CARD = contract.draft.credit_card;
+const BASE = `*/v1/credit-cards/${CARD.id}/invoice-imports`;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const CATEGORIES = [
+  { id: "cat-fallback", name: "nao-classificado", label: "Não classificado", allowed_transaction_types: ["expense", "income", "refund"], is_fallback: true },
+];
+const JANUARY = { id: 6, year: 2027, month: 1, status: "open" };
+const PAID_REASON = "Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.";
+
+const calls = [];
+let draft;
+let searchResults;
+const fresh = (key = "draft", step = "doubt") => {
+  draft = clone(contract[key]);
+  draft.current_step = step;
+  searchResults = clone(contract.search.results);
+};
+fresh();
+
+const doubts = () => draft.entries.filter((e) => e.classification === "doubt");
+const UBER_1 = () => doubts()[0];
+const UBER_2 = () => doubts()[1];
+const POSTO = () => doubts()[2];
+const CAFE = () => draft.entries.find((e) => e.bank_description === "CAFETERIA AROMA");
+
+/** As transações que o backend conhece: as opções das dúvidas, a compra da outra fatura e as da busca. */
+const known = () => [
+  ...draft.entries.flatMap((e) => e.candidates ?? []),
+  ...searchResults,
+  ...draft.entries.filter((e) => e.fincla_transaction).map((e) => ({ ...e.fincla_transaction, invoice: e.other_invoice })),
+];
+
+/**
+ * O que o backend faz com uma resposta (#559): `pair`/`move`/`move_series` com `transaction_id` liga a
+ * escolhida (a já escolhida por outro lançamento → 409 `pair_taken`); mover traz a fatura de onde ela
+ * vem e o que dá para mover agora. Responder confirma, a menos que venha `confirmed`.
+ */
+function applyBody(entry, body) {
+  if (body.transaction_id !== undefined) {
+    const other = draft.entries.find((e) => e.id !== entry.id && e.paired_transaction_id === body.transaction_id
+      && ["pair", "move", "move_series"].includes(e.answer));
+    if (other) {
+      return HttpResponse.json(
+        { detail: { code: "conflict", message: `Esta transação já é a resposta do lançamento de 12/11 (${other.bank_description}).` } },
+        { status: 409 },
+      );
+    }
+    const chosen = known().find((t) => t.id === body.transaction_id);
+    const { invoice, taken_by_entry_id: _taken, ...transaction } = chosen;
+    entry.paired_transaction_id = chosen.id;
+    entry.fincla_transaction = transaction;
+    const neighbour = invoice && invoice.id !== draft.invoice.id;
+    entry.other_invoice = neighbour ? invoice : null;
+    entry.movable = Boolean(neighbour);
+    entry.series_movable = Boolean(neighbour && transaction.installment);
+  }
+  if (body.answer !== undefined) {
+    entry.answer = body.answer;
+    if (body.answer === "ignore" || body.answer === "create") entry.paired_transaction_id = null;
+  }
+  if (body.confirmed !== undefined) entry.confirmed = body.confirmed;
+  else if (body.answer !== undefined) entry.confirmed = true;
+  return HttpResponse.json(entry);
+}
+
+const server = setupServer(
+  http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
+  http.get("*/v1/tags", ({ request }) => HttpResponse.json({ tags: new URL(request.url).searchParams.get("tag_type") === "detalhe" ? [] : CATEGORIES })),
+  http.get(`${BASE}/:importId/entries/:entryId/search`, ({ request, params: p }) => {
+    calls.push({ search: p.entryId, q: new URL(request.url).searchParams.get("q") });
+    return HttpResponse.json({ results: searchResults });
+  }),
+  http.get(`${BASE}/:importId`, () => HttpResponse.json(draft)),
+  http.patch(`${BASE}/:importId`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ progress: body });
+    Object.assign(draft, body);
+    return HttpResponse.json(draft);
+  }),
+  http.patch(`${BASE}/:importId/entries/:entryId`, async ({ request, params: p }) => {
+    const body = await request.json();
+    calls.push({ patch: p.entryId, body });
+    return applyBody(draft.entries.find((e) => e.id === p.entryId), body);
+  }),
+  http.patch(`${BASE}/:importId/entries`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ batch: body.entries ?? [], groups: body.groups ?? [] });
+    for (const item of body.entries ?? []) applyBody(draft.entries.find((e) => e.id === item.id), item);
+    return HttpResponse.json(draft);
+  }),
+);
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+afterEach(() => {
+  cleanup();
+  calls.length = 0;
+  fresh();
+  server.resetHandlers();
+  navigate.mockReset();
+});
+
+const STEP_TITLE = { doubt: "Decidir casos com dúvida", other_invoice: "Compras em outra fatura", summary: "Revisar e concluir" };
+const open = async (props = {}) => {
+  params = { cardId: CARD.public_id, importId: draft.id };
+  render(<CardInvoiceReconciliationPage organizationId={ORG} {...props} />);
+  await screen.findByRole("heading", { name: STEP_TITLE[draft.current_step] });
+};
+const article = (text) => screen.getByRole("article", { name: new RegExp(text.replace(/[*/]/g, ".")) });
+const options = (card) => within(card).getAllByTestId("candidate-option");
+const option = (card, description) => options(card).find((o) => o.textContent.includes(description));
+const answers = (card, name) => within(card).getByRole("group", { name });
+const patches = (entry) => calls.filter((c) => c.patch === entry.id).map((c) => c.body);
+const rowOf = (text) => screen.getAllByTestId("pair-row").find((r) => r.textContent.includes(text));
+const alter = (text) => screen.getAllByRole("button", { name: new RegExp(`Alterar o lançamento de .*: ${text.replace(/[*/]/g, ".")}`) });
+
+describe("o passo Decidir casos com dúvida", () => {
+  it("nada vem marcado: várias opções e a pergunta de qual é; sem Confirmar", async () => {
+    await open();
+
+    const card = article("UBER .TRIP");
+    expect(within(card).getByText("Falta responder")).toBeInTheDocument();
+    expect(within(card).getByTestId("doubt-prompt")).toHaveTextContent("Qual destas é a mesma compra? Clique para escolher.");
+    expect(options(card)).toHaveLength(2);
+    expect(options(card).every((o) => o.dataset.pressed === "false")).toBe(true);
+    expect(within(answers(card, "Esta compra do banco já está no Fincla?")).getAllByRole("button").every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
+    expect(within(card).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
+    // O que falta, pelas mesmas palavras do trilho (QA F4 OBS-03).
+    expect(screen.getByTestId("queue-pending")).toHaveTextContent("3 sem resposta");
+    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 3 compras deste passo");
+  });
+
+  it("clicar numa opção já responde e recolhe: a linha fica parada; na outra dúvida, a já escolhida fica sem clique", async () => {
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(option(article("UBER .TRIP"), "Uber 1")).getByRole("button", { name: /^Sim, é esta: Uber 1, 12\/11\/2026/ }));
+
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "pair", transaction_id: 25 }]));
+    const row = await waitFor(() => rowOf("É Uber 1"));
+    expect(row).toHaveTextContent("Conferido");
+    // A primeira resposta de uma dúvida não tem "Desfazer escolha" (o backend não volta a sem resposta).
+    expect(within(row).queryByRole("button", { name: "Desfazer escolha" })).not.toBeInTheDocument();
+    // A segunda corrida abre: a Uber 1 já é a resposta da primeira, sem clique e com o motivo.
+    const second = article("UBER .TRIP");
+    const taken = option(second, "Uber 1");
+    expect(taken).toHaveAttribute("aria-disabled", "true");
+    expect(within(taken).getByTestId("candidate-taken")).toHaveTextContent("Já é a resposta do lançamento de 12/11/2026 (UBER *TRIP)");
+    expect(within(taken).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(second).getByTestId("doubt-prompt")).toHaveTextContent("Confira e clique nela se for a mesma.");
+  });
+
+  it("reaberta: a escolhida em azul e a outra esmaecida com Fica de fora; trocar responde, e Desfazer escolha volta à anterior", async () => {
+    Object.assign(UBER_1(), { answer: "pair", confirmed: true, paired_transaction_id: 25, fincla_transaction: { ...UBER_1().candidates[0] } });
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(alter("UBER .TRIP")[0]);
+    let card = article("UBER .TRIP");
+    expect(option(card, "Uber 1").dataset.pressed).toBe("true");
+    const other = option(card, "Uber 2");
+    expect(other.dataset.faded).toBe("true");
+    expect(within(other).getByTestId("left-out-note")).toHaveTextContent("Fica de fora");
+    expect(within(other).getByTestId("left-out-note")).toHaveTextContent("vai para Sobrando no Fincla");
+    expect(within(card).getByTestId("doubt-prompt")).toHaveTextContent("Você escolheu a compra em azul. Clique em outra para trocar.");
+
+    await user.click(within(other).getByRole("button", { name: /^Sim, é esta: Uber 2/ }));
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "pair", transaction_id: 26 }));
+
+    await user.click(await within(await waitFor(() => rowOf("É Uber 2"))).findByRole("button", { name: "Desfazer escolha" }));
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "pair", confirmed: true, transaction_id: 25 }));
+    card = await screen.findByRole("article", { name: /UBER .TRIP/ });
+    expect(option(card, "Uber 1").dataset.pressed).toBe("true");
+  });
+
+  it("uma opção com valor parecido: a pergunta e a diferença em destaque", async () => {
+    for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
+    await open();
+
+    const card = article("POSTO CENTRAL");
+    expect(within(card).getByTestId("doubt-prompt")).toHaveTextContent("Valor parecido: confira e clique nela se for a mesma.");
+    const posto = option(card, "Posto");
+    expect(within(posto).getByTestId("candidate-difference")).toHaveTextContent("Diferença de R$ 0,40: o banco cobrou R$ 150,00. Se for esta, ao concluir vale o valor do banco.");
+    expect(within(posto).getAllByTestId("match-highlight").length).toBeGreaterThan(0);
+  });
+
+  it("Sim, é esta com uma opção livre a escolhe; com várias, pede para escolher; sem nenhuma, abre a busca", async () => {
+    const user = userEvent.setup();
+    await open();
+
+    const card = article("UBER .TRIP");
+    await user.click(within(answers(card, "Esta compra do banco já está no Fincla?")).getByRole("button", { name: "Sim, é esta" }));
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+    expect(within(card).getByText("Escolha ao lado qual compra é.")).toBeInTheDocument();
+
+    for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
+    POSTO().candidates = [];
+    cleanup();
+    await open();
+    await user.click(within(answers(article("POSTO CENTRAL"), "Esta compra do banco já está no Fincla?")).getByRole("button", { name: "Sim, é esta" }));
+    expect(await screen.findByRole("dialog", { name: "Procure no Fincla" })).toBeInTheDocument();
+  });
+
+  it("Não registrar recolhe no clique; reaberta, as opções continuam à vista, listradas, com Fica de fora", async () => {
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(answers(article("UBER .TRIP"), "Esta compra do banco já está no Fincla?")).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "ignore" }]));
+    const row = await waitFor(() => rowOf("Fica fora do Fincla"));
+    await user.click(within(row).getByRole("button", { name: /Alterar/ }));
+
+    const card = article("UBER .TRIP");
+    const skipped = within(card).getAllByTestId("fincla-side-skipped");
+    expect(skipped).toHaveLength(2);
+    expect(within(card).getByTestId("skip-note")).toHaveTextContent("elas vão para Sobrando no Fincla");
+    expect(within(card).queryAllByTestId("candidate-option")).toHaveLength(0);
+  });
+
+  it("Não, adicionar agora abre o formulário da compra nova, com Confirmar", async () => {
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(answers(article("UBER .TRIP"), "Esta compra do banco já está no Fincla?")).getByRole("button", { name: "Não, adicionar agora" }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "create", confirmed: false }]));
+    const card = article("UBER .TRIP");
+    expect(await within(card).findByRole("textbox", { name: "Descrição" })).toHaveValue("UBER *TRIP");
+    await user.click(within(card).getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ confirmed: true }));
+  });
+
+  it("fatura já paga (decisão 1): adicionar desligado com o motivo; uma opção da fatura vizinha não pode ser escolhida", async () => {
+    draft.invoice.status = "paid";
+    const posto = POSTO();
+    Object.assign(posto, { value_locked: true, addable: false });
+    posto.candidates = [{ ...posto.candidates[0], id: 99, description: "Posto (janeiro)", invoice: JANUARY, invoice_id: JANUARY.id }];
+    for (const e of [UBER_1(), UBER_2()]) Object.assign(e, { answer: "ignore", confirmed: true });
+    await open();
+
+    const card = article("POSTO CENTRAL");
+    const add = within(answers(card, "Esta compra do banco já está no Fincla?")).getByRole("button", { name: "Não, adicionar agora" });
+    expect(add).toBeDisabled();
+    expect(add).toHaveAccessibleDescription(PAID_REASON);
+    const neighbour = option(card, "Posto (janeiro)");
+    expect(neighbour).toHaveAttribute("aria-disabled", "true");
+    expect(within(neighbour).getByTestId("candidate-refusal")).toHaveTextContent(PAID_REASON);
+    expect(within(neighbour).getByTestId("other-invoice-badge")).toHaveTextContent("Na fatura de janeiro/2027");
+  });
+});
+
+describe("Está no Fincla com outros dados… (a busca)", () => {
+  it("procura nas faturas vizinhas do cartão; a já escolhida por outro lançamento fica sem clique; escolher responde e fecha", async () => {
+    Object.assign(UBER_1(), { answer: "pair", confirmed: true, paired_transaction_id: 25, fincla_transaction: { ...UBER_1().candidates[0] } });
+    const user = userEvent.setup();
+    await open();
+
+    const card = article("UBER .TRIP");
+    await user.click(within(card).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    expect(dialog).toHaveTextContent("Na fatura do banco: 12/11/2026 · UBER *TRIP · R$ 23,47");
+    expect(dialog).toHaveTextContent("Mostra os itens deste cartão na fatura conciliada, na anterior e na seguinte");
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(2));
+    await waitFor(() => expect(calls.filter((c) => c.search)).toEqual([{ search: UBER_2().id, q: null }]));
+
+    const taken = within(dialog).getAllByTestId("candidate-option").find((o) => o.textContent.includes("Uber 1"));
+    expect(within(taken).getByTestId("candidate-taken")).toBeInTheDocument();
+
+    await user.type(within(dialog).getByRole("textbox", { name: "Buscar por descrição, valor ou dia" }), "23,47");
+    await waitFor(() => expect(calls.filter((c) => c.search).at(-1).q).toBe("23,47"));
+
+    await user.click(within(dialog).getByRole("button", { name: /^Sim, é esta: Uber 2/ }));
+    await waitFor(() => expect(patches(UBER_2())).toEqual([{ answer: "pair", transaction_id: 26 }]));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("uma da fatura vizinha responde Mover; numa parcela, a troca entre só esta e a série fica no cartão", async () => {
+    const installment = { ...contract.search.results[0], id: 77, description: "Curso (parcela)", installment: { number: 5, count: 10 }, invoice: JANUARY, invoice_id: JANUARY.id };
+    searchResults = [installment];
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    const result = await within(dialog).findByTestId("candidate-option");
+    expect(within(result).getByTestId("other-invoice-badge")).toHaveTextContent("Na fatura de janeiro/2027");
+    // Sem sugestão do backend para a dúvida, a parcela vem "só esta" (muda o mínimo).
+    await user.click(within(result).getByRole("button", { name: /^Mover só esta: Curso \(parcela\)/ }));
+    await waitFor(() => expect(patches(UBER_1())).toEqual([{ answer: "move", transaction_id: 77 }]));
+
+    await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
+    const card = article("UBER .TRIP");
+    const how = within(card).getByRole("group", { name: "Como mover a parcela" });
+    expect(within(how).getByRole("button", { name: "Mover só esta" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(card).getByTestId("pair-outcome")).toHaveTextContent("Ao concluir: Curso (parcela) vem da fatura de janeiro/2027 para esta fatura");
+    await user.click(within(how).getByRole("button", { name: "Mover esta e as próximas parcelas" }));
+    await waitFor(() => expect(patches(UBER_1()).at(-1)).toEqual({ answer: "move_series", transaction_id: 77 }));
+  });
+
+  it("uma da fatura vizinha já paga não pode ser escolhida, com o motivo", async () => {
+    searchResults = [{ ...contract.search.results[0], id: 78, description: "Uber (dezembro pago)", invoice: { ...JANUARY, status: "paid" }, invoice_id: JANUARY.id }];
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const result = await within(await screen.findByRole("dialog")).findByTestId("candidate-option");
+    expect(within(result).getByTestId("candidate-refusal")).toHaveTextContent("A fatura de janeiro/2027 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.");
+    expect(within(result).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("a transação já escolhida por outro lançamento (409): o motivo aparece na busca, que continua aberta", async () => {
+    // A tela leu antes de outro lançamento escolher a Uber 2: o backend recusa e nomeia o outro.
+    server.use(http.patch(`${BASE}/:importId/entries/:entryId`, () => HttpResponse.json(
+      { detail: { code: "conflict", message: "Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP)." } }, { status: 409 },
+    )));
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(2));
+    await user.click(within(dialog).getByRole("button", { name: /^Sim, é esta: Uber 2/ }));
+    expect(await within(dialog).findByText("Esta transação já é a resposta do lançamento de 12/11 (UBER *TRIP).")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("o passo Compras em outra fatura", () => {
+  it("à vista: a sugestão marcada com o selo da outra fatura, as notas e Confirmar sugestão, que recolhe", async () => {
+    fresh("draft", "other_invoice");
+    const user = userEvent.setup();
+    await open();
+
+    const card = article("CAFETERIA AROMA");
+    expect(within(card).getByTestId("other-invoice-badge")).toHaveTextContent("Na fatura de janeiro/2027");
+    expect(within(card).getByTestId("move-suggestion")).toHaveTextContent("SugestãoMover para esta fatura. Compra à vista: só esta compra muda de fatura.");
+    expect(within(card).getByTestId("other-invoice-note")).toHaveTextContent("No Fincla esta compra está na fatura de janeiro/2027. O banco cobrou na de dezembro/2026.");
+    expect(within(card).getByTestId("move-consequences")).toHaveTextContent(
+      "Ao concluir, a compra sai da fatura de janeiro/2027 e entra na de dezembro/2026, com a data da compra. A fatura de janeiro/2027 no Fincla fica R$ 18,00 menor.",
+    );
+    const row = answers(card, "Mover esta compra para a fatura de dezembro/2026?");
+    expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["Mover para esta fatura", "Adicionar como nova", "Não registrar"]);
+    expect(within(row).getByRole("button", { name: "Mover para esta fatura" })).toHaveAttribute("aria-pressed", "true");
+    // O que falta é confirmar, não responder (QA F4 OBS-03).
+    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta confirmar 1 escolha deste passo");
+    expect(screen.getByTestId("queue-pending")).toHaveTextContent("1 escolha para confirmar");
+
+    await user.click(within(card).getByRole("button", { name: "Confirmar sugestão" }));
+    await waitFor(() => expect(patches(CAFE())).toEqual([{ answer: "move" }]));
+    const done = await waitFor(() => rowOf("Mover Cafeteria"));
+    expect(done).toHaveTextContent("Mover Cafeteria da fatura de janeiro/2027 para esta fatura");
+    expect(done).toHaveTextContent("Conferido");
+    expect(screen.queryByTestId("go-to-pending")).not.toBeInTheDocument();
+  });
+
+  it("parcela: Mover esta e as próximas · Mover só esta · Adicionar como nova · Não registrar, com a sugestão das vizinhas", async () => {
+    fresh("draft", "other_invoice");
+    const cafe = CAFE();
+    Object.assign(cafe, {
+      bank_description: "CURSO IDIOMAS 05/10", installment: { number: 5, count: 10 }, suggested_answer: "move_series", answer: "move_series",
+      series_movable: true,
+    });
+    cafe.fincla_transaction.installment = { number: 5, count: 10 };
+    const user = userEvent.setup();
+    await open();
+
+    const card = article("CURSO IDIOMAS");
+    const row = answers(card, "Mover esta compra para a fatura de dezembro/2026?");
+    expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Mover esta e as próximas parcelas", "Mover só esta", "Adicionar como nova", "Não registrar",
+    ]);
+    expect(within(card).getByTestId("move-suggestion")).toHaveTextContent("Mover esta e as próximas parcelas. No Fincla, a parcela anterior desta compra está nesta fatura");
+    expect(within(card).getByTestId("move-consequences")).toHaveTextContent(
+      "Ao concluir, as parcelas 05 a 10/10 voltam uma fatura: a 05 entra em dezembro/2026 e a última termina em maio/2027, como no banco. As anteriores não mudam.",
+    );
+
+    await user.click(within(row).getByRole("button", { name: "Mover só esta" }));
+    await waitFor(() => expect(patches(cafe)).toEqual([{ answer: "move" }]));
+  });
+
+  it("a outra fatura já paga: começa sem resposta, mover desligado com o motivo, Não registrar responde", async () => {
+    fresh("new_purchases_draft", "other_invoice");
+    const user = userEvent.setup();
+    await open();
+
+    const card = article("MERCADO BOA VISTA");
+    expect(within(card).getByText("Falta responder")).toBeInTheDocument();
+    const row = answers(card, "Mover esta compra para a fatura de janeiro/2027?");
+    const move = within(row).getByRole("button", { name: "Mover para esta fatura" });
+    expect(move).toBeDisabled();
+    expect(move).toHaveAccessibleDescription("A fatura de dezembro/2026 já foi paga. Para mover esta compra, desmarque o pagamento dela e volte aqui.");
+    expect(within(row).getByRole("button", { name: "Adicionar como nova" })).toBeEnabled();
+    expect(within(card).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
+
+    await user.click(within(row).getByRole("button", { name: "Não registrar" }));
+    const mercado = draft.entries.find((e) => e.bank_description === "MERCADO BOA VISTA");
+    await waitFor(() => expect(patches(mercado)).toEqual([{ answer: "ignore" }]));
+    await user.click((await waitFor(() => alter("MERCADO BOA VISTA")))[0]);
+    const skipped = within(article("MERCADO BOA VISTA")).getByTestId("fincla-side-skipped");
+    expect(skipped).toHaveTextContent("Na fatura de dezembro/2026");
+    expect(within(skipped).getByTestId("skip-note")).toHaveTextContent("Continua na fatura de dezembro/2026, sem mudança.");
+  });
+
+  it("esta fatura já paga: só Não registrar, já marcado; clicar nele confirma", async () => {
+    fresh("draft", "other_invoice");
+    Object.assign(CAFE(), {
+      answer: "ignore", confirmed: false, value_locked: true, addable: false, movable: false,
+      move_refusal: { code: "invoice_paid", message: PAID_REASON, invoice_year: 2026, invoice_month: 12 },
+    });
+    const user = userEvent.setup();
+    await open();
+
+    const row = answers(article("CAFETERIA AROMA"), "Mover esta compra para a fatura de dezembro/2026?");
+    expect(within(row).getByRole("button", { name: "Mover para esta fatura" })).toBeDisabled();
+    expect(within(row).getByRole("button", { name: "Adicionar como nova" })).toBeDisabled();
+    expect(within(row).getByRole("button", { name: "Mover para esta fatura" })).toHaveAccessibleDescription(PAID_REASON);
+    await user.click(within(row).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(patches(CAFE())).toEqual([{ answer: "ignore" }]));
+  });
+
+  it("Próximo confirma a sugestão que falta confirmar, num lote só", async () => {
+    fresh("draft", "other_invoice");
+    const user = userEvent.setup();
+    await open();
+
+    await user.click(screen.getByRole("button", { name: "Próximo: Decidir casos com dúvida →" }));
+    await screen.findByRole("heading", { name: "Decidir casos com dúvida" });
+    expect(calls.find((c) => c.batch).batch).toEqual([{ id: CAFE().id, confirmed: true }]);
+  });
+});
+
+describe("a leitura desatualizada (QA F4 OBS-01)", () => {
+  it("o aviso diz para descartar e reenviar, e o Concluir fica desligado com o motivo", async () => {
+    fresh("stale_draft", "summary");
+    const user = userEvent.setup();
+    await open();
+
+    const notice = screen.getByTestId("stale-draft-notice");
+    expect(notice).toHaveTextContent("Esta leitura ficou desatualizada: descarte e envie o PDF de novo.");
+    expect(within(notice).getByRole("button", { name: "Descartar e enviar o PDF de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Concluir conciliação da fatura" })).toBeDisabled();
+    expect(screen.getByTestId("conclude-blocked")).toHaveTextContent("Esta leitura ficou desatualizada: descarte o rascunho e envie o PDF de novo.");
+
+    server.use(http.delete(`${BASE}/:importId`, () => new HttpResponse(null, { status: 204 })));
+    await user.click(within(notice).getByRole("button", { name: "Descartar e enviar o PDF de novo" }));
+    await user.click(within(notice).getByRole("button", { name: "Sim, descartar" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` }));
+  });
+
+  it("um rascunho em dia não tem o aviso", async () => {
+    await open();
+    expect(screen.queryByTestId("stale-draft-notice")).not.toBeInTheDocument();
+  });
+});
+
+describe("celular e computador", () => {
+  it("os atalhos de teclado só aparecem no computador", async () => {
+    await open();
+    expect(screen.getByTestId("queue-shortcuts")).toBeInTheDocument();
+    cleanup();
+    await open({ isMobile: true });
+    expect(screen.queryByTestId("queue-shortcuts")).not.toBeInTheDocument();
+  });
+
+  it("varredura: no celular nenhum controle da dúvida, da busca, da troca de mover nem da outra fatura fica abaixo de 44 px", async () => {
+    const found = {};
+    const installment = { ...contract.search.results[0], id: 77, description: "Curso (parcela)", installment: { number: 5, count: 10 }, invoice: JANUARY, invoice_id: JANUARY.id };
+    searchResults = [installment, ...searchResults];
+    const user = userEvent.setup();
+    await open({ isMobile: true });
+    article("UBER .TRIP");
+    found.doubt = smallTouchTargets(document.body);
+
+    await user.click(within(article("UBER .TRIP")).getByRole("button", { name: "Está no Fincla com outros dados…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Procure no Fincla" });
+    await waitFor(() => expect(within(dialog).getAllByTestId("candidate-option")).toHaveLength(3));
+    found.search = smallTouchTargets(document.body);
+
+    await user.click(within(dialog).getByRole("button", { name: /^Mover só esta: Curso/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click((await waitFor(() => alter("UBER .TRIP")))[0]);
+    within(article("UBER .TRIP")).getByRole("group", { name: "Como mover a parcela" });
+    found.moveChoice = smallTouchTargets(document.body);
+
+    cleanup();
+    fresh("draft", "other_invoice");
+    await open({ isMobile: true });
+    article("CAFETERIA AROMA");
+    found.otherInvoice = smallTouchTargets(document.body);
+
+    expect(found).toEqual({ doubt: [], search: [], moveChoice: [], otherInvoice: [] });
+  });
+
+  it("no computador, as respostas e a troca de mover ficam com a altura de antes", async () => {
+    fresh("draft", "other_invoice");
+    await open();
+    const row = answers(article("CAFETERIA AROMA"), "Mover esta compra para a fatura de dezembro/2026?");
+    expect(within(row).getByRole("button", { name: "Não registrar" }).style.minHeight).toBe("32px");
+    expect(within(article("CAFETERIA AROMA")).getByRole("button", { name: "Confirmar sugestão" }).style.minHeight).toBe("");
+  });
+});

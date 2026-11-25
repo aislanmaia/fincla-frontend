@@ -304,7 +304,7 @@ const ChargeGroupRow = memo(function ChargeGroupRowView({ item, canUndo, focus =
  */
 export function InvoiceChargesStep({
   groupItem, entries, queue, form, invoiceMonth, isMobile, answering, groupHistory = [],
-  onAnswerGroup, onUndoGroup, onChangeEntry, onConfirmEntry, answeredRef = null,
+  onAnswerGroup, onUndoGroup, onChangeEntry, onConfirmEntry, answeredRef = null, pendingText = undefined,
 }) {
   const leading = groupItem && queue.shown(groupItem) ? (
     <EntrySlot key={groupItem.id} entryId={groupItem.id} open={groupItem.id === queue.currentId} tone={answerTone(groupItem.answer === "pair_sum" ? "pair" : groupItem.answer)}>
@@ -336,6 +336,7 @@ export function InvoiceChargesStep({
   return (
     <InvoiceNewStep
       stepKey="charges"
+      pendingText={pendingText}
       entries={entries}
       queue={queue}
       form={form}

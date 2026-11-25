@@ -21,6 +21,8 @@ const KEYS = [
   'new_purchase', 'created_transaction_id',
   // Encargos, tarifas e estornos (#558).
   'charge_group_id', 'addable',
+  // Dúvidas e compras em outra fatura (#559).
+  'suggested_answer', 'other_invoice', 'movable', 'series_movable', 'move_refusal', 'candidates',
 ];
 
 describe('normalizeCardInvoiceImport', () => {
@@ -30,6 +32,8 @@ describe('normalizeCardInvoiceImport', () => {
     expect(Object.keys(contract.entry_new).sort()).toEqual([...KEYS].sort());
     expect(Object.keys(contract.entry_installment).sort()).toEqual([...KEYS].sort());
     for (const entry of contract.new_purchases_draft.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
+    expect(Object.keys(contract.entry_doubt).sort()).toEqual([...KEYS].sort());
+    expect(Object.keys(contract.entry_move).sort()).toEqual([...KEYS].sort());
   });
 
   it('converte o dinheiro em número + moeda, com o sinal do sentido do dinheiro', () => {
@@ -70,7 +74,8 @@ describe('normalizeCardInvoiceImport', () => {
   it('a concluída traz a diferença registrada', () => {
     const done = normalizeCardInvoiceImport(contract.concluded as unknown as Record<string, unknown>);
     expect(done.status).toBe('concluded');
-    expect(done.final_difference).toEqual({ amount: -0.4, currency: 'BRL' });
+    // Com as dúvidas respondidas e a compra movida (#559), a fatura gravada bate com o banco.
+    expect(done.final_difference).toEqual({ amount: 0, currency: 'BRL' });
     expect(done.entries.every((e) => !e.answerable)).toBe(true);
   });
 });
@@ -119,11 +124,11 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     for (const entry of contract.reimport.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
     const again = normalizeCardInvoiceImport(raw(contract.reimport));
     expect(again.file_check).toEqual(contract.reimport.file_check);
-    // Os 4 pares, as 9 transações criadas pela conclusão (#557, #558) e os 4 encargos somados (#558)
-    // voltam como já conferidos.
-    expect(again.summary.already_reconciled).toBe(17);
+    // Todos os 20 voltam como já conferidos: os 4 pares, as 3 dúvidas escolhidas e a compra movida
+    // (#559), as 8 transações criadas (#557, #558) e os 4 encargos somados (#558).
+    expect(again.summary.already_reconciled).toBe(20);
     const conferred = again.entries.filter((e) => e.classification === 'reconciled');
-    expect(conferred).toHaveLength(17);
+    expect(conferred).toHaveLength(20);
     for (const entry of conferred) {
       expect(entry.answer).toBe('reconciled');
       expect(entry.confirmed).toBe(true);
@@ -139,12 +144,13 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     expect(draft.current_step).toBe('doubt');
     expect(draft.final_difference).toBeNull();
     expect(draft.expires_at).toBe(contract.list.imports[0].expires_at);
-    expect(draft.summary.already_reconciled).toBe(17);
+    expect(draft.summary.already_reconciled).toBe(20);
+    expect(draft.changed_since_read).toBe(false);
     expect(undone.undone_at).toBe(contract.list.imports[1].undone_at);
-    expect(undone.final_difference).toEqual({ amount: -0.4, currency: 'BRL' });
+    expect(undone.final_difference).toEqual({ amount: 0, currency: 'BRL' });
     expect(concluded.latest_concluded).toBe(true);
-    expect(concluded.invoice.total).toEqual({ amount: 2403.32, currency: 'BRL' });
-    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 2403.32, difference: -0.4, currency: 'BRL' });
+    expect(concluded.invoice.total).toEqual({ amount: 2402.92, currency: 'BRL' });
+    expect(concluded.difference_now).toEqual({ bank: 2402.92, fincla: 2402.92, difference: 0, currency: 'BRL' });
     expect(items.filter((i) => i.latest_concluded)).toHaveLength(1);
   });
 
@@ -169,8 +175,8 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     const undone = normalizeCardInvoiceImport(raw(contract.undone));
     expect(undone.status).toBe('undone');
     expect(undone.undone_at).toBe(contract.undone.undone_at);
-    // As 9 transações que a conclusão criou (#557 e os encargos, tarifas e estornos da #558) são apagadas.
-    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(9);
+    // As 8 transações que a conclusão criou (#557 e os encargos, tarifas e estornos da #558) são apagadas.
+    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(8);
   });
 });
 
@@ -208,10 +214,11 @@ describe('compras novas (#557)', () => {
 
   it('o resumo conta as novas, as sem descrição (bloqueio) e as sem categoria', () => {
     const draft = normalizeCardInvoiceImport(raw(contract.new_purchases_draft));
-    expect(draft.summary.to_create).toBe(5);
+    // A primeira compra (MERCADO BOA VISTA) está em outra fatura já paga (#559): começa sem resposta.
+    expect(draft.summary.to_create).toBe(4);
     expect(draft.summary.missing_description).toBe(1);
-    expect(draft.summary.uncategorized).toBe(5);
-    expect(draft.blockers).toEqual([{ code: 'missing_description', count: 1 }]);
+    expect(draft.summary.uncategorized).toBe(4);
+    expect(draft.blockers).toEqual([{ code: 'unanswered', count: 1 }, { code: 'missing_description', count: 1 }]);
     expect(draft.can_conclude).toBe(false);
   });
 
@@ -275,7 +282,7 @@ describe('encargos, tarifas e estornos (#558)', () => {
     expect(group.fincla_transaction?.id).toBe(group.suggested_transaction_id);
     expect(each.entries.filter((e) => e.charge_group_id === group.id).every((e) => e.answer === 'create')).toBe(true);
     expect(each.summary.summed_charges).toBe(0);
-    expect(each.summary.to_create).toBe(13);
+    expect(each.summary.to_create).toBe(12);
   });
 
   it('na concluída nada responde e nada é adicionável', () => {
@@ -296,5 +303,80 @@ describe('encargos, tarifas e estornos (#558)', () => {
     expect(draft.charge_groups).toEqual([]);
     expect(draft.entries.every((e) => e.charge_group_id === null && e.addable === e.answerable)).toBe(true);
     expect(draft.summary.summed_charges).toBe(0);
+  });
+});
+
+// Quinta entrega (#559): dúvidas, a busca "Procure no Fincla" e as compras em outra fatura.
+describe('dúvidas e compras em outra fatura (#559)', () => {
+  const raw = (value: unknown) => JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  const one = (entry: unknown) => normalizeCardInvoiceImport({ ...raw(contract.draft), entries: [raw(entry)] }).entries[0];
+
+  it('a dúvida começa sem resposta, com as opções ao vivo e a fatura de cada uma', () => {
+    const draft = normalizeCardInvoiceImport(raw(contract.draft));
+    const doubts = draft.entries.filter((e) => e.classification === 'doubt');
+    expect(doubts).toHaveLength(3);
+    for (const doubt of doubts) {
+      expect(doubt.answer).toBeNull();
+      expect(doubt.confirmed).toBe(false);
+      expect(doubt.suggested_answer).toBeNull();
+      expect(doubt.candidates.length).toBeGreaterThan(0);
+    }
+    const posto = doubts.find((e) => e.bank_description === 'POSTO CENTRAL')!;
+    expect(posto.candidates).toHaveLength(1);
+    expect(posto.candidates[0]).toMatchObject({ id: 27, value: 150.4, currency: 'BRL', differences: ['amount'], taken_by_entry_id: null });
+    expect(posto.candidates[0].invoice).toEqual({ id: draft.invoice.id, year: 2026, month: 12, status: 'open' });
+    expect(draft.summary.unanswered).toBe(3);
+    expect(draft.summary.to_move).toBe(1);
+  });
+
+  it('a dúvida respondida: a escolhida é a ligada; a já escolhida por outro vem marcada na busca', () => {
+    const uber = one(contract.entry_doubt);
+    expect(uber.answer).toBe('pair');
+    expect(uber.fincla_transaction?.id).toBe(uber.paired_transaction_id);
+    expect(uber.candidates.map((c) => c.id)).toEqual([25, 26]);
+    const results = contract.search.results.map((r) => one({ ...raw(contract.entry_doubt), candidates: [r] }).candidates[0]);
+    expect(results.map((r) => r.taken_by_entry_id)).toEqual([null, contract.entry_doubt.id]);
+    expect(results[0].value).toBe(23.47);
+  });
+
+  it('a compra em outra fatura: a sugestão, a fatura de onde vem e o que dá para mover agora', () => {
+    const cafe = one(contract.entry_move);
+    expect(cafe.classification).toBe('other_invoice');
+    expect(cafe.suggested_answer).toBe('move');
+    expect(cafe.other_invoice).toEqual({ id: 6, year: 2027, month: 1, status: 'open' });
+    expect(cafe.movable).toBe(true);
+    expect(cafe.series_movable).toBe(false);
+    expect(cafe.move_refusal).toBeNull();
+    expect(cafe.candidates).toEqual([]);
+  });
+
+  it('a outra fatura já paga: começa sem resposta, mover desligado com o motivo que nomeia a fatura', () => {
+    const mercado = normalizeCardInvoiceImport(raw(contract.new_purchases_draft)).entries[0];
+    expect(mercado.classification).toBe('other_invoice');
+    expect(mercado.answer).toBeNull();
+    expect(mercado.movable).toBe(false);
+    expect(mercado.move_refusal).toMatchObject({ code: 'other_invoice_paid', invoice_year: 2026, invoice_month: 12 });
+    expect(mercado.move_refusal?.message).toMatch(/dezembro\/2026 já foi paga/);
+  });
+
+  it('a leitura desatualizada (stale_draft): changed_since_read, o bloqueio e nada a concluir', () => {
+    const stale = normalizeCardInvoiceImport(raw(contract.stale_draft));
+    expect(stale.changed_since_read).toBe(true);
+    expect(stale.can_conclude).toBe(false);
+    expect(stale.blockers).toEqual([{ code: 'changed_since_read', count: 1 }]);
+    expect(normalizeCardInvoiceImport(raw(contract.draft)).changed_since_read).toBe(false);
+  });
+
+  it('sem os campos da #559 (backend anterior): sem opções, nada a mover, to_move 0', () => {
+    const old = raw(contract.draft);
+    for (const entry of old.entries as Record<string, unknown>[]) {
+      for (const key of ['suggested_answer', 'other_invoice', 'movable', 'series_movable', 'move_refusal', 'candidates']) delete entry[key];
+    }
+    delete (old.summary as Record<string, unknown>).to_move;
+    delete old.changed_since_read;
+    const draft = normalizeCardInvoiceImport(old);
+    expect(draft.entries.every((e) => e.candidates.length === 0 && !e.movable && e.other_invoice === null)).toBe(true);
+    expect(draft.summary.to_move).toBe(0);
+    expect(draft.changed_since_read).toBe(false);
   });
 });

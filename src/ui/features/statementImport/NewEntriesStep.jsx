@@ -285,7 +285,7 @@ export function NewEntriesStep({
   stepKey, entries, groups, categories, details, fallbackLabel, isMobile, queue, view = "detailed", onViewChange = null,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
   onSearch = null, renderMatched = null, answering = false,
-  selectable = true, renderCard = null, onConfirmEntry = null, trackConfirmed = false, answered: answeredOf = isAnswered, rowDetail = null, rowAmount = null, createUnavailable = null,
+  pendingText = undefined, selectable = true, renderCard = null, onConfirmEntry = null, trackConfirmed = false, answered: answeredOf = isAnswered, rowDetail = null, rowAmount = null, createUnavailable = null,
   answeredRef = null, leading = null, shortcutKeys = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
@@ -488,7 +488,7 @@ export function NewEntriesStep({
         />
       ) : null}
 
-      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} shortcutKeys={shortcutKeys ?? (onSearch ? ["s", "a", "n"] : ["a", "n"])} />
+      <EntryQueueHeader queue={queue} view={view} onViewChange={onViewChange} touch={isMobile} pendingText={pendingText} shortcutKeys={shortcutKeys ?? (onSearch ? ["s", "a", "n"] : ["a", "n"])} />
       {leading}
       {free.filter(queue.shown).map((entry) => {
         const current = entry.id === queue.currentId;

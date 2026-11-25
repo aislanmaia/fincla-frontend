@@ -39,7 +39,27 @@ const DETAILS = [
 ];
 
 const calls = [];
-let draft = clone(contract.new_purchases_draft);
+
+/**
+ * O rascunho das compras novas. Na fixture gravada depois da #559, MERCADO BOA VISTA é uma compra em
+ * outra fatura (passo 2: o Fincla a tem na fatura de dezembro, já paga). Estes testes são do passo 5:
+ * aqui ela volta a ser uma compra nova à vista, com os campos que um lançamento `new` tem (como
+ * `entry_new`), e o resumo sem a resposta que faltava a ela. O passo 2 está no teste .f5.
+ */
+function newPurchasesDraft() {
+  const d = clone(contract.new_purchases_draft);
+  const mercado = d.entries.find((e) => e.bank_description === "MERCADO BOA VISTA");
+  Object.assign(mercado, {
+    classification: "new", answer: "create", confirmed: false, suggested_transaction_id: null, paired_transaction_id: null,
+    fincla_transaction: null, suggested_answer: null, other_invoice: null, movable: false, series_movable: false, move_refusal: null,
+  });
+  d.summary.unanswered = 0;
+  d.summary.to_create += 1;
+  d.summary.uncategorized += 1;
+  d.blockers = d.blockers.filter((b) => b.code !== "unanswered");
+  return d;
+}
+let draft = newPurchasesDraft();
 
 /** O que o backend faz: responder confirma, a menos que venha `confirmed`; trocar a categoria tira as etiquetas de outra. */
 function applyBody(entry, body) {
@@ -98,7 +118,7 @@ afterAll(() => server.close());
 afterEach(() => {
   cleanup();
   calls.length = 0;
-  draft = clone(contract.new_purchases_draft);
+  draft = newPurchasesDraft();
   server.resetHandlers();
   navigate.mockReset();
 });
@@ -145,7 +165,10 @@ describe("o passo Compras novas", () => {
     expect(screen.queryByRole("button", { name: /Marcar todas/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByTestId("unclassified-note")).toHaveTextContent("5 compras sem categoria vão para Não classificado ao concluir.");
-    expect(screen.getByTestId("go-to-pending")).toHaveTextContent(/Falta responder 5/);
+    // A padaria sem descrição falta responder; as outras 4 vêm com Adicionar marcado e só faltam
+    // confirmar: o aviso diz cada coisa pelo nome, como o trilho (QA F4 OBS-03).
+    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 1 compra e confirmar 4 escolhas deste passo");
+    expect(screen.getByTestId("queue-pending")).toHaveTextContent("1 sem resposta · 4 escolhas para confirmar");
   });
 
   it("Confirmar grava a confirmação e recolhe no clique: a linha fica parada com Conferido e nada aparece abaixo", async () => {
@@ -160,7 +183,7 @@ describe("o passo Compras novas", () => {
     expect(row).toHaveTextContent("Conferido");
     // O próximo pendente abre: a padaria, sem descrição.
     expect(await screen.findByRole("article", { name: /Compra de .*: PADARIA PAO QUENTE/ })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByTestId("go-to-pending")).toHaveTextContent(/Falta responder 4/));
+    await waitFor(() => expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 1 compra e confirmar 3 escolhas deste passo"));
   });
 
   it("sem descrição, o Confirmar fica desligado com o motivo ligado por aria-describedby; escrever liga e grava a descrição antes", async () => {

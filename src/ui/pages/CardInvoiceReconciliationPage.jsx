@@ -1,5 +1,13 @@
 // Conciliar fatura do cartão (fincla-api#554; primeira entrega #555, segunda #556, terceira #557,
-// quarta #558).
+// quarta #558, quinta #559).
+//
+// #559: os passos 2 "Compras em outra fatura" e 3 "Decidir casos com dúvida" respondem
+// (`InvoiceChoiceStep`). Na dúvida, clicar numa opção já responde ("Sim, é esta" nesta fatura; "Mover"
+// na vizinha) e "Está no Fincla com outros dados…" abre a busca do extrato (`FinclaSearchDialog`)
+// nas faturas vizinhas do cartão. Na outra fatura, a sugestão de mover vem marcada, com "Confirmar
+// sugestão". Fatura paga (decisão 1): só ligar; mover e adicionar desligados com o motivo. Um
+// rascunho cuja leitura não vale mais (`changed_since_read`) diz para descartar e reenviar, e o
+// Concluir fica desligado com o motivo.
 //
 // #558: o passo 4 "Encargos, tarifas e estornos" responde. O grupo de encargos é UM item da fila
 // (respondido pela rota do grupo: "Sim, somados em <transação>" · "Não, adicionar cada um" · "Não
@@ -43,6 +51,7 @@ import {
   invoiceDraftInProgressOf,
   listCardInvoiceImports,
   previewCardInvoiceImportUndo,
+  searchCardInvoiceEntry,
   updateCardInvoiceChargeGroup,
   updateCardInvoiceEntries,
   updateCardInvoiceEntry,
@@ -75,9 +84,10 @@ import {
   isChargeGroupItem,
   invoiceSummaryRows,
   isInvoiceEntryAnswered,
-  itemsCountText,
+  linksTransaction,
   pendingEntries,
   reconciledEntries,
+  stepRemaining,
   unconfirmedEntries,
 } from "../features/statementImport/invoiceSteps.js";
 import {
@@ -86,11 +96,18 @@ import {
 import { InvoiceNewStep } from "../features/statementImport/InvoiceNewStep.jsx";
 import { CHARGE_NOUN, InvoiceChargesStep, chargeGroupAnswerUnavailable } from "../features/statementImport/InvoiceChargesStep.jsx";
 import { useCategories } from "../features/statementImport/useCategories.js";
+import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
+import {
+  INVOICE_SEARCH_COPY, InvoiceChoiceStep, InvoiceSearchResult, invoiceSearchAmount, otherInvoiceAnswerUnavailable, pickAnswerOf, pickRefusal, takenByOf,
+} from "../features/statementImport/InvoiceDoubtStep.jsx";
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação da fatura.";
 
 /** Os passos que esta versão responde numa fila (só o atual aberto). */
-const QUEUE_STEPS = new Set(["suggested", "charges", "new"]);
+const QUEUE_STEPS = new Set(["suggested", "other_invoice", "doubt", "charges", "new"]);
+
+/** Os passos 2 e 3 (#559): a mesma lista de escolha (`InvoiceChoiceStep`). */
+const CHOICE_STEPS = new Set(["other_invoice", "doubt"]);
 
 /** dd/mm/aaaa de "YYYY-MM-DD", sem passar por `Date`. */
 const fullDate = (ymd) => (ymd ? bankDateLabel(ymd) : "—");
@@ -328,6 +345,31 @@ function FileCheckNotice({ fileCheck, touch = false, onOpenPrevious }) {
   );
 }
 
+/**
+ * A leitura deste rascunho não vale mais (QA F4 OBS-01, `changed_since_read`): outra conciliação do
+ * cartão foi concluída ou desfeita, ou a fatura foi paga ou desmarcada, depois que o PDF foi lido. O
+ * rascunho não é recalculado: concluir é recusado. O caminho é descartar e enviar o PDF de novo.
+ */
+function StaleDraftNotice({ organizationId, importId, touch = false, discard, onDiscarded }) {
+  return (
+    <div data-testid="stale-draft-notice" role="alert" style={{ ...G, fontSize: 13, color: T.ink, background: T.redLight, border: `1px solid ${T.red}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <AlertTriangle size={14} aria-hidden="true" style={{ color: T.red, flexShrink: 0, alignSelf: "center" }} />
+        <span>
+          <b>Esta leitura ficou desatualizada: descarte e envie o PDF de novo.</b>{" "}
+          Depois que o PDF foi lido, outra conciliação deste cartão foi concluída ou desfeita, ou o pagamento da fatura mudou. Esta conciliação não pode mais ser concluída; nada mudou nas suas transações.
+        </span>
+      </span>
+      <div>
+        <DiscardDraftControl organizationId={organizationId} importId={importId} discard={discard} onDiscarded={onDiscarded} touch={touch} label="Descartar e enviar o PDF de novo" />
+      </div>
+    </div>
+  );
+}
+
+/** O motivo do Concluir desligado por uma leitura desatualizada. */
+const STALE_REASON = "Esta leitura ficou desatualizada: descarte o rascunho e envie o PDF de novo.";
+
 /** Banco − Fincla com sinal; zero em verde. `null` = não sabemos (nunca R$ 0,00). */
 function signedDifference(value, currency) {
   if (value === null || value === undefined) return "não sabemos";
@@ -463,10 +505,11 @@ function SummaryStep({ invoiceImport, concluding, error, touch = false, onConclu
   const { difference_now: now, invoice, summary } = invoiceImport;
   const pending = summary.unanswered;
   const missing = summary.missing_description;
-  const blocked = !invoiceImport.can_conclude || pending > 0 || missing > 0;
+  const blocked = !invoiceImport.can_conclude || invoiceImport.changed_since_read || pending > 0 || missing > 0;
   const blank = createsWhere(invoiceImport.entries, (e) => !String(e.description ?? "").trim());
   const uncategorized = createsWhere(invoiceImport.entries, (e) => !e.category_tag_id);
   const reasons = [
+    invoiceImport.changed_since_read ? STALE_REASON : null,
     pending ? `Falta responder ${unansweredText(invoiceImport) || plural(pending, "item", "itens")}.` : null,
     missing ? `${missing === 1 ? `Uma ${blank.one} está` : `${missing.toLocaleString("pt-BR")} ${blank.many} estão`} sem descrição${blank.where ? `: escreva a descrição em ${blank.where}` : ""}.` : null,
   ].filter(Boolean);
@@ -625,6 +668,9 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   const setAnswering = useCallback((on) => setInFlight((n) => Math.max(0, n + (on ? 1 : -1))), []);
   // Os PATCH de progresso saem em fila: o servidor fica sempre com o último passo aberto.
   const progressQueue = useRef(Promise.resolve());
+  // As dúvidas em que a pessoa disse "Sim, é esta" sem escolher qual (#559) e o lançamento da busca.
+  const [wantPair, setWantPair] = useState(() => new Set());
+  const [searchFor, setSearchFor] = useState(null);
   // O minimizar do passo "Compras novas" (dado pelo `NewEntriesStep`), para os atalhos A/N.
   const newStepAnswered = useRef(null);
   // O formulário da compra nova (#557): categorias e etiquetas da organização, como no extrato.
@@ -702,26 +748,83 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   // Responder confirma e recolhe no clique, sem espera; clicar de novo na resposta marcada também.
   // "Não, adicionar agora" (#557) deixa o cartão aberto com o formulário e o Confirmar ao lado: a
   // resposta fica gravada sem confirmar até o Confirmar.
-  const answer = async (entry, value) => {
-    if (value === entry.answer && entry.confirmed) {
+  //
+  // `extra` (#559): a transação escolhida (`transaction_id`) numa dúvida ou na busca. A mesma resposta
+  // com outra transação é uma resposta nova. O "Desfazer escolha" guarda a transação anterior de uma
+  // dúvida; uma primeira resposta (o lançamento vinha sem resposta) não tem o que desfazer: o backend
+  // não volta um lançamento a "sem resposta" (lacuna de contrato), e o "Alterar" troca a escolha.
+  const answer = async (entry, value, extra = {}) => {
+    const sameTarget = extra.transaction_id === undefined || extra.transaction_id === entry.paired_transaction_id;
+    if (value === entry.answer && entry.confirmed && sameTarget) {
       queue.advanceFrom(entry.id);
-      return;
+      return true;
     }
-    if (value === "create" && entry.answer === "create") return;
+    if (value === "create" && entry.answer === "create") return true;
     setAnswering(true);
     setActionError("");
     try {
-      const body = value === "create" ? { answer: value, confirmed: false } : { answer: value };
+      const body = value === "create" ? { answer: value, confirmed: false } : { answer: value, ...extra };
       showSaved(entry.id, await updateCardInvoiceEntry(cardId, organizationId, importId, entry.id, body));
-      setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), { answer: entry.answer, confirmed: entry.confirmed }] }));
+      if (entry.answer !== null) {
+        const previous = { answer: entry.answer, confirmed: entry.confirmed };
+        if (entry.classification === "doubt" && linksTransaction(entry.answer) && entry.paired_transaction_id !== null) {
+          previous.transaction_id = entry.paired_transaction_id;
+        }
+        setAnswerHistory((prev) => ({ ...prev, [entry.id]: [...(prev[entry.id] ?? []), previous] }));
+      }
+      setWantPair((prev) => {
+        if (!prev.has(entry.id)) return prev;
+        const nextSet = new Set(prev);
+        nextSet.delete(entry.id);
+        return nextSet;
+      });
       if (value !== "create") queue.advanceFrom(entry.id);
       setLastBulk(null);
       await reload();
+      return true;
     } catch (err) {
       setActionError(cardApiError(err));
+      return false;
     } finally {
       setAnswering(false);
     }
+  };
+
+  // Escolher uma opção da dúvida ou da busca (#559): nesta fatura, "Sim, é esta"; na vizinha, "Mover"
+  // (a parcela segue a sugestão do backend). A já escolhida só recolhe. Já escolhida por outro
+  // lançamento, ou numa fatura paga (decisão 1), não responde (a opção mostra o motivo).
+  const pick = async (entry, candidate) => {
+    if (linksTransaction(entry.answer) && entry.paired_transaction_id === candidate.id) {
+      if (entry.confirmed) {
+        queue.advanceFrom(entry.id);
+        return true;
+      }
+      return answer(entry, entry.answer, { transaction_id: candidate.id });
+    }
+    const invoice = invoiceImport.invoice;
+    if (takenByOf(invoiceImport.entries, entry.id, candidate.id) || pickRefusal(entry, candidate, invoice)) return false;
+    return answer(entry, pickAnswerOf(entry, candidate, invoice), { transaction_id: candidate.id });
+  };
+
+  // "Sim, é esta" numa dúvida sem escolher: com uma opção livre, escolhe-a; com várias, pede para
+  // escolher qual; sem nenhuma, abre a busca (como no extrato, `doubtYes`).
+  const doubtYes = (entry) => {
+    if (linksTransaction(entry.answer)) {
+      if (entry.confirmed) queue.advanceFrom(entry.id);
+      else answer(entry, entry.answer, { transaction_id: entry.paired_transaction_id });
+      return;
+    }
+    const invoice = invoiceImport.invoice;
+    const free = (entry.candidates ?? []).filter((c) => !takenByOf(invoiceImport.entries, entry.id, c.id) && !pickRefusal(entry, c, invoice));
+    if (free.length === 1) pick(entry, free[0]);
+    else if (free.length > 1) setWantPair((prev) => new Set(prev).add(entry.id));
+    else setSearchFor(entry);
+  };
+
+  // "Mover só esta" ⇄ "Mover esta e as próximas" na dúvida respondida com uma parcela da vizinha.
+  const changeMove = (entry, value) => {
+    if (value === entry.answer) return;
+    answer(entry, value, { transaction_id: entry.paired_transaction_id });
   };
 
   // O grupo de encargos (#558): responder confirma e recolhe no clique; a resposta já marcada e ainda
@@ -872,6 +975,22 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
         : changeEntry(e.id, { answer: "ignore" }, { onSaved: () => newAnswered(e.id) })),
     },
   };
+  // Passo 3 (#559): S é "Sim, é esta" (escolhe a opção livre, pede a escolha ou abre a busca).
+  shortcutsByStep.doubt = {
+    s: (e) => doubtYes(e),
+    a: shortcutsByStep.suggested.a,
+    n: shortcutsByStep.suggested.n,
+  };
+  // Passo 2 (#559): S é mover como a sugestão (ou o que der); A, adicionar como nova; N, não registrar.
+  shortcutsByStep.other_invoice = {
+    s: (e) => {
+      const options = [e.suggested_answer, "move", "move_series"].filter(Boolean);
+      const value = options.find((v) => !otherInvoiceAnswerUnavailable(e, v));
+      return value ? answer(e, value) : null;
+    },
+    a: shortcutsByStep.suggested.a,
+    n: shortcutsByStep.suggested.n,
+  };
   // Passo 4 (#558): no grupo, S/A/N são as três respostas dele; nos outros, A/N como no passo 5.
   const groupOr = (key, value) => (e) => {
     if (isChargeGroupItem(e)) return chargeGroupAnswerUnavailable(e.group, value) ? null : answerGroup(e, value);
@@ -879,7 +998,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   };
   shortcutsByStep.charges = { s: groupOr("s", "pair_sum"), a: groupOr("a", "create"), n: groupOr("n", "ignore") };
   const shortcutAnswers = shortcutsByStep[current] ?? {};
-  const listOpen = Boolean(invoiceImport?.status === "draft" && QUEUE_STEPS.has(current) && queue.total);
+  const listOpen = Boolean(invoiceImport?.status === "draft" && QUEUE_STEPS.has(current) && queue.total && !searchFor);
   useQueueShortcuts(listOpen ? queue : null, shortcutAnswers, { disabled: answering });
 
   const openInvoice = () => navigate({ to: invoiceDashboardPath(cardPublicId, invoiceImport.invoice.year, invoiceImport.invoice.month) });
@@ -920,6 +1039,12 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   // Os já conferidos (reimportação do mesmo PDF) aparecem no passo 1, só para leitura.
   const conferred = current === "suggested" ? reconciledEntries(invoiceImport.entries) : [];
   const form = { categories, details, fallbackLabel, cardName: invoiceImport.credit_card.name, invoiceMonth: invoiceMonthLabel(invoiceImport.invoice) };
+  // O que falta no passo, pelo estado de cada item (QA F4 OBS-03): as mesmas palavras do trilho.
+  const noun = current === "charges" ? CHARGE_NOUN : PURCHASE_NOUN;
+  const remaining = stepRemaining(queueEntries, noun.one, noun.many);
+  const discardDraft = () => discardCardInvoiceImport(cardId, organizationId, importId);
+  const backToUpload = () => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) });
+  const searchEntry = searchFor ? (invoiceImport.entries.find((e) => e.id === searchFor.id) ?? searchFor) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -934,12 +1059,15 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
           <DiscardDraftControl
             organizationId={organizationId}
             importId={importId}
-            discard={() => discardCardInvoiceImport(cardId, organizationId, importId)}
-            onDiscarded={() => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) })}
+            discard={discardDraft}
+            onDiscarded={backToUpload}
             touch={isMobile}
           />
         </div>
       </div>
+      {invoiceImport.changed_since_read ? (
+        <StaleDraftNotice organizationId={organizationId} importId={importId} touch={isMobile} discard={discardDraft} onDiscarded={backToUpload} />
+      ) : null}
       <RecognitionNotice invoiceImport={invoiceImport} touch={isMobile} onOtherCard={() => navigate({ to: "/cards" })} />
       <OtherCardNotice cardCheck={invoiceImport.card_check} touch={isMobile} onOpenCard={(other) => navigate({ to: cardInvoiceReconciliationPath(other.public_id) })} />
       <FileCheckNotice fileCheck={invoiceImport.file_check} touch={isMobile} onOpenPrevious={(id) => navigate({ to: cardInvoiceReconciliationPath(cardPublicId, id) })} />
@@ -981,6 +1109,33 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
               onUndoChoice={undoChoice}
               onConfirmAll={(ids) => confirmAll(ids, true)}
               onUndoConfirmAll={() => confirmAll(lastBulk, false)}
+              pendingText={remaining.header}
+            />
+          ) : null}
+          {CHOICE_STEPS.has(current) && queueEntries.length ? (
+            <InvoiceChoiceStep
+              key={current}
+              stepKey={current}
+              entries={queueEntries}
+              allEntries={invoiceImport.entries}
+              invoice={invoiceImport.invoice}
+              queue={queue}
+              isMobile={isMobile}
+              busy={answering}
+              history={answerHistory}
+              wantPair={wantPair}
+              form={form}
+              pendingText={remaining.header}
+              handlers={{
+                onAnswer: answer,
+                onPick: pick,
+                onMove: changeMove,
+                onYes: doubtYes,
+                onSearch: setSearchFor,
+                onChange: changeEntry,
+                onConfirmNew: (entry) => confirmNew(entry).then((ok) => ok && queue.advanceFrom(entry.id)),
+                onUndoChoice: undoChoice,
+              }}
             />
           ) : null}
           {current === "charges" && queueEntries.length ? (
@@ -999,6 +1154,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
               onChangeEntry={changeEntry}
               onConfirmEntry={confirmNew}
               answeredRef={newStepAnswered}
+              pendingText={remaining.header}
             />
           ) : null}
           {current === "new" && queueEntries.length ? (
@@ -1012,6 +1168,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
               onChangeEntry={changeEntry}
               onConfirmEntry={confirmNew}
               answeredRef={newStepAnswered}
+              pendingText={remaining.header}
             />
           ) : null}
           {INVOICE_ENTRY_STEPS.has(current) && readOnly.length ? <ReadOnlyEntries entries={readOnly} /> : null}
@@ -1045,10 +1202,35 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
         <GoToPendingButton
           key={`pending-${current}`}
           queue={queue}
-          noun={current === "charges" ? CHARGE_NOUN : PURCHASE_NOUN}
-          pendingText={current === "charges" ? itemsCountText(queueEntries.filter((e) => !isInvoiceEntryAnswered(e))) : null}
+          noun={noun}
+          label={remaining.footer}
           isMobile={isMobile}
           indent={isMobile ? 0 : RAIL_WIDTH + 16}
+        />
+      ) : null}
+      {searchEntry ? (
+        <FinclaSearchDialog
+          organizationId={organizationId}
+          importId={importId}
+          entry={searchEntry}
+          entries={invoiceImport.entries}
+          busy={answering}
+          copy={INVOICE_SEARCH_COPY}
+          amountText={invoiceSearchAmount}
+          pickError={actionError}
+          search={(query) => searchCardInvoiceEntry(cardId, organizationId, importId, searchEntry.id, query)}
+          renderResult={(candidate) => (
+            <InvoiceSearchResult
+              key={candidate.id}
+              entry={searchEntry}
+              entries={invoiceImport.entries}
+              invoice={invoiceImport.invoice}
+              candidate={candidate}
+              busy={answering}
+              onPick={async (picked) => { if (await pick(searchEntry, picked)) setSearchFor(null); }}
+            />
+          )}
+          onClose={() => { setSearchFor(null); setActionError(""); }}
         />
       ) : null}
     </div>

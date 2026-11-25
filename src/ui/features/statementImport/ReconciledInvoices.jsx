@@ -37,9 +37,16 @@ export function invoiceCountsLabel(item) {
     else if (status === "undone") parts.push(plural(summary.summed_charges, "encargo somado e desfeito", "encargos somados e desfeitos"));
     else parts.push(plural(summary.summed_charges, "encargo somado", "encargos somados"));
   }
+  if (summary.to_move) {
+    if (status === "draft") parts.push(plural(summary.to_move, "compra a mover para esta fatura", "compras a mover para esta fatura"));
+    else if (status === "undone") parts.push(plural(summary.to_move, "compra movida e desfeita", "compras movidas e desfeitas"));
+    else parts.push(plural(summary.to_move, "compra movida", "compras movidas"));
+  }
   if (summary.already_reconciled) parts.push(plural(summary.already_reconciled, "já conferido", "já conferidos"));
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));
+  // Leitura desatualizada (QA F4 OBS-01): não dá mais para concluir este rascunho.
+  if (status === "draft" && item.changed_since_read) parts.push("leitura desatualizada: descarte e envie o PDF de novo");
   return parts.join(" · ");
 }
 

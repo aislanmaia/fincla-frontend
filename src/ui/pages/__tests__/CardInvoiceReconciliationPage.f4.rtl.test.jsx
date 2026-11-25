@@ -292,8 +292,9 @@ describe("o grupo de encargos", () => {
     expect(yes).toHaveAccessibleDescription("Nenhuma transação desta fatura no Fincla tem o valor da soma.");
     expect(within(card).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Próximo: Compras novas/ })).toBeDisabled();
-    // O grupo conta como um, pelo nome, ao lado dos 4 lançamentos ainda a confirmar.
-    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 1 grupo de encargos e 4 lançamentos deste passo");
+    // O grupo conta como um, pelo nome; os 4 lançamentos já vêm com "Adicionar" marcado e só faltam
+    // confirmar: o aviso diz isso, como o trilho (QA F4 OBS-03).
+    expect(screen.getByTestId("go-to-pending")).toHaveTextContent("Falta responder 1 grupo de encargos e confirmar 4 escolhas deste passo");
 
     await user.click(within(groupAnswers()).getByRole("button", { name: "Não, adicionar cada um" }));
     await waitFor(() => expect(groupPatches()).toEqual([{ group: group().id, body: { answer: "create" } }]));

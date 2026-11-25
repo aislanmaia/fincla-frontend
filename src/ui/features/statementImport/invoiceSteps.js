@@ -2,8 +2,9 @@
 // v16. É o segundo conjunto de passos, ao lado do `STEPS` do extrato (`reconciliationSteps.js`):
 // mesmo molde, palavras de fatura ("compras", "lançamentos"). A primeira entrega (#555) responde o
 // passo 1, a terceira (#557) o passo 5 "Compras novas", a quarta (#558) o passo 4 "Encargos, tarifas
-// e estornos", onde o grupo de encargos é UM item da fila; os lançamentos dos outros passos aparecem só
-// para leitura, "Fica de fora nesta versão". Cada fluxo tem a sua contagem de passos (decisão 9): o progresso conta os 6 passos de
+// e estornos", onde o grupo de encargos é UM item da fila, e a quinta (#559) os passos 2 "Compras em
+// outra fatura" e 3 "Decidir casos com dúvida": desde ela todo passo de lançamentos responde (o "Fica
+// de fora nesta versão" só sobra para o que o backend ainda mandar só leitura). Cada fluxo tem a sua contagem de passos (decisão 9): o progresso conta os 6 passos de
 // lançamentos, como no protótipo.
 import { plural } from "../../plural.js";
 import { isAnswered } from "./entryQueue.jsx";
@@ -128,6 +129,13 @@ export function itemsCountText(items, one = "lançamento", many = "lançamentos"
   ].filter(Boolean).join(" e ");
 }
 
+/** "Mover para esta fatura" / "Mover só esta" e "Mover esta e as próximas" (#559). */
+export const MOVE_ANSWERS = new Set(["move", "move_series"]);
+export const isMoveAnswer = (answer) => MOVE_ANSWERS.has(answer);
+
+/** A resposta liga o lançamento a uma compra do Fincla (a desta fatura, ou a movida de outra). */
+export const linksTransaction = (answer) => answer === "pair" || isMoveAnswer(answer);
+
 /** Os que a pessoa responde neste passo (os outros são "Fica de fora nesta versão"). */
 export const answerableEntries = (entries) => entries.filter((e) => e.answerable);
 
@@ -150,6 +158,28 @@ export const pendingEntries = (entries) => entries.filter((e) => e.answerable &&
 
 /** Respondidos e ainda não confirmados (a sugestão que vem marcada "Sim, é esta"). */
 export const unconfirmedEntries = (entries) => entries.filter((e) => e.answerable && e.answer !== null && !e.confirmed);
+
+/**
+ * O que falta num passo, pelo estado de cada item (QA F4 OBS-03): os sem resposta ("Falta responder",
+ * âmbar no trilho) e as escolhas que já vêm marcadas e só faltam confirmar ("escolhas para confirmar",
+ * azul no trilho). O cabeçalho da lista e o aviso do rodapé usam as mesmas palavras do trilho.
+ */
+export function stepRemaining(items, one = "lançamento", many = "lançamentos") {
+  const unanswered = pendingEntries(items);
+  const waiting = new Set(unanswered);
+  const toConfirm = unconfirmedEntries(items).filter((e) => !waiting.has(e)).length;
+  const what = unanswered.length ? itemsCountText(unanswered, one, many) : "";
+  const choices = plural(toConfirm, "escolha", "escolhas");
+  let footer = null;
+  if (unanswered.length && toConfirm) footer = `Falta responder ${what} e confirmar ${choices} deste passo`;
+  else if (unanswered.length) footer = `Falta responder ${what} deste passo`;
+  else if (toConfirm) footer = `Falta confirmar ${choices} deste passo`;
+  const header = [
+    unanswered.length ? plural(unanswered.length, "sem resposta", "sem resposta") : null,
+    toConfirm ? plural(toConfirm, "escolha para confirmar", "escolhas para confirmar") : null,
+  ].filter(Boolean).join(" · ") || null;
+  return { unanswered: unanswered.length, toConfirm, header, footer };
+}
 
 /** As sugestões ainda sem a confirmação da pessoa ("Confirmar as N de uma vez"). */
 export const unconfirmedInvoiceSuggestions = (entries) =>
@@ -230,7 +260,8 @@ export const createdTransactionCount = (entry) => (entry.new_purchase && entry.i
 export function invoiceSummaryRows(invoiceImport) {
   const entries = invoiceImport.entries;
   const pairs = entries.filter((e) => e.answer === "pair");
-  const bankValue = pairs.filter((e) => e.value_change !== null).length;
+  // O valor do banco vale também na compra movida (#559).
+  const bankValue = entries.filter((e) => linksTransaction(e.answer) && e.value_change !== null).length;
   const ignored = entries.filter((e) => e.answer === "ignore");
   const readOnly = ignored.filter((e) => !e.answerable).length;
   const rows = [];
@@ -239,6 +270,23 @@ export function invoiceSummaryRows(invoiceImport) {
   };
   row(pairs.length, "compra já estava no Fincla e fica ligada ao banco", "compras já estavam no Fincla e ficam ligadas ao banco", "summary-paired");
   row(bankValue, "compra passa a ter o valor do banco", "compras passam a ter o valor do banco", "summary-bank-value");
+  // Compras em outra fatura (#559): a compra (ou só a parcela) que vem para esta fatura, e as séries
+  // que voltam uma fatura desta parcela em diante.
+  const moved = entries.filter((e) => e.answer === "move");
+  const movedInstallments = moved.filter((e) => e.installment).length;
+  row(
+    moved.length,
+    "compra sai de outra fatura e entra nesta",
+    "compras saem de outra fatura e entram nesta",
+    "summary-moved",
+    movedInstallments ? `${plural(movedInstallments, "parcela muda", "parcelas mudam")} sozinha${movedInstallments === 1 ? "" : "s"}: as outras da compra ficam onde estão` : null,
+  );
+  row(
+    entries.filter((e) => e.answer === "move_series").length,
+    "série de parcelas volta uma fatura, desta parcela em diante",
+    "séries de parcelas voltam uma fatura, desta parcela em diante",
+    "summary-moved-series",
+  );
   // O grupo de encargos somado numa transação (#558): os lançamentos ficam ligados a ela, nada mais muda.
   const summed = entries.filter((e) => e.answer === "pair_sum");
   const summedInto = (invoiceImport.charge_groups ?? []).find((g) => g.answer === "pair_sum")?.fincla_transaction?.description;
