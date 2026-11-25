@@ -6,7 +6,6 @@
 // recalcula nada).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Check } from "lucide-react";
 
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -75,7 +74,10 @@ import {
 import { FinclaSearchDialog } from "../features/statementImport/FinclaSearchDialog.jsx";
 import { InvoicePaymentStep, invoiceLabel } from "../features/statementImport/InvoicePaymentStep.jsx";
 import { statementImportUndoPath, statementReconciliationPath } from "../routing/statementImportRoute.js";
+import { cardInvoiceReconciliationPath } from "../routing/cardInvoiceImportRoute.js";
+import { invoiceDraftInProgressOf } from "../../api/cardInvoiceImports";
 import { ErrorNote, ImportUndoneCard } from "../features/statementImport/StatementImportNotes.jsx";
+import { EmptyStep, RAIL_WIDTH, StepRail, StickyTop } from "../features/statementImport/ReconciliationFrame.jsx";
 import {
   DiscardDraftControl,
   ImportedStatementsList,
@@ -134,13 +136,6 @@ function useReconciliationView(onError) {
 }
 
 const NOTHING_CHANGES = "Nada muda no Fincla até você concluir a conciliação.";
-
-const TONE = {
-  warn: { dot: T.amber, text: T.amber },
-  ready: { dot: T.blue, text: T.blue },
-  done: { dot: T.green, text: T.green },
-  neutral: { dot: T.inkFaint, text: T.inkLight },
-};
 
 function useAccountName(organizationId, accountId) {
   const [name, setName] = useState("");
@@ -210,11 +205,21 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
     setInProgress(null);
     try {
       const draft = await uploadStatement(accountId, organizationId, chosen, columnMapping);
-      navigate({ to: statementReconciliationPath(accountId, draft.id) });
+      // Um PDF é a fatura de um cartão (fincla-api#555): a conciliação abre na tela da fatura.
+      if (draft.kind === "card_invoice") navigate({ to: cardInvoiceReconciliationPath(draft.credit_card.public_id, draft.id) });
+      else navigate({ to: statementReconciliationPath(accountId, draft.id) });
     } catch (err) {
       const asked = columnMappingPreviewOf(err);
       const running = draftInProgressOf(err);
-      if (asked && !columnMapping) setPreview(asked);
+      const invoiceRunning = invoiceDraftInProgressOf(err);
+      if (invoiceRunning?.creditCardPublicId) {
+        // A fatura do PDF já tem conciliação em andamento: o mesmo aviso do extrato, que leva a esse
+        // rascunho no cartão dele (nada de navegar sem dizer por quê).
+        setPreview(null);
+        setInProgress({ ...invoiceRunning, invoice: true });
+      } else if (invoiceRunning) {
+        setError(invoiceRunning.message || handleApiError(err));
+      } else if (asked && !columnMapping) setPreview(asked);
       else if (running) {
         setPreview(null);
         setInProgress(running);
@@ -264,20 +269,31 @@ function UploadArea({ organizationId, accountId, compact = false, touch = false,
       {inProgress ? (
         <DraftInProgressNotice
           message={inProgress.message}
-          onContinue={() => navigate({ to: statementReconciliationPath(accountId, inProgress.importId) })}
+          invoice={Boolean(inProgress.invoice)}
+          onContinue={() => navigate({
+            to: inProgress.invoice
+              ? cardInvoiceReconciliationPath(inProgress.creditCardPublicId, inProgress.importId)
+              : statementReconciliationPath(accountId, inProgress.importId),
+          })}
         />
       ) : null}
     </div>
   );
 }
 
-/** O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516): só dá para continuar nela. */
-function DraftInProgressNotice({ message, onContinue }) {
+/**
+ * O mesmo arquivo já tem conciliação em andamento nesta conta (fincla-api#516), ou a fatura do PDF
+ * já tem uma no cartão dela (`invoice`, fincla-api#555): só dá para continuar nela.
+ */
+function DraftInProgressNotice({ message, invoice = false, onContinue }) {
+  const fallback = invoice ? "Você já tem uma conciliação em andamento desta fatura." : "Você já tem uma conciliação em andamento deste arquivo nesta conta.";
   return (
     <div data-testid="draft-in-progress-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <span>
-        <b>{message || "Você já tem uma conciliação em andamento deste arquivo nesta conta."}</b>{" "}
-        Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Continue de onde parou”.
+        <b>{message || fallback}</b>{" "}
+        {invoice
+          ? "Suas respostas estão salvas nela, na tela de conciliação da fatura do cartão."
+          : "Suas respostas estão salvas nela. Para recomeçar do zero, descarte o rascunho em “Continue de onde parou”."}
       </span>
       <div>
         <Btn variant="outGray" small onClick={onContinue}>Continuar conciliação</Btn>
@@ -444,99 +460,6 @@ function AccountStatementsView({ organizationId, accountId, accountName, isMobil
 // Rascunho
 // --------------------------------------------------------------------------------------------
 
-function StepRail({ statementImport, current, passed, onOpen }) {
-  return (
-    <nav aria-label="Passos da conciliação" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      {STEPS.map((step, index) => {
-        const status = stepStatus(step.key, statementImport, passed.has(step.key));
-        const tone = TONE[status.tone];
-        const active = step.key === current;
-        return (
-          <button
-            key={step.key}
-            type="button"
-            aria-current={active ? "step" : undefined}
-            onClick={() => onOpen(step.key)}
-            style={{
-              ...G, textAlign: "left", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start",
-              background: active ? T.surface : "transparent", border: `1px solid ${active ? T.border : "transparent"}`,
-              boxShadow: active ? T.sm : "none", borderRadius: 10, padding: "8px 10px",
-            }}
-          >
-            <span aria-hidden="true" style={{ ...NUM, flexShrink: 0, width: 20, height: 20, borderRadius: 9999, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", background: tone.dot, marginTop: 1 }}>
-              {status.tone === "done" ? <Check size={11} /> : index + 1}
-            </span>
-            <span style={{ minWidth: 0 }}>
-              <span data-testid="step-title" style={{ display: "block", fontSize: 12, fontWeight: 700, color: T.ink }}>{step.title}</span>
-              <span style={{ display: "block", fontSize: 11, color: tone.text, marginTop: 2 }}>{status.text}</span>
-            </span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-/** A largura da coluna dos passos no computador (o aviso do rodapé alinha à lista ao lado dela). */
-const RAIL_WIDTH = 240;
-
-/** Folga entre o topo fixo e o que ganha foco ao rolar (o cartão atual, "Alterar"…). */
-const STICKY_FOCUS_GAP = 12;
-
-/**
- * O que o topo fixo cobre no alto da área que rola: a altura dele em `data-sticky-cover` (onde a
- * área visível começa de fato, lida pela âncora da lista) e, com a folga, no `scroll-padding-top`
- * (onde o foco que a página move para).
- */
-function reserveStickyTop(scroller, height) {
-  scroller.dataset.stickyCover = String(height);
-  scroller.style.scrollPaddingTop = `${height + STICKY_FOCUS_GAP}px`;
-}
-
-/**
- * O topo fixo da conciliação: gruda no alto da área que rola, com fundo próprio para o que passa
- * por baixo não aparecer. `top: 0` grudaria ABAIXO do padding do alto da área que rola (20px no
- * computador, 14px no celular) e deixaria ali uma faixa onde o conteúdo aparece cortado (BUG-01 da
- * QA da etapa 3): o `top` negativo desse padding faz o topo encostar no alto da área que rola. Fica como filho direto da página, então vale para todos os
- * passos. Enquanto existe, reserva a altura dele no `scroll-padding-top` da área que rola: o foco
- * que a página move (cartão atual, "Alterar") nunca fica escondido atrás dele. Ao sair, devolve.
- */
-function StickyTop({ children, style = null }) {
-  const ref = useRef(null);
-  const scrollerRef = useRef(null);
-  const [top, setTop] = useState(0);
-  useEffect(() => {
-    const scroller = ref.current?.closest("[data-fincla-main-scroll]");
-    if (!scroller) return undefined;
-    scrollerRef.current = scroller;
-    const paddingTop = Number.parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
-    setTop(paddingTop ? -paddingTop : 0);
-    const previous = scroller.style.scrollPaddingTop;
-    const reserve = () => reserveStickyTop(scroller, ref.current?.offsetHeight ?? 0);
-    reserve();
-    window.addEventListener("resize", reserve);
-    return () => {
-      window.removeEventListener("resize", reserve);
-      scroller.style.scrollPaddingTop = previous;
-      delete scroller.dataset.stickyCover;
-      scrollerRef.current = null;
-    };
-  }, []);
-  // A altura muda com o conteúdo (o valor, a quebra de linha): a reserva acompanha a cada render.
-  useEffect(() => {
-    if (scrollerRef.current && ref.current) reserveStickyTop(scrollerRef.current, ref.current.offsetHeight);
-  });
-  return (
-    <div
-      ref={ref}
-      data-sticky="balance-now"
-      style={{ position: "sticky", top, zIndex: 5, background: T.bg, padding: "8px 0", margin: "-8px 0", ...style }}
-    >
-      {children}
-    </div>
-  );
-}
-
 /**
  * O topo de todos os passos (história 24): o progresso e, ao lado, a diferença de saldo agora, que
  * fica FIXA ao rolar para a pessoa ver o valor mudar a cada resposta. No computador o topo inteiro
@@ -583,14 +506,6 @@ function ProgressCard({ statementImport, passed }) {
         <b style={NUM}>{summary.to_create}</b> para adicionar
         {summary.missing_description ? <> · <span style={{ color: T.amber }}>{plural(summary.missing_description, "sem descrição", "sem descrição")}</span></> : null}
       </div>
-    </Card>
-  );
-}
-
-function EmptyStep({ children }) {
-  return (
-    <Card style={{ padding: 16 }}>
-      <p style={{ ...G, fontSize: 13, color: T.inkMid, margin: 0 }}>{children}</p>
     </Card>
   );
 }
@@ -1153,7 +1068,7 @@ function DraftView({ organizationId, accountId, importId, accountName, isMobile,
       <FileCheckNotice fileCheck={statementImport.file_check} accountId={accountId} onOpenOutside={() => open("outside")} />
       <ProgressPanel statementImport={statementImport} passed={passed} balanceNow={balanceNow} isMobile={isMobile} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `${RAIL_WIDTH}px minmax(0, 1fr)`, gap: 16, alignItems: "start" }}>
-        <StepRail statementImport={statementImport} current={current} passed={passed} onOpen={open} />
+        <StepRail steps={STEPS} statusOf={(key) => stepStatus(key, statementImport, passed.has(key))} current={current} onOpen={open} />
         <ViewModeContext.Provider value={view}>
         <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <header>

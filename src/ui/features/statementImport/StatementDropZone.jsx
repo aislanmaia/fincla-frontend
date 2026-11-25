@@ -6,9 +6,26 @@ import { CloudUpload } from "lucide-react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 
-export const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
+// O PDF é a fatura do cartão (fincla-api#555): o Fincla percebe pelos bytes e abre a conciliação da fatura.
+export const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,.pdf,application/x-ofx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/pdf";
 
-const FORMATS = "OFX, XLS, XLSX ou CSV · até 5 MB";
+/** As palavras da área: o extrato da conta (padrão, aceita também o PDF da fatura) ou só a fatura do cartão. */
+const COPY = {
+  statement: {
+    formats: "OFX, XLS, XLSX ou CSV · PDF da fatura do cartão · até 5 MB",
+    accept: ACCEPTED_FILES,
+    what: "o extrato do banco",
+    another: "outro extrato",
+    input: "Arquivo do extrato (OFX, XLS, XLSX ou CSV, ou o PDF da fatura do cartão, até 5 MB)",
+  },
+  invoice: {
+    formats: "PDF da fatura do Itaú · até 5 MB",
+    accept: ".pdf,application/pdf",
+    what: "o PDF da fatura",
+    another: "outra fatura",
+    input: "PDF da fatura do cartão (até 5 MB)",
+  },
+};
 
 export const ONE_FILE_AT_A_TIME = "Solte um arquivo por vez.";
 
@@ -38,7 +55,9 @@ const VISUALLY_HIDDEN = { position: "absolute", width: 1, height: 1, margin: -1,
  * arquivo sendo lido (a área para de aceitar outro até a resposta). `tip`: a dica de onde continuar.
  * `onError`: mais de um arquivo solto de uma vez (nenhum é usado).
  */
-export function StatementDropZone({ compact = false, touch = false, readingName = "", tip = null, onFile, onError = null }) {
+export function StatementDropZone({ compact = false, touch = false, readingName = "", tip = null, onFile, onError = null, kind = "statement" }) {
+  const copy = COPY[kind] ?? COPY.statement;
+  const FORMATS = copy.formats;
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   // Entrar num filho (ícone, textos) dispara `dragleave` na área: conta entradas e saídas, e o
@@ -47,8 +66,8 @@ export function StatementDropZone({ compact = false, touch = false, readingName 
   const reading = Boolean(readingName);
   // `touch` (celular): não há arrastar nem clicar, só tocar (G4, observação).
   const title = touch
-    ? (compact ? "Ou toque para escolher outro extrato" : "Toque para escolher o extrato do banco")
-    : (compact ? "Ou solte aqui outro extrato" : "Solte aqui o extrato do banco");
+    ? (compact ? `Ou toque para escolher ${copy.another}` : `Toque para escolher ${copy.what}`)
+    : (compact ? `Ou solte aqui ${copy.another}` : `Solte aqui ${copy.what}`);
   const hint = touch ? "A leitura começa na hora." : "ou clique para escolher. A leitura começa na hora.";
   const compactHint = touch ? FORMATS : `ou clique para escolher · ${FORMATS}`;
   const label = reading
@@ -134,8 +153,8 @@ export function StatementDropZone({ compact = false, touch = false, readingName 
         ref={inputRef}
         type="file"
         aria-hidden="true"
-        aria-label="Arquivo do extrato (OFX, XLS, XLSX ou CSV, até 5 MB)"
-        accept={ACCEPTED_FILES}
+        aria-label={copy.input}
+        accept={copy.accept}
         tabIndex={-1}
         disabled={reading}
         onChange={(e) => {

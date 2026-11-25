@@ -223,6 +223,28 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Resumo indisponível nesta fatura");
   });
 
+  it("Conciliar fatura (fincla-api#555): só com a ação do dono, e abre a conciliação do cartão", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    const onReconcileInvoice = vi.fn();
+    const view = renderPage({ onReconcileInvoice });
+    await readyDesktop();
+    await user.click(screen.getByRole("button", { name: "Conciliar fatura" }));
+    expect(onReconcileInvoice).toHaveBeenCalledWith(CARD_PUBLIC_ID);
+    view.unmount();
+
+    renderPage();
+    await readyDesktop();
+    expect(screen.queryByRole("button", { name: "Conciliar fatura" })).not.toBeInTheDocument();
+  });
+
+  // QA F1: no celular o botão tinha 26 px de altura; alvo de toque é 44 px. No computador, como era.
+  it.each([[false, ""], [true, "44px"]])("Conciliar fatura tem altura de alvo de toque só no celular (mobile=%s)", async (isMobile, height) => {
+    mockApi();
+    renderPage({ isMobile, onReconcileInvoice: vi.fn() });
+    expect((await screen.findByRole("button", { name: "Conciliar fatura" })).style.minHeight).toBe(height);
+  });
+
   it("segue a hierarquia da Direção C com resumos fundamentados e filtro por modalidade", async () => {
     const calls = mockApi();
     const user = userEvent.setup();

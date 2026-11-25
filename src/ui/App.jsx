@@ -54,6 +54,7 @@ import { StatementReconciliationPage } from "./pages/StatementReconciliationPage
 import { fillsAvailableHeight } from "./routing/statementImportRoute.js";
 import { mainScrollStyle } from "./layouts/mainScroll.js";
 import { StatementImportUndoPage } from "./pages/StatementImportUndoPage.jsx";
+import { CardInvoiceReconciliationPage } from "./pages/CardInvoiceReconciliationPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { CardAllTransactionsPage } from "./pages/CardAllTransactionsPage.jsx";
@@ -85,6 +86,7 @@ import { FinclaPageContext } from "./routing/finclaPageContext.jsx";
 import { useNavTo } from "./routing/useNavTo.js";
 import { useAuthRedirects } from "./routing/useAuthRedirects.js";
 import { statementReconciliationPath } from "./routing/statementImportRoute.js";
+import { cardInvoiceReconciliationPath } from "./routing/cardInvoiceImportRoute.js";
 
 import { resolveDataMode } from "./dataMode.js";
 import { nextDuplicateLabel } from "./features/transactions/duplicateLabel.js";
@@ -435,7 +437,9 @@ export default function App() {
               setModalPreConfig(buildEditRecurringPreConfig(rec));
               openTxModal();
             }} />,
-    invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
+    invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion}
+      // Conciliar fatura reescreve os livros da organização: só o dono opera (a API recusa os demais).
+      onReconcileInvoice={activeMembershipRole === "owner" ? (cardPublicId) => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) }) : null} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
     cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
@@ -479,6 +483,7 @@ export default function App() {
       onContinueReconciliation={activeMembershipRole === "owner" ? (accountId, importId) => navigate({ to: statementReconciliationPath(accountId, importId) }) : null} />,
     statementReconciliation: <StatementReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId}
       onOpenAccountTransactions={(accountId, period) => { bumpTransactionsList(); navTo("transactions", { accountId, txFrom: period?.from, txTo: period?.to }); }} />,
+    cardInvoiceReconciliation: <CardInvoiceReconciliationPage isMobile={isMobile} organizationId={session.activeOrgId} />,
     statementImportUndo: <StatementImportUndoPage isMobile={isMobile} organizationId={session.activeOrgId}
       onUndone={bumpTransactionsList}
       onOpenAccountTransactions={(accountId) => { bumpTransactionsList(); navTo("transactions", { accountId }); }} />,

@@ -17,7 +17,7 @@
 import { Component, createContext, createRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Check } from "lucide-react";
 
-import { T } from "../../tokens";
+import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn } from "../../components/primitives";
 import { plural } from "../../plural.js";
@@ -956,9 +956,6 @@ function scrollToCard(card) {
   events.addEventListener("scrollend", reach);
   for (const type of USER_TAKEOVER) document.addEventListener(type, drop, true);
 }
-
-/** A altura mínima de um alvo de toque (WCAG 2.5.5 / diretrizes do iOS e do Android). */
-const TOUCH_TARGET = 44;
 
 /**
  * O aviso do rodapé do passo, "↑ Falta responder N lançamentos deste passo" (decisão do Owner,

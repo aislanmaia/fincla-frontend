@@ -138,6 +138,16 @@ describe("o passo Confirmar lançamentos encontrados", () => {
     expect(railStatus("Confirmar lançamentos encontrados")).toBe("1 sugestão para confirmar");
   });
 
+  // QA F1: a fileira de respostas é a mesma da fatura; no celular, alvo de toque de 44 px.
+  it.each([[false, "32px"], [true, "44px"]])("as respostas têm altura de alvo de toque só no celular (mobile=%s → %s)", async (isMobile, height) => {
+    params = { accountId: ACCOUNT, importId: IMPORT };
+    render(<StatementReconciliationPage organizationId={ORG} isMobile={isMobile} />);
+    await screen.findByRole("heading", { name: "Confirmar lançamentos encontrados" });
+
+    const answers = within(padariaCard()).getByRole("group", { name: "Este lançamento do banco já está no Fincla?" });
+    for (const button of within(answers).getAllByRole("button")) expect(button.style.minHeight).toBe(height);
+  });
+
   it("Sim, é esta confirma o par e o cartão minimiza; Desfazer escolha o traz de volta como estava", async () => {
     const user = userEvent.setup();
     await openDraft();
