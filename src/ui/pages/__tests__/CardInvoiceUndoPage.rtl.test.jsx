@@ -66,14 +66,16 @@ describe("a prévia", () => {
     expect(await screen.findByText("Se você desfizer esta conciliação:")).toBeInTheDocument();
 
     expect(screen.getByTestId("undo-restore-count")).toHaveTextContent(
-      "9 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
+      "16 transações que já estavam no Fincla voltam ao estado de antes da conciliação e deixam de estar conferidas",
     );
     // As transações que a conclusão criou (#557, e os encargos, tarifas e estornos da #558) são apagadas.
     expect(screen.getByTestId("undo-delete-count")).toHaveTextContent("8 transações adicionadas serão apagadas");
     const restored = screen.getAllByTestId("undo-restored");
     // As 4 compras ligadas, as 3 escolhidas nas dúvidas, a compra movida (#559) e a transação em que
-    // os encargos estavam somados (#558): a ligação sai.
-    expect(restored).toHaveLength(9);
+    // os encargos estavam somados (#558): a ligação sai. Mais as 7 parcelas seguintes da Loja que o
+    // ajuste das próximas (#561) tinha posto no valor do banco: o valor volta a R$ 108,33.
+    expect(restored).toHaveLength(16);
+    expect(restored.filter((r) => r.textContent.includes("Loja") && !r.textContent.includes("presente"))).toHaveLength(7);
     expect(restored.find((r) => r.textContent.includes("Encargos do cartão"))).toHaveTextContent("Volta ao que era antes da conciliação.");
     const loja = restored.find((r) => r.textContent.includes("Loja (presente)"));
     expect(within(loja).getByText("Editada depois: descrição")).toBeInTheDocument();

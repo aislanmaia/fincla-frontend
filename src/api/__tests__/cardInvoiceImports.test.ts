@@ -374,10 +374,8 @@ describe('dúvidas e compras em outra fatura (#559)', () => {
   it('cada opção e resultado da busca traz o que dá para mover e a sugestão calculada para ela', () => {
     const [ahead, here, behind] = contract.search_neighbours.results.map((r) => normalizeInvoiceCandidate(raw(r)));
     // A 06/12 da série uma fatura à frente. A busca parte de um lançamento à vista (POSTO CENTRAL); com a
-    // QA F5 BUG-02 "esta e as próximas" é só para a parcela do próprio banco. A sugestão e a série andam
-    // juntas como a fixture gravada as traz (a de #560 foi gravada antes da BUG-02 entrar no ramo).
-    expect(ahead).toMatchObject({ id: 8, movable: true, move_refusal: null });
-    expect(ahead.series_movable).toBe(ahead.suggested_answer === 'move_series');
+    // QA F5 BUG-02 "esta e as próximas" é só para a parcela do próprio banco: só esta.
+    expect(ahead).toMatchObject({ id: 8, suggested_answer: 'move', movable: true, series_movable: false, move_refusal: null });
     expect(ahead.suggestion_basis).toEqual({
       previous: { number: 5, invoice: { id: 1, year: 2026, month: 12, status: 'open' } },
       next: { number: 7, invoice: { id: 7, year: 2027, month: 2, status: 'open' } },

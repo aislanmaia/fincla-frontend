@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 import { T } from "../tokens";
 import { G } from "../typography";
-import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 const SHEET_SLIDE_MS = 380;
 const SHEET_EASE = "cubic-bezier(0.32,0.72,0,1)";
