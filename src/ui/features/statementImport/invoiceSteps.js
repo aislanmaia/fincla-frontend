@@ -234,6 +234,14 @@ export function firstInvoiceStepWithWork(entries) {
 export function invoiceStepStatus(stepKey, invoiceImport, passed) {
   if (stepKey === "total") return { tone: "neutral", text: "Depois dos lançamentos" };
   if (stepKey === "summary") return { tone: "neutral", text: "Último passo" };
+  // "Sobrando no Fincla" (#560): pelas contagens do backend (a lista vem da rota do passo).
+  if (stepKey === "leftover") {
+    const s = invoiceImport.summary ?? {};
+    if (s.leftovers_undecided) return { tone: "warn", text: plural(s.leftovers_undecided, "item para decidir", "itens para decidir") };
+    if (passed) return { tone: "done", text: "Conferido" };
+    if (s.leftovers) return { tone: "ready", text: "Pronto · falta você conferir" };
+    return { tone: "neutral", text: "Nada a fazer" };
+  }
   const entries = invoiceStepItems(stepKey, invoiceImport);
   // Os já conferidos (reimportação) aparecem no passo 1, só para leitura.
   const conferred = stepKey === "suggested" ? reconciledEntries(invoiceImport.entries).length : 0;
@@ -347,6 +355,11 @@ export function invoiceSummaryRows(invoiceImport) {
     "lançamentos já foram conferidos numa conciliação anterior: nada muda neles",
     "summary-already-reconciled",
   );
+  // Sobrando no Fincla (#560): o que cada decisão faz ao concluir.
+  const summary = invoiceImport.summary ?? {};
+  row(summary.leftovers_to_move ?? 0, "item sobrando vai para a próxima fatura", "itens sobrando vão para a próxima fatura", "summary-leftovers-move");
+  row(summary.leftovers_to_delete ?? 0, "item sobrando será excluído do Fincla", "itens sobrando serão excluídos do Fincla", "summary-leftovers-delete");
+  row(summary.leftovers_kept ?? 0, "item sobrando fica nesta fatura, como está", "itens sobrando ficam nesta fatura, como estão", "summary-leftovers-kept");
   row(
     ignored.length,
     "lançamento não será registrado",
@@ -356,3 +369,11 @@ export function invoiceSummaryRows(invoiceImport) {
   );
   return rows;
 }
+
+/**
+ * Os "Adicionar" ainda sem confirmar de um passo (decisão do Owner de 2026-11-26, `unconfirmed_creates`):
+ * os ids que o "Confirmar as N de uma vez" ao lado do motivo manda para `POST …/suggestions/confirm`
+ * (os lançamentos do grupo de encargos com "adicionar cada um" inclusive).
+ */
+export const unconfirmedCreatesOfStep = (stepKey, entries) =>
+  invoiceEntriesOfStep(stepKey, entries).filter((e) => e.answerable && e.answer === "create" && !e.confirmed);

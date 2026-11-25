@@ -275,8 +275,8 @@ describe("o grupo de encargos", () => {
     const row = await screen.findByTestId("charge-group-row");
     expect(row).toHaveTextContent("Adicionar cada um");
     expect(row).toHaveTextContent("Conferido");
-    // A diferença do topo projeta as 4 transações criadas além da somada.
-    expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 12,99");
+    // A diferença do topo projeta as 4 transações criadas além da somada (e a Assinatura que sobra, R$ 61,00).
+    expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 73,99");
   });
 
   it("sem transação que bata: começa sem resposta, Sim desligado com o motivo, e segura o Próximo", async () => {
@@ -462,12 +462,12 @@ describe("anuidade, redução, repasse de IOF e estornos", () => {
     groupDone();
     const user = userEvent.setup();
     await open();
-    expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 0,40");
+    expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 61,40");
 
     await user.click(within(charge("ESTORNO LOJA MODA")).getByRole("button", { name: "Não registrar" }));
 
     await waitFor(() => expect(calls).toContainEqual({ patch: ESTORNO().id, body: { answer: "ignore" } }));
-    await waitFor(() => expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 45,40"));
+    await waitFor(() => expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 106,40"));
   });
 
   it("Confirmar grava a confirmação do lançamento e recolhe: a anuidade abre como despesa", async () => {

@@ -145,8 +145,15 @@ export function unconfirmedSuggestions(entries) {
   return entries.filter((e) => e.classification === "suggested" && e.answer === "pair" && !e.confirmed);
 }
 
-/** Por que "Concluir conciliação" está bloqueado, em português. */
+/**
+ * Por que "Concluir conciliação" está bloqueado, em português. `unconfirmed_creates` (decisão do Owner
+ * de 2026-11-26): "Adicionar" sem confirmar, um por passo, com o passo pelo nome.
+ */
 export function blockerText(blocker) {
+  if (blocker.code === "unconfirmed_creates") {
+    const where = STEPS.find((s) => s.key === blocker.step)?.title;
+    return `Falta confirmar ${plural(blocker.count, "lançamento novo", "lançamentos novos")}${where ? ` em ${where}` : ""}.`;
+  }
   if (blocker.code === "missing_description") {
     return `${plural(blocker.count, "lançamento novo sem descrição", "lançamentos novos sem descrição")}. Escreva a descrição em Adicionar lançamentos novos.`;
   }
@@ -186,4 +193,12 @@ export function progressBadge({ done, total, allPassed }, canConclude) {
   if (ratio < 0.5) return { badge: "Em andamento", ready: false };
   if (ratio < 0.8) return { badge: "Passou da metade", ready: false };
   return { badge: "Quase lá · falta pouco!", ready: false };
+}
+
+/**
+ * Os lançamentos "Adicionar" ainda sem confirmar de um passo (`unconfirmed_creates`): os ids que o
+ * "Confirmar os N de uma vez" ao lado do motivo manda para `POST …/suggestions/confirm`.
+ */
+export function unconfirmedCreatesOf(stepKey, entries) {
+  return entriesOfStep(stepKey, entries).filter((e) => e.answer === "create" && !e.confirmed);
 }
