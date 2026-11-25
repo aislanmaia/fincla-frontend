@@ -219,22 +219,41 @@ function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
     );
   }
   return (
+    <AnswerSegment
+      label={label}
+      answers={ANSWERS}
+      value={entry.answer}
+      busy={busy}
+      unavailable={(a) => a.value === "pair" && !entry.fincla_match}
+      onAnswer={(value) => onAnswer(entry, value)}
+      confirm={confirm}
+    />
+  );
+}
+
+/**
+ * A pergunta e a fileira de respostas de um cartão (a marca da fileira é a faixa que os atalhos e o
+ * aviso do rodapé medem), com o Confirmar ao lado quando ele cabe. Comum ao extrato e à fatura.
+ * `unavailable(a)` desliga uma resposta; `note` é o motivo escrito embaixo (ex.: fatura já paga).
+ */
+export function AnswerSegment({ label, answers, value, busy, unavailable = () => false, onAnswer, confirm = null, note = null }) {
+  return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
       <div role="group" data-answer-row="" aria-label={label} style={{ display: "inline-flex", flexWrap: "wrap", border: `1px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }}>
-        {ANSWERS.map((a, index) => {
-          const pressed = entry.answer === a.value;
-          const unavailable = a.value === "pair" && !entry.fincla_match;
+        {answers.map((a, index) => {
+          const pressed = value === a.value;
+          const off = unavailable(a);
           return (
             <button
               key={a.value}
               type="button"
               aria-pressed={pressed}
-              disabled={busy || unavailable}
-              onClick={() => onAnswer(entry, a.value)}
+              disabled={busy || off}
+              onClick={() => onAnswer(a.value)}
               style={{
-                ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy || unavailable ? "not-allowed" : "pointer",
-                border: 0, borderRight: index < ANSWERS.length - 1 ? `1px solid ${T.border}` : 0,
+                ...G, minHeight: 32, padding: "0 12px", fontSize: 12, fontWeight: 600, cursor: busy || off ? "not-allowed" : "pointer",
+                border: 0, borderRight: index < answers.length - 1 ? `1px solid ${T.border}` : 0,
                 background: pressed ? a.tone : "transparent", color: pressed ? "#fff" : T.inkLight,
               }}
             >
@@ -244,6 +263,7 @@ function AnswerButtons({ entry, busy, desc, onAnswer, onChange, onConfirm }) {
         })}
       </div>
       {confirm}
+      {note ? <span data-testid="answer-note" style={{ ...G, fontSize: 12, color: T.inkMid, flexBasis: "100%" }}>{note}</span> : null}
     </div>
   );
 }

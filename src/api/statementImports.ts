@@ -5,6 +5,7 @@
 // fixture canônica do backend (presa aos modelos Pydantic por um teste de lá).
 import apiClient from './client';
 import { toAmount, toCurrency, toFiniteNumber, type WireMoney } from './money';
+import { isCardInvoiceResponse, normalizeCardInvoiceImport, type CardInvoiceImport } from './cardInvoiceImports';
 
 /**
  * `reconciled` (fincla-api#516): já conferido numa importação anterior; nunca vem da pessoa e não muda.
@@ -493,14 +494,14 @@ const base = (accountId: string) => `/accounts/${accountId}/statement-imports`;
 /**
  * Envia o extrato (OFX, XLS, XLSX ou CSV) e cria o rascunho. Nada muda no Fincla até concluir.
  * Planilha não reconhecida: falha com 422 e a prévia (ver `columnMappingPreviewOf`); reenvie o mesmo
- * arquivo com `columnMapping`.
+ * arquivo com `columnMapping`. PDF: a fatura do cartão (`kind: "card_invoice"`, fincla-api#555).
  */
 export const uploadStatement = async (
   accountId: string,
   organizationId: string,
   file: File,
   columnMapping: ColumnMapping | null = null,
-): Promise<StatementImport> => {
+): Promise<StatementImport | CardInvoiceImport> => {
   const form = new FormData();
   form.append('file', file);
   if (columnMapping) form.append('column_mapping', JSON.stringify(columnMapping));
@@ -509,6 +510,9 @@ export const uploadStatement = async (
     // O cliente nasce com `application/json`: sem trocar, o axios serializa o FormData em JSON.
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  // Um PDF (pelos bytes) é a fatura de um cartão da organização (fincla-api#555): a resposta traz
+  // `kind: "card_invoice"` e a tela vai para a conciliação da fatura.
+  if (isCardInvoiceResponse(response.data)) return normalizeCardInvoiceImport(response.data as unknown as Record<string, unknown>);
   return normalizeStatementImport(response.data);
 };
 

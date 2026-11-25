@@ -1,0 +1,417 @@
+/** @vitest-environment jsdom */
+// Conciliar fatura (fincla-api#555), no nível da página, alimentada pela fixture de contrato
+// (`card_invoice_import.example.json`, cópia byte a byte da do backend). A gravação é garantida
+// pelos testes de API; aqui conferimos o que a pessoa vê, o que a tela manda e as regras de
+// interface do passo 1 (Confirmar só na sugestão intacta, recolher no clique sem temporizador,
+// linha parada com Alterar/Desfazer, rodapé de pendentes, "Não registrar" listrado, lote com
+// desfazer, fatura paga) e do passo 8 (contagens e Concluir).
+import React from "react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+
+import contract from "../../../api/__fixtures__/card_invoice_import.example.json";
+
+const navigate = vi.fn();
+let params = {};
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate, useParams: () => params }));
+import { CardInvoiceReconciliationPage } from "../CardInvoiceReconciliationPage.jsx";
+import { StatementReconciliationPage } from "../StatementReconciliationPage.jsx";
+
+const ORG = "org";
+const CARD = contract.draft.credit_card;
+const IMPORT = contract.draft.id;
+const BASE = `*/v1/credit-cards/${CARD.id}/invoice-imports`;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const byDescription = (d, text) => d.entries.find((e) => e.bank_description === text);
+const MERCADO = byDescription(contract.draft, "MERCADO BOA VISTA").id;
+const LOJA = byDescription(contract.draft, "LOJA DO BAIRRO 05/12").id;
+
+const calls = [];
+let draft = clone(contract.draft);
+
+/** O que o backend faz com uma resposta: o par é a sugestão; responder confirma, a menos que venha `confirmed`. */
+function applyAnswer(entry, body) {
+  if (body.answer !== undefined) {
+    entry.answer = body.answer;
+    entry.paired_transaction_id = body.answer === "pair" ? entry.suggested_transaction_id : null;
+  }
+  entry.confirmed = body.confirmed ?? true;
+}
+
+const server = setupServer(
+  http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: CARD.id, public_id: CARD.public_id, description: CARD.name, brand: "Visa", last4: CARD.last4 }])),
+  http.get(`${BASE}/${IMPORT}`, () => HttpResponse.json(draft)),
+  http.patch(`${BASE}/${IMPORT}`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ progress: body });
+    Object.assign(draft, body);
+    return HttpResponse.json(draft);
+  }),
+  http.patch(`${BASE}/${IMPORT}/entries/:entryId`, async ({ request, params: p }) => {
+    const body = await request.json();
+    calls.push({ patch: p.entryId, body });
+    const entry = draft.entries.find((e) => e.id === p.entryId);
+    applyAnswer(entry, body);
+    return HttpResponse.json(entry);
+  }),
+  http.post(`${BASE}/${IMPORT}/suggestions/confirm`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ confirm: body });
+    draft.entries.filter((e) => body.entry_ids.includes(e.id)).forEach((e) => { e.confirmed = body.confirmed; });
+    return HttpResponse.json(draft);
+  }),
+  http.post(`${BASE}/${IMPORT}/conclude`, () => {
+    calls.push({ conclude: true });
+    return HttpResponse.json(contract.concluded);
+  }),
+);
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+afterEach(() => {
+  cleanup();
+  calls.length = 0;
+  draft = clone(contract.draft);
+  server.resetHandlers();
+  navigate.mockReset();
+});
+
+const openDraft = async () => {
+  params = { cardId: CARD.public_id, importId: IMPORT };
+  render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+  await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
+};
+
+const card = (text) => screen.getByRole("article", { name: new RegExp(text.replace(/[*/]/g, ".")) });
+const rows = () => screen.queryAllByTestId("pair-row");
+const rail = () => screen.getByRole("navigation", { name: "Etapas da conciliação da fatura" });
+const railButton = (title) => within(rail()).getAllByRole("button").find((b) => within(b).getByTestId("step-title").textContent === title);
+const railStatus = (title) => railButton(title).textContent.replace(title, "").replace(/^\d/, "");
+
+describe("o topo da conciliação da fatura", () => {
+  it("mostra o caminho, os chips, o reconhecimento, o progresso e a diferença da fatura agora", async () => {
+    await openDraft();
+
+    expect(screen.getByRole("navigation", { name: "Caminho" })).toHaveTextContent("Cartões›Itaú Visa›Fatura de dezembro›Conciliar fatura");
+    const chips = screen.getByTestId("invoice-chips");
+    expect(chips).toHaveTextContent("Cartão Itaú Visa");
+    expect(chips).toHaveTextContent("Fatura dezembro/2026");
+    expect(chips).toHaveTextContent("Vencimento 10/12/2026 · fechamento 03/12/2026");
+    expect(chips).toHaveTextContent("lido do PDF · total conferido");
+    expect(chips).toHaveTextContent("20 lançamentos na fatura");
+    expect(screen.getByTestId("recognition-notice")).toHaveTextContent(
+      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no PDF. Se não for, escolha outro cartão.",
+    );
+    expect(screen.getByTestId("invoice-progress")).toHaveTextContent("Seu progresso: 0 de 6 passos conferidos");
+    const difference = screen.getByTestId("invoice-difference");
+    expect(difference).toHaveTextContent("Diferença da fatura agora");
+    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("+R$ 1.512,08");
+    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 890,84");
+    expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
+  });
+
+  it("o trilho tem os 8 passos; os desta versão sem resposta dizem que ficam de fora, os vazios que não há nada a fazer", async () => {
+    await openDraft();
+
+    const titles = within(rail()).getAllByTestId("step-title").map((t) => t.textContent);
+    expect(titles).toEqual([
+      "Confirmar compras encontradas", "Compras em outra fatura", "Decidir casos com dúvida", "Encargos, tarifas e estornos",
+      "Compras novas", "Sobrando no Fincla", "Conferir o total", "Revisar e concluir",
+    ]);
+    // O passo aberto diz "Você está aqui" (protótipo v16); os outros, o estado deles.
+    expect(railStatus("Confirmar compras encontradas")).toBe("Você está aqui");
+    expect(railStatus("Compras em outra fatura")).toBe("Nada a fazer");
+    expect(railStatus("Decidir casos com dúvida")).toBe("Nada a fazer · 3 ficam de fora nesta versão");
+    expect(railStatus("Compras novas")).toBe("Nada a fazer · 5 ficam de fora nesta versão");
+    expect(railStatus("Conferir o total")).toBe("Depois dos lançamentos");
+  });
+
+  it("o PDF de outro cartão da organização só avisa, com Conciliar no cartão X", async () => {
+    draft.card_check = clone(contract.card_check_other_card);
+    await openDraft();
+
+    const notice = screen.getByTestId("other-card-notice");
+    expect(notice).toHaveTextContent("O PDF é do cartão final 4321 (Itaú Visa)");
+    await userEvent.setup().click(within(notice).getByRole("button", { name: "Conciliar no cartão Itaú Visa" }));
+    expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` });
+  });
+});
+
+describe("o passo Confirmar compras encontradas", () => {
+  it("a sugestão intacta vem marcada, com Confirmar sugestão ao lado das respostas e o que acontece ao concluir", async () => {
+    await openDraft();
+
+    const mercado = card("MERCADO BOA VISTA");
+    expect(within(mercado).getByText("Na fatura do banco")).toBeInTheDocument();
+    expect(within(mercado).getByTestId("bank-side")).toHaveTextContent("Compras");
+    expect(within(mercado).getByTestId("bank-side")).toHaveTextContent("final 4321");
+    expect(within(mercado).getByText("Sugerido pelo Fincla")).toBeInTheDocument();
+    expect(within(mercado).getByText("Sugerido · falta confirmar")).toBeInTheDocument();
+    expect(within(mercado).getByTestId("fincla-side")).toHaveTextContent("Mercado");
+    expect(within(mercado).getByTestId("pair-consequences")).toHaveTextContent("Ao concluir, a compra fica ligada ao lançamento do banco. Nada mais muda nela.");
+    const answers = within(mercado).getByRole("group", { name: "Esta compra do banco já está no Fincla?" });
+    expect(within(answers).getByRole("button", { name: "Sim, é esta" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(answers).getByRole("button", { name: "Não registrar" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(mercado).getByRole("button", { name: "Confirmar sugestão" })).toBeInTheDocument();
+    expect(within(mercado).getByTestId("pair-outcome")).toHaveTextContent("Ao concluir: Mercado fica ligada a este lançamento da fatura.");
+    // Só o atual aberto; os outros em linhas.
+    expect(screen.getAllByTestId("pair-card")).toHaveLength(1);
+    expect(rows()).toHaveLength(3);
+  });
+
+  it("Confirmar sugestão recolhe no clique (sem espera): a linha fica parada com Conferido, Alterar e Desfazer escolha, e nada aparece abaixo", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(card("MERCADO BOA VISTA")).getByRole("button", { name: "Confirmar sugestão" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO, body: { answer: "pair" } }));
+    const row = await screen.findByRole("button", { name: /Alterar o lançamento de 05\/11\/2026: MERCADO BOA VISTA/ });
+    const line = row.closest("[data-testid='pair-row']");
+    expect(within(line).getByTestId("conferido-badge")).toBeInTheDocument();
+    expect(within(line).getByRole("button", { name: "Desfazer escolha" })).toBeInTheDocument();
+    expect(line).toHaveTextContent("É Mercado");
+    // O próximo pendente abre no lugar dele; nada de resumo nem "Próximo pendente" abaixo da linha.
+    expect(screen.queryByText(/Próximo pendente/)).not.toBeInTheDocument();
+    expect(card("FARMACIA SAO JOAO")).toBeInTheDocument();
+    // Mais nada mudou: o passo continua com as outras 3 sugestões a confirmar.
+    expect(screen.getByRole("button", { name: "Confirmar as 3 de uma vez" })).toBeInTheDocument();
+  });
+
+  it("Desfazer escolha volta a sugestão para 'falta confirmar' e reabre o cartão", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(within(card("MERCADO BOA VISTA")).getByRole("button", { name: "Confirmar sugestão" }));
+    const line = (await screen.findByRole("button", { name: /Alterar o lançamento de 05\/11\/2026: MERCADO/ })).closest("[data-testid='pair-row']");
+
+    await user.click(within(line).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO, body: { answer: "pair", confirmed: false } }));
+    expect(await screen.findByRole("button", { name: "Confirmar sugestão" })).toBeInTheDocument();
+    expect(within(card("MERCADO BOA VISTA")).getByText("Sugerido · falta confirmar")).toBeInTheDocument();
+  });
+
+  it("clicar de novo na resposta já confirmada só recolhe, sem gravar de novo", async () => {
+    draft.entries.find((e) => e.id === MERCADO).confirmed = true;
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: /Alterar o lançamento de 05\/11\/2026: MERCADO/ }));
+    const mercado = card("MERCADO BOA VISTA");
+    expect(within(mercado).queryByRole("button", { name: "Confirmar sugestão" })).not.toBeInTheDocument();
+
+    await user.click(within(mercado).getByRole("button", { name: "Sim, é esta" }));
+
+    expect(screen.queryByRole("article", { name: /MERCADO BOA VISTA/ })).not.toBeInTheDocument();
+    expect(calls.filter((c) => c.patch)).toEqual([]);
+  });
+
+  it("Não registrar recolhe no clique; reaberto, o lado do Fincla continua à vista em cinza listrado com Fica de fora, sem Confirmar", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(within(card("MERCADO BOA VISTA")).getByRole("button", { name: "Não registrar" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO, body: { answer: "ignore" } }));
+    const line = (await screen.findByRole("button", { name: /Alterar o lançamento de 05\/11\/2026: MERCADO/ })).closest("[data-testid='pair-row']");
+    expect(line).toHaveTextContent("Fica fora do Fincla");
+
+    await user.click(within(line).getByRole("button", { name: /Alterar/ }));
+    const mercado = card("MERCADO BOA VISTA");
+    const skipped = within(mercado).getByTestId("fincla-side-skipped");
+    expect(skipped).toHaveTextContent("Mercado");
+    expect(within(skipped).getByTestId("skip-note")).toHaveTextContent("Fica de fora");
+    expect(within(mercado).getByTestId("bank-side")).toHaveTextContent("Não entra no Fincla");
+    expect(within(mercado).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
+    expect(within(mercado).getByTestId("pair-outcome")).toHaveTextContent("Não entra no Fincla. A diferença aparece em Conferir o total.");
+  });
+
+  it("parcela com valor diferente: o selo, a frase do banco × Fincla, a troca para o valor do banco e o aviso das próximas parcelas", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: /Alterar o lançamento de 14\/07\/2026: LOJA DO BAIRRO 05\/12/ }));
+
+    const loja = card("LOJA DO BAIRRO 05/12");
+    expect(within(loja).getByText("VALOR DIFERENTE")).toBeInTheDocument();
+    expect(within(loja).getByTestId("fincla-side")).toHaveTextContent("Data da compra14/07/2026");
+    expect(within(loja).getByTestId("installment-badge")).toHaveTextContent("05/12");
+    const consequences = within(loja).getByTestId("pair-consequences");
+    expect(consequences).toHaveTextContent("O banco cobrou R$ 108,30; no Fincla está R$ 108,33 (diferença de R$ 0,03).");
+    expect(within(consequences).getByTestId("value-change")).toHaveTextContent(/Ao concluir, vale o valor do banco:\s*R\$ 108,33\s*R\$ 108,30/);
+    // 7 parcelas seguintes: 7 × 108,33 no Fincla contra 7 × 108,27 do banco.
+    expect(within(consequences).getByTestId("future-installments-note")).toHaveTextContent(
+      "As outras 7 parcelas desta compra continuam com o valor do Fincla. Até elas serem conciliadas, o total da compra fica R$ 0,42 diferente do banco.",
+    );
+    expect(within(loja).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(loja).getByTestId("pair-outcome")).toHaveTextContent("passa a valer R$ 108,30, o valor do banco.");
+  });
+
+  it("fatura já paga: o par liga sem trocar o valor, e o resto fica desligado com o motivo", async () => {
+    const loja = draft.entries.find((e) => e.id === LOJA);
+    loja.value_locked = true;
+    loja.value_change = null;
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(screen.getByRole("button", { name: /Alterar o lançamento de 14\/07\/2026: LOJA DO BAIRRO/ }));
+
+    const open = card("LOJA DO BAIRRO 05/12");
+    expect(within(open).getByTestId("pair-consequences")).toHaveTextContent("Fatura já paga: o valor não muda.");
+    expect(within(open).queryByTestId("value-change")).not.toBeInTheDocument();
+    expect(within(open).getByRole("button", { name: "Não registrar" })).toBeDisabled();
+    expect(within(open).getByTestId("answer-note")).toHaveTextContent("Esta fatura já foi paga. Para corrigir, desmarque o pagamento e volte aqui.");
+    expect(within(open).getByRole("button", { name: "Confirmar sugestão" })).toBeEnabled();
+  });
+
+  it("Confirmar as 4 de uma vez, com a faixa de Desfazer", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(screen.getByRole("button", { name: "Confirmar as 4 de uma vez" }));
+
+    await waitFor(() => expect(calls.find((c) => c.confirm)?.confirm.confirmed).toBe(true));
+    expect(calls.find((c) => c.confirm).confirm.entry_ids).toHaveLength(4);
+    const banner = await screen.findByText("4 compras confirmadas.");
+    expect(screen.queryAllByTestId("pair-card")).toHaveLength(0);
+    expect(rows()).toHaveLength(4);
+    expect(screen.queryByTestId("go-to-pending-bar")).not.toBeInTheDocument();
+
+    await user.click(within(banner.closest("[role='status']")).getByRole("button", { name: "Desfazer" }));
+    await waitFor(() => expect(calls.filter((c) => c.confirm).at(-1).confirm.confirmed).toBe(false));
+    expect(await screen.findByRole("button", { name: "Confirmar as 4 de uma vez" })).toBeInTheDocument();
+  });
+
+  it("com pendente no passo: o rodapé fixo 'Falta responder' leva a ele, e Próximo fica desligado", async () => {
+    // As outras sugestões já confirmadas: só a sem resposta falta.
+    for (const e of draft.entries) if (e.answerable) e.confirmed = true;
+    const pending = draft.entries.find((e) => e.id === MERCADO);
+    pending.answer = null;
+    pending.paired_transaction_id = null;
+    await openDraft();
+
+    expect(screen.getByTestId("go-to-pending")).toHaveAccessibleName("Falta responder 1 compra deste passo. Ir para o primeiro item que falta responder");
+    expect(screen.getByRole("button", { name: /^Próximo: Compras em outra fatura/ })).toBeDisabled();
+    expect(railStatus("Confirmar compras encontradas")).toBe("1 lançamento para responder");
+  });
+
+  it("Próximo confirma as escolhas que faltam confirmar e abre o passo seguinte; nada muda no Fincla", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    expect(screen.getByTestId("step-footer")).toHaveTextContent("Ao avançar, as 4 escolhas que faltam confirmar ficam confirmadas. Nada muda no Fincla até você concluir.");
+
+    await user.click(screen.getByRole("button", { name: "Próximo: Compras em outra fatura →" }));
+
+    expect(await screen.findByRole("heading", { name: "Compras em outra fatura" })).toBeInTheDocument();
+    expect(calls.find((c) => c.confirm).confirm).toEqual({ entry_ids: expect.any(Array), confirmed: true });
+    await waitFor(() => expect(calls).toContainEqual({ progress: { current_step: "other_invoice", reviewed_steps: ["suggested"] } }));
+    expect(railStatus("Confirmar compras encontradas")).toBe("Conferido");
+    expect(screen.getByText(/Nada a fazer aqui: nenhuma compra desta fatura está em outra fatura/)).toBeInTheDocument();
+  });
+
+  it("os lançamentos dos outros passos aparecem só para leitura: Fica de fora nesta versão", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+
+    await user.click(railButton("Decidir casos com dúvida"));
+
+    const list = await screen.findByTestId("read-only-entries");
+    expect(within(list).getAllByTestId("read-only-row")).toHaveLength(3);
+    expect(within(list).getAllByText("Fica de fora nesta versão")).toHaveLength(3);
+    expect(screen.queryByRole("group", { name: "Esta compra do banco já está no Fincla?" })).not.toBeInTheDocument();
+    // Estorno é crédito: mostrado com "−" (diminui a fatura).
+    await user.click(railButton("Encargos, tarifas e estornos"));
+    const estorno = (await screen.findAllByTestId("read-only-row")).find((r) => r.textContent.includes("ESTORNO LOJA MODA"));
+    expect(estorno).toHaveTextContent("−R$");
+  });
+});
+
+describe("o passo Revisar e concluir", () => {
+  it("mostra as contagens, o total da fatura no Fincla, a diferença e conclui", async () => {
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(railButton("Revisar e concluir"));
+
+    expect(await screen.findByTestId("summary-paired")).toHaveTextContent("4 compras já estavam no Fincla e ficam ligadas ao banco");
+    expect(screen.getByTestId("summary-bank-value")).toHaveTextContent("1 compra passa a ter o valor do banco");
+    expect(screen.getByTestId("summary-ignored")).toHaveTextContent("16 lançamentos não serão registrados · 16 ficam de fora nesta versão");
+    expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 890,84/);
+    expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*\+R\$ 1\.512,08/);
+    expect(screen.getByTestId("payment-not-marked")).toHaveTextContent("O pagamento desta fatura não é marcado aqui: ele é conferido quando você concilia o extrato da conta corrente");
+
+    await user.click(screen.getByRole("button", { name: "Concluir conciliação da fatura" }));
+
+    expect(await screen.findByRole("heading", { name: "Fatura de dezembro conciliada" })).toBeInTheDocument();
+    expect(screen.getByTestId("done-totals")).toHaveTextContent("Fatura no Fincla: R$ 890,84 · diferença registrada: +R$ 1.512,08.");
+    await user.click(screen.getByRole("button", { name: "Ver a fatura" }));
+    expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/invoices/2026/12` });
+  });
+
+  it("Concluir fica desligado com o motivo escrito enquanto falta responder", async () => {
+    draft.can_conclude = false;
+    draft.summary.unanswered = 1;
+    draft.blockers = [{ code: "unanswered", count: 1 }];
+    const user = userEvent.setup();
+    await openDraft();
+    await user.click(railButton("Revisar e concluir"));
+
+    expect(await screen.findByRole("button", { name: "Concluir conciliação da fatura" })).toBeDisabled();
+    expect(screen.getByTestId("conclude-blocked")).toHaveTextContent("Falta responder 1 item.");
+  });
+
+  it("o total do Fincla que não sabemos é 'não sabemos', nunca R$ 0,00", async () => {
+    draft.difference_now = { bank: draft.difference_now.bank, fincla: null, difference: null };
+    const user = userEvent.setup();
+    await openDraft();
+
+    expect(screen.getByTestId("invoice-difference-value")).toHaveTextContent("não sabemos");
+    await user.click(railButton("Revisar e concluir"));
+    expect(await screen.findByTestId("summary-fincla-total")).toHaveTextContent("não sabemos");
+    expect(screen.getByTestId("summary-fincla-total")).not.toHaveTextContent("R$ 0,00");
+  });
+});
+
+describe("enviar o PDF da fatura", () => {
+  it("pela tela do cartão: o PDF vai para a rota do cartão e a conciliação abre", async () => {
+    server.use(http.post(BASE, () => HttpResponse.json(draft, { status: 201 })));
+    params = { cardId: CARD.public_id };
+    const user = userEvent.setup();
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+
+    const input = await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)");
+    expect(input).toHaveAttribute("accept", ".pdf,application/pdf");
+    await user.upload(input, new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` }));
+  });
+
+  it("já há conciliação em andamento desta fatura: o aviso leva ao rascunho", async () => {
+    server.use(http.post(BASE, () => HttpResponse.json({ detail: contract.draft_in_progress }, { status: 409 })));
+    params = { cardId: CARD.public_id };
+    const user = userEvent.setup();
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+
+    await user.upload(await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+
+    const notice = await screen.findByTestId("draft-in-progress-notice");
+    expect(notice).toHaveTextContent("Você já tem uma conciliação em andamento desta fatura.");
+    await user.click(within(notice).getByRole("button", { name: "Continuar conciliação" }));
+    expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` });
+  });
+
+  it("pela área de envio da conta: um PDF reconhecido como fatura abre a conciliação da fatura no cartão", async () => {
+    const ACCOUNT = contract.draft.account_id;
+    server.use(
+      http.get("*/v1/accounts", () => HttpResponse.json([{ id: ACCOUNT, name: "Itaú", type: "checking", currency: "BRL", is_active: true }])),
+      http.get(`*/v1/accounts/${ACCOUNT}/statement-imports`, () => HttpResponse.json({ imports: [] })),
+      http.post(`*/v1/accounts/${ACCOUNT}/statement-imports`, () => HttpResponse.json(draft, { status: 201 })),
+    );
+    params = { accountId: ACCOUNT };
+    const user = userEvent.setup();
+    render(<StatementReconciliationPage organizationId={ORG} />);
+
+    const input = await screen.findByLabelText(/Arquivo do extrato/);
+    expect(input.getAttribute("accept")).toContain(".pdf");
+    await user.upload(input, new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` }));
+  });
+});

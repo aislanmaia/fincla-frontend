@@ -70,7 +70,11 @@ function StatusPill({ status }) {
   );
 }
 
-export function DiscardDraftControl({ organizationId, accountId, importId, onDiscarded, label = "Descartar rascunho" }) {
+/**
+ * "Descartar rascunho" com a confirmação na própria linha. `discard` troca o pedido (a conciliação da
+ * fatura descarta pela rota do cartão); sem ele, descarta o rascunho do extrato da conta.
+ */
+export function DiscardDraftControl({ organizationId, accountId, importId, onDiscarded, label = "Descartar rascunho", discard: discardDraft = null }) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,7 +94,7 @@ export function DiscardDraftControl({ organizationId, accountId, importId, onDis
     setBusy(true);
     setError("");
     try {
-      await discardStatementImport(accountId, organizationId, importId);
+      await (discardDraft ? discardDraft() : discardStatementImport(accountId, organizationId, importId));
       onDiscarded?.(importId);
     } catch (err) {
       setError(handleApiError(err));
