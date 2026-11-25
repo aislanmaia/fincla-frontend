@@ -246,13 +246,16 @@ function GroupCard({ group, entries, categories, details, fallbackLabel, isMobil
  *   fica aberto); `trackConfirmed` faz o "Desfazer escolha" devolver também o `confirmed` de antes;
  * - `answered(entry)` diz quando a linha mostra "Conferido"; `rowDetail(entry)` completa a linha e
  *   `rowAmount(entry)` mostra o valor como a fatura mostra; `createUnavailable(entry)` (fatura paga):
- *   o "Desfazer escolha" de um "Não registrar" sem resposta anterior só tira a confirmação.
+ *   o "Desfazer escolha" de um "Não registrar" sem resposta anterior só tira a confirmação;
+ * - `answeredRef`: a página recebe em `answeredRef.current(id)` o mesmo minimizar das respostas do
+ *   cartão (guarda o "como estava" para o "Desfazer escolha"), para os atalhos A/N usarem.
  */
 export function NewEntriesStep({
   stepKey, entries, groups, categories, details, fallbackLabel, isMobile, queue, view = "detailed", onViewChange = null,
   onChangeEntry, onBatch, onCreateGroup, onUpdateGroup, onDeleteGroup,
   onSearch = null, renderMatched = null, answering = false,
   selectable = true, renderCard = null, onConfirmEntry = null, trackConfirmed = false, answered: answeredOf = isAnswered, rowDetail = null, rowAmount = null, createUnavailable = null,
+  answeredRef = null,
 }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [lastBulk, setLastBulk] = useState(null);
@@ -275,11 +278,17 @@ export function NewEntriesStep({
     if (!currentEntry) return;
     openedAs.current[currentEntry.id] = { answer: currentEntry.answer, confirmed: currentEntry.confirmed, description: currentEntry.description ?? "" };
   }, [currentEntry?.id]); // só a abertura conta, não cada mudança no cartão aberto
-  const answered = (id) => {
+  const answered = useStableCallback((id) => {
     const before = openedAs.current[id];
     if (before) setHistory((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), before] }));
     queue.advanceFrom(id);
-  };
+  });
+  // Os atalhos da página (A/N) minimizam por aqui, para o "Desfazer escolha" ter o que voltar.
+  useEffect(() => {
+    if (!answeredRef) return undefined;
+    answeredRef.current = answered;
+    return () => { if (answeredRef.current === answered) answeredRef.current = null; };
+  }, [answeredRef, answered]);
   const undoChoice = useStableCallback(async (id) => {
     const entry = byId.get(id);
     if (!entry) return;
@@ -291,15 +300,22 @@ export function NewEntriesStep({
     }
     if (previous && previous.description !== (entry.description ?? "")) body.description = previous.description;
     if (trackConfirmed && previous && previous.confirmed !== entry.confirmed && body.confirmed === undefined) body.confirmed = previous.confirmed;
-    // Sem resposta diferente para voltar, o "Não registrar" volta a "Não, adicionar agora".
+    // Sem resposta diferente para voltar, o "Não registrar" volta a "Não, adicionar agora". Com
+    // `trackConfirmed` (a fatura), o "Adicionar" só se confirma pelo Confirmar do formulário: volta
+    // a confirmar, com o cartão aberto (sem `confirmed`, o backend confirmaria sozinho).
     if (entry.answer === "ignore" && !body.answer) {
       if (createUnavailable?.(entry)) body.confirmed = false;
-      else body.answer = "create";
+      else {
+        body.answer = "create";
+        if (trackConfirmed) body.confirmed = false;
+      }
     }
     if (Object.keys(body).length && (await onChangeEntry(id, body)) === false) return;
     if (previous) setHistory((prev) => ({ ...prev, [id]: (prev[id] ?? []).slice(0, -1) }));
+    const after = { answer: body.answer ?? entry.answer, confirmed: body.confirmed ?? entry.confirmed };
     // O "Confirmar" do adicionar agora só minimizou: desfazer devolve o cartão aberto, como antes.
-    if (entry.answer === "create" && (body.answer ?? "create") === "create") queue.open(id);
+    // Na fatura, um "Adicionar" que volta a confirmar também abre o cartão, com o Confirmar.
+    if ((entry.answer === "create" && after.answer === "create") || (trackConfirmed && after.answer === "create" && !after.confirmed)) queue.open(id);
   });
 
   // O Confirmar (e o "Não registrar" já marcado): grava a confirmação, quando a tela pede, e minimiza.

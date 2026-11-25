@@ -215,6 +215,64 @@ describe("o passo Compras novas", () => {
 
     await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
     await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO().id, body: { answer: "create", confirmed: false } }));
+    // Volta aberto, a confirmar: o "Adicionar" só se confirma pelo Confirmar.
+    expect(await within(purchase("MERCADO BOA VISTA")).findByRole("button", { name: "Confirmar" })).toBeEnabled();
+  });
+
+  it("N pelo atalho, depois Desfazer escolha: volta a Adicionar a confirmar, com o cartão aberto", async () => {
+    const user = userEvent.setup();
+    await open();
+    purchase("MERCADO BOA VISTA");
+
+    await user.keyboard("n");
+    const row = (await screen.findAllByTestId("ignored-entry")).find((r) => r.textContent.includes("MERCADO BOA VISTA"));
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls.filter((c) => c.patch === MERCADO().id).at(-1).body).toEqual({ answer: "create", confirmed: false }));
+    const card = await screen.findByRole("article", { name: /Compra de .*: MERCADO BOA VISTA/ });
+    expect(within(card).getByRole("button", { name: "Adicionar" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(card).getByRole("button", { name: "Confirmar" })).toBeEnabled();
+    expect(MERCADO().confirmed).toBe(false);
+  });
+
+  it("rascunho retomado com Não registrar já confirmado: Desfazer escolha não confirma o Adicionar sozinho", async () => {
+    Object.assign(MERCADO(), { answer: "ignore", confirmed: true });
+    const user = userEvent.setup();
+    await open();
+
+    const row = (await screen.findAllByTestId("ignored-entry")).find((r) => r.textContent.includes("MERCADO BOA VISTA"));
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO().id, body: { answer: "create", confirmed: false } }));
+    expect(await within(purchase("MERCADO BOA VISTA")).findByRole("button", { name: "Confirmar" })).toBeEnabled();
+  });
+
+  it("A pelo atalho confirma e recolhe; Desfazer escolha devolve o cartão aberto, a confirmar", async () => {
+    const user = userEvent.setup();
+    await open();
+    purchase("MERCADO BOA VISTA");
+
+    await user.keyboard("a");
+    await waitFor(() => expect(calls).toContainEqual({ patch: MERCADO().id, body: { confirmed: true } }));
+    const row = (await screen.findAllByTestId("entry-row")).find((r) => r.textContent.includes("MERCADO BOA VISTA"));
+    expect(row).toHaveTextContent("Conferido");
+    await user.click(within(row).getByRole("button", { name: "Desfazer escolha" }));
+
+    await waitFor(() => expect(calls.filter((c) => c.patch === MERCADO().id).at(-1).body).toEqual({ confirmed: false }));
+    expect(await within(purchase("MERCADO BOA VISTA")).findByRole("button", { name: "Confirmar" })).toBeEnabled();
+  });
+
+  it("o Valor travado vai como a fatura mostra: cobrança sem sinal; estorno sem o sinal invertido", async () => {
+    Object.assign(PADARIA(), { amount: { amount: "21.00", currency: "BRL" }, transaction_type: "refund", description: "Estorno padaria" });
+    const user = userEvent.setup();
+    await open();
+
+    const plain = (el) => el.textContent.replace(/\u00a0/g, " ");
+    expect(plain(within(purchase("MERCADO BOA VISTA")).getByTestId("locked-amount"))).toBe("R$ 310,10");
+    await user.click(alter("PADARIA PAO QUENTE"));
+    const padaria = purchase("PADARIA PAO QUENTE");
+    expect(plain(within(padaria).getByTestId("locked-amount"))).toBe("R$ 21,00");
+    expect(within(padaria).getByTestId("locked-type")).toHaveTextContent("Estorno");
   });
 
   it("Não registrar mantém o formulário à vista, sem edição, com a nota Fica de fora", async () => {
@@ -330,6 +388,53 @@ describe("compra parcelada nova (decisão 5)", () => {
     expect(within(curso).getByTestId("scope-note-from_current")).toHaveTextContent("As parcelas 01 a 12 ficam de fora.");
   });
 
+  it("as opções ficam desligadas enquanto a escolha está sendo gravada", async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    server.use(http.patch(`${BASE}/:importId/entries/:entryId`, async ({ request, params: p }) => {
+      const body = await request.json();
+      calls.push({ patch: p.entryId, body });
+      await gate;
+      const entry = draft.entries.find((e) => e.id === p.entryId);
+      applyBody(entry, body);
+      return HttpResponse.json(entry);
+    }));
+    const user = userEvent.setup();
+    await open();
+    await user.click(alter("LOJA DO BAIRRO 03/06"));
+
+    await user.click(within(purchase("LOJA DO BAIRRO 03/06")).getByRole("radio", { name: /Só daqui em diante/ }));
+
+    await waitFor(() => expect(within(purchase("LOJA DO BAIRRO 03/06")).getByRole("radio", { name: /Compra inteira/ })).toBeDisabled());
+    expect(within(purchase("LOJA DO BAIRRO 03/06")).getByRole("radio", { name: /Só daqui em diante/ })).toBeDisabled();
+    release();
+    await waitFor(() => expect(within(purchase("LOJA DO BAIRRO 03/06")).getByRole("radio", { name: /Compra inteira/ })).toBeEnabled());
+  });
+
+  it("parcela 01/MM: sem o que escolher, a lista das parcelas e o total ficam à vista", async () => {
+    LOJA().installment = { number: 1, count: 6 };
+    const user = userEvent.setup();
+    await open();
+    await user.click(alter("LOJA DO BAIRRO 03/06"));
+
+    const loja = purchase("LOJA DO BAIRRO 03/06");
+    expect(within(loja).queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(within(loja).getByTestId("installments-scope")).toHaveTextContent("Compra parcelada · 01/06");
+    expect(within(loja).getAllByTestId("new-purchase-installment")).toHaveLength(6);
+    expect(within(loja).getByTestId("new-purchase-total").textContent.replace(/\u00a0/g, " ")).toBe(
+      "As etiquetas valem para todas as parcelas. Total da compra: R$ 599,40.",
+    );
+  });
+
+  it("sem o total da compra: diz que não sabemos, em vez de esconder", async () => {
+    LOJA().new_purchase.total_amount = null;
+    const user = userEvent.setup();
+    await open();
+    await user.click(alter("LOJA DO BAIRRO 03/06"));
+
+    expect(within(purchase("LOJA DO BAIRRO 03/06")).getByTestId("new-purchase-total")).toHaveTextContent("Total da compra: não sabemos, nas duas opções.");
+  });
+
   it("a linha recolhida diz quantas parcelas entram", async () => {
     LOJA().confirmed = true;
     await open();
@@ -409,6 +514,25 @@ describe("Não, adicionar agora (passo 1)", () => {
     const row = (await screen.findAllByTestId("pair-row")).find((r) => r.textContent.includes("MERCADO BOA VISTA"));
     expect(row).toHaveTextContent("Adicionar ao Fincla: Mercado do mês");
     expect(row).toHaveTextContent("Conferido");
+  });
+
+  it("clicar de novo em Não, adicionar agora já marcado confirma, como no passo 5 (e o A também)", async () => {
+    draft = clone(contract.draft);
+    const [first, second] = draft.entries.filter((e) => e.answerable && e.fincla_transaction);
+    Object.assign(first, { answer: "create", confirmed: false, description: "Mercado do mês" });
+    Object.assign(second, { answer: "create", confirmed: false, description: "Outra compra" });
+    params = { cardId: CARD.public_id, importId: draft.id };
+    const user = userEvent.setup();
+    render(<CardInvoiceReconciliationPage organizationId={ORG} />);
+    await screen.findByRole("heading", { name: "Confirmar compras encontradas" });
+
+    await user.click(within(pairCard(first.bank_description.replace(/[*/]/g, "."))).getByRole("button", { name: "Não, adicionar agora" }));
+    await waitFor(() => expect(calls).toContainEqual({ patch: first.id, body: { confirmed: true } }));
+    expect(calls.filter((c) => c.patch === first.id)).toHaveLength(1);
+
+    await screen.findByRole("article", { name: new RegExp(`Lançamento de .*: ${second.bank_description.replace(/[*/]/g, ".")}`) });
+    await user.keyboard("a");
+    await waitFor(() => expect(calls).toContainEqual({ patch: second.id, body: { confirmed: true } }));
   });
 
   it("parcela sugerida: Não, adicionar agora mostra as duas opções da compra parcelada", async () => {

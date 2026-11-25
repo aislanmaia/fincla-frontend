@@ -79,7 +79,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
             embedded
             desc={desc}
             skipped={skipped}
-            invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange)}
+            invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange, busy)}
           />
         </div>
       </div>
@@ -119,9 +119,10 @@ function installmentsDetail(entry) {
 /**
  * O passo "Compras novas". `form` = { categories, details, fallbackLabel, cardName, invoiceMonth };
  * `onChangeEntry(id, body, { onSaved })` grava (devolve `false` quando não gravou); `onConfirmEntry`
- * grava a confirmação antes de recolher.
+ * grava a confirmação antes de recolher; `answeredRef` recebe o minimizar dos atalhos (ver
+ * `NewEntriesStep`).
  */
-export function InvoiceNewStep({ entries, queue, form, isMobile, answering, onChangeEntry, onConfirmEntry }) {
+export function InvoiceNewStep({ entries, queue, form, isMobile, answering, onChangeEntry, onConfirmEntry, answeredRef = null }) {
   return (
     <NewEntriesStep
       stepKey="new"
@@ -142,6 +143,7 @@ export function InvoiceNewStep({ entries, queue, form, isMobile, answering, onCh
       trackConfirmed
       answered={isInvoiceEntryAnswered}
       onConfirmEntry={onConfirmEntry}
+      answeredRef={answeredRef}
       createUnavailable={(entry) => invoiceAnswerUnavailable(entry, "create")}
       rowDetail={installmentsDetail}
       rowAmount={(entry) => <InvoiceAmount amount={entry.amount} currency={entry.currency} />}

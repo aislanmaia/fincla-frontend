@@ -368,7 +368,7 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, o
       onChange={onChange}
       embedded
       desc={desc}
-      invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange)}
+      invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange, busy)}
     />
   ) : (
     <InvoiceFinclaSide
@@ -402,7 +402,15 @@ function InvoicePairCard({ entry, invoiceMonth, isMobile, busy, canUndo, form, o
           value={entry.answer}
           busy={busy}
           unavailable={(a) => invoiceAnswerUnavailable(entry, a.value)}
-          onAnswer={(value) => onAnswer(entry, value)}
+          onAnswer={(value) => {
+            // "Não, adicionar agora" já marcado: clicar de novo confirma, como o Confirmar (e como o
+            // "Adicionar" do passo 5); sem descrição, nada (o Confirmar diz o motivo).
+            if (value === "create" && entry.answer === "create") {
+              if (!busy && desc.value.trim()) desc.confirm(onConfirmNew);
+              return;
+            }
+            onAnswer(entry, value);
+          }}
           confirm={confirm}
           note={paidNote}
           touch={isMobile}

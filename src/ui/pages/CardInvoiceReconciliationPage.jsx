@@ -574,6 +574,8 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   const setAnswering = useCallback((on) => setInFlight((n) => Math.max(0, n + (on ? 1 : -1))), []);
   // Os PATCH de progresso saem em fila: o servidor fica sempre com o último passo aberto.
   const progressQueue = useRef(Promise.resolve());
+  // O minimizar do passo "Compras novas" (dado pelo `NewEntriesStep`), para os atalhos A/N.
+  const newStepAnswered = useRef(null);
   // O formulário da compra nova (#557): categorias e etiquetas da organização, como no extrato.
   const { categories, details, error: categoriesError } = useCategories(organizationId);
   const fallbackLabel = useMemo(() => categories.find((c) => c.is_fallback)?.label || "Não classificado", [categories]);
@@ -708,17 +710,15 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   };
 
   // "Próximo": confirma as escolhas do passo que faltam confirmar (nada muda no Fincla) e avança.
-  // As sugestões pela confirmação em lote; as outras (Adicionar, Não registrar) pelo lote de respostas.
+  // Todas num lote só (sugestões, Adicionar, Não registrar), tudo ou nada: uma falha não deixa
+  // metade confirmada.
   const next = async (stepKey) => {
     const unconfirmed = unconfirmedEntries(stepEntries);
-    const pairs = unconfirmed.filter((e) => e.answer === "pair");
-    const others = unconfirmed.filter((e) => e.answer !== "pair");
-    if (pairs.length && !(await confirmAll(pairs.map((e) => e.id), true))) return;
-    if (others.length) {
+    if (unconfirmed.length) {
       setAnswering(true);
       setActionError("");
       try {
-        setImport(await updateCardInvoiceEntries(cardId, organizationId, importId, others.map((e) => ({ id: e.id, confirmed: true }))));
+        setImport(await updateCardInvoiceEntries(cardId, organizationId, importId, unconfirmed.map((e) => ({ id: e.id, confirmed: true }))));
       } catch (err) {
         setActionError(cardApiError(err));
         return;
@@ -746,25 +746,31 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
   };
 
   // O Confirmar pelo atalho A numa compra nova: só com descrição (a mesma regra do botão).
-  const confirmNewAndAdvance = async (entry) => {
+  const confirmNewAndAdvance = async (entry, advance = queue.advanceFrom) => {
     if (!String(entry.description ?? "").trim()) return;
-    if (await confirmNew(entry)) queue.advanceFrom(entry.id);
+    if (await confirmNew(entry)) advance(entry.id);
   };
+  // O minimizar do passo 5 é o do `NewEntriesStep`: guarda o "como estava" para o "Desfazer escolha".
+  const newAnswered = (id) => (newStepAnswered.current ? newStepAnswered.current(id) : queue.advanceFrom(id));
   // S/A/N respondem a compra aberta (só com a fileira de respostas inteira à vista, como no extrato).
   const shortcutsByStep = {
     suggested: {
       s: (e) => (invoiceAnswerUnavailable(e, "pair") ? null : answer(e, "pair")),
-      a: (e) => (invoiceAnswerUnavailable(e, "create") ? null : answer(e, "create")),
+      // "Não, adicionar agora" já marcado: o A confirma, como o clique na resposta e o passo 5.
+      a: (e) => {
+        if (invoiceAnswerUnavailable(e, "create")) return null;
+        return e.answer === "create" ? confirmNewAndAdvance(e) : answer(e, "create");
+      },
       n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
     },
     new: {
       a: (e) => {
         if (invoiceAnswerUnavailable(e, "create")) return null;
-        return e.answer === "create" ? confirmNewAndAdvance(e) : changeEntry(e.id, { answer: "create", confirmed: false });
+        return e.answer === "create" ? confirmNewAndAdvance(e, newAnswered) : changeEntry(e.id, { answer: "create", confirmed: false });
       },
       n: (e) => (e.answer === "ignore"
-        ? confirmNew(e).then((ok) => ok && queue.advanceFrom(e.id))
-        : changeEntry(e.id, { answer: "ignore" }, { onSaved: () => queue.advanceFrom(e.id) })),
+        ? confirmNew(e).then((ok) => ok && newAnswered(e.id))
+        : changeEntry(e.id, { answer: "ignore" }, { onSaved: () => newAnswered(e.id) })),
     },
   };
   const shortcutAnswers = shortcutsByStep[current] ?? {};
@@ -882,6 +888,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
               answering={answering}
               onChangeEntry={changeEntry}
               onConfirmEntry={confirmNew}
+              answeredRef={newStepAnswered}
             />
           ) : null}
           {INVOICE_ENTRY_STEPS.has(current) && readOnly.length ? <ReadOnlyEntries entries={readOnly} /> : null}

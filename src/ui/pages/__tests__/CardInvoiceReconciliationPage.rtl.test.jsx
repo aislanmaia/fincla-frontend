@@ -76,6 +76,12 @@ const server = setupServer(
     applyAnswer(entry, body);
     return HttpResponse.json(entry);
   }),
+  http.patch(`${BASE}/${IMPORT}/entries`, async ({ request }) => {
+    const body = await request.json();
+    calls.push({ batch: body.entries });
+    for (const item of body.entries) applyAnswer(draft.entries.find((e) => e.id === item.id), item);
+    return HttpResponse.json(draft);
+  }),
   http.post(`${BASE}/${IMPORT}/suggestions/confirm`, async ({ request }) => {
     const body = await request.json();
     calls.push({ confirm: body });
@@ -416,7 +422,11 @@ describe("o passo Confirmar compras encontradas", () => {
     await user.click(screen.getByRole("button", { name: "Próximo: Compras em outra fatura →" }));
 
     expect(await screen.findByRole("heading", { name: "Compras em outra fatura" })).toBeInTheDocument();
-    expect(calls.find((c) => c.confirm).confirm).toEqual({ entry_ids: expect.any(Array), confirmed: true });
+    // Um lote só, tudo ou nada: nenhuma confirmação em separado.
+    expect(calls.filter((c) => c.batch)).toHaveLength(1);
+    expect(calls.find((c) => c.batch).batch).toHaveLength(4);
+    expect(calls.find((c) => c.batch).batch.every((b) => b.confirmed === true && Object.keys(b).length === 2)).toBe(true);
+    expect(calls.some((c) => c.confirm)).toBe(false);
     await waitFor(() => expect(calls).toContainEqual({ progress: { current_step: "other_invoice", reviewed_steps: ["suggested"] } }));
     expect(railStatus("Confirmar compras encontradas")).toBe("Conferido");
     expect(screen.getByText(/Nada a fazer aqui: nenhuma compra desta fatura está em outra fatura/)).toBeInTheDocument();

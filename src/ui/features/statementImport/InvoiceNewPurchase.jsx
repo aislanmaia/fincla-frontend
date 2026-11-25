@@ -98,15 +98,38 @@ function InstallmentList({ entry }) {
   );
 }
 
+/** "As etiquetas valem para todas as parcelas. Total da compra: …" (sem total: "não sabemos"). */
+function InstallmentsHelp({ entry, both }) {
+  const total = entry.new_purchase.total_amount;
+  return (
+    <span data-testid="new-purchase-total" style={HELP}>
+      As etiquetas valem para todas as parcelas. Total da compra:{" "}
+      {total ? <b style={NUM}>{formatMoney(total.amount, total.currency)}</b> : <b>não sabemos</b>}
+      {both ? ", nas duas opções." : "."}
+    </span>
+  );
+}
+
 /**
  * As duas opções da compra parcelada nova (decisão 5): a escolhida vai para o rascunho na hora
  * (`installments_scope`), sem minimizar o cartão (o Confirmar do formulário é que confirma). Dentro
- * do `<fieldset>` do formulário: no "Não registrar" fica à vista e desligada.
+ * do `<fieldset>` do formulário: no "Não registrar" fica à vista e desligada; `busy` (um PATCH no
+ * ar) também a desliga. Na parcela 01 não há o que escolher: ficam a lista das parcelas e o total.
  */
-export function InstallmentScopeChoice({ entry, onChange }) {
+export function InstallmentScopeChoice({ entry, onChange, busy = false }) {
   const touchTarget = useTouchTarget();
-  if (!entry.installment || !entry.new_purchase || entry.installment.number <= 1) return null;
+  if (!entry.installment || !entry.new_purchase || entry.installment.count <= 1) return null;
   const { number: n, count: m } = entry.installment;
+  if (n <= 1) {
+    return (
+      <div data-testid="installments-scope">
+        <span style={FIELD_LABEL}>Compra parcelada · {pad2(n)}/{pad2(m)}</span>
+        <span style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.5 }}>Cria a compra em {plural(m, "parcela", "parcelas")}, cada uma na sua fatura.</span>
+        <InstallmentList entry={entry} />
+        <InstallmentsHelp entry={entry} both={false} />
+      </div>
+    );
+  }
   const scope = entry.installments_scope ?? "full";
   const notes = scopeNotes(entry);
   const name = `scope-${entry.id}`;
@@ -114,7 +137,6 @@ export function InstallmentScopeChoice({ entry, onChange }) {
     { value: "full", label: `Compra inteira (parcelas 01 a ${pad2(m)})`, note: notes.full },
     { value: "from_current", label: `Só daqui em diante (parcelas ${pad2(n)} a ${pad2(m)})`, note: notes.fromCurrent },
   ];
-  const total = entry.new_purchase.total_amount;
   return (
     <div data-testid="installments-scope">
       <span id={`${name}-label`} style={FIELD_LABEL}>Compra parcelada · {pad2(n)}/{pad2(m)}</span>
@@ -124,15 +146,16 @@ export function InstallmentScopeChoice({ entry, onChange }) {
           return (
             <label
               key={option.value}
-              style={{ ...G, display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", border: `1px solid ${checked ? T.blue : T.border}`, background: checked ? T.blueLight : T.surface, borderRadius: 10, padding: "8px 10px", ...touchTarget }}
+              style={{ ...G, display: "flex", gap: 8, alignItems: "flex-start", cursor: busy ? "not-allowed" : "pointer", border: `1px solid ${checked ? T.blue : T.border}`, background: checked ? T.blueLight : T.surface, borderRadius: 10, padding: "8px 10px", ...touchTarget }}
             >
               <input
                 type="radio"
                 name={name}
                 value={option.value}
                 checked={checked}
+                disabled={busy}
                 onChange={() => onChange(entry.id, { installments_scope: option.value })}
-                style={{ margin: "2px 0 0", width: 16, height: 16, flexShrink: 0, cursor: "pointer" }}
+                style={{ margin: "2px 0 0", width: 16, height: 16, flexShrink: 0, cursor: busy ? "not-allowed" : "pointer" }}
               />
               <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                 <b style={{ fontSize: 13, color: T.ink }}>{option.label}</b>
@@ -143,22 +166,19 @@ export function InstallmentScopeChoice({ entry, onChange }) {
         })}
       </div>
       <InstallmentList entry={entry} />
-      <span style={HELP}>
-        As etiquetas valem para todas as parcelas.
-        {total ? <> Total da compra: <b style={NUM}>{formatMoney(total.amount, total.currency)}</b>, nas duas opções.</> : null}
-      </span>
+      <InstallmentsHelp entry={entry} both />
     </div>
   );
 }
 
 /**
  * O `invoice` do formulário do item novo (`StatementEntryCard`): a forma de pagamento travada, as
- * opções da parcelada e a nota do "Não registrar".
+ * opções da parcelada (desligadas com `busy`) e a nota do "Não registrar".
  */
-export function invoiceNewPurchaseForm(entry, cardName, onChange) {
+export function invoiceNewPurchaseForm(entry, cardName, onChange, busy = false) {
   return {
     paymentLabel: cardPaymentLabel(cardName),
-    extraFields: <InstallmentScopeChoice entry={entry} onChange={onChange} />,
+    extraFields: <InstallmentScopeChoice entry={entry} onChange={onChange} busy={busy} />,
     skipText: "Esta compra não entra no Fincla: nada é adicionado. A diferença aparece em Conferir o total.",
   };
 }

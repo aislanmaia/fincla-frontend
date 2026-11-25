@@ -4,7 +4,7 @@ import { Ban, Check, ChevronRight, Layers, Lock, Plus } from "lucide-react";
 import { T, TOUCH_TARGET } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { Badge, Btn, Select, useTouchTarget } from "../../components/primitives";
-import { formatMoney } from "../../money/formatMoney.js";
+import { formatMoney, formatMoneyAbs } from "../../money/formatMoney.js";
 import { DetailTagPicker } from "./DetailTagPicker.jsx";
 import { ConferidoBadge, InlineFields, ROW_CLICKABLE, isAnswered, openOnRowClick, useCompact } from "./entryQueue.jsx";
 
@@ -450,7 +450,11 @@ function NewTransactionEditor({ entry, categories, details, fallbackLabel, isMob
         </div>
         <div>
           <span style={FIELD_LABEL}>Valor</span>
-          <LockedValue testId="locked-amount" title={`Vem do ${source} e não pode ser alterado`}>{formatMoney(entry.amount, entry.currency)}</LockedValue>
+          {/* Na fatura o sinal é do extrato (cobrança negativa): o valor vai sem sinal, como a
+              fatura mostra, e o tipo travado ao lado diz se é despesa ou estorno. */}
+          <LockedValue testId="locked-amount" title={`Vem do ${source} e não pode ser alterado`}>
+            {invoice ? formatMoneyAbs(entry.amount, entry.currency) : formatMoney(entry.amount, entry.currency)}
+          </LockedValue>
           <span style={HELP}>Vem do banco</span>
         </div>
 
