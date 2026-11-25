@@ -1,4 +1,5 @@
 import { T } from "../../../tokens";
+import { categoryColorForCategory } from "../../../data/categoryLabels.js";
 
 /** `shortDateLabel` com identidade estável — ver `cacheDeRotuloDeData`. */
 export function rotuloDeData(raw) {
@@ -17,26 +18,11 @@ export function rotuloDeData(raw) {
 }
 
 
-export const CAT_COLORS = {
-  Alimentação: "#059669",
-  Transporte: "#2563EB",
-  Moradia: "#6B7280",
-  Saúde: "#DC2626",
-  Receita: "#059669",
-  Assinaturas: "#7C3AED",
-  "Assinaturas & Software": "#0891B2",
-  Streaming: "#7C3AED",
-  Lazer: "#D97706",
-  "Lazer & Entretenimento": "#D97706",
-  Compras: "#0891B2",
-  "Compras Pessoais": "#DC2626",
-  Educação: "#7C3AED",
-  Outros: "#374151",
-  Serviços: "#6B7280",
-  "Impostos & Taxas": "#D97706",
-  Vestuário: "#BE185D",
-};
-export const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+/* A cor da categoria segue a regra única (`categoryColorForCategory`): a cor da
+   própria categoria na API (a que a pessoa edita), senão a chave estável do
+   sistema, senão o mapa por rótulo. Renomear não muda a cor (BUG-02). */
+export const catColor = (label, systemKey = null, color = null) =>
+  categoryColorForCategory({ color, systemKey, label }) || T.inkMid;
 
 /** "20/08/2026" -> { top: "20 ago", sub: "qua" }. Duas linhas curtas cabem numa
  *  coluna de 54 px sem quebrar; a data por extenso não cabia. */
@@ -70,7 +56,7 @@ export function shortDateLabel(raw, today = new Date()) {
   if (sameDay(d, yesterday)) return { top, sub: "ontem" };
   return { top, sub: WEEKDAYS_SHORT[d.getDay()] || "" };
 }
-export const catBg = (label) => `${catColor(label)}18`;
+export const catBg = (label, systemKey = null, color = null) => `${catColor(label, systemKey, color)}18`;
 
 export function transactionStatus(status) {
   return status === "confirmado"

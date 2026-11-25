@@ -7,6 +7,11 @@
  * cartões é recarregada e o cartão novo fica selecionado — ou, em erro da
  * API, a mensagem aparece em PT-BR e o formulário continua aberto.
  *
+ * Sem `{ timeout }` por teste: vale o teto global de `vite.config.ts` (45 s).
+ * Os `15000` que havia aqui REBAIXAVAM esse teto — isolados os mais lentos
+ * levam ~4 s (igual na main), mas sob a carga do gate G2 do "Exportar
+ * lançamentos" dois deles passaram de 15 s e caíram.
+ *
  * Mock único no limite de rede (`apiClient`): tudo que fica entre o clique
  * e o POST — `buildCreateCreditCardPayload`, `createCreditCardForUi`,
  * `listCreditCards`, `handleApiError` — roda de verdade.
@@ -209,7 +214,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     expect(screen.getByText("Cartão Antigo").parentElement.style.background).not.toBe(
       SELECTED_BG,
     );
-  }, 15000);
+  });
 
   it("preConfig.cartaoId não rouba a seleção de volta depois que o quick-add cria outro cartão (achado 1)", async () => {
     const user = userEvent.setup();
@@ -252,7 +257,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     expect(
       screen.getByText("Cartão Antigo").parentElement.style.background,
     ).not.toBe(SELECTED_BG);
-  }, 15000);
+  });
 
   it("mostra o erro em PT-BR quando a API rejeita e mantém o formulário aberto", async () => {
     const user = userEvent.setup();
@@ -289,7 +294,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Cartão Duplicado")).not.toBeInTheDocument();
-  }, 15000);
+  });
 
   it("POST cria o cartão mas a recarga da lista falha — não vira erro de criação, não convida a duplicar, e NÃO derruba a lista (achado 2, e achado 1 da 2ª rodada)", async () => {
     const user = userEvent.setup();
@@ -347,7 +352,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     await screen.findByText(/Cartão criado, mas não foi possível atualizar a lista/);
     expect(screen.getByText("Cartão Antigo")).toBeInTheDocument();
     expect(screen.getByText(/Novo cartão/i)).toBeInTheDocument();
-  }, 15000);
+  });
 
   it("modo não-live: quick-add avisa que está indisponível em vez de um formulário morto (achado 4)", async () => {
     const user = userEvent.setup();
@@ -371,7 +376,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       "/credit-cards",
       expect.anything(),
     );
-  }, 15000);
+  });
 
   it("erro de cartão duplicado (400, corpo real {error,message,type} do backend) aparece em PT-BR (achado 3 da 2ª rodada)", async () => {
     const user = userEvent.setup();
@@ -417,7 +422,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       "Já existe um cartão com essa bandeira e esses 4 últimos dígitos nesta organização.",
     );
     expect(screen.queryByText(/Card with brand/i)).not.toBeInTheDocument();
-  }, 15000);
+  });
 
   it("fechar e reabrir o drawer com um POST de criação em voo não deixa a sessão antiga vazar pra sessão nova (drawerSessionRef, achado 2 da 2ª rodada)", async () => {
     const user = userEvent.setup();
@@ -498,7 +503,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
 
     // A sessão nova não viu nada da sessão antiga.
     expect(screen.queryByText("Sessão Velha")).not.toBeInTheDocument();
-  }, 15000);
+  });
 
   it("trocar de preConfig com o drawer ABERTO e um POST em voo não deixa o setCardId tardio sobrescrever o formulário já resetado (achado 4 da 2ª rodada)", async () => {
     const user = userEvent.setup();
@@ -576,7 +581,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     expect(
       screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     ).not.toBeInTheDocument();
-  }, 15000);
+  });
 
   it("recarga da lista falha PERSISTENTEMENTE após criar: a seleção do cartão novo continua protegida mesmo depois de outro gatilho do efeito de auto-seleção (achado 1 da 3ª rodada)", async () => {
     const user = userEvent.setup();
@@ -635,7 +640,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     expect(screen.getByText("Cartão Antigo").parentElement.style.background).not.toBe(
       SELECTED_BG,
     );
-  }, 15000);
+  });
 });
 
 describe("NovaTransacaoModal — Esc fecha, uma camada por vez (§29)", () => {

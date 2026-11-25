@@ -97,3 +97,24 @@ describe("Simulação — valores na moeda base (#310)", () => {
     await waitFor(() => expect(text()).toContain("R$ 1.200,00"));
   });
 });
+
+// G3-P-07 (fincla-api#534): o orçamento do período com as casas da moeda —
+// o valor riscado saía "US$ 5.000" (sem centavos) ao lado de "US$ 2.499,60".
+describe("Simulação — orçamento do período com as casas da moeda (G3-P-07)", () => {
+  it("orçamento ajustado: o real riscado e o ajustado, ambos com 2 casas", async () => {
+    render(
+      <SimulacaoPage cenarios={[{ ...CENARIO, budgetOverride: 2499.6 }]} setCenarios={() => {}} cenarioId={1}
+        setCenarioId={() => {}} organizationId={ORG} />,
+    );
+    await waitFor(() => expect(text()).toContain("US$ 2.499,60"));
+    // O riscado é a receita média da simulação (5.000 em 1 mês), com centavos.
+    await waitFor(() => expect(text()).toContain("US$ 5.000,00"));
+    expect(text()).not.toMatch(/US\$ \d{1,3}(\.\d{3})*(?![\d.,])/);
+  });
+
+  it("orçamento real da conta: com 2 casas", async () => {
+    renderPage();
+    await waitFor(() => expect(text()).toContain("orçamento real da conta"));
+    await waitFor(() => expect(text()).toContain("US$ 5.000,00"));
+  });
+});

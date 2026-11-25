@@ -10,7 +10,7 @@ import {
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { M_MONO } from "../moodV4";
-import { CAT_COLORS_CARD } from "../../data/creditCardsMockData.js";
+import { cardCategoryColor } from "../../data/creditCardsMockData.js";
 import { safePctOrFallback as safe } from "../../data/creditCardsAdapter.js";
 import { computeCardKpis } from "./cardKpis.js";
 import { CardHeuristicTiles } from "./CardHeuristicTiles.jsx";
@@ -265,7 +265,7 @@ export function InstallmentsTab({
           const pct = Math.round(p.pago / p.total * 100);
           const remainingCount = p.total - p.pago;
           const remainingValue = remainingCount * p.vParcela;
-          const rowColor = CAT_COLORS_CARD[p.cat] || T.inkMid;
+          const rowColor = cardCategoryColor(p.cat, p.catSystemKey, p.catColor);
           const isOpen = expandedInstallment === p.id;
           const isLast = idx === sorted.length - 1;
           return (
@@ -364,7 +364,7 @@ export function AnalyticsTab({
     </div>
   );
   const trendCategories = (cardTrend && cardTrend.length > 0) ? Object.keys(cardTrend[0]).filter((k) => k !== "mes") : [];
-  const trendColors = trendCategories.reduce((m, c) => ({ ...m, [c]: CAT_COLORS_CARD[c] || T.inkMid }), {});
+  const trendColors = trendCategories.reduce((m, c) => ({ ...m, [c]: cardCategoryColor(c) }), {});
   const kpis = computeCardKpis({ card, invoice, usagePercent, totalInstallments, projection });
 
   return (
@@ -375,7 +375,7 @@ export function AnalyticsTab({
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {categoryAlerts.map((a, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: T.amberLight, borderRadius: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: CAT_COLORS_CARD[a.cat] || T.inkMid, flexShrink: 0 }} />
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: cardCategoryColor(a.cat), flexShrink: 0 }} />
                 <span style={{ ...G, fontSize: 12, color: T.ink, flex: 1 }}>
                   <strong>{a.cat}</strong> cresceu <strong style={{ color: T.amber }}>+{a.pct}%</strong> em relação ao mês anterior
                 </span>

@@ -637,7 +637,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
         <div style={{ border: `1.5px solid ${projFimOkPreview ? T.green : T.purple}`, borderRadius: 10, overflow: "hidden", boxShadow: `0 0 0 3px ${projFimOkPreview ? T.green : T.purple}11`, transition: "border 0.2s, box-shadow 0.2s" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 13px", background: projFimOkPreview ? T.greenLight : T.purpleLight, transition: "background 0.2s" }}>
             <span style={{ fontSize: 13 }}>💰</span>
-            <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{sym} {apiBudgetBase.toLocaleString("pt-BR")}</span>
+            <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{fmtAbs(apiBudgetBase)}</span>
             <span style={{ fontSize: 11, color: T.inkLight }}>→</span>
             <input autoFocus
               style={{ ...G, fontFamily: "'Geist Mono', monospace", fontSize: 15, fontWeight: 800, color: projFimOkPreview ? T.green : T.purple, background: "none", border: "none", outline: "none", flex: 1, fontVariantNumeric: "tabular-nums" }}
@@ -659,9 +659,9 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
       ) : budgetOverride ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: T.purpleLight, border: `1.5px solid ${T.purple}44`, borderRadius: 10, cursor: "pointer" }} onClick={startBudgetEdit}>
           <span style={{ fontSize: 13 }}>💰</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{sym} {apiBudgetBase.toLocaleString("pt-BR")}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 12, color: T.inkLight, textDecoration: "line-through" }}>{fmtAbs(apiBudgetBase)}</span>
           <span style={{ fontSize: 11, color: T.inkLight }}>→</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.purple, flex: 1 }}>{sym} {budgetOverride.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.purple, flex: 1 }}>{fmtAbs(budgetOverride)}</span>
           <div style={{ width: 7, height: 7, borderRadius: 99, background: T.purple, flexShrink: 0 }} />
           <button onClick={e => { e.stopPropagation(); restoreBudget(); }} style={{ ...G, background: "none", border: "none", fontSize: 11, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>
         </div>
@@ -671,7 +671,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
           onMouseEnter={e => e.currentTarget.style.borderColor = T.borderHov}
           onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
           <span style={{ fontSize: 13 }}>💰</span>
-          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.ink, flex: 1 }}>{sym} {apiBudgetBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+          <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.ink, flex: 1 }}>{fmtAbs(apiBudgetBase)}</span>
           <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ Ajustar para este cenário</span>
         </div>
       )}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardCategoryRows,
   mapCategory,
+  mapTransaction,
   mapUpcomingDebits,
   pickCategoryName,
 } from "../useDashboardData.js";
@@ -81,6 +82,41 @@ describe("pickCategoryName", () => {
       tags: { categoria: [{ id: "cat-1", name: "", icon_key: "pill", is_default: true }] },
     });
     expect(name).toBe("Saúde");
+  });
+
+  // fincla-api#534: o nome é o que a API entrega em `label` (o da organização ou o do catálogo em pt-BR).
+  it("usa o rótulo da API: nome da organização numa categoria renomeada e o do catálogo nas outras", () => {
+    const renamed = pickCategoryName({
+      tags: { categoria: [{ id: "cat-1", name: "Personal Shopping", label: "Minhas compras", icon_key: "shopping-bag", is_default: true, tag_type: { name: "categoria" } }] },
+    });
+    expect(renamed).toBe("Minhas compras");
+    const catalog = pickCategoryName({
+      tags: { categoria: [{ id: "cat-2", name: "Subscriptions & Software", label: "Assinaturas e software", icon_key: "smartphone", is_default: true, tag_type: { name: "categoria" } }] },
+    });
+    expect(catalog).toBe("Assinaturas e software");
+  });
+
+  // G3-P-02: categoria do SISTEMA renomeada. Uma API que ainda manda a tradução
+  // em `label` (ou nenhum `label`) e o nome da org em `custom_name` não pode
+  // fazer a Visão Geral mostrar o nome do catálogo — Transações mostra o da org.
+  it("categoria do sistema renomeada: o nome da organização vence a tradução nos DOIS cards da Visão Geral", () => {
+    const renamedTag = {
+      id: "cat-shop", name: "Personal Shopping", label: "Compras pessoais", custom_name: "Minhas compras",
+      icon_key: "shopping-bag", is_default: true, tag_type: { name: "categoria" },
+    };
+    const tx = { type: "expense", value: 80, value_currency: "BRL", tags: { categoria: [renamedTag] } };
+    // Últimas transações.
+    expect(pickCategoryName(tx)).toBe("Minhas compras");
+    expect(mapTransaction(tx).cat).toBe("Minhas compras");
+    // Gastos por categoria — o rótulo atual da API (label = nome da org) também.
+    const rows = buildDashboardCategoryRows([tx], "2026-06-01", "2026-06-30", [], new Map(), "BRL", []);
+    expect(rows.map((r) => r.name)).toEqual(["Minhas compras"]);
+    const labelOnly = { ...tx, tags: { categoria: [{ ...renamedTag, label: "Minhas compras", custom_name: undefined }] } };
+    expect(buildDashboardCategoryRows([labelOnly], "2026-06-01", "2026-06-30", [], new Map(), "BRL", [])[0].name)
+      .toBe("Minhas compras");
+    // A moeda da linha (PR #330) continua a da transação.
+    expect(rows[0].currency).toBe("BRL");
+    expect(rows[0].value).toBe(80);
   });
 
   // Regressão #100 (rodada 3, achado 2c): `??` deixava passar string vazia
@@ -330,5 +366,108 @@ describe("buildDashboardCategoryRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("Health");
     expect(rows[0].color).toBe("#ABCDEF");
+  });
+});
+
+/**
+ * BUG-05: com R$ 190,40 e US$ 225,60 na mesma categoria, o card somava as
+ * transações e escrevia "R$ 416,00". As linhas seguem vindo das transações, mas
+ * somadas por moeda e convertidas pela cotação que a API usou no período.
+ */
+describe("buildDashboardCategoryRows — moedas (BUG-05)", () => {
+  const food = { categoria: [{ id: "cat-food", name: "Food & Groceries", icon_key: "shopping-cart", is_default: true }] };
+  const tx = (value, currency, tags = food) => ({ type: "expense", value, value_currency: currency, tags });
+  const RATES = [{ base: "USD", quote: "BRL", rate: "5.7898000000", quoted_on: "2026-11-17" }];
+  const build = (txs, base, rates, prev = new Map()) =>
+    buildDashboardCategoryRows(txs, "2026-11-01", "2026-11-30", [], prev, base, rates);
+
+  it("R$ + US$ na mesma categoria: convertido para a base pela cotação da API", () => {
+    const [row] = build([tx(190.4, "BRL"), tx(225.6, "USD")], "BRL", RATES);
+    // 225,60 × 5,7898 = 1.306,18; + 190,40
+    expect(row).toEqual(expect.objectContaining({ value: 1496.58, currency: "BRL", byCurrency: null }));
+  });
+
+  it("mês só em US$ numa base BRL: convertido, nunca US$ escrito como R$", () => {
+    const [row] = build([tx(50, "USD")], "BRL", RATES);
+    expect(row).toEqual(expect.objectContaining({ value: 289.49, currency: "BRL" }));
+  });
+
+  it("sem a cotação do par: sem soma; as somas por moeda lado a lado, base primeiro", () => {
+    const [row] = build([tx(225.6, "USD"), tx(190.4, "BRL")], "BRL", []);
+    expect(row.value).toBeNull();
+    expect(row.byCurrency).toEqual([
+      { currency: "BRL", amount: 190.4 },
+      { currency: "USD", amount: 225.6 },
+    ]);
+    expect(row.avg).toBeNull();
+  });
+
+  it("API fora do ar (sem base, sem taxas) e uma moeda só: a soma, escrita nessa moeda, sem comparativo", () => {
+    const [row] = build([tx(20, "USD"), tx(30, "USD")], null, null, new Map([["cat-food", 10]]));
+    expect(row).toEqual(expect.objectContaining({ value: 50, currency: "USD", avg: null }));
+  });
+
+  it("\"Sem categoria\" continua no card quando há moeda estrangeira no mês", () => {
+    const rows = build([tx(300, "BRL", {}), tx(50, "USD")], "BRL", RATES);
+    expect(rows.map((r) => r.name)).toContain("Sem categoria");
+  });
+
+  it("tudo na moeda base: a soma das transações, com comparativo, como antes", () => {
+    const [row] = build([tx(20, "BRL"), tx(30, "BRL")], "BRL", RATES, new Map([["cat-food", 40]]));
+    expect(row).toEqual(expect.objectContaining({ value: 50, currency: "BRL", avg: 40 }));
+  });
+
+  it("despesa sem moeda declarada conta como a base, não como a estrangeira", () => {
+    const [row] = build([tx(100, undefined), tx(10, "USD")], "BRL", RATES);
+    // 100 (base) + 10 × 5,7898 = 157,90
+    expect(row).toEqual(expect.objectContaining({ value: 157.9, currency: "BRL" }));
+  });
+});
+
+describe("mapTransaction / mapUpcomingDebits — moeda da linha (BUG-05)", () => {
+  it("a linha leva a moeda da transação", () => {
+    expect(mapTransaction({ id: 1, type: "expense", value: 50, value_currency: "USD", tags: {} }).currency).toBe("USD");
+    expect(mapTransaction({ id: 2, type: "expense", value: 50, tags: {} }).currency).toBeNull();
+  });
+
+  it("o débito previsto leva a moeda da série", () => {
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 2);
+    const ymd = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, "0")}-${String(soon.getDate()).padStart(2, "0")}`;
+    const [d] = mapUpcomingDebits({ series: [{ id: "s1", type: "expense", description: "Netflix", value: 20, value_currency: "USD", next_occurrence: ymd, tags: [] }] });
+    expect(d.currency).toBe("USD");
+  });
+});
+
+// QA display-and-pagination BUG-01/BUG-02: Saúde (system_key "health") renomeada
+// para "Saude da Familia QA". Na Visão Geral a cor vinha da cor crua da API e nas
+// Transações do rótulo; agora as duas saem da chave estável, e as linhas que só
+// existem na resposta de `/analytics/by-category` usam `tag_label`.
+describe("Gastos por categoria: categoria do sistema renomeada", () => {
+  const RENAMED = "Saude da Familia QA";
+  const HEALTH = "#DC2626";
+  const renamedTag = {
+    id: "cat-h", name: "Health", label: RENAMED, custom_name: RENAMED, system_key: "health",
+    color: null, is_default: true, tag_type: { name: "categoria" },
+  };
+
+  it("a linha vinda das transações tem o nome da organização e a cor da chave do sistema", async () => {
+    const { catColor } = await import("../../transactions/shared/transactionFormat.js");
+    const tx = { type: "expense", value: 80, value_currency: "BRL", tags: { categoria: [renamedTag] } };
+    const [row] = buildDashboardCategoryRows([tx], "2026-11-01", "2026-11-30", [], new Map(), "BRL", []);
+    expect(row.name).toBe(RENAMED);
+    expect(row.color).toBe(HEALTH);
+    // A mesma cor do chip das Transações para a mesma linha.
+    expect(row.color).toBe(catColor(RENAMED, "health"));
+  });
+
+  it("a linha só da API (sem transações) usa tag_label e a cor da chave", () => {
+    const api = [{
+      tag_id: "cat-h", tag_name: "Health", tag_label: RENAMED, tag_system_key: "health",
+      tag_color: null, total: 120,
+    }];
+    const [row] = buildDashboardCategoryRows([], "2026-11-01", "2026-11-30", api, new Map(), "BRL", []);
+    expect(row.name).toBe(RENAMED);
+    expect(row.color).toBe(HEALTH);
   });
 });

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 
 import { getCreditCardInvoice, listCreditCards } from "../../api/creditCards";
 import { T } from "../tokens";
+import { fmtCount } from "../formatters.js";
 import { plural } from "../plural.js";
 import { G, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
-import { Card, PageTitle } from "../components/primitives.jsx";
+import { Btn, Card, PageTitle } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { FC } from "../routing/searchContract.js";
@@ -18,7 +19,12 @@ import { shortDateLabel } from "../features/transactions/shared/transactionForma
 import { TransactionsFilterBar } from "../features/transactions/filters/TransactionsFilterBar.jsx";
 import { useTransactionsFilterState } from "../features/transactions/filters/useTransactionsFilterState.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
-import { categoryOptions, invoiceRows, tagOptions, weeklySpending } from "../features/cardTransactions/cardTransactionsModel.js";
+import { categoryOptions, invoiceExportFilter, invoiceRows, tagOptions, weeklySpending } from "../features/cardTransactions/cardTransactionsModel.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { invoiceExportNames } from "../features/export/invoiceExport.js";
+import { exportTexts } from "../features/export/exportTexts.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
+import { TAG_MODE_LABELS } from "../features/transactions/filters/tagModeLabels.js";
 
 const panel = { padding: 18, minWidth: 0 };
 const input = { ...G, minHeight: 38, border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, color: T.ink, padding: "7px 10px" };
@@ -26,6 +32,7 @@ const INVOICE_FILTER_INITIAL = { period: "tudo" };
 const INVOICE_FACETS = ["periodo", "categoria", "tag", "valor"];
 const INVOICE_SORT_FIELDS = ["date", "val", "desc", "cat"];
 const money = (value, currency) => currency ? formatMoney(value, currency) : null;
+const MODALITY_LABELS = { cash: "À vista", installment: "Parcelada", refund: "Estorno" };
 
 function Notice({ children }) {
   return <Card role="status" style={{ ...panel, ...G, color: T.inkMid, fontSize: 13 }}>{children}</Card>;
@@ -140,13 +147,43 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const setPreference = (patch) => setPrefs((before) => { const next = { ...before, ...patch }; writeListPrefs(next); return next; });
   const goBack = () => navigate({ to: invoiceDashboardPath(cardId, year, month) });
   const currency = detail?.currency || state.card?.currency || null;
+  const [exportOpen, setExportOpen] = useState(false);
+  // O recorte da tela como parâmetros da API (#525): o arquivo e os totais do painel saem do servidor com eles.
+  const exportFilter = state.card && detail ? invoiceExportFilter({
+    organizationId, cardId: state.card.id, invoiceId: detail.invoice_id ?? null, items: detail.items,
+    search: filter.search, cats: filter.cats, tags: filter.tags, tagMode: filter.tagMode, modality,
+    from: bounds.from, to: bounds.to, valueMin: filter.valueMin, valueMax: filter.valueMax, valueCurrency: currency,
+  }) : { params: null, blocked: null };
+  const exportSummary = useExportSummary(exportOpen ? exportFilter.params : null);
+  const exportNames = state.card ? invoiceExportNames(state.card, year, month) : null;
+  const exportFiltersText = () => {
+    const texts = exportTexts("pt-BR");
+    const byId = new Map(categories.map((row) => [row.id, row.name]));
+    const catNames = filter.cats.map((id) => byId.get(id)).filter(Boolean);
+    const valueFacet = filter.buildFacets({ valueCurrency: currency }).find((facet) => facet.key === "valor" && facet.active);
+    return [
+      exportNames.invoiceLine,
+      ...(bounds.from || bounds.to ? [texts.period(bounds.from, bounds.to)] : []),
+      ...(filter.search.trim() ? [`Busca: ${filter.search.trim()}`] : []),
+      ...(catNames.length ? [`${catNames.length === 1 ? "Categoria" : "Categorias"}: ${catNames.join(", ")}`] : []),
+      texts.tags(filter.tags, TAG_MODE_LABELS[filter.tagMode] ?? TAG_MODE_LABELS.any),
+      ...(MODALITY_LABELS[modality] ? [`Modalidade: ${MODALITY_LABELS[modality]}`] : []),
+      ...(valueFacet ? [`${valueFacet.label}: ${valueFacet.value}`] : []),
+    ].filter(Boolean);
+  };
 
   return (
     <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       <button type="button" onClick={goBack} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para a fatura</button>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
       <div>
         <PageTitle sans="Lançamentos da" serif="fatura" />
         {state.card && <p style={{ ...G, ...NUM, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{state.card.description || state.card.brand} •{state.card.last4} · {new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>}
+      </div>
+      {enabled && state.status === "ok" && detail && <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, maxWidth: 320 }}>
+        <Btn variant="outGray" disabled={rows.length === 0 || Boolean(exportFilter.blocked)} onClick={() => setExportOpen(true)} data-testid="export-invoice-transactions"><Download size={14} /> Exportar</Btn>
+        {rows.length > 0 && exportFilter.blocked && <span role="status" style={{ ...G, fontSize: 11, color: T.inkMid, textAlign: "right" }}>{exportFilter.blocked}</span>}
+      </div>}
       </div>
       {!enabled && <Notice>Selecione uma organização para ver os lançamentos.</Notice>}
       {enabled && state.status === "loading" && <Notice>Carregando lançamentos…</Notice>}
@@ -177,9 +214,10 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           <label style={{ ...G, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.inkMid, minHeight: 38 }}><input type="checkbox" checked={prefs.grouped && filter.sort[0]?.field === "date"} disabled={filter.sort[0]?.field !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
           </div>
         </Card>
-        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {plural(detail.items_count, "lançamento", "lançamentos")}. Os filtros não alteram o resumo da fatura.</div>
+        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {fmtCount(rows.length)} de {plural(detail.items_count, "lançamento", "lançamentos")}. Os filtros não alteram o resumo da fatura.</div>
         <TransactionList rows={rows} grouped={prefs.grouped && filter.sort[0]?.field === "date"} density={prefs.density} isMobile={isMobile} currency={currency} />
       </>}
+      {exportOpen && exportFilter.params && <ExportPanel title={`Lançamentos da fatura · ${exportNames.title}`} filePrefix={exportNames.filePrefix} filtersText={exportFiltersText()} filterParams={exportFilter.params} count={rows.length} summary={exportSummary.data} summaryError={exportSummary.error} onClose={() => setExportOpen(false)} />}
     </div>
   );
 }

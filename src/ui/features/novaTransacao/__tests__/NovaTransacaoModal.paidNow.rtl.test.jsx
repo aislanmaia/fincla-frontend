@@ -10,6 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * Mock só no limite HTTP (`apiClient`): o modal, `buildCreateTransactionPayload`
  * e `createTransactionForUi` rodam de verdade.
+ *
+ * Sem `{ timeout }` por teste: vale o teto global de `vite.config.ts` (45 s).
+ * Os `20000`/`30000` que havia aqui REBAIXAVAM esse teto e, sob a carga de um
+ * gate, derrubavam o teste por tempo (mesmo motivo do NovaTransacaoModal.rtl).
  */
 
 vi.mock("../../../../api/client", async () => {
@@ -144,7 +148,7 @@ describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvi
     expect(resend[1].paid_at).toBe(first[1].paid_at);
     expect(resend[2].headers["Idempotency-Key"]).toBe(first[2].headers["Idempotency-Key"]);
     expect(await screen.findByText("Despesa registrada!")).toBeInTheDocument();
-  }, 20000);
+  });
 
   it("o instante congelado morre com a sessão do drawer: reabrir e lançar de novo usa o instante novo", async () => {
     const user = userEvent.setup();
@@ -210,7 +214,7 @@ describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvi
     const resend = txPosts()[sentAfterYesterday];
     expect(resend[1].paid_at).toBe(first[1].paid_at);
     expect(resend[2].headers["Idempotency-Key"]).toBe(first[2].headers["Idempotency-Key"]);
-  }, 30000);
+  });
 
   it("erro definitivo (422) e novo envio depois: usa a hora atual, não a congelada", async () => {
     let calls = 0;
@@ -262,6 +266,6 @@ describe("NovaTransacaoModal — o instante do 'Já paguei' não quebra o reenvi
     await user.click(confirmar);
     await waitFor(() => expect(txPosts().length).toBe(sentBefore + 1));
     expect(txPosts()[sentBefore][1].paid_at).toBe("2026-11-04T08:27:00");
-  }, 20000);
+  });
 });
 

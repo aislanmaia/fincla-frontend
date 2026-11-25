@@ -12,7 +12,7 @@ import { FC } from "../routing/searchContract";
 import { cardAllTransactionsPath } from "../routing/invoiceRoute";
 import { shouldUseRealData } from "../dataMode";
 import { formatYmdToBrDisplay } from "../data/transactionsAdapter.js";
-import { useFocusTrap } from "../features/transactions/useFocusTrap";
+import { useFocusTrap } from "../components/useFocusTrap.js";
 
 /** "3× restam" / "1× resta": o verbo concorda com o número de parcelas que faltam. */
 const remainingLabel = (n) => { const k = Math.max(0, Number(n) || 0); return `${k}× ${k === 1 ? "resta" : "restam"}`; };

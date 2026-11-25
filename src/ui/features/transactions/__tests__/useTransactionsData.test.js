@@ -11,16 +11,17 @@
 // inspecionar os params exatos que sairiam na querystring.
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { useTransactionsData } from "../useTransactionsData.js";
 import { filtersToLegacyParams } from "../filters/filtersToLegacyParams.js";
-import { listTransactions, getTransactionsSummary } from "../../../../api/transactions";
+import { deleteTransaction, listTransactions, getTransactionsSummary } from "../../../../api/transactions";
 
 vi.mock("../../../../api/transactions", () => ({
   listTransactions: vi.fn(),
   getTransactionsSummary: vi.fn(),
+  deleteTransaction: vi.fn(),
 }));
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -62,9 +63,13 @@ describe("fincla-frontend#80 — facet Situação chega como `settled` na chamad
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, settled: false }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(getTransactionsSummary).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, settled: false }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -78,6 +83,8 @@ describe("fincla-frontend#80 — facet Situação chega como `settled` na chamad
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ settled: true }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -108,9 +115,13 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ organization_id: ORG, tag_id: [TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(getTransactionsSummary).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -144,6 +155,8 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
     // da tag ficava aceso filtrando nada.
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [CAT_ID, TAG_ID] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -158,6 +171,8 @@ describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
 
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: [TAG_ID, SECOND] }),
+      // 2º argumento: o `signal` que cancela a leitura superada (G3-P-01).
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 });
@@ -225,7 +240,10 @@ describe("fincla-frontend#106 — hasLoaded distingue carregando/erro de vazio d
     listTransactions.mockRejectedValueOnce(new Error("network down"));
     rerender({ refreshToken: 1 });
 
-    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // G3-P-01: falha numa releitura em segundo plano é um aviso discreto
+    // (`refreshError`), não o erro geral — que pararia a rolagem.
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+    expect(result.current.error).toBe("");
 
     // A implementação ANTERIOR zerava `transactions`/`total` no catch — a
     // lista sumia da tela sob uma falha de revalidação, mesmo com dados
@@ -368,235 +386,308 @@ describe("fincla-frontend#109 achado 3 — falha ao trocar de contexto não herd
   });
 });
 
-// fincla-frontend#109 rodada 2, achado 3 — o scroll infinito
-// (`hasMore`/`tryLoadMore` em TransacoesPage.jsx) só aumenta `filters.limit`
-// pra pedir mais páginas da MESMA pergunta; a página recalcula `filters` como
-// objeto NOVO a cada bump, então `query`/`summaryQuery` também trocam de
-// referência — indistinguível, pela checagem referencial de `sameFilters`,
-// de uma troca de verdade de organização/filtro. Uma falha ao "carregar
-// mais" não pode zerar as linhas já lidas.
-describe("fincla-frontend#109 rodada 2, achado 3 — paginação (limit crescente) não é 'contexto novo'", () => {
-  it("falha ao aumentar `limit` (scroll infinito): preserva as linhas/hasLoaded já carregados", async () => {
-    const ROW = {
-      id: "tx-pagina-1",
-      description: "Café página 1",
-      amount: -10,
-      type: "expense",
-      date: "2026-08-01",
-      tags: {},
+// fincla-api#535 — o scroll infinito pede a PRÓXIMA PÁGINA (`page` crescente,
+// `limit` fixo no tamanho da página) e SOMA as linhas. Antes ele só aumentava
+// o `limit` do mesmo pedido (10, 20… 100) e parava em 100 — o máximo que o
+// servidor aceita — com o cabeçalho anunciando o total real.
+//
+// O servidor aqui é um dublê que pagina de verdade: devolve a fatia
+// `[(page-1)*limit, page*limit)` e um `pagination` como o da API.
+const PAGE_LIMIT = 10;
+
+function apiRow(id) {
+  return { id, description: `Item ${id}`, amount: -10, type: "expense", date: "2026-08-01", tags: {} };
+}
+
+/** Lista "do servidor", mutável pelo teste (inserir no topo, apagar). */
+function serveRows(rows, { failOnce = new Set() } = {}) {
+  listTransactions.mockImplementation(async (q) => {
+    const page = Number(q.page);
+    const limit = Number(q.limit);
+    if (failOnce.has(page)) {
+      failOnce.delete(page);
+      throw new Error("network down");
+    }
+    const total = rows.length;
+    return {
+      data: rows.slice((page - 1) * limit, page * limit),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        has_next: page * limit < total,
+        has_prev: page > 1,
+      },
     };
-    listTransactions.mockResolvedValueOnce({
-      data: [ROW],
-      pagination: { total: 30, has_next: true },
-    });
-    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+  });
+  getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+}
 
-    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
-    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
+const pagesRequested = () => listTransactions.mock.calls.map(([q]) => [q.page, q.limit]);
+const loadedIds = (result) => result.current.transactions.map((t) => String(t.id));
+const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => String(from + i));
 
-    const { result, rerender } = renderHook(
-      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
-      { initialProps: { filters: filtersPage1 } },
-    );
+function renderPaged(initialProps = {}) {
+  const filters = filtersToLegacyParams(BASE_STATE, { limit: PAGE_LIMIT });
+  return renderHook(
+    ({ organizationId = ORG, filters: f = filters, refreshToken = 0 }) =>
+      useTransactionsData({ organizationId, enabled: true, filters: f, refreshToken }),
+    { initialProps },
+  );
+}
 
+async function loadNext(result) {
+  const before = result.current.transactions.length;
+  const calls = listTransactions.mock.calls.length;
+  act(() => result.current.loadMore());
+  await waitFor(() => expect(listTransactions.mock.calls.length).toBeGreaterThan(calls));
+  await waitFor(() => expect(result.current.isLoading).toBe(false));
+  return result.current.transactions.length - before;
+}
+
+describe("fincla-api#535 — scroll infinito pede page 2, 3… com o mesmo limit e acumula", () => {
+  it("sequência de pedidos: page 1, 2, 3 — todos com limit = tamanho da página — e as linhas somam", async () => {
+    serveRows(Array.from({ length: 45 }, (_, i) => apiRow(i + 1)));
+    const { result } = renderPaged();
     await waitFor(() => expect(result.current.hasLoaded).toBe(true));
-    expect(result.current.transactions).toHaveLength(1);
+    expect(loadedIds(result)).toEqual(range(1, 10));
 
-    // "Carregar mais" (limit 10 -> 20) falha.
-    listTransactions.mockRejectedValueOnce(new Error("network down"));
-    rerender({ filters: filtersPage2 });
+    await loadNext(result);
+    await loadNext(result);
 
-    // Rodada 3, achado 2: a falha de página vai pro canal `pageError`, não
-    // pro `error` geral (ver describe dedicado abaixo) — aqui só confere
-    // que o dado PRESERVADO (achado da rodada 2) continua de pé.
-    await waitFor(() => expect(result.current.pageError).toBeTruthy());
-
-    // A implementação ANTERIOR (achado 3 da rodada 1, sem distinguir
-    // paginação) trocaria a linha já lida pelo card de erro e derrubaria os
-    // KPIs a zero. Paginação é a MESMA consulta, só mais páginas — conta
-    // como revalidação suave.
-    expect(result.current.hasLoaded).toBe(true);
-    expect(result.current.transactions).toHaveLength(1);
-    expect(result.current.transactions[0].id).toBe("tx-pagina-1");
+    expect(pagesRequested()).toEqual([[1, 10], [2, 10], [3, 10]]);
+    expect(loadedIds(result)).toEqual(range(1, 30));
+    expect(result.current.total).toBe(45);
+    expect(result.current.hasMore).toBe(true);
+    // Carregar mais NÃO repete o resumo: é a mesma pergunta.
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
   });
 
-  it("falha ao trocar de FILTRO com `limit` também diferente: ainda reseta (não é só paginação)", async () => {
-    const ROW = {
-      id: "tx-filtro-limit",
-      description: "Café filtro",
-      amount: -10,
-      type: "expense",
-      date: "2026-08-01",
-      tags: {},
-    };
-    listTransactions.mockResolvedValueOnce({
-      data: [ROW],
-      pagination: { total: 1, has_next: false },
-    });
-    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
-
-    const filtersA = filtersToLegacyParams(BASE_STATE, { limit: 10 });
-    // MESMO limit que a 1ª chamada de "load more" acima usaria, mas o
-    // FILTRO de verdade também mudou (type) — não pode contar como paginação.
-    const filtersB = filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: 20 });
-
-    const { result, rerender } = renderHook(
-      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
-      { initialProps: { filters: filtersA } },
-    );
-
+  it("510 lançamentos: carrega os 510 e, no fim, hasMore=false e nenhum pedido a mais", async () => {
+    serveRows(Array.from({ length: 510 }, (_, i) => apiRow(i + 1)));
+    const { result } = renderPaged();
     await waitFor(() => expect(result.current.hasLoaded).toBe(true));
 
-    listTransactions.mockRejectedValueOnce(new Error("network down"));
-    rerender({ filters: filtersB });
+    let guard = 0;
+    while (result.current.hasMore && guard < 60) {
+      guard += 1;
+      await loadNext(result);
+    }
 
-    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(loadedIds(result)).toEqual(range(1, 510));
+    expect(result.current.hasMore).toBe(false);
+    expect(pagesRequested()).toEqual(Array.from({ length: 51 }, (_, i) => [i + 1, PAGE_LIMIT]));
 
-    expect(result.current.transactions).toEqual([]);
-    expect(result.current.hasLoaded).toBe(false);
+    const calls = listTransactions.mock.calls.length;
+    act(() => result.current.loadMore());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(listTransactions).toHaveBeenCalledTimes(calls);
+  });
+
+  it("nenhum pedido sai com limit acima do tamanho da página, nem com limit acima de 100", async () => {
+    serveRows(Array.from({ length: 300 }, (_, i) => apiRow(i + 1)));
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: 250 });
+    const { result } = renderPaged({ filters });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+    for (const [, limit] of pagesRequested()) expect(limit).toBeLessThanOrEqual(100);
+    expect(loadedIds(result)).toEqual(range(1, 200));
+  });
+
+  it("dois 'carregar mais' no mesmo instante pedem a página seguinte UMA vez", async () => {
+    serveRows(Array.from({ length: 45 }, (_, i) => apiRow(i + 1)));
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    act(() => {
+      result.current.loadMore();
+      result.current.loadMore();
+    });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(20));
+    expect(pagesRequested()).toEqual([[1, 10], [2, 10]]);
+  });
+
+  it("trocar o FILTRO recomeça da página 1 e descarta as páginas do recorte anterior", async () => {
+    serveRows(Array.from({ length: 45 }, (_, i) => apiRow(i + 1)));
+    const { result, rerender } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+    await loadNext(result);
+    expect(result.current.transactions).toHaveLength(30);
+
+    listTransactions.mockClear();
+    rerender({ filters: filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: PAGE_LIMIT }) });
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(listTransactions.mock.calls[0][0]).toMatchObject({ page: 1, limit: 10, type: "expense" });
+    expect(loadedIds(result)).toEqual(range(1, 10));
+
+    // E o próximo "carregar mais" é a página 2 do recorte NOVO, não a 4.
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 2, limit: 10, type: "expense" });
+  });
+
+  it("trocar a ORGANIZAÇÃO recomeça da página 1", async () => {
+    const ORG_B = "22222222-2222-4222-8222-222222222222";
+    serveRows(Array.from({ length: 45 }, (_, i) => apiRow(i + 1)));
+    const { result, rerender } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+
+    listTransactions.mockClear();
+    rerender({ organizationId: ORG_B });
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(listTransactions.mock.calls[0][0]).toMatchObject({ organization_id: ORG_B, page: 1, limit: 10 });
+    expect(result.current.transactions).toHaveLength(10);
+  });
+
+  it("um 'carregar mais' em voo quando o filtro troca não mistura linhas do recorte anterior", async () => {
+    serveRows(Array.from({ length: 45 }, (_, i) => apiRow(i + 1)));
+    const { result, rerender } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    let releasePage2;
+    listTransactions.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        releasePage2 = () => resolve({ data: [apiRow(999)], pagination: { page: 2, limit: 10, total: 45, has_next: true } });
+      }),
+    );
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(releasePage2).toBeTypeOf("function"));
+
+    rerender({ filters: filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: PAGE_LIMIT }) });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act(() => releasePage2());
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(loadedIds(result)).toEqual(range(1, 10));
   });
 });
 
-
-// fincla-frontend#109 rodada 3, achado 2 — a correção da rodada 2 (achado 3:
-// paginação não é "contexto novo") preservava as linhas numa falha de
-// "carregar mais", mas ainda escrevia a mensagem no `error` GERAL — e
-// `hasMore` força `false` sempre que `state.error` está preenchido. Ou seja:
-// o scroll infinito morria de vez (a lista fica truncada com CARA de
-// completa, o sentinel/observer somem, nada re-dispara o fetch), só que de
-// um jeito diferente do bug anterior. `pageError` é um canal PRÓPRIO: não
-// contamina `error` nem `hasMore`.
-describe("fincla-frontend#109 rodada 3, achado 2 — pageError não contamina error/hasMore", () => {
-  it("falha ao 'carregar mais': pageError liga, error GERAL continua vazio, hasMore continua true", async () => {
-    listTransactions.mockResolvedValueOnce({
-      data: Array.from({ length: 10 }, (_, i) => ({
-        id: `tx-${i}`,
-        description: `Item ${i}`,
-        amount: -10,
-        type: "expense",
-        date: "2026-08-01",
-        tags: {},
-      })),
-      pagination: { total: 30, has_next: true },
-    });
-    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
-
-    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
-    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
-
-    const { result, rerender } = renderHook(
-      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
-      { initialProps: { filters: filtersPage1 } },
-    );
-
+describe("fincla-api#535 — atualizar em segundo plano não duplica nem perde linhas", () => {
+  it("refreshToken novo relê as páginas JÁ carregadas (1..3, mesmo limit) e troca as linhas, sem duplicar", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
     await waitFor(() => expect(result.current.hasLoaded).toBe(true));
-    expect(result.current.transactions).toHaveLength(10);
+    await loadNext(result);
+    await loadNext(result);
+
+    // Outra tela criou um lançamento que cai no topo.
+    rows.unshift(apiRow(1000));
+    listTransactions.mockClear();
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(loadedIds(result)[0]).toBe("1000"));
+
+    expect(pagesRequested().sort()).toEqual([[1, 10], [2, 10], [3, 10]]);
+    expect(loadedIds(result)).toEqual(["1000", ...range(1, 29)]);
+    expect(result.current.total).toBe(46);
     expect(result.current.hasMore).toBe(true);
 
-    // "Carregar mais" (limit 10 -> 20) falha.
-    listTransactions.mockRejectedValueOnce(new Error("network down"));
-    rerender({ filters: filtersPage2 });
+    // E a rolagem continua da página 4.
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 4, limit: 10 });
+    expect(loadedIds(result)).toEqual(["1000", ...range(1, 39)]);
+  });
 
+  it("um lançamento novo no topo ENTRE uma página e outra não aparece duas vezes", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    rows.unshift(apiRow(1000)); // a página 2 agora começa no 10, que já está na tela
+    await loadNext(result);
+
+    const ids = loadedIds(result);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(range(1, 19));
+  });
+
+  it("excluir uma linha e rolar não pula o lançamento que subiu para a página anterior", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    deleteTransaction.mockImplementation(async (id) => {
+      const at = rows.findIndex((r) => String(r.id) === String(id));
+      if (at >= 0) rows.splice(at, 1);
+    });
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    await act(() => result.current.removeTransaction(3));
+    await loadNext(result);
+
+    // O 11 subiu para a página 1 no servidor; a página 2 agora começa no 12.
+    expect(loadedIds(result)).toEqual([...range(1, 2), ...range(4, 21)]);
+    for (const [, limit] of pagesRequested()) expect(limit).toBe(10);
+  });
+});
+
+describe("fincla-api#535 — falha numa página: as linhas ficam e 'Tentar novamente' pede AQUELA página", () => {
+  it("página 2 falha: linhas da 1 ficam, pageError liga, error geral não, hasMore segue true", async () => {
+    serveRows(Array.from({ length: 30 }, (_, i) => apiRow(i + 1)), { failOnce: new Set([2]) });
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.pageError).toBeTruthy());
 
-    // As 10 linhas continuam lá (achado 3 da rodada 2, sem regressão)...
-    expect(result.current.transactions).toHaveLength(10);
-    // ...mas agora, ALÉM disso: o erro GERAL não pode ligar (ele governa
-    // `hasMore` abaixo) e `hasMore` precisa continuar `true` — senão o
-    // scroll infinito morre pra sempre, com a lista truncada parecendo
-    // completa.
+    expect(loadedIds(result)).toEqual(range(1, 10));
+    expect(result.current.hasLoaded).toBe(true);
     expect(result.current.error).toBe("");
     expect(result.current.hasMore).toBe(true);
   });
 
-  it("sucesso ao retomar (mesma página, refreshToken novo) limpa um pageError anterior", async () => {
-    listTransactions.mockResolvedValueOnce({
-      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
-      pagination: { total: 2, has_next: true },
-    });
-    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
-
-    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
-    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
-
-    const { result, rerender } = renderHook(
-      ({ filters, refreshToken }) =>
-        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
-      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
-    );
+  it("retryPage pede a MESMA página (2, limit 10), soma as linhas e limpa o pageError", async () => {
+    serveRows(Array.from({ length: 30 }, (_, i) => apiRow(i + 1)), { failOnce: new Set([2]) });
+    const { result } = renderPaged();
     await waitFor(() => expect(result.current.hasLoaded).toBe(true));
-
-    listTransactions.mockRejectedValueOnce(new Error("network down"));
-    rerender({ filters: filtersPage2, refreshToken: 0 });
+    act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.pageError).toBeTruthy());
 
-    listTransactions.mockResolvedValueOnce({
-      data: [
-        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
-        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
-      ],
-      pagination: { total: 2, has_next: false },
-    });
-    // "Retomar" (issue #109 rodada 3, achado 2): a MESMA página (`filtersPage2`
-    // já é a mesma referência — `query` não muda), só um `refreshToken` novo
-    // simulando o gatilho de retentativa. Isso entra pelo ramo
-    // `softRefreshOnly` (é a MESMA consulta que falhou), e um sucesso limpa
-    // `pageError` no `.then` como qualquer outro sucesso.
-    rerender({ filters: filtersPage2, refreshToken: 1 });
-    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+    act(() => result.current.retryPage());
+    await waitFor(() => expect(result.current.transactions).toHaveLength(20));
 
+    expect(pagesRequested()).toEqual([[1, 10], [2, 10], [2, 10]]);
+    expect(loadedIds(result)).toEqual(range(1, 20));
     expect(result.current.pageError).toBe("");
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
   });
-});
 
-// fincla-frontend#109 rodada 4, achado 7 — o `setState` de pré-fetch limpava
-// `error` mas não `pageError`. Uma vez setado, só uma resposta bem-sucedida
-// (achado 2 da rodada 3) limpava — e ele influencia a guarda de `hasMore`
-// (achado 1 da rodada 4), então vivia mais que a requisição que o criou:
-// mesmo no INÍCIO de uma nova tentativa (antes dela resolver), `pageError`
-// tinha que continuar aceso indevidamente.
-describe("fincla-frontend#109 rodada 4, achado 7 — pageError é limpo no INÍCIO de qualquer nova tentativa", () => {
-  it("pageError zera assim que uma nova tentativa começa, antes mesmo dela resolver", async () => {
-    listTransactions.mockResolvedValueOnce({
-      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
-      pagination: { total: 2, has_next: true },
-    });
-    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
-
-    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
-    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
-
-    const { result, rerender } = renderHook(
-      ({ filters, refreshToken }) =>
-        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
-      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
-    );
+  it("o pageError apaga no INÍCIO da nova tentativa, antes de ela responder", async () => {
+    serveRows(Array.from({ length: 30 }, (_, i) => apiRow(i + 1)), { failOnce: new Set([2]) });
+    const { result } = renderPaged();
     await waitFor(() => expect(result.current.hasLoaded).toBe(true));
-
-    listTransactions.mockRejectedValueOnce(new Error("network down"));
-    rerender({ filters: filtersPage2, refreshToken: 0 });
+    act(() => result.current.loadMore());
     await waitFor(() => expect(result.current.pageError).toBeTruthy());
 
-    // Nova tentativa (retry) — a promise fica PENDENTE de propósito, pra
-    // provar que a limpeza acontece no INÍCIO do efeito, não só quando (e
-    // se) a resposta chegar.
-    let resolveRetry;
-    const pending = new Promise((resolve) => {
-      resolveRetry = resolve;
-    });
-    listTransactions.mockReturnValueOnce(pending);
-    rerender({ filters: filtersPage2, refreshToken: 1 });
-
+    let release;
+    listTransactions.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        release = () => resolve({ data: [apiRow(11)], pagination: { page: 2, limit: 10, total: 11, has_next: false } });
+      }),
+    );
+    act(() => result.current.retryPage());
     await waitFor(() => expect(result.current.pageError).toBe(""));
+    expect(result.current.isLoading).toBe(true);
+    act(() => release());
+    await waitFor(() => expect(result.current.transactions).toHaveLength(11));
+  });
 
-    resolveRetry({
-      data: [
-        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
-        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
-      ],
-      pagination: { total: 2, has_next: false },
-    });
-    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+  it("enquanto a página está com erro, 'carregar mais' não dispara sozinho (só o retry)", async () => {
+    serveRows(Array.from({ length: 30 }, (_, i) => apiRow(i + 1)), { failOnce: new Set([2]) });
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+    const calls = listTransactions.mock.calls.length;
+    act(() => result.current.loadMore());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(listTransactions).toHaveBeenCalledTimes(calls);
   });
 });
 
@@ -665,3 +756,207 @@ describe("#293 — a consulta é identificada pelo CONTEÚDO dos filtros", () =>
   });
 });
 
+
+describe("moeda dos totais (fincla-api#520 D1, G3-1-01)", () => {
+  it("Transações pede o resumo com slice_currency=true, como o exportador calcula o arquivo", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters({ ...BASE_STATE, settlement: "a-pagar" });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(getTransactionsSummary).toHaveBeenCalledTimes(1);
+    expect(getTransactionsSummary.mock.calls[0][0]).toMatchObject({ slice_currency: true, settled: false });
+    // A listagem não tem regra de moeda: o parâmetro é só do resumo.
+    expect(listTransactions.mock.calls[0][0]).not.toHaveProperty("slice_currency");
+  });
+});
+
+// G3-P-01 / G3-P-04 / G3-P-05 (review do fix/post-export-ui). A releitura em
+// segundo plano continua relendo as páginas já roladas, mas:
+// - uma leitura superada é CANCELADA (AbortController) e nenhum pedido dela
+//   sai depois da troca;
+// - uma página que falha na releitura não derruba a lista nem para a rolagem;
+// - a página que chega pela rolagem durante a releitura não é apagada;
+// - excluir com uma página em voo não pula a linha que subiu.
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+function pageOf(rows, page, limit) {
+  const total = rows.length;
+  return {
+    data: rows.slice((page - 1) * limit, page * limit),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit), has_next: page * limit < total, has_prev: page > 1 },
+  };
+}
+
+describe("G3-P-01 — releitura superada é cancelada; falha parcial mantém as linhas", () => {
+  it("trocar o filtro durante a releitura de 6 páginas aborta os pedidos velhos e nenhum sai depois da troca", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    for (let i = 0; i < 5; i += 1) await loadNext(result);
+    expect(result.current.transactions).toHaveLength(60);
+
+    // A releitura das 6 páginas fica pendurada no servidor.
+    const stale = [];
+    listTransactions.mockImplementation((q, options) => {
+      if (q.type === "expense") return Promise.resolve(pageOf(rows, Number(q.page), Number(q.limit)));
+      stale.push({ page: q.page, signal: options?.signal });
+      return new Promise(() => {});
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(stale.length).toBe(4)); // concorrência limitada a 4
+    expect(stale.every((call) => call.signal instanceof AbortSignal)).toBe(true);
+
+    rerender({
+      refreshToken: 1,
+      filters: filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: PAGE_LIMIT }),
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(stale.every((call) => call.signal.aborted)).toBe(true);
+    // As páginas 5 e 6 da releitura velha nunca saíram.
+    expect(stale.map((call) => call.page).sort()).toEqual([1, 2, 3, 4]);
+    expect(loadedIds(result)).toEqual(range(1, 10));
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 1, type: "expense" });
+  });
+
+  it("desmontar no meio da releitura aborta os pedidos em voo", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const { result, rerender, unmount } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    const signals = [];
+    listTransactions.mockImplementation((_q, options) => {
+      signals.push(options?.signal);
+      return new Promise(() => {});
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(signals.length).toBe(1));
+    unmount();
+    expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it("uma página da releitura falha: as linhas atuais ficam, aviso discreto, sem erro geral e a rolagem continua", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    const failOnce = new Set();
+    serveRows(rows, { failOnce });
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+    await loadNext(result);
+
+    rows.unshift(apiRow(1000));
+    failOnce.add(2);
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+
+    // Nada da releitura entrou pela metade: a lista é a de antes, inteira.
+    expect(loadedIds(result)).toEqual(range(1, 30));
+    expect(result.current.error).toBe("");
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.hasMore).toBe(true);
+
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 4, limit: 10 });
+    expect(result.current.transactions.length).toBeGreaterThan(30);
+  });
+
+  it("o aviso da releitura apaga quando a próxima releitura começa", async () => {
+    const rows = Array.from({ length: 15 }, (_, i) => apiRow(i + 1));
+    const failOnce = new Set();
+    serveRows(rows, { failOnce });
+    const { result, rerender } = renderPaged({ refreshToken: 0 });
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    failOnce.add(1);
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(result.current.refreshError).toBeTruthy());
+    rerender({ refreshToken: 2 });
+    await waitFor(() => expect(result.current.refreshError).toBe(""));
+  });
+});
+
+describe("G3-P-04 — a página que chega pela rolagem durante a releitura não é apagada", () => {
+  it("releitura de 1..2 em voo, página 3 chega antes: no fim há 30 linhas, sem piscar e sem reler a 3", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    const lengths = [];
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: PAGE_LIMIT });
+    const { result, rerender } = renderHook(
+      ({ refreshToken }) => {
+        const data = useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken });
+        lengths.push(data.transactions.length);
+        return data;
+      },
+      { initialProps: { refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    await loadNext(result);
+
+    const held = [];
+    listTransactions.mockImplementation((q) => {
+      const page = Number(q.page);
+      const limit = Number(q.limit);
+      if (page <= 2) {
+        const gate = deferred();
+        held.push(gate);
+        return gate.promise.then(() => pageOf(rows, page, limit));
+      }
+      return Promise.resolve(pageOf(rows, page, limit));
+    });
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(held).toHaveLength(2));
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.transactions).toHaveLength(30));
+    const fromHere = lengths.length;
+
+    await act(async () => { for (const gate of held) gate.resolve(); });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(loadedIds(result)).toEqual(range(1, 30));
+    expect(Math.min(...lengths.slice(fromHere))).toBe(30);
+    expect(pagesRequested().filter(([page]) => page === 3)).toHaveLength(1);
+
+    await loadNext(result);
+    expect(listTransactions.mock.calls.at(-1)[0]).toMatchObject({ page: 4, limit: 10 });
+    expect(loadedIds(result)).toEqual(range(1, 40));
+  });
+});
+
+describe("G3-P-05 — excluir com uma página em voo não pula linha", () => {
+  it("página 2 em voo, exclusão confirmada antes dela responder: o 11 (que subiu para a página 1) não some", async () => {
+    const rows = Array.from({ length: 45 }, (_, i) => apiRow(i + 1));
+    serveRows(rows);
+    deleteTransaction.mockImplementation(async (id) => {
+      const at = rows.findIndex((r) => String(r.id) === String(id));
+      if (at >= 0) rows.splice(at, 1);
+    });
+    const { result } = renderPaged();
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    const gate = deferred();
+    listTransactions.mockImplementationOnce((q) =>
+      // O servidor lê a página DEPOIS da exclusão (quando o portão abre).
+      gate.promise.then(() => pageOf(rows, Number(q.page), Number(q.limit))),
+    );
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(listTransactions.mock.calls.length).toBe(2));
+
+    await act(() => result.current.removeTransaction(3));
+    await act(async () => { gate.resolve(); });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(loadedIds(result)).toContain("21"));
+
+    expect(loadedIds(result)).toEqual([...range(1, 2), ...range(4, 21)]);
+  });
+});

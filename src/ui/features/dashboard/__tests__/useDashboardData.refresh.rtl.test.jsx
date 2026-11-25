@@ -41,3 +41,18 @@ it("does not refetch while nothing was saved", async () => {
 
   expect(getTransactionsSummary.mock.calls.length).toBe(before);
 });
+
+// G3-1-01: a Visão Geral escreve os totais com o símbolo da moeda BASE e os compara com a renda declarada
+// (na base). Ela não pode pedir a moeda do recorte: num mês só com lançamentos em dólar de uma organização em
+// real, o servidor responderia US$ e a tela escreveria "R$ 50,00" para US$ 50. Sem o parâmetro, o servidor
+// converte para a base (teste do backend: test_without_the_parameter_a_foreign_only_slice_is_converted...).
+it("pede o resumo do período SEM slice_currency, para receber os totais na moeda base", async () => {
+  const props = { organizationId: "org-1", dateStart: "2026-11-01", dateEnd: "2026-11-30", refreshKey: 0 };
+  renderHook((p) => useDashboardData(p), { initialProps: props });
+  await waitFor(() => expect(getTransactionsSummary).toHaveBeenCalled());
+
+  for (const [query] of getTransactionsSummary.mock.calls) {
+    expect(query).not.toHaveProperty("slice_currency");
+    expect(query).toMatchObject({ organization_id: "org-1" });
+  }
+});

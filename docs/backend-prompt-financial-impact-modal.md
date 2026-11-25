@@ -170,5 +170,5 @@ interface PreviewTransactionResponse {
 ## Referências no repositório frontend
 
 - Componente: `NovaTransacaoModal` — blocos “Impacto financeiro”, `MobileImpact`, `ReviewBody` (`src/ui/App.jsx`).
-- Cliente analytics atual: `src/api/analytics.ts` (`monthly-evolution`, `by-category`, `spending-rhythm`, `period-comparison`, `export-csv`).
+- Cliente analytics atual: `src/api/analytics.ts` (`monthly-evolution`, `by-category`, `spending-rhythm`, `period-comparison`). O `export-csv` foi removido (fincla-api#528): exportação é `GET /v1/transactions/export`, em `src/api/transactions.ts`.
 - Orçamentos: `src/api/budgets.ts`, tipos `Budget` / `BudgetListResponse` em `src/api/types.ts`.

@@ -63,7 +63,7 @@ vi.mock("../../../api/transactions", async (importOriginal) => ({
   ...(await importOriginal()),
   listTransactions: (...args) => listTransactionsMock(...args),
   getTransactionsSummary: (...args) => summaryApiMock(...args),
-  exportTransactionsCsv: (...args) => exportMock(...args),
+  exportTransactions: (...args) => exportMock(...args),
 }));
 vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
 const listCreditCardsMock = vi.fn();

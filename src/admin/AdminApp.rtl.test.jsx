@@ -194,11 +194,26 @@ describe("painel do administrador Fincla", () => {
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "nova@example.com" } });
     fireEvent.change(screen.getByLabelText("Organização"), { target: { value: "Família Nova" } });
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
-    expect(await screen.findByText("Conta criada e convite enviado por e-mail.")).toBeInTheDocument();
+    expect(await screen.findByText("Conta criada e convite enviado por e-mail (o link vale 3 dias).")).toBeInTheDocument();
     expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
+    // Someone who never set a password gets the invite again, not a recovery link.
+    expect(await screen.findByText(/A pessoa ainda não definiu a senha/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar link de redefinição" })).not.toBeInTheDocument();
+    mocks.sendAdminPasswordReset.mockResolvedValueOnce({ email_sent: true, kind: "invite" }).mockResolvedValueOnce({ email_sent: true, kind: "recovery" });
+    const resend = async (reason) => {
+      fireEvent.click(screen.getByRole("button", { name: "Reenviar convite" }));
+      fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: reason } });
+      fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
+      await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-2", reason));
+    };
+    await resend("Não recebeu");
+    expect(await screen.findByText("Convite reenviado para nova@example.com. O novo link vale 3 dias.")).toBeInTheDocument();
+    // The person set a password meanwhile: the backend sent a recovery link, and the notice says so.
+    await resend("Pediu de novo");
+    expect(await screen.findByText("Link de redefinição enviado para nova@example.com.")).toBeInTheDocument();
   });
 
-  it("cria conta e organização com um mês gratuito na mesma operação", async () => {
+  it("cria conta e organização com a quantidade de dias gratuitos que o admin escolher", async () => {
     localStorage.setItem("auth_token", "admin-token");
     mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
     mocks.getAdminPlans.mockResolvedValue({ items: [{ id: "pro", name: "Pro", is_active: true }] });
@@ -221,12 +236,78 @@ describe("painel do administrador Fincla", () => {
     fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
     fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
     fireEvent.click(await screen.findByRole("option", { name: "Pro" }));
+    const days = screen.getByLabelText("Dias gratuitos");
+    fireEvent.change(days, { target: { value: "400" } });
+    expect(screen.getByText("Informe de 1 a 365 dias.")).toBeInTheDocument();
+    fireEvent.change(days, { target: { value: "17" } });
+    expect(screen.getByText(/Acesso gratuito por 17 dias, até/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
 
     await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({
       email: "cortesia@example.com", organization_name: "Org Cortesia",
-      initial_access: "courtesy", courtesy_plan: "pro", courtesy_months: 1,
+      initial_access: "courtesy", courtesy_plan: "pro", courtesy_days: 17,
     })));
+    expect(mocks.createAdminAccount.mock.calls.at(-1)[0]).not.toHaveProperty("courtesy_months");
+    expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
+  });
+
+  it("cria conta de teste sem organização, deixando a configuração para o onboarding da pessoa", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
+    mocks.getAdminPlans.mockResolvedValue({ items: [{ id: "pro", name: "Pro", is_active: true }] });
+    mocks.createAdminAccount.mockResolvedValue({
+      user_id: "user-4", organization_id: null, setup: "self_onboarding", email_sent: true,
+      initial_access: "courtesy", courtesy_until: "2026-12-06T12:00:00",
+    });
+    mocks.getAdminUser.mockResolvedValue({
+      id: "user-4", email: "lead@example.com", first_name: "Lead", last_name: null,
+      created_at: "2026-11-22", onboarding_completed: false, password_pending: true,
+      blocked_at: null, subscription: null, organizations: [], invoices: [],
+    });
+
+    render(<AdminApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Criar conta" }));
+    expect(screen.getByLabelText("Organização")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.queryByLabelText("Organização")).toBeNull();
+    expect(screen.queryByLabelText(/Renda mensal/)).toBeNull();
+    expect(screen.getByText(/ela faz o onboarding completo/)).toBeInTheDocument();
+    // A trial starts as a courtesy: the access is already preselected.
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Cortesia com prazo");
+    // A trial never starts without a free period.
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    expect(screen.queryByRole("option", { name: "Sem acesso gratuito" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
+    // Back to a ready account, the automatic courtesy is undone (re-picking the same value is no manual choice)…
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta pronta: eu configuro" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Sem acesso gratuito");
+    // …and redone when the trial is chosen again.
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Cortesia com prazo");
+    // A courtesy the admin picks by hand on a ready account stays when switching modes.
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta pronta: eu configuro" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    fireEvent.click(screen.getByRole("option", { name: "Beta sem prazo" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Como a conta começa" }));
+    fireEvent.click(screen.getByRole("option", { name: "Conta de teste: a pessoa configura" }));
+    expect(screen.getByRole("combobox", { name: "Tipo de acesso inicial" })).toHaveTextContent("Beta sem prazo");
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Lead" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "lead@example.com" } });
+    // The only plan comes preselected (#341): nothing to pick before creating.
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Plano da cortesia" })).toHaveTextContent("Pro"));
+    fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
+
+    await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalled());
+    const sent = mocks.createAdminAccount.mock.calls.at(-1)[0];
+    expect(sent).toMatchObject({ setup: "self_onboarding", email: "lead@example.com", initial_access: "courtesy", courtesy_plan: "pro", courtesy_days: 14 });
+    expect(sent).not.toHaveProperty("organization_name");
+    expect(sent).not.toHaveProperty("monthly_income");
     expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
   });
 

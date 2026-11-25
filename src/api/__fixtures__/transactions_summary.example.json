@@ -1,11 +1,29 @@
 {
   "total_transactions": 20,
-  "total_value": 25221.04,
-  "total_income": 18717.79,
-  "total_expenses": 6503.25,
-  "total_refunds": 0.0,
-  "balance": 12214.54,
-  "average_transaction": 1261.05,
+  "total_value": {
+    "amount": "25221.04",
+    "currency": "BRL"
+  },
+  "total_income": {
+    "amount": "18717.79",
+    "currency": "BRL"
+  },
+  "total_expenses": {
+    "amount": "6503.25",
+    "currency": "BRL"
+  },
+  "total_refunds": {
+    "amount": "0.00",
+    "currency": "BRL"
+  },
+  "balance": {
+    "amount": "12214.54",
+    "currency": "BRL"
+  },
+  "average_transaction": {
+    "amount": "1261.05",
+    "currency": "BRL"
+  },
   "period": {
     "start_date": "2025-01-01",
     "end_date": "2025-01-31"
@@ -18,11 +36,20 @@
     "date_start": "2025-01-01",
     "date_end": "2025-01-31",
     "recurring": null,
-    "tag_id": null
+    "tag_id": null,
+    "credit_card_id": null,
+    "invoice_id": null,
+    "account_id": null
   },
   "recurring_in_period": {
-    "total_expense": 320.0,
-    "total_income": 0.0,
+    "total_expense": {
+      "amount": "320.00",
+      "currency": "BRL"
+    },
+    "total_income": {
+      "amount": "0.00",
+      "currency": "BRL"
+    },
     "period": {
       "start_date": "2025-01-01",
       "end_date": "2025-01-31"
@@ -35,17 +62,127 @@
   "refund_count": 0,
   "largest_income": {
     "description": "Salário mensal",
-    "value": 10217.79,
+    "value": {
+      "amount": "10217.79",
+      "currency": "BRL"
+    },
     "date": "2025-01-05"
   },
   "largest_expense": {
     "description": "Aluguel",
-    "value": 2400.0,
+    "value": {
+      "amount": "2400.00",
+      "currency": "BRL"
+    },
     "date": "2025-01-10"
   },
   "unsettled_count": 11,
-  "unsettled_expenses": 4129.56,
-  "unsettled_income": 8500.0,
-  "unsettled_refunds": 0.0,
-  "settled_balance": 7844.1
+  "unsettled_expenses": {
+    "amount": "4129.56",
+    "currency": "BRL"
+  },
+  "unsettled_income": {
+    "amount": "8500.00",
+    "currency": "BRL"
+  },
+  "unsettled_refunds": {
+    "amount": "0.00",
+    "currency": "BRL"
+  },
+  "settled_balance": {
+    "amount": "7844.10",
+    "currency": "BRL"
+  },
+  "by_currency": [
+    {
+      "amount": "25221.04",
+      "currency": "BRL"
+    }
+  ],
+  "result_by_currency": [
+    {
+      "currency": "BRL",
+      "total_transactions": 20,
+      "total_income": {
+        "amount": "18717.79",
+        "currency": "BRL"
+      },
+      "total_expenses": {
+        "amount": "6503.25",
+        "currency": "BRL"
+      },
+      "total_refunds": {
+        "amount": "0.00",
+        "currency": "BRL"
+      },
+      "balance": {
+        "amount": "12214.54",
+        "currency": "BRL"
+      }
+    }
+  ],
+  "consolidation": {
+    "target_currency": "BRL",
+    "rates": [],
+    "unavailable": null
+  },
+  "breakdown": {
+    "by_category": [
+      {
+        "category": "Alimentação",
+        "amount": {
+          "amount": "1250.40",
+          "currency": "BRL"
+        }
+      }
+    ],
+    "by_month": [
+      {
+        "year": 2025,
+        "month": 1,
+        "amount": {
+          "amount": "1250.40",
+          "currency": "BRL"
+        }
+      }
+    ],
+    "by_invoice": [
+      {
+        "invoice_id": 41,
+        "year": 2025,
+        "month": 1,
+        "amount": {
+          "amount": "1250.40",
+          "currency": "BRL"
+        },
+        "credit_card_id": 7
+      }
+    ],
+    "by_week": [
+      {
+        "week_start": "2024-12-30",
+        "amount": {
+          "amount": "1250.40",
+          "currency": "BRL"
+        }
+      }
+    ],
+    "projected_by_invoice": [
+      {
+        "year": 2025,
+        "month": 2,
+        "amount": {
+          "amount": "521.40",
+          "currency": "BRL"
+        },
+        "count": 7,
+        "approximate": false
+      }
+    ]
+  },
+  "balance_statement": {
+    "available": true,
+    "reason": null,
+    "message": null
+  }
 }

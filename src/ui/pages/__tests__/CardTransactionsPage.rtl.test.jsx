@@ -34,7 +34,7 @@ const detail = {
   month: "2026-10", due_date: "2026-10-10", total_amount: money("140.00"), status: "open",
   closing_date: "2026-10-15", paid_date: null, days_until_due: 6, is_overdue: false,
   previous_month_total: null, month_over_month_change: null, limit_usage_percent: null,
-  items_count: 3, items,
+  items_count: 3, items, invoice_id: 410,
   category_breakdown: [
     { category_id: "food", category_name: "Alimentação", category_color: "#2563EB", total: money("100.00"), percentage: 71.4, transaction_count: 1 },
     { category_id: "fuel", category_name: "Transporte", category_color: "#059669", total: money("40.00"), percentage: 28.6, transaction_count: 2 },
@@ -205,6 +205,13 @@ describe("Lançamentos de um cartão", () => {
     expect(screen.getByText(/Exibindo 0 de 3 lançamentos/)).toBeInTheDocument();
   });
 
+  it("fatura com mais de mil lançamentos usa separador de milhar nas duas contagens (fincla-api#534)", async () => {
+    const many = Array.from({ length: 1050 }, (_, i) => item(i + 1, `Compra ${i + 1}`, "1.00", "2026-10-12", "Alimentação"));
+    serve({ invoice: { ...detail, items: many, items_count: 1050 } });
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText(/Exibindo 1\.050 de 1\.050 lançamentos/)).toBeInTheDocument();
+  });
+
   it("não consulta fatura de cartão fora da organização", async () => {
     const calls = serve({ cardList: [] });
     render(<CardTransactionsPage organizationId={ORG_ID} />);
@@ -261,5 +268,139 @@ describe("Lançamentos de um cartão", () => {
     render(<CardTransactionsPage organizationId={ORG_ID} />);
     expect(await screen.findByText("Moeda da fatura indisponível; os valores não podem ser exibidos com segurança.")).toBeInTheDocument();
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Lançamentos da fatura — exportar com os filtros da tela (fincla-api#525)", () => {
+  const summaryOf = (count) => ({ total_transactions: count, total_income: { amount: "0.00", currency: "BRL" }, total_expenses: { amount: "0.00", currency: "BRL" }, total_refunds: { amount: "20.00", currency: "BRL" }, balance: { amount: "20.00", currency: "BRL" }, unsettled_count: 0, result_by_currency: [] });
+  const withExportApi = (count) => {
+    const seen = { summaries: [], exports: [] };
+    server.use(
+      http.get("*/v1/transactions/summary", ({ request }) => { seen.summaries.push(new URL(request.url).searchParams); return HttpResponse.json(summaryOf(count)); }),
+      http.get("*/v1/transactions/export", ({ request }) => { seen.exports.push(new URL(request.url).searchParams); return new HttpResponse("x", { headers: { "Content-Type": "text/csv" } }); }),
+    );
+    return seen;
+  };
+  const listed = () => within(screen.getByRole("region", { name: "Lançamentos da fatura" })).queryAllByRole("listitem");
+
+  it("leva cartão, fatura e CADA filtro da tela ao resumo e ao arquivo, e o painel conta o que a tela mostra", async () => {
+    routeSearch = { fc_invoice_modality: "refund" };
+    serve();
+    const seen = withExportApi(1);
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    const names = [];
+    const spy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clicked() { names.push(this.download); });
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Estorno Posto");
+    await user.click(screen.getByRole("button", { name: /Categoria: Todas/ }));
+    await user.click(screen.getByRole("button", { name: "Transporte" }));
+    await user.click(screen.getByRole("button", { name: /Tags:/ }));
+    await user.click(screen.getByRole("button", { name: "Tag combustível" }));
+    await user.click(screen.getByRole("button", { name: /Valor: Qualquer/ }));
+    await user.type(screen.getByRole("textbox", { name: "Valor mínimo" }), "10");
+    await user.type(screen.getByRole("textbox", { name: "Buscar transações" }), "posto");
+    await waitFor(() => expect(listed()).toHaveLength(1));
+    expect(listed()[0]).toHaveTextContent("Estorno Posto");
+
+    const button = screen.getByRole("button", { name: "Exportar" });
+    expect(button).not.toHaveTextContent(/CSV/);
+    await user.click(button);
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    // A contagem do painel é a da tela (1 linha), e os totais vêm do resumo do mesmo recorte.
+    expect(panel).toHaveTextContent("1 lançamento,");
+    await waitFor(() => expect(seen.summaries).toHaveLength(1));
+    const summary = seen.summaries[0];
+    const expected = {
+      // A categoria vai pelo id da fatura (`category_id`), não pelo rótulo "Transporte" (tradução da semente
+      // `Transport`), que a API não conhece: com o rótulo, resumo e arquivo voltavam vazios (G3-2-01).
+      organization_id: [ORG_ID], credit_card_id: ["1"], invoice_id: ["410"], category: ["fuel"],
+      tag_id: ["fuel-tag"], tag_match: ["any"], modality: ["refund"], value_min: ["10"], description: ["posto"],
+    };
+    for (const [key, values] of Object.entries(expected)) expect(summary.getAll(key), key).toEqual(values);
+    expect(summary.get("slice_currency")).toBe("true");
+    // Nos dois sentidos: nada além dos filtros da tela (um `type` ou `date_start` velho também quebraria a paridade).
+    expect([...new Set(summary.keys())].sort()).toEqual([...Object.keys(expected), "locale", "slice_currency"].sort());
+
+    await user.click(within(panel).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(seen.exports).toHaveLength(1));
+    const asked = seen.exports[0];
+    for (const [key, values] of Object.entries(expected)) expect(asked.getAll(key), key).toEqual(values);
+    const fileKeys = ["content", "file_prefix", "filters_text", "format", "locale", "timezone", "title"];
+    expect([...new Set(asked.keys())].sort()).toEqual([...Object.keys(expected), ...fileKeys].sort());
+    expect(asked.get("file_prefix")).toBe("cartao-azul-fatura-2026-10");
+    expect(asked.get("title")).toBe("Lançamentos da fatura · Azul •7112 · Fatura de Out/2026");
+    const filtersText = asked.getAll("filters_text");
+    expect(filtersText[0]).toBe("Fatura: Out/2026");
+    expect(filtersText).toEqual(expect.arrayContaining(["Busca: posto", "Categoria: Transporte", "Tags: #combustível", "Modalidade: Estorno"]));
+    expect(filtersText.some((text) => /^Valor/.test(text))).toBe(true);
+    await waitFor(() => expect(names).toHaveLength(1));
+    expect(names[0]).toMatch(/^cartao-azul-fatura-2026-10-\d{4}-\d{2}-\d{2}\.pdf$/);
+    spy.mockRestore();
+  });
+
+  it("o período da tela vira date_start/date_end, em datas absolutas no texto dos filtros", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 6, 12));
+    serve();
+    const seen = withExportApi(2);
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    await user.click(screen.getByRole("button", { name: /Período: Todo período/ }));
+    await user.click(screen.getByRole("button", { name: "Preset: Este mês" }));
+    await waitFor(() => expect(listed()).toHaveLength(2));
+    await user.click(screen.getByRole("button", { name: "Exportar" }));
+    const panel = await screen.findByRole("dialog", { name: "Exportar" });
+    await waitFor(() => expect(seen.summaries).toHaveLength(1));
+    expect(seen.summaries[0].get("date_start")).toBe("2026-10-01");
+    expect(seen.summaries[0].get("date_end")).toBe("2026-10-31");
+    expect(panel).toHaveTextContent("Período: 01/10/2026 a 31/10/2026");
+  });
+
+  it("sem filtros, só cartão e fatura (nada a mais no pedido)", async () => {
+    serve();
+    const seen = withExportApi(3);
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    await user.click(screen.getByRole("button", { name: "Exportar" }));
+    await screen.findByRole("dialog", { name: "Exportar" });
+    await waitFor(() => expect(seen.summaries).toHaveLength(1));
+    const keys = [...new Set([...seen.summaries[0].keys()])].sort();
+    expect(keys).toEqual(["credit_card_id", "invoice_id", "locale", "organization_id", "slice_currency"]);
+  });
+
+  it("a busca olha só a descrição, como a da API: o nome da categoria não acha nada", async () => {
+    serve();
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    await user.type(screen.getByRole("textbox", { name: "Buscar transações" }), "Transporte");
+    await waitFor(() => expect(listed()).toHaveLength(0));
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+  });
+
+  it("filtro sem tradução exata (Sem Categoria) não exporta outro recorte: botão parado e o motivo na tela", async () => {
+    const loose = { ...item(4, "Sem tag", "5.00", "2026-10-02", "Alimentação"), tags: {} };
+    serve({ invoice: { ...detail, items: [...items, loose], items_count: 4, category_breakdown: [...detail.category_breakdown, { category_id: null, category_name: "Sem Categoria", category_color: "#6B7280", total: money("5.00"), percentage: 3, transaction_count: 1 }] } });
+    const seen = withExportApi(1);
+    const user = userEvent.setup();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    await user.click(screen.getByRole("button", { name: /Categoria: Todas/ }));
+    await user.click(screen.getByRole("button", { name: "Sem Categoria" }));
+    await waitFor(() => expect(listed()).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+    expect(screen.getByText(/"Sem Categoria" ainda não pode ser exportado/)).toBeInTheDocument();
+    expect(seen.summaries).toHaveLength(0);
+  });
+
+  it("fatura sem id no servidor: botão parado com o motivo", async () => {
+    serve({ invoice: { ...detail, invoice_id: null } });
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Mercado");
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
   });
 });

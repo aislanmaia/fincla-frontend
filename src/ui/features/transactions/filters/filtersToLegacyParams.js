@@ -185,16 +185,3 @@ export function filtersToLegacyParams(
     limit,
   };
 }
-
-/**
- * Mesma forma do `buildTransactionsCsvOptions` legado.
- */
-export function filtersToCsvOptions(state) {
-  return {
-    filterType: mapTypeToLegacy(state.type),
-    filterMethod: mapMethodToLegacy(state.method),
-    period: state.period,
-    customFrom: state.customFrom,
-    customTo: state.customTo,
-  };
-}

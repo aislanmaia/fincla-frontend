@@ -1,20 +1,6 @@
-import { humanizeDetailString, isLegacyError, isSafeError } from "../../../api/apiError";
-import { bulkCategorizeTransactions, listTransactions } from "../../../api/transactions";
+import { refusalReason } from "../../../api/apiError";
+import { bulkCategorizeTransactions } from "../../../api/transactions";
 import { moveInstallmentToInvoice } from "../../../api/creditCards";
-import { TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
-
-/**
- * Por que o servidor recusou: a mensagem do PRÓPRIO servidor, quando é regra de negócio (400/409/422), como
- * "Reabra a fatura paga antes de alterar seus lançamentos." Falha de rede, 5xx ou mensagem que o sanitizador
- * reprova não têm causa que o usuário resolva: ficam sem motivo (e com o convite a tentar de novo).
- */
-export function refusalReason(error) {
-  const status = error?.response?.status;
-  const detail = error?.response?.data?.detail;
-  if (![400, 409, 422].includes(status) || !(isSafeError(detail) || isLegacyError(detail))) return "";
-  const message = humanizeDetailString(detail.message, status);
-  return message && !/[.!?]$/.test(message) ? `${message}.` : message;
-}
 
 /**
  * Roda uma ação por linha sem parar na primeira falha; devolve quem passou, quem falhou e a causa das recusas
@@ -88,17 +74,4 @@ export async function categorizeRows({ rows, categoryId, organizationId }) {
 /** Só parcelas de compra parcelada podem mudar de fatura; as demais linhas são ignoradas aqui. */
 export function moveRows({ rows, cardId, organizationId, year, month }) {
   return eachRow(rows, (row) => moveInstallmentToInvoice(cardId, row.id, organizationId, { target_year: year, target_month: month }));
-}
-
-/** Todas as páginas do recorte filtrado (a exportação nunca sai só com o que está carregado). */
-export async function fetchAllRows({ base, filter, total, signal }) {
-  const rows = [];
-  for (let page = 1; rows.length < total; page += 1) {
-    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
-    const response = await listTransactions({ ...base, ...filter, page, limit: TRANSACTIONS_API_MAX_LIMIT });
-    const data = response.data ?? [];
-    rows.push(...data);
-    if (data.length === 0 || !response.pagination?.has_next) break;
-  }
-  return rows;
 }

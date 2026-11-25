@@ -699,6 +699,11 @@ export interface ListTransactionsQuery {
   recurring?: boolean;
   /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
   commitment_kind?: 'one_off' | 'installment';
+  /**
+   * A modalidade que a fatura do cartão mostra em cada linha (`items[].modality`, fincla-api#525): `refund` =
+   * estornos; `cash` = série à vista; `installment` = as demais linhas. É o filtro "Modalidade" de Lançamentos da fatura.
+   */
+  modality?: 'cash' | 'installment' | 'refund';
   page?: number;
   limit?: number;
   sort_by?: SortByField;
@@ -825,8 +830,24 @@ export interface TransactionsSummaryQuery {
   recurring?: boolean;
   /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
   commitment_kind?: 'one_off' | 'installment';
+  /**
+   * A modalidade que a fatura do cartão mostra em cada linha (`items[].modality`, fincla-api#525): `refund` =
+   * estornos; `cash` = série à vista; `installment` = as demais linhas. É o filtro "Modalidade" de Lançamentos da fatura.
+   */
+  modality?: 'cash' | 'installment' | 'refund';
   /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
   settled?: boolean;
+  /**
+   * Moeda do recorte (fincla-api#520, D1): `true` -> se todas as linhas estão numa moeda só, os totais vêm nela.
+   * Só as telas que abrem o painel de exportação mandam (`withSliceCurrency`), para tela e arquivo baterem.
+   * A Visão Geral e os demais NÃO mandam: eles escrevem os totais com o símbolo da moeda base.
+   */
+  slice_currency?: boolean;
+  /**
+   * "Exportar seleção" (fincla-api#524): os totais só destes lançamentos (até 500). Substitui o recorte: os
+   * demais filtros são ignorados. Id fora da organização -> 404 `TRANSACTION_NOT_FOUND`.
+   */
+  ids?: number[];
 }
 
 export interface PeriodInfo {
@@ -915,6 +936,13 @@ export interface TransactionsSummaryResponse {
   unsettled_refunds: number;
   /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
   settled_balance: number;
+  /**
+   * Só com `slice_currency=true` (as telas que abrem o painel de exportação): se o arquivo do MESMO recorte pode
+   * trazer o saldo da conta ("Incluir saldo", fincla-api#541) e, se não, por quê. A regra é do servidor; o painel só
+   * mostra. `reason`: `selection` | `card` | `filtered` | `no_period` | `invalid_period` | `inactive_account` | `no_accounts` |
+   * `mixed_currencies`; `message` é a frase em pt-BR para o painel.
+   */
+  balance_statement?: { available: boolean; reason: string | null; message: string | null } | null;
   /** Opt-in, full filtered result. Values remain separate by currency. */
   breakdown?: {
     by_category: Array<{ category: string; amount: number; amount_currency?: string | null }>;
@@ -1832,7 +1860,12 @@ export interface MonthlyEvolutionResponse {
 
 export interface CategoryDataPoint {
   tag_id: string;
+  /** Nome cru do sistema ("Health"): só chave de junção, não exibir. */
   tag_name: string;
+  /** Nome exibido: o da organização, senão a tradução, senão o nome (`tag_display_label`). */
+  tag_label: string;
+  /** Chave estável da categoria do sistema (`null` se criada pela organização): a cor sai dela. */
+  tag_system_key?: string | null;
   /** Quando o backend enviar, melhora o mapa PT + Lucide */
   tag_icon_key?: string | null;
   total: number;
@@ -1850,7 +1883,11 @@ export interface ByCategoryResponse {
 
 export interface SpendingRhythmCategory {
   tag_id: string;
+  /** Nome cru do sistema: só chave de junção, não exibir. */
   tag_name: string;
+  /** Nome exibido (`tag_display_label`), como em `CategoryDataPoint`. */
+  tag_label: string;
+  tag_system_key?: string | null;
   tag_icon_key?: string | null;
   monthly_totals: number[];
   average: number;
@@ -2059,6 +2096,11 @@ export interface ConsultantClient {
    * patrimônio, quando nós é que não sabemos lê-lo.
    */
   patrimonio: number | null;
+  /**
+   * `patrimonio` convertido para a moeda de leitura do consultor (fincla-api#537),
+   * para comparar clientes de moedas diferentes. `null` sem patrimônio ou sem cotação.
+   */
+  patrimonio_converted?: number | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
   /**

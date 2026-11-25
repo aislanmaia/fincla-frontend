@@ -13,22 +13,8 @@ import { healthTone } from "./consultantFormat";
  * gráficos SVG (sparkline, donut). Tudo presentational e determinístico.
  */
 
-/** `true` quando a viewport é mais estreita que `max` (mobile-first: colunas empilham). */
-export function useIsNarrow(max = 900) {
-  const query = `(max-width: ${max}px)`;
-  const [narrow, setNarrow] = React.useState(
-    () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches,
-  );
-  React.useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const mql = window.matchMedia(query);
-    const onChange = (e) => setNarrow(e.matches);
-    setNarrow(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
-  return narrow;
-}
+/** `true` quando a viewport é mais estreita que `max` (mobile-first: colunas empilham). Mora em `ui/useIsNarrow`. */
+export { useIsNarrow } from "../../useIsNarrow.js";
 
 /** Conjunto de ícones (traço, estilo lucide) usado pela área do consultor. */
 export function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8, style = {} }) {

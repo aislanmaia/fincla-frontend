@@ -722,10 +722,13 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
   });
 
-  /* 30 s, não 15: isolado este teste leva ~14,7 s — cada `userEvent` percorre a
-     árvore inteira da página, que tem 4 mil linhas, e são seis interações.
-     Sob a suíte cheia ele estourava o padrão por margem de segundos. O limite
-     maior é sobre o custo do jsdom nesta página, não sobre esperar bug passar. */
+  /* Sem teto próprio: vale o global de `vite.config.ts` (45 s). Este teste tinha
+     `30000` aqui, de antes do teto global, e esse número passou a REBAIXAR o
+     limite — o mesmo erro dos overrides por `describe` que o cabeçalho deste
+     arquivo descreve. Isolado ele leva ~10,5 s, igual na main e no branch: cada
+     interação custa ~1 s porque a primeira consulta por papel depois de um
+     render recalcula o estilo de cada ancestral no jsdom. Sob a carga do gate
+     (73 arquivos dividindo o pool) passou de 30 s duas vezes. */
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     // 1600: o chip de visualizações mostra o rótulo. Abaixo disso ele é só o
     // marcador, e o "alterada" vira um ponto — coberto pelo teste do chip.
@@ -745,7 +748,7 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(
       screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
     ).toHaveAttribute("aria-checked", "false");
-  }, 30000);
+  });
 
   /* O desktop compacto abre A MESMA DOCK do largo. Antes ele abria a faixa
      permanente de nove cards — o painel que o redesenho aposentou —, e o teste
@@ -2112,9 +2115,12 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
     // a coluna já não existe. (Era 2100 px até a coluna sair do fim da linha e
     // ir para o vão, colada na categoria.) E o texto perdeu o `#` — o fundo e o
     // formato já dizem que é tag, e o `#` roubava dois dos 78 px úteis.
+    // Painel de filtros FECHADO, de propósito: em 1500 px ele se ancora (≥ 1280) e ocupa 396 px, a lista cai para
+    // ~770 px e a coluna de tags sai por desenho (< 1000 px). Este teste abria o painel e só passava quando um teste
+    // anterior do arquivo deixava o ambiente num estado em que a abertura não estreitava a lista — rodado sozinho,
+    // falhava também na origin/main.
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1500 });
     renderPage();
-    await openFilters();
 
     const chip = await screen.findByText("trabalho");
     expect(chip).toHaveAttribute("title", "trabalho");

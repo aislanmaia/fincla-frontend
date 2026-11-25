@@ -4,6 +4,7 @@ import { G } from "../../../../../typography";
 import { PanelHeader } from "./PanelHeader.jsx";
 import { currencyInfo } from "../../../../../money/currencyRegistry.js";
 import { parseMoneyInputFor, reformatMoneyInputOnBlur } from "../../../../../money/moneyInput.js";
+import { fmtCount } from "../../../../../formatters.js";
 
 const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -283,8 +284,8 @@ export function ValuePanel({
                   applyBucket(b);
                 }}
                 aria-pressed={dentro}
-                aria-label={`${label}: ${b.count} ${b.count === 1 ? "transação" : "transações"}`}
-                title={`${label} · ${b.count}`}
+                aria-label={`${label}: ${fmtCount(b.count)} ${b.count === 1 ? "transação" : "transações"}`}
+                title={`${label} · ${fmtCount(b.count)}`}
                 disabled={b.count === 0}
                 style={{
                   display: "flex",
@@ -310,7 +311,7 @@ export function ValuePanel({
                     textAlign: "center",
                   }}
                 >
-                  {b.count}
+                  {fmtCount(b.count)}
                 </span>
                 <span
                   aria-hidden="true"

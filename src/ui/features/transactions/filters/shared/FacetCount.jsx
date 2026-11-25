@@ -1,5 +1,6 @@
 import React from "react";
 import { T } from "../../../../tokens";
+import { fmtCount } from "../../../../formatters.js";
 
 const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
@@ -18,7 +19,7 @@ export function FacetCount({ n, active = false }) {
   if (n == null) return null;
   return (
     <span
-      aria-label={`${n} ${n === 1 ? "transação" : "transações"}`}
+      aria-label={`${fmtCount(n)} ${n === 1 ? "transação" : "transações"}`}
       style={{
         ...MONO,
         fontSize: 11,
@@ -30,7 +31,7 @@ export function FacetCount({ n, active = false }) {
         fontVariantNumeric: "tabular-nums",
       }}
     >
-      {n}
+      {fmtCount(n)}
     </span>
   );
 }

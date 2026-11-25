@@ -3,6 +3,7 @@ import { T } from "../../../tokens";
 import { G } from "../../../typography";
 import { Tip } from "../../../components/Tip.jsx";
 import { FacetPanelContent } from "./facetBar/FacetPanelContent.jsx";
+import { fmtCount } from "../../../formatters.js";
 
 /**
  * O painel de filtros da proposta (seção 07 do artefato).
@@ -294,7 +295,7 @@ export function TransactionsFilterPanel({
               cursor: "pointer",
             }}
           >
-            {resultsLoading ? "Atualizando…" : `Ver ${resultCount} ${resultCount === 1 ? "transação" : "transações"}`}
+            {resultsLoading ? "Atualizando…" : `Ver ${fmtCount(resultCount)} ${resultCount === 1 ? "transação" : "transações"}`}
           </button>
         </div>
       </div>

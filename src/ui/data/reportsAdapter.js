@@ -1,23 +1,30 @@
 import {
-  downloadTransactionsCsv,
   getByCategory,
   getMonthlyEvolution,
   getSpendingRhythm,
 } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
 import { listTransactions } from "../../api/transactions";
+import { expensesInBase } from "../money/convertToBase.js";
+import { fetchExpenseConsolidation } from "./periodConsolidation.js";
 import {
   categoryLabelPtForTag,
   resolveCategoryColorForTag,
 } from "./categoryLabels.js";
-import { expandExpenseTxToAttributedParts } from "./transactionsAdapter.js";
+import { expandExpenseTxToAttributedParts, pickDisplayAmount } from "./transactionsAdapter.js";
 
 /**
- * Rótulo PT para pontos de analytics (nome EN/PT da API + icon_key opcional).
- * @param {{ tag_name?: string | null; tag_icon_key?: string | null; tagIconKey?: string | null } | null | undefined} category
+ * O nome de uma categoria de analytics. `tag_label` é o nome que o resto do app
+ * mostra, já resolvido pela API (nome da organização > tradução > nome) e
+ * exibido como veio: uma categoria do sistema renomeada não volta ao nome do
+ * catálogo (QA display-and-pagination, BUG-01). `tag_name` é o nome cru, só
+ * traduzido como reserva para uma resposta sem `tag_label`.
+ * @param {{ tag_name?: string | null; tag_label?: string | null; tag_icon_key?: string | null; tagIconKey?: string | null } | null | undefined} category
  */
 function analyticsCategoryLabelPt(category) {
   if (!category) return "Categoria";
+  const label = typeof category.tag_label === "string" ? category.tag_label.trim() : "";
+  if (label) return label;
   return categoryLabelPtForTag({
     tag_name: category.tag_name,
     name: category.tag_name,
@@ -205,17 +212,36 @@ export async function fetchReportsAnalytics(organizationId, periodo) {
   let velocityDaily = [];
   if (compositionWindow?.dateStart && compositionWindow?.dateEnd) {
     try {
-      const txs = await fetchAllExpenseTransactionsInRange(
-        organizationId,
-        compositionWindow.dateStart,
-        compositionWindow.dateEnd,
+      const [rawTxs, consolidation] = await Promise.all([
+        fetchAllExpenseTransactionsInRange(
+          organizationId,
+          compositionWindow.dateStart,
+          compositionWindow.dateEnd,
+        ),
+        // Sem o recibo do resumo, o de `composition` (mesma janela, só despesa com
+        // categoria) ainda serve para as moedas que ele cobre.
+        fetchExpenseConsolidation(
+          organizationId,
+          compositionWindow.dateStart,
+          compositionWindow.dateEnd,
+        ).catch(() => composition?.consolidation ?? null),
+      ]);
+      // O acumulado do dia é escrito na base: as estrangeiras entram pela taxa do
+      // período (#331). Sem taxa, a velocidade não é desenhada (lista vazia).
+      const txs = expensesInBase(
+        rawTxs,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
+        pickDisplayAmount,
       );
-      velocityDaily = buildVelocityDailyFromTransactions(
-        txs,
-        compositionWindow.dateStart,
-        compositionWindow.dateEnd,
-        latestGasto,
-      );
+      velocityDaily = txs === null
+        ? []
+        : buildVelocityDailyFromTransactions(
+            txs,
+            compositionWindow.dateStart,
+            compositionWindow.dateEnd,
+            latestGasto,
+          );
     } catch {
       velocityDaily = [];
     }
@@ -257,28 +283,6 @@ export function sumMonthsByCurrency(months) {
     }
   }
   return [...acc.values()].sort((a, b) => a.currency.localeCompare(b.currency));
-}
-
-export async function downloadReportsCsvForUi(organizationId, periodo) {
-  const months = resolveReportMonths(periodo);
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const fmt = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
-
-  return downloadTransactionsCsv(
-    organizationId,
-    {
-      dateStart: fmt(start),
-      dateEnd: fmt(end),
-    },
-    `relatorios-${periodo}.csv`,
-  );
 }
 
 export function formatReportsApiError(error) {

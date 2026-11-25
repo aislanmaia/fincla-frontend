@@ -6,7 +6,7 @@ import { useNovaTransacaoDetailTags } from "./useNovaTransacaoDetailTags.js";
 
 vi.mock("../../../api/tags", () => ({
   listTagTypes: vi.fn(),
-  listTags: vi.fn(),
+  getCategoryCatalog: vi.fn(),
   createTag: vi.fn(),
 }));
 
@@ -36,6 +36,38 @@ function detailRow(id, name, parentId, isDefault = false) {
   };
 }
 
+/**
+ * O hook lê as tags detalhe do catálogo de categorias (`GET /tags/catalog`, desde 013270c), não de `GET /tags`:
+ * cada detalhe chega com `label` (o nome a mostrar) e `system_key` (presente só nas linhas do sistema). Este teste
+ * mockava `listTags`, que o hook deixou de chamar — `getCategoryCatalog` ficava indefinido e o hook carregava vazio.
+ * `detailRow` continua descrevendo a tag; `catalogOf` a entrega no formato do catálogo, agrupada pela categoria pai.
+ */
+function catalogOf(rows) {
+  const byParent = new Map();
+  for (const row of rows) {
+    const parent = row.parent_category_tag_id;
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push({
+      id: row.id,
+      label: row.name,
+      system_key: row.is_default ? `seed_${row.name}` : null,
+      icon_key: row.icon_key,
+    });
+  }
+  return {
+    categories: [...byParent.entries()].map(([id, details]) => ({
+      id,
+      system_key: null,
+      label: "Categoria",
+      icon_key: null,
+      color: null,
+      allowed_transaction_types: ["expense"],
+      is_fallback: false,
+      details,
+    })),
+  };
+}
+
 describe("useNovaTransacaoDetailTags", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,9 +82,7 @@ describe("useNovaTransacaoDetailTags", () => {
         },
       ],
     });
-    vi.mocked(tagsApi.listTags).mockResolvedValue({
-      tags: [detailRow(DET_EXISTING, "família", CAT)],
-    });
+    vi.mocked(tagsApi.getCategoryCatalog).mockResolvedValue(catalogOf([detailRow(DET_EXISTING, "família", CAT)]));
     vi.mocked(tagsApi.createTag).mockResolvedValue(
       detailRow("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "semanal", CAT),
     );
@@ -66,7 +96,7 @@ describe("useNovaTransacaoDetailTags", () => {
         enabled: false,
       }),
     );
-    expect(tagsApi.listTags).not.toHaveBeenCalled();
+    expect(tagsApi.getCategoryCatalog).not.toHaveBeenCalled();
   });
 
   it("carrega tags detalhe e findByLabel encontra por nome normalizado", async () => {
@@ -80,24 +110,18 @@ describe("useNovaTransacaoDetailTags", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    // Sem `status` (só ativas) — de propósito (achado 1, rodada 5 de
-    // review #100): o backend REATIVA uma tag arquivada em `POST /tags`
-    // pro mesmo nome; se este fetch trouxesse arquivadas, `ensureDetailTag`
-    // devolveria o id da linha inativa sem reativar (ver
-    // useNovaTransacaoDetailTags.js).
-    expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe");
+    // O catálogo da organização, do tipo de lançamento do modal, no idioma da tela.
+    expect(tagsApi.getCategoryCatalog).toHaveBeenCalledWith(ORG, "expense", "pt-BR");
     const row = result.current.findByLabel("família");
     expect(row?.id).toBe(DET_EXISTING);
     expect(result.current.labelForDetailId(DET_EXISTING)).toBe("família");
   });
 
   it("labelForDetailId traduz nome cru do seed em inglês (regressão #77)", async () => {
-    vi.mocked(tagsApi.listTags).mockResolvedValue({
-      tags: [
+    vi.mocked(tagsApi.getCategoryCatalog).mockResolvedValue(catalogOf([
         detailRow(DET_EXISTING, "família", CAT),
         detailRow("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "health_plan", CAT, true),
-      ],
-    });
+      ]));
     const { result } = renderHook(() =>
       useNovaTransacaoDetailTags({
         organizationId: ORG,
@@ -113,13 +137,23 @@ describe("useNovaTransacaoDetailTags", () => {
     );
   });
 
+  // fincla-api#534: o catálogo já entrega o rótulo no idioma; a tela mostra como veio, sem reescrever caixa.
+  it("rótulo já localizado pelo catálogo aparece como veio", async () => {
+    vi.mocked(tagsApi.getCategoryCatalog).mockResolvedValue(
+      catalogOf([detailRow("ffffffff-ffff-4fff-8fff-ffffffffffff", "Plano de saúde", CAT, true)]),
+    );
+    const { result } = renderHook(() =>
+      useNovaTransacaoDetailTags({ organizationId: ORG, categoryTagId: CAT, enabled: true }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.labelForDetailId("ffffffff-ffff-4fff-8fff-ffffffffffff")).toBe("Plano de saúde");
+  });
+
   // Regressão do review adversarial da PR #97: o usuário só vê o rótulo PT
   // ("mercado") na tela — se ele digitar exatamente isso de volta, o app
   // precisa achar a tag seed "grocery" já existente, não criar uma duplicata.
   it("ensureDetailTag acha a tag seed pelo rótulo PT exibido, não só pelo nome cru (regressão #77)", async () => {
-    vi.mocked(tagsApi.listTags).mockResolvedValue({
-      tags: [detailRow("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "grocery", CAT, true)],
-    });
+    vi.mocked(tagsApi.getCategoryCatalog).mockResolvedValue(catalogOf([detailRow("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "grocery", CAT, true)]));
     const { result } = renderHook(() =>
       useNovaTransacaoDetailTags({
         organizationId: ORG,
@@ -145,12 +179,10 @@ describe("useNovaTransacaoDetailTags", () => {
   // (só bate pelo rótulo traduzido) — senão a transação salva com o id
   // errado, e o erro é invisível porque os dois chips mostram o mesmo texto.
   it("rótulo ambíguo resolve pro nome cru exato antes do rótulo PT traduzido", async () => {
-    vi.mocked(tagsApi.listTags).mockResolvedValue({
-      tags: [
+    vi.mocked(tagsApi.getCategoryCatalog).mockResolvedValue(catalogOf([
         detailRow("seed-grocery-id", "grocery", CAT, true), // seed → exibe "mercado"
         detailRow("user-mercado-id", "mercado", CAT, false), // tag própria do usuário
-      ],
-    });
+      ]));
     const { result } = renderHook(() =>
       useNovaTransacaoDetailTags({
         organizationId: ORG,
@@ -250,14 +282,14 @@ describe("useNovaTransacaoDetailTags", () => {
 
     // A próxima chamada (para ORG_B) fica pendente de propósito, para provar
     // que a limpeza acontece ANTES da resposta chegar.
-    vi.mocked(tagsApi.listTags).mockReturnValueOnce(orgBPromise);
+    vi.mocked(tagsApi.getCategoryCatalog).mockReturnValueOnce(orgBPromise);
     rerender({ organizationId: ORG_B });
 
     // Implementação anterior: `allDetailTags` continuaria com a tag "família"
     // (da org A) até a promise de ORG_B resolver — janela de dado errado.
     expect(result.current.allDetailTags).toEqual([]);
 
-    resolveOrgB({ tags: [] });
+    resolveOrgB(catalogOf([]));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.allDetailTags).toEqual([]);
   });
@@ -283,7 +315,7 @@ describe("useNovaTransacaoDetailTags", () => {
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    vi.mocked(tagsApi.listTags).mockReturnValueOnce(orgBPromise);
+    vi.mocked(tagsApi.getCategoryCatalog).mockReturnValueOnce(orgBPromise);
     rerender({ organizationId: ORG_B });
     expect(result.current.loading).toBe(true);
     expect(result.current.allDetailTags).toEqual([]);
@@ -295,7 +327,7 @@ describe("useNovaTransacaoDetailTags", () => {
     await expect(result.current.ensureDetailTag("família")).rejects.toThrow(/carregando/i);
     expect(tagsApi.createTag).not.toHaveBeenCalled();
 
-    resolveOrgB({ tags: [detailRow(DET_EXISTING, "família", CAT)] });
+    resolveOrgB(catalogOf([detailRow(DET_EXISTING, "família", CAT)]));
     await waitFor(() => expect(result.current.loading).toBe(false));
   });
 });

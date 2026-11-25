@@ -4,9 +4,9 @@ import { X } from "lucide-react";
 import { Btn, Select } from "../../components/primitives.jsx";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
-import { useFocusTrap } from "../transactions/useFocusTrap.js";
-import { EXPORT_MAX_ROWS } from "./ledgerExport.js";
+import { useFocusTrap } from "../../components/useFocusTrap.js";
 import { installmentOf } from "./ledgerModel.js";
+import { fmtCount } from "../../formatters.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -49,7 +49,7 @@ export function CategorizeDialog({ rows: selection, categories, onSubmit, onClos
     if (failed) setError(failed);
   };
   return <LedgerModal title="Categorizar lançamentos" onClose={onClose}>
-    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{rows.length} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.{ignored > 0 ? ` ${ignored} estorno${ignored === 1 ? " fica" : "s ficam"} de fora: estorno mantém a categoria de estorno.` : ""}</p>
+    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{fmtCount(rows.length)} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.{ignored > 0 ? ` ${fmtCount(ignored)} estorno${ignored === 1 ? " fica" : "s ficam"} de fora: estorno mantém a categoria de estorno.` : ""}</p>
     <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Nova categoria
       <Select aria-label="Nova categoria" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
         <option value="">Escolha…</option>
@@ -91,7 +91,7 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, currentKey = null,
     {movable.length === 0
       ? <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Só parcelas de compras parceladas podem mudar de fatura. Nenhum item selecionado é parcelado.</p>
       : <>
-        <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{movable.length} parcela{movable.length === 1 ? "" : "s"}{movable.length < rows.length ? ` (${rows.length - movable.length} item(ns) à vista foram ignorados)` : ""}. As demais parcelas da mesma compra são reposicionadas, um mês de intervalo entre elas.</p>
+        <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{fmtCount(movable.length)} parcela{movable.length === 1 ? "" : "s"}{movable.length < rows.length ? ` (${fmtCount(rows.length - movable.length)} item(ns) à vista foram ignorados)` : ""}. As demais parcelas da mesma compra são reposicionadas, um mês de intervalo entre elas.</p>
         <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Fatura de destino
           <Select aria-label="Fatura de destino" value={target} onChange={(event) => setTarget(event.target.value)}>
             <option value="">Escolha…</option>
@@ -101,30 +101,5 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, currentKey = null,
       </>}
     <Outcome error={error} />
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn>{movable.length > 0 && <Btn variant="blue" disabled={!target || busy} onClick={submit}>{busy ? "Movendo…" : "Mover parcela"}</Btn>}</div>
-  </LedgerModal>;
-}
-
-export function ExportDialog({ total, filterSummary, selection = null, blocked = false, onExport, onClose }) {
-  const [format, setFormat] = useState("csv");
-  const tooLarge = !selection && format === "csv" && Number(total) > EXPORT_MAX_ROWS;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const submit = async () => {
-    setBusy(true); setError(null);
-    const failed = await onExport(format);
-    setBusy(false);
-    if (failed) setError(failed); else onClose();
-  };
-  return <LedgerModal title={selection ? "Exportar seleção" : "Exportar lançamentos"} onClose={onClose}>
-    {selection
-      ? <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Saem só os lançamentos que você marcou: {selection.count} lançamento{selection.count === 1 ? "" : "s"}{selection.sum ? ` · ${selection.sum}` : ""}.</p>
-      : <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Sai o conjunto inteiro do recorte atual{total != null ? `: ${total} lançamento${total === 1 ? "" : "s"}` : ""}, não só o que está carregado na tela.</p>}
-    {!selection && filterSummary.length > 0 && <ul style={{ ...G, margin: 0, paddingLeft: 18, fontSize: 11, color: T.inkMid }}>{filterSummary.map((line) => <li key={line}>{line}</li>)}</ul>}
-    <div role="group" aria-label="Formato" style={{ display: "flex", gap: 8 }}>
-      {[["csv", "CSV"], ["pdf", "PDF"]].map(([value, label]) => <button key={value} type="button" aria-pressed={format === value} onClick={() => setFormat(value)} style={{ ...G, flex: 1, minHeight: 40, border: `1.5px solid ${format === value ? T.blue : T.border}`, borderRadius: 9, background: format === value ? T.blueLight : T.surface, color: format === value ? T.blue : T.ink, fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
-    </div>
-    {tooLarge && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.amber }}>O recorte passa de {EXPORT_MAX_ROWS.toLocaleString("pt-BR")} lançamentos, o máximo de um arquivo CSV. Estreite os filtros para exportar em CSV; o PDF não tem esse limite.</p>}
-    <Outcome error={error} />
-    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn><Btn variant="dark" disabled={busy || !total || tooLarge || blocked} onClick={submit}>{busy ? "Preparando…" : `Exportar ${format.toUpperCase()}`}</Btn></div>
   </LedgerModal>;
 }

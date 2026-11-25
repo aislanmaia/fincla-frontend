@@ -1,6 +1,7 @@
 import React from "react";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
+import { fmtCount } from "../../formatters.js";
 
 /**
  * Peças da seleção em lote — UMA mecânica para o app (decisão do Owner, #281): os
@@ -29,7 +30,7 @@ export function SelectionCount({ count, extra = null }) {
   if (count <= 0) return null;
   return (
     <span style={{ color: T.blue }}>
-      {count} selecionado{count === 1 ? "" : "s"}
+      {fmtCount(count)} selecionado{count === 1 ? "" : "s"}
       {extra ? ` · ${extra}` : ""}
     </span>
   );

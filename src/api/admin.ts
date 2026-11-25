@@ -109,11 +109,11 @@ export const changeAdminUserAccess = async (id: string, action: 'block' | 'unblo
 export const getAdminUserAudit = async (id: string) =>
   (await apiClient.get<{ items: Array<{ id: string; actor_user_id: string; action: string; reason: string; created_at: string }> }>(`/admin/users/${id}/audit`)).data;
 
-export const createAdminAccount = async (data: { email: string; first_name: string; last_name?: string; organization_name: string; organization_type?: string; monthly_income?: string; initial_access?: 'none' | 'beta' | 'courtesy'; courtesy_plan?: string; courtesy_months?: number }) =>
-  (await apiClient.post<{ user_id: string; organization_id: string; email_sent: boolean; initial_access: 'none' | 'beta' | 'courtesy'; courtesy_until: string | null }>('/admin/users', data)).data;
+export const createAdminAccount = async (data: { setup?: 'ready' | 'self_onboarding'; email: string; first_name: string; last_name?: string; organization_name?: string; organization_type?: string; monthly_income?: string; initial_access?: 'none' | 'beta' | 'courtesy'; courtesy_plan?: string; courtesy_days?: number }) =>
+  (await apiClient.post<{ user_id: string; organization_id: string | null; setup: 'ready' | 'self_onboarding'; email_sent: boolean; initial_access: 'none' | 'beta' | 'courtesy'; courtesy_until: string | null }>('/admin/users', data)).data;
 
 export const sendAdminPasswordReset = async (id: string, reason: string) =>
-  (await apiClient.post<{ email_sent: boolean }>(`/admin/users/${id}/password-reset-email`, { reason })).data;
+  (await apiClient.post<{ email_sent: boolean; kind?: 'invite' | 'recovery' }>(`/admin/users/${id}/password-reset-email`, { reason })).data;
 
 export const changeAdminBeta = async (id: string, enabled: boolean, reason: string) =>
   (await apiClient.post(`/admin/users/${id}/beta${enabled ? '' : '/end'}`, { reason })).data;

@@ -530,6 +530,7 @@ export default function App() {
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow
       isMobile={isMobile}
+      ownerName={[session.user?.first_name, session.user?.last_name].filter(Boolean).join(" ")}
       isSubmitting={onboardingSubmitting}
       errorMessage={onboardingError}
       onComplete={async (data) => {
@@ -583,6 +584,7 @@ export default function App() {
           token={entry.token}
           onValidateToken={validateResetToken}
           onResetPassword={session.resetPasswordWithToken}
+          onRequestNewLink={session.requestPasswordReset}
           onComplete={() => {
             stripAuthEntryQueryAndHash();
             window.location.reload();

@@ -16,4 +16,9 @@ describe("RecentItems — atalho 'ver os N'", () => {
     render(<RecentItems items={[]} totalCount={7} currency="BRL" isMobile={false} onViewAll={vi.fn()} />);
     expect(screen.getByRole("button", { name: /ver os 7/ })).toBeTruthy();
   });
+
+  it("com mil ou mais usa separador de milhar (fincla-api#534)", () => {
+    render(<RecentItems items={[]} totalCount={1050} currency="BRL" isMobile={false} onViewAll={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /ver os 1\.050/ })).toBeTruthy();
+  });
 });

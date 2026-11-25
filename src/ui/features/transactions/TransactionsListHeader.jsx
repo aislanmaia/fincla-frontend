@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { fmtCount } from "../../formatters.js";
 import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
 
 /**
@@ -56,7 +57,7 @@ export function TransactionsListHeader({
   /** Ação à direita, antes da soma (o atalho "Conciliar extrato", decisão do Owner de 2026-11-17). */
   action = null,
 }) {
-  const num = (v) => (loading ? "—" : String(v));
+  const num = (v) => (loading ? "—" : fmtCount(v));
 
   /* O ANÚNCIO é uma frase própria, separada do que se vê.
      A região viva antiga era o cabeçalho inteiro: ela recitava a linha toda a
@@ -72,8 +73,8 @@ export function TransactionsListHeader({
     const id = setTimeout(() => {
       setAnuncio(
         pending > 0
-          ? `${total} transaç${total === 1 ? "ão" : "ões"}, ${pending} a pagar`
-          : `${total} transaç${total === 1 ? "ão" : "ões"}`,
+          ? `${fmtCount(total)} transaç${total === 1 ? "ão" : "ões"}, ${fmtCount(pending)} a pagar`
+          : `${fmtCount(total)} transaç${total === 1 ? "ão" : "ões"}`,
       );
     }, 350);
     return () => clearTimeout(id);
@@ -149,7 +150,7 @@ export function TransactionsListHeader({
               onClick={onPendingClick}
               // O `title` não vira nome acessível quando o botão tem texto —
               // e a marca de anel é decorativa, então sozinha não diz nada.
-              aria-label={`${pending} a pagar — ainda não entraram no saldo da conta`}
+              aria-label={`${fmtCount(pending)} a pagar — ainda não entraram no saldo da conta`}
               title="Ainda não entraram no saldo da conta"
               style={{
                 ...G,

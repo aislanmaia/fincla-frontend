@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
@@ -7,12 +7,13 @@ import { G } from "../typography";
 import { FC } from "../routing/searchContract.js";
 import { Btn, Card } from "../components/primitives";
 import { shouldUseRealData } from "../dataMode.js";
-import { mapInvoiceItemToUi } from "../data/creditCardsAdapter.js";
 import { cardLedgerLink, invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { StatusBadge } from "../features/cardHub/InvoiceCard.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { invoiceKey, parseInvoiceKey } from "../features/cardHub/hubInvoices.js";
-import { buildInvoiceCsv, downloadCsv } from "../features/creditCards/invoiceCsv.js";
+import { ExportPanel } from "../features/export/ExportPanel.jsx";
+import { invoiceExportNames } from "../features/export/invoiceExport.js";
+import { useExportSummary } from "../features/export/useExportSummary.js";
 import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdown.jsx";
 import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/InvoiceDetailBody.jsx";
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
@@ -85,10 +86,15 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   const budget = useInvoiceBudgetContext(organizationId, (detailState === "ok" || detailState === "empty") && invoice?.status === "open", now, transactionsRefreshToken);
   const pad = isMobile ? 16 : 28;
 
-  const exportCsv = () => {
-    if (!detail || !card) return;
-    downloadCsv(`fatura-${card.description?.trim() || `${card.brand}-${card.last4}`}-${selectedKey}.csv`, buildInvoiceCsv((detail.items ?? []).map(mapInvoiceItemToUi)));
-  };
+  // "Exportar" abre o painel compartilhado com o recorte desta fatura (cartão + fatura, #525), para qualquer fatura
+  // com lançamentos: o arquivo e os totais saem do servidor (`invoice_id`), não do navegador.
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportInvoiceId = detail?.invoice_id ?? null;
+  const exportParams = card && exportInvoiceId != null
+    ? { organization_id: organizationId, credit_card_id: card.id, invoice_id: [exportInvoiceId] }
+    : null;
+  const exportSummary = useExportSummary(exportOpen ? exportParams : null);
+  const openExport = () => { if (exportParams) setExportOpen(true); };
 
   const detailProps = useMemo(() => ({
     state: detailState,
@@ -100,12 +106,12 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
     refreshFailed: data.refreshFailed,
     onMarkPaid: data.markPaid,
     onUnmarkPaid: data.unmarkPaid,
-    onExport: exportCsv,
+    onExport: exportInvoiceId != null ? openExport : null,
     onRetry: data.retryDetail,
     note: noteApi.note,
     onEditNote: noteApi.openEditor,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [noteApi.note, noteApi.openEditor, detailState, detail, data.futureRow, card, now, data.mutation, data.refreshFailed, data.markPaid, data.unmarkPaid, data.retryDetail, selectedKey]);
+  }), [noteApi.note, noteApi.openEditor, detailState, detail, data.futureRow, card, now, data.mutation, data.refreshFailed, data.markPaid, data.unmarkPaid, data.retryDetail, selectedKey, exportInvoiceId]);
 
   if (!valid) {
     return <div style={{ padding: pad, display: "flex", flexDirection: "column", gap: 12 }}><BackLink onClick={goBack} /><Notice tone="warn" role="alert">Fatura inválida.</Notice></div>;
@@ -216,6 +222,10 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
           {lower}
         </>
       )}
+      {exportOpen && exportParams && (() => {
+        const names = invoiceExportNames(card, year, month);
+        return <ExportPanel title={names.title} filePrefix={names.filePrefix} filtersText={[names.invoiceLine]} filterParams={exportParams} count={detail?.items_count} summary={exportSummary.data} summaryError={exportSummary.error} onClose={() => setExportOpen(false)} />;
+      })()}
       {noteApi.open && <NotesDialog title="Anotação da fatura" label="Anotação da fatura" initialNotes={noteApi.note.text ?? ""} isMobile={isMobile} onSave={noteApi.save} onClose={noteApi.closeEditor} />}
     </div>
   );

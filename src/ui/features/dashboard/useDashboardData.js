@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBalanceSummary } from "../../../api/balances";
 import { linearProjection } from "./periodYardstick.js";
+import { convertToBase, expensesInBase } from "../../money/convertToBase.js";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -108,12 +109,14 @@ function dayIndexInRange(isoDate, rangeStart, dayCount) {
  */
 export function pickCategoryName(transaction) {
   const tag = pickCategoryTagFromApiTransaction(transaction);
-  const rawName = tag?.name || transaction.category || "Sem categoria";
-  return categoryLabelPtForTag({
-    name: rawName,
-    icon_key: tag?.icon_key ?? null,
-    is_default: tag?.is_default ?? null,
-  });
+  // A tag com nome decide sozinha: o `label` dela é o nome que a API mostra (fincla-api#534).
+  if (tag && (tag.label || tag.name)) return categoryLabelPtForTag(tag);
+  if (transaction.category) {
+    return categoryLabelPtForTag({ name: transaction.category, is_default: tag?.is_default ?? null });
+  }
+  // Linha do seed sem nome nenhum: só o ícone ainda a identifica.
+  const byIcon = tag ? categoryLabelPtForTag(tag) : null;
+  return byIcon && byIcon !== "Categoria" ? byIcon : "Sem categoria";
 }
 
 function pickCategoryColor(category) {
@@ -127,7 +130,7 @@ function pickTransactionIcon(transaction) {
   return "🧾";
 }
 
-function mapTransaction(transaction) {
+export function mapTransaction(transaction) {
   const dateRaw = pickTransactionListDateRawForDisplay(transaction);
   const expenseAmt =
     transaction.type === "expense" ? pickDisplayAmount(transaction) : 0;
@@ -135,6 +138,9 @@ function mapTransaction(transaction) {
     id: transaction.id,
     desc: transaction.description,
     cat: pickCategoryName(transaction),
+    // A moeda DESTA linha (a da conta). A lista não é um total: um gasto de
+    // US$ 50 é escrito "US$ 50,00", nunca na moeda base da organização.
+    currency: transaction.value_currency ?? null,
     date: formatShortDate(dateRaw),
     val:
       transaction.type === "income"
@@ -159,7 +165,7 @@ function normalizeTagNameKey(name) {
 /**
  * Agrega despesas retornadas pela API no período (já filtradas no servidor).
  */
-function aggregateExpenseCategoriesFromTransactions(rawTx) {
+function aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency = null) {
   const map = new Map();
 
   for (const tx of rawTx) {
@@ -173,31 +179,40 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
     // card Gastos por Categoria, na mesma tela.
     const rawName = tag?.name || tx.category || "Sem categoria";
     const isDefault = tag?.is_default ?? null;
-    const normalizedName = categoryLabelPtForTag({
-      name: rawName,
-      icon_key: tag?.icon_key ?? null,
-      is_default: isDefault,
-    });
+    /* O nome EXIBIDO segue a tag inteira (nome da org > `label` da API >
+       nome), como Últimas transações (G3-P-02). `rawName` continua a
+       identidade canônica: é a chave de junção com `/analytics/by-category`. */
+    const displayName = tag && (tag.custom_name || tag.label || tag.name)
+      ? categoryLabelPtForTag(tag)
+      : categoryLabelPtForTag({ name: rawName, icon_key: tag?.icon_key ?? null, is_default: isDefault });
     const mapKey =
       tag?.id != null && tag.id !== ""
         ? `id:${tag.id}`
-        : `name:${normalizeTagNameKey(normalizedName)}`;
+        : `name:${normalizeTagNameKey(displayName)}`;
 
     const add = pickDisplayAmount(tx);
+    // Sem moeda declarada = a base (é o que toda org de moeda única sempre viu).
+    const txCurrency = tx.value_currency ?? baseCurrency ?? null;
     const cur = map.get(mapKey);
     if (cur) {
       cur.total += add;
+      cur.parts.set(txCurrency, (cur.parts.get(txCurrency) ?? 0) + add);
       if (!cur.color && tag?.color) cur.color = tag.color;
       if (!cur.tagId && tag?.id) cur.tagId = tag.id;
       if (!cur.icon_key && tag?.icon_key) cur.icon_key = tag.icon_key;
+      if (!cur.systemKey && tag?.system_key) cur.systemKey = tag.system_key;
     } else {
       map.set(mapKey, {
         tagId: tag?.id ?? null,
         tagName: rawName,
+        displayName,
         icon_key: tag?.icon_key ?? null,
+        systemKey: tag?.system_key ?? null,
         color: tag?.color ?? null,
         isDefault,
         total: add,
+        // Soma POR MOEDA: `total` acima é nominal e só vale com uma moeda só.
+        parts: new Map([[txCurrency, add]]),
       });
     }
   }
@@ -205,14 +220,62 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
   return Array.from(map.values());
 }
 
+/**
+ * O valor de uma linha somada por moeda (`parts`: moeda → soma).
+ *
+ * Uma moeda só: o próprio valor, nela. Mais de uma: convertido para a moeda base
+ * (`target`) pelas cotações que a API usou no mesmo período (`rates`), cada parte
+ * pela taxa do seu par. Faltando a base ou alguma taxa, não há número honesto:
+ * `value: null`, e a linha mostra as somas por moeda lado a lado, sem somar.
+ */
+export function resolveRowMoney(parts, target, rates) {
+  const list = [...parts.entries()].map(([currency, amount]) => ({ currency, amount }));
+  if (list.length === 1 && (target == null || list[0].currency === target)) {
+    return { value: list[0].amount, currency: list[0].currency, byCurrency: null };
+  }
+  if (target != null) {
+    let sum = 0;
+    let ok = true;
+    for (const { currency, amount } of list) {
+      if (currency === target) {
+        sum += amount;
+        continue;
+      }
+      const converted = currency ? convertToBase(amount, currency, target, rates) : null;
+      if (converted == null) {
+        ok = false;
+        break;
+      }
+      sum += converted;
+    }
+    if (ok) return { value: Math.round(sum * 100) / 100, currency: target, byCurrency: null };
+  }
+  if (list.length === 1) return { value: list[0].amount, currency: list[0].currency, byCurrency: null };
+  const byCurrency = list.sort((a, b) =>
+    a.currency === target ? -1 : b.currency === target ? 1 : String(a.currency).localeCompare(String(b.currency)),
+  );
+  return { value: null, currency: null, byCurrency };
+}
+
+/**
+ * Linhas do card "Gastos por Categoria".
+ *
+ * As linhas continuam vindo das transações do período (mesma semântica de sempre:
+ * "Sem categoria" incluso, estorno não abatido), mas somadas POR MOEDA: com
+ * R$ 190,40 e US$ 225,60 na mesma categoria, a soma nominal escrevia "R$ 416,00".
+ * Ver `resolveRowMoney`. `baseCurrency` e `rates` vêm de `consolidation` da
+ * resposta de `/analytics/by-category`; com ela fora do ar, ambos `null`.
+ */
 export function buildDashboardCategoryRows(
   rawTx,
   rangeStartYmd,
   rangeEndYmd,
   apiCategories,
   prevTotalByTagId,
+  baseCurrency = null,
+  rates = null,
 ) {
-  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx);
+  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx, baseCurrency);
   const apiList = apiCategories ?? [];
 
   const apiColorByTagId = new Map(
@@ -247,18 +310,29 @@ export function buildDashboardCategoryRows(
       : apiList.map((c) => ({
           tagId: c.tag_id,
           tagName: c.tag_name,
+          // O nome que o resto do app mostra (nome da organização > tradução), já resolvido pela API (BUG-01).
+          displayName: c.tag_label || null,
           icon_key: c.tag_icon_key ?? null,
+          systemKey: c.tag_system_key ?? null,
           color: c.tag_color,
           // Endpoint de agregação do consultor NUNCA manda `is_default`
           // (ver doc de `categoryLabelPtForTag` em categoryLabels.js) — fica
           // `null`, mesmo shape que os outros call sites desse endpoint.
           isDefault: null,
           total: c.total,
+          // Total da API: já na base (ou `null`, sem cotação).
+          parts: new Map([[baseCurrency, c.total]]),
         }));
 
   return sourceRows
-    .filter((r) => r.total > 0)
-    .sort((a, b) => b.total - a.total)
+    .filter((r) => r.total === null || r.total > 0)
+    .map((r) =>
+      r.total === null
+        ? { ...r, money: { value: null, currency: baseCurrency, byCurrency: null } }
+        : { ...r, money: resolveRowMoney(r.parts, baseCurrency, rates) },
+    )
+    // Valores conhecidos primeiro, do maior; os sem número honesto depois.
+    .sort((a, b) => (b.money.value ?? -1) - (a.money.value ?? -1))
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
       // Mesma chamada de `apiJoinKey` acima — de propósito SEM `is_default`
@@ -270,6 +344,7 @@ export function buildDashboardCategoryRows(
       const apiMeta = apiMetaByName.get(rowNameKey);
       const tagId = row.tagId || apiMeta?.tag_id || undefined;
       const iconKey = row.icon_key || apiMeta?.tag_icon_key || null;
+      const systemKey = row.systemKey || apiMeta?.tag_system_key || null;
       const color =
         row.color ||
         (tagId ? apiColorByTagId.get(String(tagId)) : null) ||
@@ -280,17 +355,28 @@ export function buildDashboardCategoryRows(
         {
           tag_id: tagId,
           tag_name: row.tagName,
+          display_name: row.displayName ?? null,
           tag_icon_key: iconKey,
+          // A cor sai da chave estável antes da cor crua (`pickCategoryColor`), como nas Transações (BUG-02).
+          tag_system_key: systemKey,
           tag_color: color,
           is_default: row.isDefault ?? null,
-          total: row.total,
+          total: row.money.value,
         },
-        prevTotalByTagId,
+        // O comparativo vem da API, na moeda base: só vale para uma linha na base.
+        // O comparativo é na base: vale para linha com número e na base (ou sem
+        // moeda declarada, que é a base por convenção). Sem número, nada a desenhar.
+        row.money.value != null &&
+          (row.money.currency == null || row.money.currency === baseCurrency)
+          ? prevTotalByTagId
+          : new Map(),
+        row.money.currency,
+        row.money.byCurrency,
       );
     });
 }
 
-export function mapCategory(category, prevTotalByTagId) {
+export function mapCategory(category, prevTotalByTagId, currency = null, byCurrency = null) {
   const prev = category.tag_id ? prevTotalByTagId.get(category.tag_id) : undefined;
   const avg = typeof prev === "number" && prev > 0 ? prev : null;
 
@@ -300,12 +386,17 @@ export function mapCategory(category, prevTotalByTagId) {
     // linha final do card sequestrava categorias do usuário que coincidem
     // de texto com um nome canônico do seed (ex. "Health" → "Saúde"), o
     // mesmo defeito que `pickCategoryName` já corrige pra Últimas transações.
-    name: categoryLabelPtForTag({
+    // `display_name`: o nome já resolvido da tag da transação (G3-P-02).
+    name: category.display_name || categoryLabelPtForTag({
       name: category.tag_name,
       icon_key: category.tag_icon_key ?? null,
       is_default: category.is_default ?? null,
     }),
     value: category.total,
+    /** Moeda de `value`/`avg`; `null` = a base da organização. */
+    currency,
+    /** Com `value: null`: as somas por moeda, para mostrar lado a lado. */
+    byCurrency,
     avg,
     color: pickCategoryColor(category),
   };
@@ -321,7 +412,13 @@ const RITMO_VAZIO = {
   rhythmMode: "daily",
 };
 
-export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
+/**
+ * A curva de ritmo soma as despesas dia a dia e depois é escalada para o total do
+ * período. Somar US$ e R$ no mesmo dia distorce a forma (#331), então as
+ * estrangeiras entram convertidas pelas taxas do mesmo total (`expensesInBase`).
+ * Sem taxa → a curva não é desenhada.
+ */
+export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd, baseCurrency = null, rates = null) {
   const startD = parseLocalYmd(rangeStartYmd);
   const endD = parseLocalYmd(rangeEndYmd);
   if (!startD || !endD) return { ...RITMO_VAZIO };
@@ -339,6 +436,8 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   if (summary && (summary.total_expenses == null || summary.total_income == null)) {
     return { ...RITMO_VAZIO };
   }
+  const expenses = expensesInBase(transactions, baseCurrency, rates, pickDisplayAmount);
+  if (expenses === null) return { ...RITMO_VAZIO };
 
   const D = daysInclusive(startD, endD);
   const now = new Date();
@@ -349,10 +448,10 @@ export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndY
   ).getTime();
 
   if (D <= RHYTHM_MAX_DAILY_POINTS) {
-    return buildRhythmDaily(transactions, summary, startD, D, todayStartMs);
+    return buildRhythmDaily(expenses, summary, startD, D, todayStartMs);
   }
   return buildRhythmWeekly(
-    transactions,
+    expenses,
     summary,
     startD,
     endD,
@@ -597,6 +696,7 @@ export function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         id: r.id,
         name: r.description,
         value: r.value,
+        currency: r.value_currency ?? null,
         day: occ.getDate(),
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
@@ -779,8 +879,23 @@ export function useDashboardData({
         balanceRes.status === "fulfilled" ? balanceRes.value : null;
 
       const rawTx = transactionsResponse.data ?? [];
+      // Base e taxas: as do recibo do TOTAL do período (`/transactions/summary`), que
+      // cobre também despesa sem categoria; as de `/analytics/by-category` completam
+      // um par que faltar ali. A base é a do resumo.
+      const consolidation = {
+        target_currency:
+          summary?.consolidation?.target_currency ?? categoriesResponse.consolidation?.target_currency ?? null,
+        rates: [...(summary?.consolidation?.rates ?? []), ...(categoriesResponse.consolidation?.rates ?? [])],
+      };
       const recent = rawTx.slice(0, 5).map(mapTransaction);
-      const rhythm = buildRhythmChart(rawTx, summary, start, end);
+      const rhythm = buildRhythmChart(
+        rawTx,
+        summary,
+        start,
+        end,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
+      );
 
       const prevTotalByTagId = new Map(
         (prevCategoriesResponse.categories ?? []).map((c) => [
@@ -794,6 +909,8 @@ export function useDashboardData({
         end,
         categoriesResponse.categories,
         prevTotalByTagId,
+        consolidation?.target_currency ?? null,
+        consolidation?.rates ?? null,
       );
 
       setState({
