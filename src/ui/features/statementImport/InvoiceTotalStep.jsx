@@ -47,7 +47,7 @@ function BankSummary({ summary }) {
   const payment = summary.payment;
   return (
     <Card data-testid="total-bank-summary" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-      <h3 style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, margin: 0 }}>O resumo da fatura no PDF</h3>
+      <h3 style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, margin: 0 }}>O resumo da fatura no arquivo do banco</h3>
       <Line testId="total-previous" label="Total da fatura anterior" value={plainMoney(summary.previous_total)} note="só referência" />
       <Line
         testId="total-payment"

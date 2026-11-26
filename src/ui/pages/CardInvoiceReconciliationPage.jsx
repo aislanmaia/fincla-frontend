@@ -204,7 +204,7 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
           <span style={{ ...G, fontSize: 13, color: T.inkMid }}>{cardName(card)}</span>
         </div>
         <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0, maxWidth: 680 }}>
-          Envie o PDF da fatura do cartão. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
+          Envie a fatura do cartão em PDF ou na planilha XLSX do banco. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
         </p>
       </div>
       {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
@@ -279,7 +279,7 @@ function ContextChips({ invoiceImport }) {
         Vencimento <b style={{ ...NUM, color: T.ink }}>{fullDate(invoice.due_date)}</b> · fechamento <b style={{ ...NUM, color: T.ink }}>{fullDate(invoice.closing_date)}</b>
       </span>
       <span data-testid="invoice-file-chip" style={CHIP}>
-        {fileName ? <>Arquivo <b style={{ color: T.ink, overflowWrap: "anywhere" }}>{fileName}</b></> : "Arquivo lido do PDF"} · <span style={{ color: T.green, display: "inline-flex", gap: 4, alignItems: "center" }}>total conferido <Check size={12} aria-hidden="true" /></span></span>
+        {fileName ? <>Arquivo <b style={{ color: T.ink, overflowWrap: "anywhere" }}>{fileName}</b></> : "Arquivo lido"} · <span style={{ color: T.green, display: "inline-flex", gap: 4, alignItems: "center" }}>total conferido <Check size={12} aria-hidden="true" /></span></span>
       <span style={CHIP}><b style={{ ...NUM, color: T.ink }}>{entries.length.toLocaleString("pt-BR")}</b> {entries.length === 1 ? "lançamento" : "lançamentos"} na fatura</span>
     </div>
   );
@@ -305,8 +305,8 @@ function RecognitionNotice({ invoiceImport, touch = false, onOtherCard }) {
       <Info size={14} aria-hidden="true" style={{ color: T.blue, flexShrink: 0, alignSelf: "center" }} />
       <span>
         {otherCard
-          ? <>Esta conciliação está na {invoiceLabel}, pelo vencimento que vem no PDF. Se não for,{" "}</>
-          : <>Reconhecemos este arquivo como a {invoiceLabel}, pelo final do cartão e pelo vencimento que vêm no PDF. Se não for,{" "}</>}
+          ? <>Esta conciliação está na {invoiceLabel}, pelo vencimento que vem no arquivo. Se não for,{" "}</>
+          : <>Reconhecemos este arquivo como a {invoiceLabel}, pelo final do cartão e pelo vencimento que vêm no arquivo. Se não for,{" "}</>}
         {/* No celular o link tem a altura de um alvo de toque (QA F1), sem mudar a frase. */}
         <button type="button" onClick={onOtherCard} style={{ ...G, background: "none", border: 0, padding: 0, fontSize: 13, fontWeight: 600, color: T.blue, textDecoration: "underline", cursor: "pointer", ...(touch ? { display: "inline-flex", alignItems: "center", minHeight: TOUCH_TARGET, verticalAlign: "middle" } : null) }}>
           escolha outro cartão
@@ -324,7 +324,7 @@ function OtherCardNotice({ cardCheck, touch = false, onOpenCard }) {
     <div data-testid="other-card-notice" role="status" style={{ ...G, fontSize: 13, color: T.ink, background: T.amberLight, border: `1px solid ${T.amberBorder}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
       <span>
         <b>Esta fatura parece ser de outro cartão.</b>{" "}
-        {cardCheck.file_last4 ? <>O PDF é do cartão final <b style={NUM}>{cardCheck.file_last4}</b>{suggested ? <> ({suggested.name})</> : null}. </> : null}
+        {cardCheck.file_last4 ? <>O arquivo é do cartão final <b style={NUM}>{cardCheck.file_last4}</b>{suggested ? <> ({suggested.name})</> : null}. </> : null}
         Se ela é mesmo deste cartão, pode seguir: nada impede a conciliação.
       </span>
       {suggested ? (
@@ -369,19 +369,19 @@ function StaleDraftNotice({ organizationId, importId, touch = false, discard, on
       <span style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
         <AlertTriangle size={14} aria-hidden="true" style={{ color: T.red, flexShrink: 0, alignSelf: "center" }} />
         <span>
-          <b>Esta leitura ficou desatualizada: descarte e envie o PDF de novo.</b>{" "}
-          Depois que o PDF foi lido, outra conciliação deste cartão foi concluída ou desfeita, ou o pagamento da fatura mudou. Esta conciliação não pode mais ser concluída; nada mudou nas suas transações.
+          <b>Esta leitura ficou desatualizada: descarte e envie o arquivo de novo.</b>{" "}
+          Depois que o arquivo foi lido, outra conciliação deste cartão foi concluída ou desfeita, ou o pagamento da fatura mudou. Esta conciliação não pode mais ser concluída; nada mudou nas suas transações.
         </span>
       </span>
       <div>
-        <DiscardDraftControl organizationId={organizationId} importId={importId} discard={discard} onDiscarded={onDiscarded} touch={touch} label="Descartar e enviar o PDF de novo" />
+        <DiscardDraftControl organizationId={organizationId} importId={importId} discard={discard} onDiscarded={onDiscarded} touch={touch} label="Descartar e enviar o arquivo de novo" />
       </div>
     </div>
   );
 }
 
 /** O motivo do Concluir desligado por uma leitura desatualizada. */
-const STALE_REASON = "Esta leitura ficou desatualizada: descarte o rascunho e envie o PDF de novo.";
+const STALE_REASON = "Esta leitura ficou desatualizada: descarte o rascunho e envie o arquivo de novo.";
 
 /** Banco − Fincla com sinal; zero em verde. `null` = não sabemos (nunca R$ 0,00). */
 function signedDifference(value, currency) {
@@ -1178,7 +1178,7 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
         <ErrorNote>{loadError}</ErrorNote>
-        <Btn variant="outGray" onClick={() => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) })} style={touchHeight(isMobile)}>Enviar o PDF da fatura</Btn>
+        <Btn variant="outGray" onClick={() => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) })} style={touchHeight(isMobile)}>Enviar a fatura</Btn>
       </div>
     );
   }

@@ -117,7 +117,7 @@ describe("a tela inicial, sem rascunho", () => {
     expect(await screen.findByText("Itaú")).toBeInTheDocument();
     const zone = screen.getByRole("button", { name: /Solte aqui o extrato do banco/ });
     expect(zone).toHaveTextContent("ou clique para escolher. A leitura começa na hora.");
-    expect(zone).toHaveTextContent("OFX, XLS, XLSX ou CSV · PDF da fatura do cartão · até 5 MB");
+    expect(zone).toHaveTextContent("OFX, XLS, XLSX ou CSV · fatura do cartão em PDF ou XLSX · até 5 MB");
     expect(screen.queryByText(/ainda não conferid/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("resume-draft")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar extrato" })).not.toBeInTheDocument();

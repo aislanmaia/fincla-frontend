@@ -176,7 +176,7 @@ describe("Faturas conciliadas do cartão", () => {
     await openUpload();
     const before = calls.filter((c) => c.list).length;
 
-    await user.upload(screen.getByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    await user.upload(screen.getByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
 
     const notice = await screen.findByTestId("draft-in-progress-notice");
     expect(notice).toHaveTextContent(contract.draft_in_progress.message);
@@ -198,12 +198,12 @@ describe("a área de envio e a lista", () => {
 
     await screen.findByTestId("card-invoice-upload");
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByRole("button", { name: /Solte aqui o PDF da fatura/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Solte aqui a fatura \(PDF ou XLSX\)/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Ou solte aqui outra fatura/ })).not.toBeInTheDocument();
 
     release();
     expect(await screen.findByRole("button", { name: /Ou solte aqui outra fatura/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Solte aqui o PDF da fatura/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Solte aqui a fatura \(PDF ou XLSX\)/ })).not.toBeInTheDocument();
   });
 
   it("se a lista não carrega, a área de envio aparece mesmo assim, com o erro", async () => {
@@ -212,7 +212,7 @@ describe("a área de envio e a lista", () => {
     render(<CardInvoiceReconciliationPage organizationId={ORG} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Não deu para buscar as faturas.");
-    expect(screen.getByRole("button", { name: /Solte aqui o PDF da fatura/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Solte aqui a fatura \(PDF ou XLSX\)/ })).toBeInTheDocument();
   });
 
   it("a busca que falha depois tira a lista velha; a que volta a dar certo apaga o erro", async () => {
@@ -231,7 +231,7 @@ describe("a área de envio e a lista", () => {
       http.get(BASE, () => HttpResponse.json(list)),
       http.post(BASE, () => HttpResponse.json({ detail: contract.draft_in_progress }, { status: 409 })),
     );
-    await user.upload(screen.getByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    await user.upload(screen.getByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
     expect(await screen.findAllByTestId("reconciled-invoice")).toHaveLength(2);
     expect(screen.queryByText("Não deu para buscar as faturas.")).not.toBeInTheDocument();
   });
@@ -252,13 +252,13 @@ describe("retomar o rascunho", () => {
   });
 
   it("rascunho parado há 30 dias: a mensagem do backend e o caminho para enviar o PDF de novo", async () => {
-    const message = "Esta conciliação ficou parada por 30 dias e foi descartada. Para conciliar esta fatura, envie o PDF de novo.";
+    const message = "Esta conciliação ficou parada por 30 dias e foi descartada. Para conciliar esta fatura, envie a fatura de novo.";
     detailResponse = () => HttpResponse.json({ detail: { code: "not_found", message } }, { status: 404 });
     const user = userEvent.setup();
     openImport(detail.id);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
-    await user.click(screen.getByRole("button", { name: "Enviar o PDF da fatura" }));
+    await user.click(screen.getByRole("button", { name: "Enviar a fatura" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` });
   });
 });
