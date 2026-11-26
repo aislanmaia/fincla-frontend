@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
@@ -50,11 +50,29 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
 // O cabeçalho do dia gruda logo abaixo do cabeçalho de colunas (desktop), senão ele ficaria coberto e sem clique.
 const COLUMN_HEADER_HEIGHT = 30;
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 92px 92px 86px";
+/* Com ações rápidas, a grade ganha o VÃO de /transactions (TransactionRow): uma coluna vazia logo antes do valor, com
+   piso de 156 px, onde as ações aparecem no hover ancoradas à borda direita dele — crescem para dentro do vazio ao abrir
+   o rótulo e não cobrem nenhuma coluna. */
+const COLUMNS_WITH_ACTIONS = "22px 58px minmax(140px,2.2fr) minmax(124px,1fr) 62px 96px 92px minmax(156px,1fr) 92px 86px";
+// A mesma régua de /transactions: abaixo de 1000 px de LISTA o vão não comporta o botão aberto e o rótulo fica fora.
+const ACTION_LABELS_MIN_WIDTH = 1000;
 
 
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, onEdit = null, onDelete = null, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
+  const hasActions = Boolean(onEdit || onDelete);
+  const columns = hasActions ? COLUMNS_WITH_ACTIONS : COLUMNS;
+  // A LISTA medida, não a viewport (a dock de filtros a estreita). Sem ResizeObserver (jsdom), cai no limiar de viewport.
+  const [listWidth, setListWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth - 260));
+  useEffect(() => {
+    const node = scrollerRef.current;
+    if (!node || isMobile || typeof ResizeObserver !== "function") return undefined;
+    const observer = new ResizeObserver(([entry]) => setListWidth(Math.round(entry.contentRect.width)));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isMobile]);
+  const showActionLabels = !isMobile && listWidth >= ACTION_LABELS_MIN_WIDTH;
   const groups = useMemo(() => {
     if (!grouped) return [{ key: "all", rows }];
     const result = [];
@@ -90,7 +108,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       </BulkActionsToolbar>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
-      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
+      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: columns, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span>{hasActions && <span />}<span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>
           {grouped && (() => {
@@ -104,26 +122,25 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
             const info = status(row);
             if (!isMobile) {
               const rest = remainingInstallments(row);
-              return <div key={row.id} role="listitem" className={onEdit || onDelete ? (inspected?.id === row.id ? "fincla-row fincla-row-on" : "fincla-row") : undefined} style={{ display: "grid", gridTemplateColumns: COLUMNS, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
+              return <div key={row.id} role="listitem" className={hasActions ? (inspected?.id === row.id ? "fincla-row fincla-row-on" : "fincla-row") : undefined} style={{ display: "grid", gridTemplateColumns: columns, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
                 <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
                 <div style={{ ...NUM, fontSize: 11, lineHeight: 1.25, color: T.inkMid }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>
                 <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                   <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
                   <span style={{ fontSize: 11, color: T.inkMid }}>{part ? "Crédito parcelado" : row.type === "refund" ? "Estorno" : row.recurring ? "Recorrente" : "Crédito à vista"}</span>
                 </button>
-                {/* Ações rápidas como em /transactions: aparecem no hover (ou foco) e ocupam a coluna de categoria, a
-                    única que pode sumir sem perda — data, descrição, valor e status continuam à vista. */}
-                <span style={{ minWidth: 0, position: "relative" }}>
-                  {/* A pílula cabe na coluna (reticências e o nome inteiro no title): transbordando, ela invadia a Parcela. */}
-                  <span className={onEdit || onDelete ? "fincla-quick-cover" : undefined} title={category(row)} style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span>
-                  {(onEdit || onDelete) && <div className="fincla-quick" style={{ left: 0, right: "auto", marginRight: 0 }}>
-                    {onEdit && <QuickAction label={`Editar ${row.description}`} text="Editar" showText={false} onClick={(event) => { event.stopPropagation(); onEdit(row); }}>✎</QuickAction>}
-                    {onDelete && <QuickAction label={`Excluir ${row.description}`} text="Excluir" tone="red" showText={false} onClick={(event) => { event.stopPropagation(); onDelete(row); }}>🗑</QuickAction>}
-                  </div>}
-                </span>
+                {/* A pílula cabe na coluna (reticências e o nome inteiro no title): transbordando, ela invadia a Parcela. */}
+                <span style={{ minWidth: 0 }}><span title={category(row)} style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span></span>
                 <span style={{ ...NUM, color: T.ink }}>{part ? `${part.installment_number}/${part.total_installments}` : "—"}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{rest == null ? "—" : rest === 0 ? "quitada" : `${rest}× ${formatMoneyAbs(part.amount, row.value_currency ?? cardCurrency) ?? ""}`}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{forecastEnd(row) ?? "—"}</span>
+                {/* O vão das ações rápidas, como em /transactions: no hover (ou foco) o grupo aparece colado ao valor. */}
+                {hasActions && <span style={{ position: "relative", minWidth: 0, alignSelf: "stretch" }}>
+                  <div className="fincla-quick">
+                    {onEdit && <QuickAction label={`Editar ${row.description}`} text="Editar" showText={showActionLabels} onClick={(event) => { event.stopPropagation(); onEdit(row); }}>✎</QuickAction>}
+                    {onDelete && <QuickAction label={`Excluir ${row.description}`} text="Excluir" tone="red" showText={showActionLabels} onClick={(event) => { event.stopPropagation(); onDelete(row); }}>🗑</QuickAction>}
+                  </div>
+                </span>}
                 <span style={{ ...NUM, textAlign: "right", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}</span>
                 <span style={{ color: info.color, fontWeight: 600, fontSize: 11 }}>{info.text}</span>
               </div>;

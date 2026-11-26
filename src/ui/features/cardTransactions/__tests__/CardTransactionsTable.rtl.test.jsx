@@ -65,3 +65,28 @@ describe("CardTransactionsTable · concordância da contagem", () => {
     expect(screen.getByTestId("ledger-footer-count")).toHaveTextContent(/^2 lançamentos carregados$/);
   });
 });
+
+describe("CardTransactionsTable · ações rápidas como em /transactions", () => {
+  const table = (props) => render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} onEdit={noop} onDelete={noop} isMobile={false} {...props} />);
+  afterEach(() => { Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 }); });
+
+  it("as ações moram no vão logo antes do valor, não na coluna de categoria", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+    table();
+    const edit = screen.getByRole("button", { name: "Editar Aluguel" });
+    const gapCell = edit.closest(".fincla-quick").parentElement;
+    expect(gapCell.nextElementSibling).toHaveTextContent("−R$ 10,00");
+    expect(gapCell.previousElementSibling).toHaveTextContent("—");
+    expect(screen.getAllByText("Moradia")[0].closest(".fincla-quick")).toBeNull();
+  });
+
+  it("com lista larga o botão abre o rótulo no hover; estreita, fica só o ícone (mesma régua de 1000 px)", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+    const { unmount } = table();
+    expect(screen.getByRole("button", { name: "Editar Aluguel" })).not.toHaveClass("fincla-qa-mute");
+    unmount();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1100 });
+    table();
+    expect(screen.getByRole("button", { name: "Excluir Aluguel" })).toHaveClass("fincla-qa-mute");
+  });
+});
