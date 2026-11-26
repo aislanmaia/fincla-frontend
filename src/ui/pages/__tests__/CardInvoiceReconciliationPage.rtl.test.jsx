@@ -139,8 +139,29 @@ describe("o topo da conciliação da fatura", () => {
     expect(difference).toHaveTextContent("Diferença da fatura agora");
     // A Assinatura que sobra no Fincla (#560) entra no total: R$ 61,00 além dos R$ 0,40 do posto.
     expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 61,40");
-    expect(difference).toHaveTextContent("Banco R$ 2.402,92 · Fincla R$ 2.464,32");
+    // #575: o total de hoje (`invoice.total`) e o projetado com as respostas, cada um com o seu rótulo.
+    expect(within(difference).getByTestId("invoice-difference-bank")).toHaveTextContent("Banco R$ 2.402,92");
+    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Fincla hoje: R$ 964,46 (R$ 1.438,46 a menos que o banco)");
+    expect(within(difference).getByTestId("invoice-difference-after")).toHaveTextContent(
+      "Depois de concluir, com suas respostas: R$ 2.464,32 · diferença −R$ 61,40",
+    );
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
+  });
+
+  it("#575: sem o total de hoje nem o projetado, diz \"não sabemos\", nunca R$ 0,00", async () => {
+    draft.invoice.total = null;
+    draft.difference_now.fincla = null;
+    draft.difference_now.difference = null;
+    await openDraft();
+
+    const difference = screen.getByTestId("invoice-difference");
+    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("não sabemos");
+    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Fincla hoje: não sabemos");
+    expect(within(difference).getByTestId("invoice-difference-today")).not.toHaveTextContent("que o banco");
+    expect(within(difference).getByTestId("invoice-difference-after")).toHaveTextContent(
+      "Depois de concluir, com suas respostas: não sabemos · diferença não sabemos",
+    );
+    expect(difference).not.toHaveTextContent("R$ 0,00");
   });
 
   it("o trilho tem os 8 passos, cada um com o estado dos seus itens", async () => {
