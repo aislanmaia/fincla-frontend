@@ -148,6 +148,17 @@ describe("o topo da conciliação da fatura", () => {
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
   });
 
+  it("#575: no celular, a barra compacta diz \"Depois de concluir\" e o total de hoje", async () => {
+    await openDraft({ isMobile: true });
+
+    const difference = screen.getByTestId("invoice-difference");
+    expect(difference).toHaveAttribute("data-compact", "true");
+    expect(difference).not.toHaveTextContent("Diferença agora");
+    expect(difference).toHaveTextContent("Depois de concluir");
+    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Hoje: R$ 964,46");
+    expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 61,40");
+  });
+
   it("#575: sem o total de hoje nem o projetado, diz \"não sabemos\", nunca R$ 0,00", async () => {
     draft.invoice.total = null;
     draft.difference_now.fincla = null;

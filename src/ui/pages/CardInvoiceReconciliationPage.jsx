@@ -417,7 +417,12 @@ function InvoiceDifferencePanel({ differenceNow, invoiceTotal = null, compact = 
     return (
       <div data-testid="invoice-difference" data-state={state} data-compact="true" role="status" aria-live="polite"
         style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0, border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 12, padding: "8px 14px", boxShadow: T.sm }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Diferença agora</span>
+        <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Depois de concluir</span>
+          <span data-testid="invoice-difference-today" style={{ fontSize: 11, color: T.inkMid }}>
+            Hoje: <b style={NUM}>{today === null ? "não sabemos" : formatMoney(today, currency)}</b>
+          </span>
+        </span>
         <span data-testid="invoice-difference-value" style={{ ...NUM, fontSize: 16, fontWeight: 800, color: tone.ink, whiteSpace: "nowrap" }}>{value}</span>
       </div>
     );
@@ -465,7 +470,7 @@ function ProgressPanel({ invoiceImport, passed, isMobile }) {
     return (
       <>
         <div data-testid="status-bar"><ProgressCard invoiceImport={invoiceImport} passed={passed} /></div>
-        <StickyTop><InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} compact /></StickyTop>
+        <StickyTop><InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} invoiceTotal={invoiceImport.invoice?.total ?? null} compact /></StickyTop>
       </>
     );
   }
