@@ -10,7 +10,8 @@
 //   cinza listrada. Nenhum lançamento do grupo é respondido sozinho;
 // - os outros (anuidade, redução, repasse de IOF, estornos): o passo "Compras novas" (#557), com o
 //   formulário do item novo; crédito vira estorno, com a nota "Entra como estorno: diminui o total
-//   da fatura".
+//   da fatura". O repasse de IOF somado em vários lançamentos do Fincla (#574, `split_pair`) tem a
+//   terceira resposta, "Sim, somados no Fincla" (`InvoiceSplitPair.jsx`).
 // Nada muda no Fincla até "Concluir conciliação da fatura".
 import { memo, useEffect, useRef } from "react";
 import { ChevronRight, Info, Plus, Sparkles } from "lucide-react";
@@ -349,7 +350,7 @@ export function InvoiceChargesStep({
       cardLabel="Lançamento"
       leading={leading}
       // O S só responde o grupo: a dica só o mostra com o grupo aberto.
-      shortcutKeys={groupItem && groupItem.id === queue.currentId ? ["s", "a", "n"] : ["a", "n"]}
+      shortcutKeys={(groupItem && groupItem.id === queue.currentId) || entries.find((e) => e.id === queue.currentId)?.split_pair ? ["s", "a", "n"] : ["a", "n"]}
     />
   );
 }

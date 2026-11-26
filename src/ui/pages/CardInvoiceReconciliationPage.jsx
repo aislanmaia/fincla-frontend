@@ -204,7 +204,7 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
           <span style={{ ...G, fontSize: 13, color: T.inkMid }}>{cardName(card)}</span>
         </div>
         <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0, maxWidth: 680 }}>
-          Envie o PDF da fatura do Itaú. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
+          Envie o PDF da fatura do cartão. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
         </p>
       </div>
       {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
@@ -1124,6 +1124,13 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
     },
     new: {
+      // #574: S é "Sim, somados no Fincla" no lançamento somado em vários (só no passo 4).
+      s: (e) => {
+        if (!e.split_pair) return null;
+        return e.answer === "pair_split"
+          ? confirmNew(e).then((ok) => ok && newAnswered(e.id))
+          : changeEntry(e.id, { answer: "pair_split" }, { onSaved: () => newAnswered(e.id) });
+      },
       a: (e) => {
         if (invoiceAnswerUnavailable(e, "create")) return null;
         return e.answer === "create" ? confirmNewAndAdvance(e, newAnswered) : changeEntry(e.id, { answer: "create", confirmed: false });

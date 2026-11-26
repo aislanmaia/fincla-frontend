@@ -28,7 +28,7 @@ export type InvoiceEntryClassification = 'reconciled' | 'suggested' | 'other_inv
  * `move_series` ("Mover esta e as próximas", só parcela). `reconciled` e (#558) `pair_sum` (o grupo de encargos somado numa transação, respondido pelo
  * grupo) só vêm do servidor: nunca se enviam num lançamento.
  */
-export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled' | 'pair_sum';
+export type InvoiceEntryAnswer = 'pair' | 'ignore' | 'create' | 'move' | 'move_series' | 'reconciled' | 'pair_sum' | 'pair_split';
 /** As respostas do grupo de encargos (#558): Sim, somados em <transação> · Não, adicionar cada um · Não registrar. */
 export type ChargeGroupAnswer = 'pair_sum' | 'create' | 'ignore';
 /** A seção do PDF onde o banco imprimiu o lançamento. */
@@ -133,6 +133,16 @@ export interface InvoiceFinclaTransaction {
   tag_names: string[];
   /** `amount`: valor ≠ do banco; `date`: dia da compra ≠ do banco. */
   differences: ('amount' | 'date')[];
+}
+
+/**
+ * #574: um lançamento do banco (o "Repasse de IOF") que é a soma, ao centavo, de várias transações
+ * desta fatura no Fincla (os IOFs lançados um a um). `total` = a soma delas, sem sinal.
+ */
+export interface InvoiceSplitPair {
+  transaction_ids: number[];
+  transactions: InvoiceFinclaTransaction[];
+  total: InvoiceMoney | null;
 }
 
 /**
@@ -249,6 +259,8 @@ export interface InvoiceEntry {
   suggestion_basis: SuggestionBasis | null;
   /** As opções de uma dúvida, ao vivo, a mais parecida primeiro; vazio fora de `doubt` e de rascunho. */
   candidates: InvoiceCandidate[];
+  /** #574: as transações do Fincla somadas neste lançamento (`pair_split`); `null` = nenhuma soma bate. */
+  split_pair: InvoiceSplitPair | null;
 }
 
 /**
@@ -463,7 +475,7 @@ export interface UpdateInvoiceEntryRequest {
    * `null` (enviado) volta o lançamento a sem resposta (`confirmed: false`): o "Desfazer escolha" da
    * primeira resposta. Nunca com `transaction_id` nem `confirmed: true` (→ 422).
    */
-  answer?: 'pair' | 'ignore' | 'create' | InvoiceMoveAnswer | null;
+  answer?: 'pair' | 'ignore' | 'create' | 'pair_split' | InvoiceMoveAnswer | null;
   /**
    * Com `pair`/`move`/`move_series`: a transação escolhida (opção da dúvida ou da busca). Ausente = a
    * sugerida. `pair` só nesta fatura; `move`/`move_series` só na anterior ou na seguinte.
@@ -649,6 +661,17 @@ export const normalizeInvoiceCandidate = (raw: Raw): InvoiceCandidate => ({
   ...normalizeMoveFields(raw),
 });
 
+const normalizeSplitPair = (raw: unknown): InvoiceSplitPair | null => {
+  const split = raw as Raw | null | undefined;
+  if (!split) return null;
+  const transactions = ((split.transactions as Raw[]) ?? []).map((t) => normalizeFincla(t) as InvoiceFinclaTransaction);
+  return {
+    transaction_ids: ((split.transaction_ids as unknown[]) ?? transactions.map((t) => t.id)).map(Number),
+    transactions,
+    total: moneyOrNull(split.total as WireMoney),
+  };
+};
+
 export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
   const change = raw.value_change as { from: WireMoney; to: WireMoney } | null | undefined;
   return {
@@ -686,6 +709,7 @@ export const normalizeInvoiceEntry = (raw: Raw): InvoiceEntry => {
     ...normalizeMoveFields(raw),
     other_invoice: normalizeBrief(raw.other_invoice),
     candidates: ((raw.candidates as Raw[]) ?? []).map(normalizeInvoiceCandidate),
+    split_pair: normalizeSplitPair(raw.split_pair),
   };
 };
 
