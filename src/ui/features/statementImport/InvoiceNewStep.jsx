@@ -23,6 +23,9 @@ import { NewEntriesStep } from "./NewEntriesStep.jsx";
 import { InvoiceAmount, InvoiceBankSide, InvoiceStatusBadge, invoiceAnswerNote, invoiceAnswerUnavailable } from "./InvoiceSuggestedStep.jsx";
 import { invoiceNewPurchaseForm, newPurchaseOutcome } from "./InvoiceNewPurchase.jsx";
 import { createdInstallments, isInvoiceEntryAnswered, pad2 } from "./invoiceSteps.js";
+import {
+  InvoiceEntryRow, SPLIT_PAIR_ANSWERS, SPLIT_PAIR_QUESTION, SplitPairBadge, SplitPairFinclaSide, splitPairOutcome, untouchedSplitPair,
+} from "./InvoiceSplitPair.jsx";
 
 const QUESTION = "O que fazer com esta compra?";
 /** A pergunta do passo 4 (protótipo v16): anuidade, tarifa, IOF e estorno não são "compras". */
@@ -54,7 +57,10 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
     // "Adicionar" deixa o formulário aberto para conferir, com o Confirmar; nada fica confirmado ainda.
     onChange(entry.id, value === "create" ? { answer: "create", confirmed: false } : { answer: value });
   };
-  const confirm = entry.answer === "create" ? (
+  // #574: o Repasse de IOF somado em vários lançamentos do Fincla tem a terceira resposta.
+  const split = Boolean(entry.split_pair);
+  const showForm = !split || entry.answer === "create";
+  let confirm = entry.answer === "create" ? (
     <ConfirmAnswerButton
       disabled={busy || blank}
       blockedNote={blank ? CONFIRM_BLOCKED_NOTE : ""}
@@ -62,21 +68,28 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
       onConfirm={() => desc.confirm(onConfirm)}
     />
   ) : null;
+  if (untouchedSplitPair(entry)) {
+    confirm = <ConfirmAnswerButton label="Confirmar sugestão" disabled={busy} touch={isMobile} onConfirm={() => onConfirm(entry)} />;
+  }
+  let outcome = newPurchaseOutcome(entry, form);
+  if (skipped || entry.addable === false) outcome = <>Não entra no Fincla. A diferença aparece em Conferir o total.</>;
+  if (split && entry.answer === "pair_split") outcome = splitPairOutcome(entry);
+  else if (split && entry.answer === null) outcome = <>Escolha uma resposta.</>;
   return (
     <article
       data-testid="new-purchase-card"
       aria-label={`${cardLabel} de ${bankDateLabel(entry.date)}: ${entry.bank_description}`}
-      style={{ background: T.surface, border: `1px solid ${entry.confirmed ? T.border : T.green}`, borderRadius: 14, boxShadow: T.sm, overflow: "hidden" }}
+      style={{ background: T.surface, border: `1px solid ${entry.confirmed ? T.border : split && entry.answer !== "create" ? T.blue : T.green}`, borderRadius: 14, boxShadow: T.sm, overflow: "hidden" }}
     >
       <header style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{bankDateLabel(entry.date)}</span>
-        <InvoiceStatusBadge entry={entry} />
+        {entry.answer === "pair_split" ? <SplitPairBadge entry={entry} /> : <InvoiceStatusBadge entry={entry} />}
       </header>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 0, padding: 14, alignItems: "stretch" }}>
         <InvoiceBankSide entry={entry} />
-        <Connector answer={entry.answer} isMobile={isMobile} />
+        <Connector answer={entry.answer === "pair_split" ? "pair" : entry.answer} isMobile={isMobile} />
         <div style={{ display: "flex", flex: 1, minWidth: 0 }}>
-          <StatementEntryCard
+          {showForm ? <StatementEntryCard
             entry={entry}
             categories={form.categories}
             details={form.details}
@@ -87,13 +100,13 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
             desc={desc}
             skipped={skipped}
             invoice={invoiceNewPurchaseForm(entry, form.cardName, onChange, busy)}
-          />
+          /> : <SplitPairFinclaSide entry={entry} />}
         </div>
       </div>
       <footer style={{ padding: "10px 14px", background: T.bg, borderTop: `1px solid ${T.border}` }}>
         <AnswerSegment
-          label={question}
-          answers={ANSWERS}
+          label={split ? SPLIT_PAIR_QUESTION : question}
+          answers={split ? SPLIT_PAIR_ANSWERS : ANSWERS}
           value={entry.answer}
           busy={busy}
           unavailable={(a) => invoiceAnswerUnavailable(entry, a.value)}
@@ -105,7 +118,7 @@ function InvoiceNewPurchaseCard({ entry, form, isMobile, busy, onChange, onConfi
       </footer>
       <p data-testid="pair-outcome" style={{ ...G, fontSize: 12, color: T.inkMid, margin: 0, padding: "8px 14px", borderTop: `1px solid ${T.border}` }}>
         <span aria-hidden="true" style={{ marginRight: 6 }}>→</span>
-        {skipped || entry.addable === false ? <>Não entra no Fincla. A diferença aparece em Conferir o total.</> : newPurchaseOutcome(entry, form)}
+        {outcome}
       </p>
     </article>
   );
@@ -161,6 +174,10 @@ export function InvoiceNewStep({
       createUnavailable={(entry) => invoiceAnswerUnavailable(entry, "create")}
       rowDetail={installmentsDetail}
       rowAmount={(entry) => <InvoiceAmount amount={entry.amount} currency={entry.currency} />}
+      // #574: sem resposta, ou somado em vários do Fincla: a linha diz isso (nunca "Adicionar agora").
+      renderRow={(entry, row) => (entry.answer === null || entry.answer === "pair_split" ? (
+        <InvoiceEntryRow entry={entry} amount={<InvoiceAmount amount={entry.amount} currency={entry.currency} />} {...row} />
+      ) : null)}
       renderCard={(entry, { busy, onChange, onConfirm }) => (
         <InvoiceNewPurchaseCard
           entry={entry}

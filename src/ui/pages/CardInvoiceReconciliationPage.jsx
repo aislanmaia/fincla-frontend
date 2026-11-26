@@ -204,7 +204,7 @@ function InvoiceUploadView({ organizationId, card, cardPublicId, isMobile }) {
           <span style={{ ...G, fontSize: 13, color: T.inkMid }}>{cardName(card)}</span>
         </div>
         <p style={{ ...G, fontSize: 14, color: T.inkMid, margin: 0, maxWidth: 680 }}>
-          Envie o PDF da fatura do Itaú. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
+          Envie o PDF da fatura do cartão. O Fincla reconhece o cartão pelo final e a fatura pelo vencimento, e mostra cada lançamento antes de qualquer coisa mudar.
         </p>
       </div>
       {notice ? <p role="status" style={{ ...G, fontSize: 13, color: T.green, margin: 0 }}>{notice}</p> : null}
@@ -390,9 +390,22 @@ function signedDifference(value, currency) {
   return (value > 0 ? "+" : "−") + formatMoney(Math.abs(value), currency);
 }
 
-/** "Diferença da fatura agora" (banco − Fincla), fixa ao rolar, com "Banco R$ X · Fincla R$ Y". */
-function InvoiceDifferencePanel({ differenceNow, compact = false }) {
+/** "R$ X a menos/a mais que o banco": o quanto o total de hoje fica abaixo ou acima do banco. */
+function todayGap(bank, today, currency) {
+  if (bank === null || today === null) return null;
+  const gap = bank - today;
+  if (Math.abs(gap) < 0.005) return "igual ao banco";
+  return `${formatMoney(Math.abs(gap), currency)} ${gap > 0 ? "a menos" : "a mais"} que o banco`;
+}
+
+/**
+ * "Diferença da fatura agora" (banco − Fincla), fixa ao rolar (#575): o número grande é a diferença
+ * DEPOIS de concluir com as respostas marcadas; embaixo, o total do Fincla hoje (`invoice.total`)
+ * e o total projetado, cada um com o seu rótulo, para o projetado não ser lido como o de hoje.
+ */
+function InvoiceDifferencePanel({ differenceNow, invoiceTotal = null, compact = false }) {
   const { bank, fincla, difference, currency } = differenceNow;
+  const today = invoiceTotal ? invoiceTotal.amount : null;
   const known = difference !== null;
   const ok = known && Math.abs(difference) < 0.005;
   const tone = !known ? { border: T.border, bg: T.surface, ink: T.inkMid } : ok
@@ -404,27 +417,35 @@ function InvoiceDifferencePanel({ differenceNow, compact = false }) {
     return (
       <div data-testid="invoice-difference" data-state={state} data-compact="true" role="status" aria-live="polite"
         style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0, border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 12, padding: "8px 14px", boxShadow: T.sm }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Diferença agora</span>
+        <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Depois de concluir</span>
+          <span data-testid="invoice-difference-today" style={{ fontSize: 11, color: T.inkMid }}>
+            Hoje: <b style={NUM}>{today === null ? "não sabemos" : formatMoney(today, currency)}</b>
+          </span>
+        </span>
         <span data-testid="invoice-difference-value" style={{ ...NUM, fontSize: 16, fontWeight: 800, color: tone.ink, whiteSpace: "nowrap" }}>{value}</span>
       </div>
     );
   }
-  let sub;
-  if (ok) sub = <>Banco e Fincla batem: <b style={NUM}>{formatMoney(bank, currency)}</b></>;
-  else {
-    sub = (
-      <>
-        Banco <b style={NUM}>{bank === null ? "não sabemos" : formatMoney(bank, currency)}</b> · Fincla{" "}
-        <b style={NUM}>{fincla === null ? "não sabemos" : formatMoney(fincla, currency)}</b>
-      </>
-    );
-  }
+  const money = (v) => (v === null ? "não sabemos" : formatMoney(v, currency));
+  const gap = todayGap(bank, today, currency);
+  const sub = (
+    <>
+      <div data-testid="invoice-difference-bank">Banco <b style={NUM}>{money(bank)}</b></div>
+      <div data-testid="invoice-difference-today">
+        Fincla hoje: <b style={NUM}>{money(today)}</b>{gap ? <> ({gap})</> : null}
+      </div>
+      <div data-testid="invoice-difference-after">
+        Depois de concluir, com suas respostas: <b style={NUM}>{money(fincla)}</b> · diferença <b style={NUM}>{value}</b>
+      </div>
+    </>
+  );
   return (
     <div data-testid="invoice-difference" data-state={state} role="status" aria-live="polite"
       style={{ ...G, minWidth: 0, flex: "1 1 240px", border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 14, padding: "12px 16px", boxShadow: T.sm }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: T.inkMid }}>Diferença da fatura agora</div>
       <div data-testid="invoice-difference-value" style={{ ...NUM, fontSize: 22, fontWeight: 800, color: tone.ink, marginTop: 2 }}>{value}</div>
-      <div style={{ fontSize: 12, color: T.inkMid, marginTop: 2 }}>{sub}</div>
+      <div style={{ fontSize: 12, color: T.inkMid, marginTop: 2, display: "grid", gap: 1 }}>{sub}</div>
     </div>
   );
 }
@@ -449,7 +470,7 @@ function ProgressPanel({ invoiceImport, passed, isMobile }) {
     return (
       <>
         <div data-testid="status-bar"><ProgressCard invoiceImport={invoiceImport} passed={passed} /></div>
-        <StickyTop><InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} compact /></StickyTop>
+        <StickyTop><InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} invoiceTotal={invoiceImport.invoice?.total ?? null} compact /></StickyTop>
       </>
     );
   }
@@ -457,7 +478,7 @@ function ProgressPanel({ invoiceImport, passed, isMobile }) {
     <StickyTop>
       <div data-testid="status-bar" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
         <ProgressCard invoiceImport={invoiceImport} passed={passed} />
-        <InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} />
+        <InvoiceDifferencePanel differenceNow={invoiceImport.difference_now} invoiceTotal={invoiceImport.invoice?.total ?? null} />
       </div>
     </StickyTop>
   );
@@ -1108,6 +1129,13 @@ function InvoiceDraftView({ organizationId, card, cardPublicId, importId, isMobi
       n: (e) => (invoiceAnswerUnavailable(e, "ignore") ? null : answer(e, "ignore")),
     },
     new: {
+      // #574: S é "Sim, somados no Fincla" no lançamento somado em vários (só no passo 4).
+      s: (e) => {
+        if (!e.split_pair) return null;
+        return e.answer === "pair_split"
+          ? confirmNew(e).then((ok) => ok && newAnswered(e.id))
+          : changeEntry(e.id, { answer: "pair_split" }, { onSaved: () => newAnswered(e.id) });
+      },
       a: (e) => {
         if (invoiceAnswerUnavailable(e, "create")) return null;
         return e.answer === "create" ? confirmNewAndAdvance(e, newAnswered) : changeEntry(e.id, { answer: "create", confirmed: false });

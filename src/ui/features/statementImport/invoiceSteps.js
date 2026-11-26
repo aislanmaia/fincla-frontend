@@ -352,6 +352,16 @@ export function invoiceSummaryRows(invoiceImport) {
     "summary-summed-charges",
     summedInto ? `em “${summedInto}”, que fica ligada a ${summed.length === 1 ? "ele" : "todos eles"}` : null,
   );
+  // O Repasse de IOF somado em vários lançamentos do Fincla (#574): fica ligado a eles, nada mais muda.
+  const split = entries.filter((e) => e.answer === "pair_split");
+  const splitTransactions = split.reduce((sum, e) => sum + (e.split_pair?.transactions.length ?? 0), 0);
+  row(
+    split.length,
+    "lançamento já estava somado no Fincla e fica ligado ao banco",
+    "lançamentos já estavam somados no Fincla e ficam ligados ao banco",
+    "summary-split-pairs",
+    splitTransactions ? `ligado${split.length === 1 ? "" : "s"} a ${plural(splitTransactions, "lançamento", "lançamentos")} do Fincla` : null,
+  );
   // Compras novas (#557): as transações que entram, com as parcelas das parceladas.
   const creates = entries.filter((e) => e.answer === "create");
   const transactions = creates.reduce((sum, e) => sum + createdTransactionCount(e), 0);

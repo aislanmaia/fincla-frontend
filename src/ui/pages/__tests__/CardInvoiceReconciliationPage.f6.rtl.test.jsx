@@ -235,7 +235,7 @@ describe("Revisar e concluir: o que segura o concluir (#560)", () => {
 
     const blockers = screen.getAllByTestId("blocker-unconfirmed-creates");
     expect(blockers.map((b) => b.dataset.step)).toEqual(["charges", "new"]);
-    expect(blockers[0]).toHaveTextContent("Falta confirmar 4 transações novas em Encargos, tarifas e estornos.");
+    expect(blockers[0]).toHaveTextContent("Falta confirmar 3 transações novas em Encargos, tarifas e estornos.");
     expect(blockers[1]).toHaveTextContent("Falta confirmar 3 compras novas em Compras novas.");
     expect(screen.getByRole("button", { name: "Concluir conciliação da fatura" })).toBeDisabled();
 

@@ -19,7 +19,7 @@ const COPY = {
     input: "Arquivo do extrato (OFX, XLS, XLSX ou CSV, ou o PDF da fatura do cartão, até 5 MB)",
   },
   invoice: {
-    formats: "PDF da fatura do Itaú · até 5 MB",
+    formats: "PDF da fatura · até 5 MB",
     accept: ".pdf,application/pdf",
     what: "o PDF da fatura",
     another: "outra fatura",

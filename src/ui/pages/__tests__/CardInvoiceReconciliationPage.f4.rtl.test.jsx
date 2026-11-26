@@ -195,8 +195,9 @@ describe("o grupo de encargos", () => {
     // Os outros lançamentos do passo são linhas, cada um o seu: o repasse de IOF nunca entra no grupo.
     expect(within(card).queryByText("Repasse de IOF")).not.toBeInTheDocument();
     const rows = screen.getAllByTestId("entry-row").map((r) => r.textContent);
-    expect(rows).toHaveLength(4);
-    expect(rows.some((t) => t.includes("Repasse de IOF"))).toBe(true);
+    expect(rows).toHaveLength(3);
+    // #574: o repasse de IOF vem somado nos IOFs do Fincla, numa linha própria.
+    expect(screen.getByTestId("split-pair-row")).toHaveTextContent("Repasse de IOF");
     // O grupo conta como UM item: 5 na fila.
     expect(screen.getByTestId("queue-position")).toHaveTextContent("Lançamento 1 de 5");
   });
@@ -479,7 +480,8 @@ describe("anuidade, redução, repasse de IOF e estornos", () => {
     await waitFor(() => expect(calls).toContainEqual({ patch: ESTORNO().id, body: { confirmed: true } }));
     const repasse = await screen.findByRole("article", { name: /Lançamento de 10\/11\/2026: Repasse de IOF/ });
     expect(within(repasse).getByTestId("bank-side")).toHaveTextContent("Internacional");
-    expect(within(repasse).getByTestId("locked-type")).toHaveTextContent("Despesa");
+    // #574: o repasse vem somado nos IOFs do Fincla, sem o formulário.
+    expect(within(repasse).getByTestId("split-pair-side")).toHaveTextContent("Somados no Fincla: 2 lançamentos");
     expect(within(repasse).queryByTestId("refund-note")).not.toBeInTheDocument();
   });
 
