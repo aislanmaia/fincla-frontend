@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import { Badge, Btn } from "../../components/primitives.jsx";
@@ -8,6 +8,8 @@ import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 import { LedgerModal } from "./LedgerDialogs.jsx";
 import { forecastEnd, installmentOf, remainingInstallments } from "./ledgerModel.js";
+import { ConfirmActionInline } from "../transactions/ConfirmAction.jsx";
+import { deleteConfirmTx } from "./deleteConfirmTx.js";
 
 const statusText = (row) => row.type === "refund" ? "Estorno" : row.status === "paid" ? "Paga" : row.status === "confirmed" ? "A pagar" : "Pendente";
 const line = { ...G, display: "flex", justifyContent: "space-between", gap: 10, borderBottom: `1px solid ${T.border}`, padding: "10px 0", fontSize: 12 };
@@ -17,7 +19,11 @@ function Rows({ entries }) {
 }
 
 /** Detalhe do lançamento: dados, cronograma da parcela, mudança de fatura e estorno. */
-export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove, onRefund, onOpenOriginal }) {
+/**
+ * `onDelete` abre a pergunta de exclusão. No desktop a página responde com o modal de /transactions; no toque
+ * ela devolve `confirmingDelete` e a pergunta ocupa o lugar do botão, como na sanfona de /transactions.
+ */
+export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove, onRefund, onOpenOriginal, onDelete = null, confirmingDelete = false, deleteBusy = false, onConfirmDelete, onCancelDelete }) {
   // Mover fatura e estornar valem para o cartão da tela: em "todos os cartões" a página não passa as ações.
   const code = row.value_currency || currency;
   const money = (value) => code ? formatMoneyAbs(value, code) : "—";
@@ -25,6 +31,14 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove,
   const rest = remainingInstallments(row);
   const hasRefund = (row.refunds_summary?.count ?? 0) > 0;
   const category = pickCategoryTagFromApiTransaction(row)?.label || row.category || "—";
+  // A pergunta toma o lugar do botão focado: o foco vai para o Cancelar dela (caminho seguro), não cai no body.
+  const confirmRef = useRef(null);
+  // Cancelada, o foco volta ao Excluir que a abriu.
+  const askedRef = useRef(false);
+  useEffect(() => {
+    if (confirmingDelete || askedRef.current) confirmRef.current?.querySelector("button")?.focus();
+    askedRef.current = confirmingDelete;
+  }, [confirmingDelete]);
   return <>
     <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} style={{ float: "right", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
     <h2 style={{ ...G, margin: "0 0 6px", fontSize: 18 }}>{row.description}</h2>
@@ -51,6 +65,11 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove,
           ? <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.green, fontWeight: 700 }}>✓ Esta compra possui estorno relacionado</p>
           : !onRefund ? null : <button type="button" onClick={() => onRefund(row)} style={{ ...G, width: "100%", minHeight: 40, border: `1.5px dashed ${T.green}`, borderRadius: 10, background: T.greenLight, color: T.green, fontWeight: 700, cursor: "pointer" }}>↺ Lançar estorno desta compra</button>}
     </div>
+    {onDelete && <div ref={confirmRef} style={{ marginTop: 16 }}>
+      {confirmingDelete
+        ? <ConfirmActionInline kind="delete" desc={row.description} tx={deleteConfirmTx(row, currency)} busy={deleteBusy} onConfirm={() => onConfirmDelete?.(row)} onCancel={() => onCancelDelete?.()} />
+        : <button type="button" onClick={() => onDelete(row)} style={{ ...G, width: "100%", minHeight: 40, borderRadius: 10, border: `1px solid ${T.red}44`, background: T.surface, color: T.red, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🗑 Excluir</button>}
+    </div>}
   </>;
 }
 

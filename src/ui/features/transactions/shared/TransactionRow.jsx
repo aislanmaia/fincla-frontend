@@ -59,7 +59,7 @@ export const SR_ONLY = {
  * descrição da transação: quem usa leitor de tela precisa saber *qual* linha
  * está prestes a excluir.
  */
-const QuickAction = ({ label, text, tone, onClick, showText = true, children }) => (
+export const QuickAction = ({ label, text, tone, onClick, showText = true, children }) => (
   <button
     type="button"
     className={showText ? "fincla-qa" : "fincla-qa fincla-qa-mute"}

@@ -442,7 +442,7 @@ export default function App() {
       // Conciliar fatura reescreve os livros da organização: só o dono opera (a API recusa os demais).
       onReconcileInvoice={activeMembershipRole === "owner" ? (cardPublicId) => navigate({ to: cardInvoiceReconciliationPath(cardPublicId) }) : null} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
-    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
+    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} onTransactionsInvalidate={bumpTransactionsList} />,
     cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
     cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
       hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}

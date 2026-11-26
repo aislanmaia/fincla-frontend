@@ -124,6 +124,8 @@ export const ANIM_CSS = `
   }
   .fincla-row { transition: background 0.11s; }
   .fincla-row:hover { background: #F0EFEB !important; }
+  /* Linha cujo detalhe está aberto: o hover não apaga a marca de qual linha o painel mostra. */
+  .fincla-row.fincla-row-on:hover { background: #EFF6FF !important; }
   /* Ações rápidas: aparecem no hover ANCORADAS À ESQUERDA DO VALOR, flutuando
      dentro do vão que a linha já tem. Absolutas de propósito — no fluxo elas
      empurrariam o valor ao aparecer e a linha inteira saltaria sob o cursor,
@@ -159,6 +161,10 @@ export const ANIM_CSS = `
   }
   .fincla-row:hover .fincla-quick,
   .fincla-row:focus-within .fincla-quick { visibility: visible; }
+  /* Onde as ações não têm vão próprio (extrato do cartão), elas TROCAM de lugar com a categoria em vez de cair por
+     cima dela: meio nome coberto por dois botões fica ilegível; nome nenhum por um instante, não. */
+  .fincla-row:hover .fincla-quick-cover,
+  .fincla-row:focus-within .fincla-quick-cover { visibility: hidden; }
   /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
      um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
      permanentemente visível. Antes isso era inofensivo (ele tinha coluna

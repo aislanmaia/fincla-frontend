@@ -9,6 +9,7 @@ import { dayKey, forecastEnd, groupSubtotal, installmentOf, remainingInstallment
 import { plural } from "../../plural.js";
 import { BulkActionsToolbar, RowCheckbox, SelectionCount, bulkButton } from "../selection/BulkSelection.jsx";
 import { fmtCount } from "../../formatters.js";
+import { QuickAction } from "../transactions/shared/TransactionRow.jsx";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -51,7 +52,7 @@ const COLUMN_HEADER_HEIGHT = 30;
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 92px 92px 86px";
 
 
-export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
+export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, onEdit = null, onDelete = null, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
   const groups = useMemo(() => {
@@ -103,14 +104,23 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
             const info = status(row);
             if (!isMobile) {
               const rest = remainingInstallments(row);
-              return <div key={row.id} role="listitem" style={{ display: "grid", gridTemplateColumns: COLUMNS, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
+              return <div key={row.id} role="listitem" className={onEdit || onDelete ? (inspected?.id === row.id ? "fincla-row fincla-row-on" : "fincla-row") : undefined} style={{ display: "grid", gridTemplateColumns: COLUMNS, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
                 <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
                 <div style={{ ...NUM, fontSize: 11, lineHeight: 1.25, color: T.inkMid }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>
                 <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                   <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
                   <span style={{ fontSize: 11, color: T.inkMid }}>{part ? "Crédito parcelado" : row.type === "refund" ? "Estorno" : row.recurring ? "Recorrente" : "Crédito à vista"}</span>
                 </button>
-                <span style={{ minWidth: 0 }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span>
+                {/* Ações rápidas como em /transactions: aparecem no hover (ou foco) e ocupam a coluna de categoria, a
+                    única que pode sumir sem perda — data, descrição, valor e status continuam à vista. */}
+                <span style={{ minWidth: 0, position: "relative" }}>
+                  {/* A pílula cabe na coluna (reticências e o nome inteiro no title): transbordando, ela invadia a Parcela. */}
+                  <span className={onEdit || onDelete ? "fincla-quick-cover" : undefined} title={category(row)} style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span>
+                  {(onEdit || onDelete) && <div className="fincla-quick" style={{ left: 0, right: "auto", marginRight: 0 }}>
+                    {onEdit && <QuickAction label={`Editar ${row.description}`} text="Editar" showText={false} onClick={(event) => { event.stopPropagation(); onEdit(row); }}>✎</QuickAction>}
+                    {onDelete && <QuickAction label={`Excluir ${row.description}`} text="Excluir" tone="red" showText={false} onClick={(event) => { event.stopPropagation(); onDelete(row); }}>🗑</QuickAction>}
+                  </div>}
+                </span>
                 <span style={{ ...NUM, color: T.ink }}>{part ? `${part.installment_number}/${part.total_installments}` : "—"}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{rest == null ? "—" : rest === 0 ? "quitada" : `${rest}× ${formatMoneyAbs(part.amount, row.value_currency ?? cardCurrency) ?? ""}`}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{forecastEnd(row) ?? "—"}</span>
