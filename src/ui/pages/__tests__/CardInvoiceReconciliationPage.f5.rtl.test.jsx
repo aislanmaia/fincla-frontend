@@ -690,13 +690,13 @@ describe("a leitura desatualizada (QA F4 OBS-01)", () => {
     await open();
 
     const notice = screen.getByTestId("stale-draft-notice");
-    expect(notice).toHaveTextContent("Esta leitura ficou desatualizada: descarte e envie o PDF de novo.");
-    expect(within(notice).getByRole("button", { name: "Descartar e enviar o PDF de novo" })).toBeInTheDocument();
+    expect(notice).toHaveTextContent("Esta leitura ficou desatualizada: descarte e envie o arquivo de novo.");
+    expect(within(notice).getByRole("button", { name: "Descartar e enviar o arquivo de novo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Concluir conciliação da fatura" })).toBeDisabled();
-    expect(screen.getByTestId("conclude-blocked")).toHaveTextContent("Esta leitura ficou desatualizada: descarte o rascunho e envie o PDF de novo.");
+    expect(screen.getByTestId("conclude-blocked")).toHaveTextContent("Esta leitura ficou desatualizada: descarte o rascunho e envie o arquivo de novo.");
 
     server.use(http.delete(`${BASE}/:importId`, () => new HttpResponse(null, { status: 204 })));
-    await user.click(within(notice).getByRole("button", { name: "Descartar e enviar o PDF de novo" }));
+    await user.click(within(notice).getByRole("button", { name: "Descartar e enviar o arquivo de novo" }));
     await user.click(within(notice).getByRole("button", { name: "Sim, descartar" }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` }));
   });

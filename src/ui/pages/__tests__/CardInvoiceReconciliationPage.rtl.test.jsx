@@ -132,7 +132,7 @@ describe("o topo da conciliação da fatura", () => {
     expect(within(chips).getByTestId("invoice-file-chip")).toHaveTextContent(`Arquivo ${contract.draft.file_name} · total conferido`);
     expect(chips).toHaveTextContent("20 lançamentos na fatura");
     expect(screen.getByTestId("recognition-notice")).toHaveTextContent(
-      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no PDF. Se não for, escolha outro cartão.",
+      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no arquivo. Se não for, escolha outro cartão.",
     );
     expect(screen.getByTestId("invoice-progress")).toHaveTextContent("Seu progresso: 0 de 6 passos conferidos");
     const difference = screen.getByTestId("invoice-difference");
@@ -197,7 +197,7 @@ describe("o topo da conciliação da fatura", () => {
     draft.file_name = null;
     await openDraft();
 
-    expect(screen.getByTestId("invoice-file-chip")).toHaveTextContent("Arquivo lido do PDF · total conferido");
+    expect(screen.getByTestId("invoice-file-chip")).toHaveTextContent("Arquivo lido · total conferido");
   });
 
   it("outro cartão com o final do PDF que não dá para escolher (suggested_card null): avisa, sem Conciliar no cartão X", async () => {
@@ -206,7 +206,7 @@ describe("o topo da conciliação da fatura", () => {
 
     const notice = screen.getByTestId("other-card-notice");
     expect(notice).toHaveTextContent("Esta fatura parece ser de outro cartão.");
-    expect(notice).toHaveTextContent("O PDF é do cartão final 4321.");
+    expect(notice).toHaveTextContent("O arquivo é do cartão final 4321.");
     expect(notice).toHaveTextContent("Se ela é mesmo deste cartão, pode seguir");
     expect(within(notice).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByTestId("recognition-notice")).not.toHaveTextContent("pelo final do cartão");
@@ -220,11 +220,11 @@ describe("o topo da conciliação da fatura", () => {
 
     const recognition = screen.getByTestId("recognition-notice");
     expect(recognition).toHaveTextContent(
-      "Esta conciliação está na fatura do Itaú Visa de dezembro (vencimento 10/12), pelo vencimento que vem no PDF. Se não for, escolha outro cartão.",
+      "Esta conciliação está na fatura do Itaú Visa de dezembro (vencimento 10/12), pelo vencimento que vem no arquivo. Se não for, escolha outro cartão.",
     );
     expect(recognition).not.toHaveTextContent("Reconhecemos");
     expect(recognition).not.toHaveTextContent("pelo final do cartão");
-    expect(screen.getByTestId("other-card-notice")).toHaveTextContent("O PDF é do cartão final 4321");
+    expect(screen.getByTestId("other-card-notice")).toHaveTextContent("O arquivo é do cartão final 4321");
   });
 
   it("PDF do mesmo cartão (same_card): o reconhecimento pelo final continua, sem aviso de outro cartão", async () => {
@@ -232,7 +232,7 @@ describe("o topo da conciliação da fatura", () => {
     await openDraft();
 
     expect(screen.getByTestId("recognition-notice")).toHaveTextContent(
-      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no PDF. Se não for, escolha outro cartão.",
+      "Reconhecemos este arquivo como a fatura do Itaú Visa de dezembro (vencimento 10/12), pelo final do cartão e pelo vencimento que vêm no arquivo. Se não for, escolha outro cartão.",
     );
     expect(screen.queryByTestId("other-card-notice")).not.toBeInTheDocument();
   });
@@ -253,7 +253,7 @@ describe("o topo da conciliação da fatura", () => {
     await openDraft();
 
     const notice = screen.getByTestId("other-card-notice");
-    expect(notice).toHaveTextContent("O PDF é do cartão final 4321 (Itaú Visa)");
+    expect(notice).toHaveTextContent("O arquivo é do cartão final 4321 (Itaú Visa)");
     await userEvent.setup().click(within(notice).getByRole("button", { name: "Conciliar no cartão Itaú Visa" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` });
   });
@@ -587,8 +587,8 @@ describe("enviar o PDF da fatura", () => {
     const user = userEvent.setup();
     render(<CardInvoiceReconciliationPage organizationId={ORG} />);
 
-    const input = await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)");
-    expect(input).toHaveAttribute("accept", ".pdf,application/pdf");
+    const input = await screen.findByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)");
+    expect(input).toHaveAttribute("accept", ".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     await user.upload(input, new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${IMPORT}` }));
@@ -600,7 +600,7 @@ describe("enviar o PDF da fatura", () => {
     const user = userEvent.setup();
     render(<CardInvoiceReconciliationPage organizationId={ORG} />);
 
-    await user.upload(await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    await user.upload(await screen.findByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
 
     const notice = await screen.findByTestId("draft-in-progress-notice");
     expect(notice).toHaveTextContent("Você já tem uma conciliação em andamento desta fatura.");
@@ -627,17 +627,17 @@ describe("enviar o PDF da fatura", () => {
     params = { cardId: CARD.public_id };
     const user = userEvent.setup();
     const view = render(<CardInvoiceReconciliationPage organizationId={ORG} />);
-    await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)");
+    await screen.findByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)");
 
     params = { cardId: OTHER.public_id };
     view.rerender(<CardInvoiceReconciliationPage organizationId={ORG} />);
     // O cartão anterior deixa de valer na hora: nada de área de envio apontando para ele.
-    expect(screen.queryByLabelText("PDF da fatura do cartão (até 5 MB)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)")).not.toBeInTheDocument();
     expect(screen.getByText("Carregando o cartão…")).toBeInTheDocument();
 
     await waitFor(() => expect(release).toBeTypeOf("function"));
     await act(async () => { release(); });
-    await user.upload(await screen.findByLabelText("PDF da fatura do cartão (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
+    await user.upload(await screen.findByLabelText("Fatura do cartão em PDF ou XLSX (até 5 MB)"), new File(["%PDF-1.4"], "fatura.pdf", { type: "application/pdf" }));
     await waitFor(() => expect(posted).toEqual([OTHER.id]));
   });
 

@@ -27,7 +27,7 @@ export const STATEMENT_UNDO_WORDS = {
 /** As da fatura (#556): desfazer também tira a marca de conferida das compras ligadas. */
 export const INVOICE_UNDO_WORDS = {
   noun: "conciliação",
-  reimport: "enviar o PDF da fatura de novo",
+  reimport: "enviar a fatura de novo",
   restoreTail: " e deixam de estar conferidas",
   restoreTailOne: " e deixa de estar conferida",
 };

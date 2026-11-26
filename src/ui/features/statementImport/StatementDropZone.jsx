@@ -12,18 +12,18 @@ export const ACCEPTED_FILES = ".ofx,.xls,.xlsx,.csv,.pdf,application/x-ofx,appli
 /** As palavras da área: o extrato da conta (padrão, aceita também o PDF da fatura) ou só a fatura do cartão. */
 const COPY = {
   statement: {
-    formats: "OFX, XLS, XLSX ou CSV · PDF da fatura do cartão · até 5 MB",
+    formats: "OFX, XLS, XLSX ou CSV · fatura do cartão em PDF ou XLSX · até 5 MB",
     accept: ACCEPTED_FILES,
     what: "o extrato do banco",
     another: "outro extrato",
-    input: "Arquivo do extrato (OFX, XLS, XLSX ou CSV, ou o PDF da fatura do cartão, até 5 MB)",
+    input: "Arquivo do extrato (OFX, XLS, XLSX ou CSV, ou a fatura do cartão em PDF ou XLSX, até 5 MB)",
   },
   invoice: {
-    formats: "PDF da fatura · até 5 MB",
-    accept: ".pdf,application/pdf",
-    what: "o PDF da fatura",
+    formats: "Fatura em PDF ou XLSX · até 5 MB",
+    accept: ".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    what: "a fatura (PDF ou XLSX)",
     another: "outra fatura",
-    input: "PDF da fatura do cartão (até 5 MB)",
+    input: "Fatura do cartão em PDF ou XLSX (até 5 MB)",
   },
 };
 

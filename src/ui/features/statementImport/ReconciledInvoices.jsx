@@ -46,7 +46,7 @@ export function invoiceCountsLabel(item) {
   if (summary.ignored) parts.push(plural(summary.ignored, "não registrado", "não registrados"));
   if (status === "draft" && summary.unanswered) parts.push(plural(summary.unanswered, "sem resposta", "sem resposta"));
   // Leitura desatualizada (QA F4 OBS-01): não dá mais para concluir este rascunho.
-  if (status === "draft" && item.changed_since_read) parts.push("leitura desatualizada: descarte e envie o PDF de novo");
+  if (status === "draft" && item.changed_since_read) parts.push("leitura desatualizada: descarte e envie o arquivo de novo");
   return parts.join(" · ");
 }
 
