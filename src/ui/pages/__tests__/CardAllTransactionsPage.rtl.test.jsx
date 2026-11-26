@@ -1352,6 +1352,97 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(navigate.mock.calls[0][0].search({}).fc_tx).toBe("11");
   });
 
+  describe("ações rápidas de editar e excluir (mesmo fluxo de /transactions)", () => {
+    const withDelete = (status = 204) => {
+      const deleted = [];
+      server.use(http.delete("*/v1/transactions/:id", ({ params, request }) => {
+        deleted.push({ id: params.id, org: new URL(request.url).searchParams.get("organization_id") });
+        return status === 204 ? new HttpResponse(null, { status: 204 }) : HttpResponse.json({ detail: "Falhou" }, { status });
+      }));
+      return deleted;
+    };
+
+    it("✎ da linha abre o Painel de Transação na edição", async () => {
+      withLedger();
+      render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      await userEvent.setup().click(await screen.findByRole("button", { name: "Editar Padaria" }));
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(navigate.mock.calls[0][0].search({})).toEqual({ fc_tx: "12", fc_modal: "edit-transaction" });
+    });
+
+    it("🗑 da linha pergunta no modal, com Cancelar em foco, e só exclui ao confirmar", async () => {
+      withLedger();
+      const deleted = withDelete();
+      const invalidate = vi.fn();
+      render(<CardAllTransactionsPage organizationId={ORG_ID} onTransactionsInvalidate={invalidate} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: "Excluir Padaria" }));
+      const modal = screen.getByRole("alertdialog", { name: /Excluir esta transação\? Padaria/ });
+      expect(within(modal).getByRole("button", { name: "Cancelar" })).toHaveFocus();
+      expect(within(modal).getByText("Não há como desfazer.")).toBeInTheDocument();
+      await user.click(within(modal).getByRole("button", { name: "Cancelar" }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(deleted).toHaveLength(0);
+
+      await user.click(screen.getByRole("button", { name: "Excluir Padaria" }));
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" }));
+      await waitFor(() => expect(deleted).toEqual([{ id: "12", org: ORG_ID }]));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(invalidate).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Lançamento excluído.")).toBeInTheDocument();
+    });
+
+    it("parcela avisa que a compra inteira sai, com a contagem e o total", async () => {
+      withLedger();
+      withDelete();
+      render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: "Excluir Notebook" }));
+      const modal = screen.getByRole("alertdialog", { name: /Excluir a compra parcelada\?/ });
+      expect(within(modal).getByText(/Esta é a 3ª de 10 parcelas.*10 parcelas, cerca de R\$\s*1\.000,00 no total\./)).toBeInTheDocument();
+      const before = requests.length;
+      await user.click(within(modal).getByRole("button", { name: "🗑 Excluir" }));
+      // Sem o token global, a própria tela relê a lista.
+      await waitFor(() => expect(requests.length).toBeGreaterThan(before));
+      expect(screen.getByText("Compra parcelada excluída.")).toBeInTheDocument();
+    });
+
+    it("falha da API fecha a pergunta e diz o motivo, sem fingir que excluiu", async () => {
+      withLedger();
+      withDelete(500);
+      const invalidate = vi.fn();
+      render(<CardAllTransactionsPage organizationId={ORG_ID} onTransactionsInvalidate={invalidate} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: "Excluir Padaria" }));
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(invalidate).not.toHaveBeenCalled();
+      expect(screen.queryByText("Lançamento excluído.")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Excluir Padaria" })).toBeInTheDocument();
+    });
+
+    it("no celular a pergunta é in-place no detalhe e fechar o detalhe cancela", async () => {
+      withLedger();
+      const deleted = withDelete();
+      render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: /Padaria/ }));
+      const sheet = screen.getByRole("dialog", { name: "Detalhes do lançamento" });
+      await user.click(within(sheet).getByRole("button", { name: "🗑 Excluir" }));
+      expect(screen.queryByRole("alertdialog", { name: /Padaria/ })).not.toBeInTheDocument();
+      const inline = within(sheet).getByRole("alertdialog", { name: "Excluir esta transação?" });
+      expect(within(sheet).queryByRole("button", { name: "🗑 Excluir" })).toBe(within(inline).getByRole("button", { name: "🗑 Excluir" }));
+      await user.click(within(sheet).getByRole("button", { name: "Fechar detalhes" }));
+      await user.click(screen.getByRole("button", { name: /Padaria/ }));
+      expect(within(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).queryByRole("alertdialog")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "🗑 Excluir" }));
+      await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" }));
+      await waitFor(() => expect(deleted.map((entry) => entry.id)).toEqual(["12"]));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument());
+    });
+  });
+
   it("recarrega a lista e fecha o detalhe quando o Painel de Transação salva", async () => {
     withLedger();
     const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
