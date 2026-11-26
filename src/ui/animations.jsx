@@ -161,10 +161,6 @@ export const ANIM_CSS = `
   }
   .fincla-row:hover .fincla-quick,
   .fincla-row:focus-within .fincla-quick { visibility: visible; }
-  /* Onde as ações não têm vão próprio (extrato do cartão), elas TROCAM de lugar com a categoria em vez de cair por
-     cima dela: meio nome coberto por dois botões fica ilegível; nome nenhum por um instante, não. */
-  .fincla-row:hover .fincla-quick-cover,
-  .fincla-row:focus-within .fincla-quick-cover { visibility: hidden; }
   /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
      um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
      permanentemente visível. Antes isso era inofensivo (ele tinha coluna
