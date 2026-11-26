@@ -1383,6 +1383,8 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       await user.click(within(modal).getByRole("button", { name: "Cancelar" }));
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
       expect(deleted).toHaveLength(0);
+      // O foco volta ao 🗑 que abriu a pergunta, não ao topo da página.
+      expect(screen.getByRole("button", { name: "Excluir Padaria" })).toHaveFocus();
 
       await user.click(screen.getByRole("button", { name: "Excluir Padaria" }));
       await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" }));
@@ -1407,15 +1409,30 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       expect(screen.getByText("Compra parcelada excluída.")).toBeInTheDocument();
     });
 
+    it("um re-render da página não tira o foco do Excluir no meio da escolha", async () => {
+      withLedger();
+      const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: "Excluir Padaria" }));
+      const confirm = within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" });
+      await user.tab();
+      expect(confirm).toHaveFocus();
+      rerender(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      expect(confirm).toHaveFocus();
+    });
+
     it("falha da API fecha a pergunta e diz o motivo, sem fingir que excluiu", async () => {
       withLedger();
-      withDelete(500);
+      withDelete(404);
       const invalidate = vi.fn();
       render(<CardAllTransactionsPage organizationId={ORG_ID} onTransactionsInvalidate={invalidate} />);
       const user = userEvent.setup();
       await user.click(await screen.findByRole("button", { name: "Excluir Padaria" }));
+      const before = requests.length;
       await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "🗑 Excluir" }));
       await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      // Já apagada em outro lugar (404): a lista é relida para não insistir numa linha velha.
+      await waitFor(() => expect(requests.length).toBeGreaterThan(before));
       expect(invalidate).not.toHaveBeenCalled();
       expect(screen.queryByText("Lançamento excluído.")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Excluir Padaria" })).toBeInTheDocument();
@@ -1431,6 +1448,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       await user.click(within(sheet).getByRole("button", { name: "🗑 Excluir" }));
       expect(screen.queryByRole("alertdialog", { name: /Padaria/ })).not.toBeInTheDocument();
       const inline = within(sheet).getByRole("alertdialog", { name: "Excluir esta transação?" });
+      expect(within(inline).getByRole("button", { name: "Cancelar" })).toHaveFocus();
       expect(within(sheet).queryByRole("button", { name: "🗑 Excluir" })).toBe(within(inline).getByRole("button", { name: "🗑 Excluir" }));
       await user.click(within(sheet).getByRole("button", { name: "Fechar detalhes" }));
       await user.click(screen.getByRole("button", { name: /Padaria/ }));

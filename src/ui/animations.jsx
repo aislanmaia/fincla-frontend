@@ -124,6 +124,8 @@ export const ANIM_CSS = `
   }
   .fincla-row { transition: background 0.11s; }
   .fincla-row:hover { background: #F0EFEB !important; }
+  /* Linha cujo detalhe está aberto: o hover não apaga a marca de qual linha o painel mostra. */
+  .fincla-row.fincla-row-on:hover { background: #EFF6FF !important; }
   /* Ações rápidas: aparecem no hover ANCORADAS À ESQUERDA DO VALOR, flutuando
      dentro do vão que a linha já tem. Absolutas de propósito — no fluxo elas
      empurrariam o valor ao aparecer e a linha inteira saltaria sob o cursor,

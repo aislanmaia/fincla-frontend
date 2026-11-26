@@ -1,4 +1,5 @@
 import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
 import { fmtValorDaLinha } from "../transactions/shared/transactionFormat.js";
 import { installmentOf } from "./ledgerModel.js";
 
@@ -16,12 +17,14 @@ export function deleteConfirmTx(row, cardCurrency = null) {
     icon: row.type === "refund" ? "↩" : "▤",
     desc: row.description,
     date: formatYmdToBrDisplay(String(row.date ?? "").slice(0, 10)) || null,
-    cat: pickCategoryTagFromApiTransaction(row)?.label || row.category || null,
+    // O nome que a organização deu à categoria vem primeiro, como no resto do app.
+    cat: (() => { const tag = pickCategoryTagFromApiTransaction(row); return (tag && (tag.custom_name || tag.label || categoryLabelPtForTag(tag))) || row.category || null; })(),
     method: "Cartão de crédito",
     type: row.type,
-    valorFormatado: fmtValorDaLinha(Math.abs(Number(row.value) || 0), currency),
+    // Sem moeda conhecida o valor fica "—", como na tabela: nunca inventar real para um valor de moeda desconhecida.
+    valorFormatado: currency ? fmtValorDaLinha(Math.abs(Number(row.value) || 0), currency) : "—",
     parcela: part && part.total_installments > 1
-      ? { total: part.total_installments, atual: part.installment_number, valorTotal: Math.round(perInstallment * part.total_installments * 100) / 100 }
+      ? { total: part.total_installments, atual: part.installment_number, valorTotal: currency ? Math.round(perInstallment * part.total_installments * 100) / 100 : null }
       : null,
     currency,
   };

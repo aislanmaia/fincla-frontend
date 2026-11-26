@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import { Badge, Btn } from "../../components/primitives.jsx";
@@ -31,6 +31,14 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove,
   const rest = remainingInstallments(row);
   const hasRefund = (row.refunds_summary?.count ?? 0) > 0;
   const category = pickCategoryTagFromApiTransaction(row)?.label || row.category || "—";
+  // A pergunta toma o lugar do botão focado: o foco vai para o Cancelar dela (caminho seguro), não cai no body.
+  const confirmRef = useRef(null);
+  // Cancelada, o foco volta ao Excluir que a abriu.
+  const askedRef = useRef(false);
+  useEffect(() => {
+    if (confirmingDelete || askedRef.current) confirmRef.current?.querySelector("button")?.focus();
+    askedRef.current = confirmingDelete;
+  }, [confirmingDelete]);
   return <>
     <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} style={{ float: "right", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
     <h2 style={{ ...G, margin: "0 0 6px", fontSize: 18 }}>{row.description}</h2>
@@ -57,7 +65,7 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove,
           ? <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.green, fontWeight: 700 }}>✓ Esta compra possui estorno relacionado</p>
           : !onRefund ? null : <button type="button" onClick={() => onRefund(row)} style={{ ...G, width: "100%", minHeight: 40, border: `1.5px dashed ${T.green}`, borderRadius: 10, background: T.greenLight, color: T.green, fontWeight: 700, cursor: "pointer" }}>↺ Lançar estorno desta compra</button>}
     </div>
-    {onDelete && <div style={{ marginTop: 16 }}>
+    {onDelete && <div ref={confirmRef} style={{ marginTop: 16 }}>
       {confirmingDelete
         ? <ConfirmActionInline kind="delete" desc={row.description} tx={deleteConfirmTx(row, currency)} busy={deleteBusy} onConfirm={() => onConfirmDelete?.(row)} onCancel={() => onCancelDelete?.()} />
         : <button type="button" onClick={() => onDelete(row)} style={{ ...G, width: "100%", minHeight: 40, borderRadius: 10, border: `1px solid ${T.red}44`, background: T.surface, color: T.red, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🗑 Excluir</button>}

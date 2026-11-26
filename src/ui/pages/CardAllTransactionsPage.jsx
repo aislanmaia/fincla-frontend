@@ -188,6 +188,21 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // Exclusão como em /transactions: no desktop a pergunta vai num modal; no toque, in-place no detalhe.
   const [deleteRequest, setDeleteRequest] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteBusyRef = useRef(false);
+  // Quem abriu a pergunta (🗑 da linha ou do detalhe) recebe o foco de volta ao cancelar.
+  const deleteTriggerRef = useRef(null);
+  const restoreDeleteFocus = useCallback(() => {
+    const trigger = deleteTriggerRef.current;
+    deleteTriggerRef.current = null;
+    if (trigger?.isConnected) trigger.focus?.();
+  }, []);
+  // Estável de propósito: o modal refaz o foco inicial (Cancelar) sempre que `onCancel` muda, e um re-render
+  // qualquer da página (resumo, facetas) tiraria o foco do Excluir no meio da escolha.
+  const cancelDelete = useCallback(() => {
+    if (deleteBusyRef.current) return;
+    setDeleteRequest(null);
+    restoreDeleteFocus();
+  }, [restoreDeleteFocus]);
   const [state, setState] = useState({ card: null, rows: [], total: null, page: 0, queryKey: "", loading: true, error: false, missing: false });
   const [nextPage, setNextPage] = useState(1);
   // O detalhe do desktop é um painel ao lado da tabela (não modal): sem armadilha de foco, só devolve o foco.
@@ -567,21 +582,27 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // Sem gatilho de foco: o Painel assume o foco, a linha atrás dele não pode roubá-lo.
   const openTransaction = (row) => { inspectTriggerRef.current = null; setInspected(null); navigate({ search: (prev) => editTransactionSearch(prev, row.id) }); };
   const requestDelete = (row) => {
+    deleteTriggerRef.current = document.activeElement;
     if (isMobile) { setInspected(row); setDeleteRequest({ row, inline: true }); return; }
     setDeleteRequest({ row, inline: false });
   };
-  const cancelDelete = () => { if (!deleteBusy) setDeleteRequest(null); };
   const confirmDelete = async (row) => {
-    if (deleteBusy) return;
+    if (deleteBusyRef.current) return;
+    deleteBusyRef.current = true;
     setDeleteBusy(true);
     try {
       await deleteTransaction(row.id, organizationId);
     } catch (error) {
+      deleteBusyRef.current = false;
       setDeleteBusy(false);
       setDeleteRequest(null);
+      restoreDeleteFocus();
       setNotice(formatTransactionsApiError(error) || "Não foi possível excluir o lançamento.");
+      // A linha pode já ter sumido em outra aba ou por outra pessoa (404): relê a lista para não insistir nela.
+      setReload((value) => value + 1);
       return;
     }
+    deleteBusyRef.current = false;
     setDeleteBusy(false);
     setDeleteRequest(null);
     setNotice(installmentOf(row)?.total_installments > 1 ? "Compra parcelada excluída." : "Lançamento excluído.");
