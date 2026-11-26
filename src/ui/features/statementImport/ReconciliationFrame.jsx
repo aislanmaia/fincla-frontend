@@ -25,8 +25,12 @@ export const RAIL_WIDTH = 240;
  * cada passo tem pelo menos a altura de um alvo de toque.
  */
 export function StepRail({ steps, statusOf, current, onOpen, label = "Passos da conciliação", currentText = null, separatorBefore = null, touch = false }) {
+  // No computador o trilho fica sempre à vista ao rolar (Owner, 2026-11-26): gruda logo abaixo do
+  // topo fixo, na altura que ele publica em `--reconciliation-rail-top`. No celular o trilho fica
+  // em cima da lista e rola com ela.
+  const sticky = touch ? null : { position: "sticky", top: `var(${RAIL_TOP_VAR}, ${STICKY_FOCUS_GAP}px)`, zIndex: 4 };
   return (
-    <nav aria-label={label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <nav aria-label={label} data-testid="step-rail" style={{ display: "flex", flexDirection: "column", gap: 4, ...sticky }}>
       {steps.map((step, index) => {
         const status = statusOf(step.key);
         const tone = STEP_TONE[status.tone];
@@ -64,6 +68,9 @@ export function StepRail({ steps, statusOf, current, onOpen, label = "Passos da 
 /** Folga entre o topo fixo e o que ganha foco ao rolar (o cartão atual, "Alterar"…). */
 const STICKY_FOCUS_GAP = 12;
 
+/** Onde o trilho dos passos gruda: logo abaixo do topo fixo (publicado na área que rola). */
+const RAIL_TOP_VAR = "--reconciliation-rail-top";
+
 /**
  * O que o topo fixo cobre no alto da área que rola: a altura dele em `data-sticky-cover` (onde a
  * área visível começa de fato, lida pela âncora da lista) e, com a folga, no `scroll-padding-top`
@@ -72,6 +79,10 @@ const STICKY_FOCUS_GAP = 12;
 function reserveStickyTop(scroller, height) {
   scroller.dataset.stickyCover = String(height);
   scroller.style.scrollPaddingTop = `${height + STICKY_FOCUS_GAP}px`;
+  // O `top` de quem gruda conta a partir do padding do alto da área que rola; o topo fixo encosta
+  // no alto de fato (top negativo), então o trilho desconta esse padding.
+  const paddingTop = Number.parseFloat(window.getComputedStyle(scroller).paddingTop) || 0;
+  scroller.style.setProperty(RAIL_TOP_VAR, `${height - paddingTop + STICKY_FOCUS_GAP}px`);
 }
 
 /**
@@ -99,6 +110,7 @@ export function StickyTop({ children, style = null }) {
     return () => {
       window.removeEventListener("resize", reserve);
       scroller.style.scrollPaddingTop = previous;
+      scroller.style.removeProperty(RAIL_TOP_VAR);
       delete scroller.dataset.stickyCover;
       scrollerRef.current = null;
     };
