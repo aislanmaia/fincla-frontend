@@ -141,7 +141,7 @@ describe("o topo da conciliação da fatura", () => {
     expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 61,40");
     // #575: o total de hoje (`invoice.total`) e o projetado com as respostas, cada um com o seu rótulo.
     expect(within(difference).getByTestId("invoice-difference-bank")).toHaveTextContent("Banco R$ 2.402,92");
-    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Fincla hoje: R$ 964,46 (R$ 1.438,46 a menos que o banco)");
+    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Fincla hoje: R$ 966,35 (R$ 1.436,57 a menos que o banco)");
     expect(within(difference).getByTestId("invoice-difference-after")).toHaveTextContent(
       "Depois de concluir, com suas respostas: R$ 2.464,32 · diferença −R$ 61,40",
     );
@@ -155,7 +155,7 @@ describe("o topo da conciliação da fatura", () => {
     expect(difference).toHaveAttribute("data-compact", "true");
     expect(difference).not.toHaveTextContent("Diferença agora");
     expect(difference).toHaveTextContent("Depois de concluir");
-    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Hoje: R$ 964,46");
+    expect(within(difference).getByTestId("invoice-difference-today")).toHaveTextContent("Hoje: R$ 966,35");
     expect(within(difference).getByTestId("invoice-difference-value")).toHaveTextContent("−R$ 61,40");
   });
 
@@ -519,10 +519,12 @@ describe("o passo Revisar e concluir", () => {
     expect(screen.queryByTestId("summary-moved-series")).not.toBeInTheDocument();
     // O grupo de encargos somado (#558) e os encargos, tarifas e estornos que entram como transações.
     expect(screen.getByTestId("summary-summed-charges")).toHaveTextContent("4 encargos já estavam somados no Fincla · em “Encargos do cartão”, que fica ligada a todos eles");
-    expect(screen.getByTestId("summary-created")).toHaveTextContent("8 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
+    expect(screen.getByTestId("summary-created")).toHaveTextContent("7 transações novas entram no Fincla · 2 estornos diminuem o total da fatura");
+    // O Repasse de IOF somado nos IOFs lançados um a um no Fincla (#574).
+    expect(screen.getByTestId("summary-split-pairs")).toHaveTextContent("1 lançamento já estava somado no Fincla e fica ligado ao banco · ligado a 2 lançamentos do Fincla");
     expect(screen.queryByTestId("summary-ignored")).not.toBeInTheDocument();
     expect(screen.getByTestId("summary-uncategorized")).toHaveTextContent(
-      "8 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
+      "7 transações novas estão sem categoria e vão para Não classificado ao concluir. Dá para escolher a categoria em Encargos, tarifas e estornos e em Compras novas.",
     );
     expect(screen.getByTestId("summary-fincla-total")).toHaveTextContent(/Fatura de dezembro no Fincla fica\s*R\$ 2\.464,32/);
     expect(screen.getByTestId("summary-difference")).toHaveTextContent(/Diferença que fica registrada\s*−R\$ 61,40/);

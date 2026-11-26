@@ -30,16 +30,8 @@ const CATEGORIES = [
   { id: "cat-fallback", name: "nao-classificado", label: "Não classificado", allowed_transaction_types: ["expense", "income", "refund"], is_fallback: true },
 ];
 
-const iofTx = (id, description, amount) => ({
-  id, description, type: "expense", value: { amount, currency: "BRL" }, date: "2026-11-05T00:00:00", purchase_date: "2026-11-05",
-  installment: null, invoice_id: 1, status: "confirmed", paid_at: null, category_name: "Impostos e taxas", tag_names: [], differences: [],
-});
-/** O Repasse de IOF (R$ 1,89) somado em dois IOFs lançados um a um no Fincla. */
-const SPLIT = {
-  transaction_ids: [41, 42],
-  transactions: [iofTx(41, "Iof Internacional - Claude", "1.20"), iofTx(42, "Iof Internacional - Spotify", "0.69")],
-  total: { amount: "1.89", currency: "BRL" },
-};
+/** O Repasse de IOF somado em dois IOFs lançados um a um no Fincla (fixture de contrato `entry_iof_split`). */
+const SPLIT = contract.entry_iof_split.split_pair;
 
 const calls = [];
 let draft;
@@ -52,7 +44,7 @@ function fresh({ split = true } = {}) {
   for (const e of draft.entries) e.split_pair = null;
   for (const e of draft.entries.filter((x) => x.classification === "charges")) e.confirmed = true;
   Object.assign(repasse(), split
-    ? { split_pair: clone(contract.entry_iof_split?.split_pair ?? SPLIT), answer: "pair_split", confirmed: false }
+    ? { split_pair: clone(SPLIT), answer: "pair_split", confirmed: false }
     : { split_pair: null, answer: null, confirmed: false });
 }
 fresh();

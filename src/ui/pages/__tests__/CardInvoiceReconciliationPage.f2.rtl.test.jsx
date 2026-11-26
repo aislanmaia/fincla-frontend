@@ -112,18 +112,18 @@ describe("Faturas conciliadas do cartão", () => {
     expect(draftRow).toHaveTextContent("Em andamento");
     expect(draftRow).toHaveTextContent("20 lançamentos · 20 já conferidos");
     expect(draftRow).toHaveTextContent("Você parou em Decidir casos com dúvida.");
-    expect(draftRow).toHaveTextContent("Se ficar parada, é descartada em 25/12/2026.");
+    expect(draftRow).toHaveTextContent("Se ficar parada, é descartada em 26/12/2026.");
     expect(within(draftRow).getByRole("button", { name: "Continuar conciliação" })).toBeInTheDocument();
     expect(within(draftRow).getByRole("button", { name: "Descartar rascunho" })).toBeInTheDocument();
     expect(within(draftRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(undoneRow).toHaveTextContent("Desfeita");
-    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 25/11/2026 · Diferença registrada: −R$ 61,00");
+    expect(within(undoneRow).getByTestId("import-difference")).toHaveTextContent("Desfeita em 26/11/2026 · Diferença registrada: −R$ 61,00");
     expect(within(undoneRow).queryByRole("button", { name: "Desfazer conciliação" })).not.toBeInTheDocument();
 
     expect(concludedRow).toHaveTextContent("Concluída");
-    expect(concludedRow).toHaveTextContent("20 lançamentos · 7 compras ligadas · 8 lançamentos adicionados · 4 encargos somados · 1 compra movida");
-    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 25/11/2026 · Diferença registrada: −R$ 61,00");
+    expect(concludedRow).toHaveTextContent("20 lançamentos · 7 compras ligadas · 7 lançamentos adicionados · 4 encargos somados · 1 compra movida");
+    expect(within(concludedRow).getByTestId("import-difference")).toHaveTextContent("Concluída em 26/11/2026 · Diferença registrada: −R$ 61,00");
   });
 
   it("Continuar conciliação abre o rascunho; Ver conciliação, a concluída; Desfazer leva à tela do desfazer", async () => {
@@ -270,7 +270,7 @@ describe("reimportação do mesmo PDF", () => {
     openImport(detail.id);
 
     const notice = await screen.findByTestId("file-already-imported");
-    expect(notice).toHaveTextContent("Este arquivo já foi conciliado em 25/11/2026.");
+    expect(notice).toHaveTextContent("Este arquivo já foi conciliado em 26/11/2026.");
     expect(notice).toHaveTextContent("aparecem como “já conferidos” no primeiro passo e nada se duplica");
     await user.click(within(notice).getByRole("button", { name: "Ver a conciliação anterior" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile/${contract.reimport.file_check.import_id}` });
@@ -345,7 +345,7 @@ describe("a conciliação concluída", () => {
 
     const done = await screen.findByTestId("invoice-import-undone");
     expect(done).toHaveTextContent("Conciliação da fatura de dezembro desfeita");
-    expect(done).toHaveTextContent("Desfeita em 25/11/2026.");
+    expect(done).toHaveTextContent("Desfeita em 26/11/2026.");
     await user.click(within(done).getByRole("button", { name: "Conciliar a fatura de novo" }));
     expect(navigate).toHaveBeenCalledWith({ to: `/cards/${CARD.public_id}/reconcile` });
   });

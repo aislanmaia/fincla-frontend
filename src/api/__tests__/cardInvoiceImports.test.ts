@@ -28,6 +28,8 @@ const KEYS = [
   'charge_group_id', 'addable',
   // Dúvidas e compras em outra fatura (#559).
   'suggested_answer', 'other_invoice', 'movable', 'series_movable', 'move_refusal', 'candidates', 'suggestion_basis',
+  // O Repasse de IOF somado em vários lançamentos do Fincla (#574).
+  'split_pair',
 ];
 
 describe('normalizeCardInvoiceImport', () => {
@@ -39,6 +41,16 @@ describe('normalizeCardInvoiceImport', () => {
     for (const entry of contract.new_purchases_draft.entries) expect(Object.keys(entry).sort()).toEqual([...KEYS].sort());
     expect(Object.keys(contract.entry_doubt).sort()).toEqual([...KEYS].sort());
     expect(Object.keys(contract.entry_move).sort()).toEqual([...KEYS].sort());
+    expect(Object.keys(contract.entry_iof_split).sort()).toEqual([...KEYS].sort());
+  });
+
+  it('#574: o Repasse de IOF somado em vários do Fincla (entry_iof_split): as transações e a soma em número', () => {
+    const entry = normalizeInvoiceEntry(contract.entry_iof_split as never);
+    expect(entry.answer).toBe('pair_split');
+    expect(entry.split_pair?.transaction_ids).toEqual([30, 31]);
+    expect(entry.split_pair?.transactions.map((t) => [t.id, t.value, t.currency])).toEqual([[30, 0.92, 'BRL'], [31, 0.97, 'BRL']]);
+    expect(entry.split_pair?.total).toEqual({ amount: -1.89, currency: 'BRL' });
+    expect(normalizeInvoiceEntry(contract.entry as never).split_pair).toBeNull();
   });
 
   it('converte o dinheiro em número + moeda, com o sinal do sentido do dinheiro', () => {
@@ -53,7 +65,7 @@ describe('normalizeCardInvoiceImport', () => {
     expect(loja.value_change).toEqual({ from: 108.33, to: 108.3, currency: 'BRL' });
     expect(loja.fincla_transaction?.value).toBe(108.33);
     expect(loja.fincla_transaction?.purchase_date).toBe('2026-07-14');
-    expect(draft.invoice.total).toEqual({ amount: 964.46, currency: 'BRL' });
+    expect(draft.invoice.total).toEqual({ amount: 966.35, currency: 'BRL' });
     expect(draft.difference_now).toEqual({ bank: 2402.92, fincla: 2464.32, difference: -61.4, currency: 'BRL' });
     expect(draft.bank_summary.payment).toEqual({ amount: { amount: -2900, currency: 'BRL' }, date: '2026-11-10' });
     expect(draft.final_difference).toBeNull();
@@ -181,8 +193,9 @@ describe('desfazer, rascunho e reimportação (#556)', () => {
     const undone = normalizeCardInvoiceImport(raw(contract.undone));
     expect(undone.status).toBe('undone');
     expect(undone.undone_at).toBe(contract.undone.undone_at);
-    // As 8 transações que a conclusão criou (#557 e os encargos, tarifas e estornos da #558) são apagadas.
-    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(8);
+    // As 7 transações que a conclusão criou (#557 e os encargos, tarifas e estornos da #558; o Repasse de IOF
+    // ficou somado nos IOFs do Fincla, #574) são apagadas.
+    expect((contract.undone as { deleted_transactions: number }).deleted_transactions).toBe(7);
   });
 });
 
@@ -294,7 +307,7 @@ describe('encargos, tarifas e estornos (#558)', () => {
     expect(group.fincla_transaction?.id).toBe(group.suggested_transaction_id);
     expect(each.entries.filter((e) => e.charge_group_id === group.id).every((e) => e.answer === 'create')).toBe(true);
     expect(each.summary.summed_charges).toBe(0);
-    expect(each.summary.to_create).toBe(12);
+    expect(each.summary.to_create).toBe(11);
   });
 
   it('na concluída nada responde e nada é adicionável', () => {
@@ -417,7 +430,7 @@ describe('dúvidas e compras em outra fatura (#559)', () => {
     expect(stale.changed_since_read).toBe(true);
     expect(stale.can_conclude).toBe(false);
     expect(stale.blockers).toEqual([
-      { code: 'undecided_leftovers', count: 9, step: 'leftover' },
+      { code: 'undecided_leftovers', count: 11, step: 'leftover' },
       { code: 'changed_since_read', count: 1, step: null },
     ]);
     expect(normalizeCardInvoiceImport(raw(contract.draft)).changed_since_read).toBe(false);
@@ -444,7 +457,7 @@ describe('Sobrando no Fincla e Conferir o total (#560)', () => {
     const left = normalizeCardInvoiceLeftovers(asRaw(contract.leftovers));
     expect(left.items).toHaveLength(1);
     const [item] = left.items;
-    expect(item.transaction).toMatchObject({ id: 30, description: 'Assinatura', value: 61, currency: 'BRL', type: 'expense' });
+    expect(item.transaction).toMatchObject({ id: 32, description: 'Assinatura', value: 61, currency: 'BRL', type: 'expense' });
     expect(item).toMatchObject({ action: null, movable: true, deletable: true, move_refusal: null, delete_refusal: null });
     expect(item.hint?.code).toBe('maybe_next_invoice');
     expect(left.waiting_transactions).toBe(0);
@@ -460,7 +473,7 @@ describe('Sobrando no Fincla e Conferir o total (#560)', () => {
     expect(check.matches).toBe(false);
     expect(check.causes).toEqual([{
       code: 'kept_leftover', step: 'leftover', description: 'Assinatura', amount: { amount: 61, currency: 'BRL' },
-      effect: { amount: -61, currency: 'BRL' }, date: '2026-11-25', entry_id: null, charge_group_id: null, transaction_id: 30,
+      effect: { amount: -61, currency: 'BRL' }, date: '2026-11-25', entry_id: null, charge_group_id: null, transaction_id: 32,
     }]);
     expect(check.bank_summary.financed_balance).toEqual({ amount: 100, currency: 'BRL' });
     const unknown = normalizeCardInvoiceTotalCheck({ ...asRaw(contract.total_check), fincla: null, difference: null });
@@ -471,10 +484,10 @@ describe('Sobrando no Fincla e Conferir o total (#560)', () => {
   it('as compras novas sem confirmar seguram o concluir, um bloqueio por passo; confirmadas, libera', () => {
     const pending = normalizeCardInvoiceImport(asRaw(contract.draft_unconfirmed));
     expect(pending.blockers).toEqual([
-      { code: 'unconfirmed_creates', count: 4, step: 'charges' },
+      { code: 'unconfirmed_creates', count: 3, step: 'charges' },
       { code: 'unconfirmed_creates', count: 3, step: 'new' },
     ]);
-    expect(pending.summary.unconfirmed_creates).toBe(7);
+    expect(pending.summary.unconfirmed_creates).toBe(6);
     expect(pending.summary.leftovers_kept).toBe(1);
     const done = normalizeCardInvoiceImport(asRaw(contract.creates_confirmed));
     expect(done.blockers).toEqual([]);
