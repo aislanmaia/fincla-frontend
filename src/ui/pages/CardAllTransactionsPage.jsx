@@ -194,7 +194,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const restoreDeleteFocus = useCallback(() => {
     const trigger = deleteTriggerRef.current;
     deleteTriggerRef.current = null;
-    if (trigger?.isConnected) trigger.focus?.();
+    if (!trigger?.isConnected) return;
+    // O 🗑 da linha mora num grupo que só é visível no hover/foco, e com o modal aberto a linha não tem nenhum dos
+    // dois: `focus()` num elemento invisível é ignorado. Revela o grupo para focar; o `:focus-within` o mantém visível.
+    const group = trigger.closest?.(".fincla-quick");
+    if (group) group.style.visibility = "visible";
+    trigger.focus?.();
+    if (group) group.style.visibility = "";
   }, []);
   // Estável de propósito: o modal refaz o foco inicial (Cancelar) sempre que `onCancel` muda, e um re-render
   // qualquer da página (resumo, facetas) tiraria o foco do Excluir no meio da escolha.

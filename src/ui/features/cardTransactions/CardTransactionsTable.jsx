@@ -113,8 +113,10 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
                 </button>
                 {/* Ações rápidas como em /transactions: aparecem no hover (ou foco) e ocupam a coluna de categoria, a
                     única que pode sumir sem perda — data, descrição, valor e status continuam à vista. */}
-                <span style={{ minWidth: 0, position: "relative" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>
-                  {(onEdit || onDelete) && <div className="fincla-quick" style={{ marginRight: 0 }}>
+                <span style={{ minWidth: 0, position: "relative" }}>
+                  {/* A pílula cabe na coluna (reticências e o nome inteiro no title): transbordando, ela invadia a Parcela. */}
+                  <span className={onEdit || onDelete ? "fincla-quick-cover" : undefined} title={category(row)} style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span>
+                  {(onEdit || onDelete) && <div className="fincla-quick" style={{ left: 0, right: "auto", marginRight: 0 }}>
                     {onEdit && <QuickAction label={`Editar ${row.description}`} text="Editar" showText={false} onClick={(event) => { event.stopPropagation(); onEdit(row); }}>✎</QuickAction>}
                     {onDelete && <QuickAction label={`Excluir ${row.description}`} text="Excluir" tone="red" showText={false} onClick={(event) => { event.stopPropagation(); onDelete(row); }}>🗑</QuickAction>}
                   </div>}
