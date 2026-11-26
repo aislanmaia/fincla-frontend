@@ -49,20 +49,28 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
 
 // O cabeçalho do dia gruda logo abaixo do cabeçalho de colunas (desktop), senão ele ficaria coberto e sem clique.
 const COLUMN_HEADER_HEIGHT = 30;
-const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 92px 92px 86px";
-/* Com ações rápidas, a grade ganha o VÃO de /transactions (TransactionRow): uma coluna vazia logo antes do valor, com
-   piso de 156 px, onde as ações aparecem no hover ancoradas à borda direita dele — crescem para dentro do vazio ao abrir
-   o rótulo e não cobrem nenhuma coluna. */
-const COLUMNS_WITH_ACTIONS = "22px 58px minmax(140px,2.2fr) minmax(124px,1fr) 62px 96px 92px minmax(156px,1fr) 92px 86px";
-// A mesma régua de /transactions: abaixo de 1000 px de LISTA o vão não comporta o botão aberto e o rótulo fica fora.
-const ACTION_LABELS_MIN_WIDTH = 1000;
+/* A grade se ajusta à largura MEDIDA da lista (a dock de filtros e o painel de detalhe a estreitam), com uma ordem de
+   sacrifício como a de /transactions: Valor e Status nunca saem da tela.
+   - Com ações rápidas há o VÃO de /transactions (TransactionRow): uma coluna vazia logo antes do valor, onde o grupo
+     aparece no hover ancorado à borda direita dela. Com folga (>= 1050 px) ele tem piso de 156 px e os botões abrem o
+     rótulo; abaixo disso o piso cede e fica só o ícone.
+   - Abaixo de 820 px saem "Restam" e "Fim previsto" — o painel de detalhe mostra os dois.
+   - Descrição e categoria encolhem com reticências (a categoria tem piso de 72 px). */
+export const ROOMY_LIST_WIDTH = 1050;
+export const COMPACT_LIST_WIDTH = 820;
+export function ledgerGrid({ width, actions }) {
+  const compact = width < COMPACT_LIST_WIDTH;
+  const roomy = width >= ROOMY_LIST_WIDTH;
+  const tracks = ["22px", "58px", roomy ? "minmax(140px,2.2fr)" : "minmax(0,2.2fr)", roomy ? "minmax(124px,1fr)" : "minmax(72px,1fr)", "62px",
+    ...(compact ? [] : ["96px", "92px"]), ...(actions ? [roomy ? "minmax(156px,1fr)" : "minmax(0,1fr)"] : []), "92px", "86px"];
+  return { columns: tracks.join(" "), compact, labels: Boolean(actions) && roomy };
+}
 
 
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, onEdit = null, onDelete = null, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
   const hasActions = Boolean(onEdit || onDelete);
-  const columns = hasActions ? COLUMNS_WITH_ACTIONS : COLUMNS;
   // A LISTA medida, não a viewport (a dock de filtros a estreita). Sem ResizeObserver (jsdom), cai no limiar de viewport.
   const [listWidth, setListWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth - 260));
   useEffect(() => {
@@ -72,7 +80,9 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     observer.observe(node);
     return () => observer.disconnect();
   }, [isMobile]);
-  const showActionLabels = !isMobile && listWidth >= ACTION_LABELS_MIN_WIDTH;
+  const grid = ledgerGrid({ width: listWidth, actions: hasActions });
+  const { columns, compact } = grid;
+  const showActionLabels = !isMobile && grid.labels;
   const groups = useMemo(() => {
     if (!grouped) return [{ key: "all", rows }];
     const result = [];
@@ -108,7 +118,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       </BulkActionsToolbar>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
-      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: columns, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span>{hasActions && <span />}<span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
+      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: columns, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span>{!compact && <><span>Restam</span><span>Fim previsto</span></>}{hasActions && <span />}<span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>
           {grouped && (() => {
@@ -132,8 +142,8 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
                 {/* A pílula cabe na coluna (reticências e o nome inteiro no title): transbordando, ela invadia a Parcela. */}
                 <span style={{ minWidth: 0 }}><span title={category(row)} style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span></span>
                 <span style={{ ...NUM, color: T.ink }}>{part ? `${part.installment_number}/${part.total_installments}` : "—"}</span>
-                <span style={{ ...NUM, color: T.inkMid }}>{rest == null ? "—" : rest === 0 ? "quitada" : `${rest}× ${formatMoneyAbs(part.amount, row.value_currency ?? cardCurrency) ?? ""}`}</span>
-                <span style={{ ...NUM, color: T.inkMid }}>{forecastEnd(row) ?? "—"}</span>
+                {!compact && <span style={{ ...NUM, color: T.inkMid }}>{rest == null ? "—" : rest === 0 ? "quitada" : `${rest}× ${formatMoneyAbs(part.amount, row.value_currency ?? cardCurrency) ?? ""}`}</span>}
+                {!compact && <span style={{ ...NUM, color: T.inkMid }}>{forecastEnd(row) ?? "—"}</span>}
                 {/* O vão das ações rápidas, como em /transactions: no hover (ou foco) o grupo aparece colado ao valor. */}
                 {hasActions && <span style={{ position: "relative", minWidth: 0, alignSelf: "stretch" }}>
                   <div className="fincla-quick">
