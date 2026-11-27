@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { AxiosError } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getConsultantPortfolioCategoryContributors, streamConsultantPortfolioExpenseAnalysis } from "../../../../api/consultant.ts";
@@ -276,5 +277,35 @@ describe("PortfolioExpenseDistribution", () => {
     render(<PortfolioExpenseDistribution block={report} onFollowUp={vi.fn()} />);
     expect(await screen.findByText(/Sem observações adicionais sustentadas/)).toBeInTheDocument();
     expect(screen.queryByText(/alcance e concentração não são a mesma coisa/i)).not.toBeInTheDocument();
+  });
+
+  const httpFailure = (status) => new AxiosError(`Report stream failed (${status})`, "ERR_BAD_RESPONSE", undefined, undefined, { status, data: {}, headers: {}, statusText: "", config: {} });
+
+  it("says why the report could not be loaded instead of one message for every failure", async () => {
+    vi.mocked(streamConsultantPortfolioExpenseAnalysis).mockRejectedValueOnce(httpFailure(429));
+    render(<PortfolioExpenseDistribution block={report} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível atualizar este relatório. Muitas tentativas. Aguarde um momento e tente novamente.");
+  });
+
+  it("says why a retried reading failed", async () => {
+    vi.mocked(streamConsultantPortfolioExpenseAnalysis)
+      .mockImplementationOnce(async (_params, onEvent) => {
+        onEvent({ type: "report.ready", data: analysis() });
+        onEvent({ type: "completed", data: {} });
+      })
+      .mockRejectedValueOnce(httpFailure(500));
+    render(<PortfolioExpenseDistribution block={report} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Tentar leitura novamente" }));
+    expect(await screen.findByText("Não foi possível gerar a leitura deste período. Erro interno do servidor. Tente novamente mais tarde.")).toBeInTheDocument();
+  });
+
+  it("says why the reading was lost when the connection drops after the report arrived", async () => {
+    vi.mocked(streamConsultantPortfolioExpenseAnalysis).mockImplementationOnce(async (_params, onEvent) => {
+      onEvent({ type: "report.ready", data: analysis() });
+      throw new AxiosError("network error", AxiosError.ERR_NETWORK);
+    });
+    render(<PortfolioExpenseDistribution block={report} />);
+    expect(await screen.findByText("Não foi possível gerar a leitura deste período. Não foi possível conectar ao servidor. Verifique sua conexão.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar leitura novamente" })).toBeInTheDocument();
   });
 });

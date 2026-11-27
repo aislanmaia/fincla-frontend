@@ -18,10 +18,11 @@ describe("CONSULTANT_NAV (modelo de navegação)", () => {
 
   it("usa ids/slugs em inglês e labels em PT-BR", () => {
     expect(Object.keys(byId).sort()).toEqual(
-      ["clients", "copilot", "insights", "messages", "painel", "profile"].sort(),
+      ["category-templates", "clients", "copilot", "insights", "messages", "painel", "profile"].sort(),
     );
     expect(byId.clients.label).toBe("Clientes");
     expect(byId.copilot.label).toBe("Copiloto IA");
+    expect(byId["category-templates"].label).toBe("Modelos de categorias");
   });
 
   it("marca Mensagens como 'em breve' (sem rota)", () => {
@@ -37,8 +38,8 @@ describe("CONSULTANT_NAV (modelo de navegação)", () => {
     expect(byId.copilot.ai).toBe(true);
   });
 
-  it("itens navegáveis (painel/clients/insights/copilot/profile) têm rota e não são 'em breve'", () => {
-    for (const id of ["painel", "clients", "insights", "copilot", "profile"]) {
+  it("itens navegáveis (painel/clients/category-templates/insights/copilot/profile) têm rota e não são 'em breve'", () => {
+    for (const id of ["painel", "clients", "category-templates", "insights", "copilot", "profile"]) {
       expect(byId[id].to).toMatch(/^\/consultant/);
       expect(byId[id].comingSoon).toBeFalsy();
     }

@@ -131,6 +131,8 @@ const API_MESSAGE_TRANSLATIONS = new Map<string, string>([
     'Número inválido. Confira o país selecionado e digite o número com DDD, ex.: 11 99999-0000.',
   ],
   ['INVALID_PHONE_FORMAT', 'Número inválido. Confira o país selecionado e digite o número com DDD, ex.: 11 99999-0000.'],
+  // The backend names the feature by its internal code.
+  ["Recurso 'consultant_ai' não disponível no seu plano", 'Este recurso não está disponível no seu plano.'],
 ]);
 
 function translateApiMessage(message: string, errorCode?: string): string {
