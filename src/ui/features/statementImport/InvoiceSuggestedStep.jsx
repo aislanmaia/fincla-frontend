@@ -166,7 +166,7 @@ export function InvoiceBankSide({ entry, valueDiffers = false }) {
           ["Valor", <Hl key="v" on={valueDiffers}><InvoiceAmount amount={entry.amount} currency={entry.currency} strong /></Hl>],
           ["Seção", SECTION_LABEL[entry.section] ?? entry.section],
           entry.card_last4 ? ["Cartão", <span key="c" style={NUM}>final {entry.card_last4}</span>] : null,
-          entry.foreign_amount ? ["Moeda", <span key="f" style={NUM}>{entry.foreign_amount.currency} {entry.foreign_amount.amount}</span>] : null,
+          entry.foreign_amount ? ["Moeda", <span key="f" style={NUM}>{formatMoney(entry.foreign_amount.amount, entry.foreign_amount.currency)}</span>] : null,
         ]}
       />
     </section>

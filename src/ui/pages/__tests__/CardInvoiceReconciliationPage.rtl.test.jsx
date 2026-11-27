@@ -291,6 +291,15 @@ describe("o passo Confirmar compras encontradas", () => {
     expect(rows()).toHaveLength(3);
   });
 
+  it("compra internacional: o valor na moeda estrangeira sai escrito como dinheiro, no padrão brasileiro", async () => {
+    byDescription(draft, "MERCADO BOA VISTA").foreign_amount = { amount: "1234.50", currency: "USD" };
+    await openDraft();
+
+    const bank = within(card("MERCADO BOA VISTA")).getByTestId("bank-side");
+    expect(bank).toHaveTextContent("US$ 1.234,50");
+    expect(bank).not.toHaveTextContent("1234.50");
+  });
+
   it("Confirmar sugestão recolhe no clique (sem espera): a linha fica parada com Conferido, Alterar e Desfazer escolha, e nada aparece abaixo", async () => {
     const user = userEvent.setup();
     await openDraft();
