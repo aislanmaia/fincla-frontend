@@ -13,6 +13,7 @@
 //   convertem desde a fincla-api#505 e mandam o recibo `consolidation`; antes só
 //   ROTULAVAM uma soma não convertida. `converted` diz qual das duas a resposta é,
 //   e quem desenha decide se o rótulo merece confiança (`consultantCurrency.js`).
+import { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import apiClient from './client';
 import { API_CONFIG } from './config';
 import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
@@ -89,6 +90,27 @@ export type PortfolioExpenseStreamEvent =
   | { type: 'insight.failed'; data: { code?: string; message: string } }
   | { type: 'completed'; data: Record<string, never> };
 
+/**
+ * A failed stream request in the same shape as any `apiClient` failure, so `handleApiError`
+ * explains it (permission, rate limit, server, validation detail) like everywhere else.
+ */
+const streamFailure = async (response: Response): Promise<AxiosError> => {
+  const data: unknown = await response.json().catch(() => undefined);
+  return new AxiosError(`Report stream failed (${response.status})`, AxiosError.ERR_BAD_RESPONSE, undefined, undefined, {
+    status: response.status,
+    statusText: response.statusText,
+    data,
+    headers: {},
+    config: {} as InternalAxiosRequestConfig,
+  });
+};
+
+/** `fetch` and body reads reject with TypeError when the server cannot be reached; anything else passes through. */
+const asNetworkFailure = (error: unknown): never => {
+  if (error instanceof TypeError) throw new AxiosError(error.message, AxiosError.ERR_NETWORK);
+  throw error;
+};
+
 export const streamConsultantPortfolioExpenseAnalysis = async (
   params: { date_start: string; date_end: string },
   onEvent: (event: PortfolioExpenseStreamEvent) => void,
@@ -105,12 +127,13 @@ export const streamConsultantPortfolioExpenseAnalysis = async (
       ...(requestId ? { 'X-Request-Id': requestId } : {}),
     },
     signal,
-  });
+  }).catch(asNetworkFailure);
   if (response.status === 401) {
     localStorage.removeItem('auth_token');
     window.dispatchEvent(new CustomEvent('fincla:auth-expired'));
   }
-  if (!response.ok || !response.body) throw new Error(`Report stream failed (${response.status})`);
+  if (!response.ok) throw await streamFailure(response);
+  if (!response.body) throw new Error('Report stream has no body');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -118,7 +141,7 @@ export const streamConsultantPortfolioExpenseAnalysis = async (
   let finished = false;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await reader.read().catch(asNetworkFailure);
       buffer += decoder.decode(value, { stream: !done });
       buffer = buffer.replace(/\r\n/g, '\n');
       if (buffer.length > 2_000_000) throw new Error('Report stream frame too large');

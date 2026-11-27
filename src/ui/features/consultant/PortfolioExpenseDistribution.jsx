@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
 
+import { handleApiError } from "../../../api/client";
 import { getConsultantPortfolioCategoryContributors, streamConsultantPortfolioExpenseAnalysis } from "../../../api/consultant.ts";
 import { DashboardPeriodSelector } from "../../features/dashboard/DashboardPeriodSelector.jsx";
 import { normalizeCustomRange, rangeForDashboardPreset } from "../../features/dashboard/dashboardDateRange.js";
@@ -7,6 +9,15 @@ import { useIsNarrow } from "./consultantUi";
 import { MonthlySeries } from "./MonthlySeries.jsx";
 import { fmtMoneyIn } from "./consultantFormat";
 import { EXPENSE_BASIS_NOTE } from "./portfolioExpensePdfText";
+
+// The server answered (or could not be reached): say why. Anything else has no useful cause to show.
+const failureMessage = (what, cause) => (axios.isAxiosError(cause) ? `${what} ${handleApiError(cause)}` : null);
+
+// A reading that failed in transit: the cause when there is one, else the panel's default text.
+const readingFailure = (cause) => {
+  const message = failureMessage("Não foi possível gerar a leitura deste período.", cause);
+  return message ? { message } : true;
+};
 
 const formatPercent = (value) => `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number(value) || 0)}%`;
 const categoryColors = ["#8266dc", "#4d8cdb", "#2ca583", "#d4a01d", "#cd6581", "#9b75cf", "#708191"];
@@ -228,10 +239,11 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
         }
       }, controller.signal);
       if (!reportReceived) throw new Error("Relatório ausente no stream");
-    } catch {
+    } catch (cause) {
       if (thisRequest === requestId.current && !controller.signal.aborted) {
-        if (reportReceived) { setNarrativeError(true); setNarrativeLoading(false); }
-        else setError("Não foi possível atualizar este relatório. Tente novamente.");
+        // A cause that arrives after the reading's own outcome must not replace that outcome.
+        if (reportReceived) { if (!outcomeReceived) { outcomeReceived = true; setNarrativeError(readingFailure(cause)); } setNarrativeLoading(false); }
+        else setError(failureMessage("Não foi possível atualizar este relatório.", cause) || "Não foi possível atualizar este relatório. Tente novamente.");
       }
     } finally {
       if (thisRequest === requestId.current) {
@@ -334,7 +346,11 @@ export function PortfolioExpenseDistribution({ block, clients = [], onFollowUp }
       controller.signal,
       true,
     )
-      .catch(() => { if (thisRequest === requestId.current && !controller.signal.aborted) setNarrativeError(true); })
+      .catch((cause) => {
+        if (thisRequest !== requestId.current || controller.signal.aborted || outcomeReceived) return;
+        outcomeReceived = true;
+        setNarrativeError(readingFailure(cause));
+      })
       .finally(() => {
         if (thisRequest !== requestId.current) return;
         if (!outcomeReceived && !controller.signal.aborted) setNarrativeError(true);
